@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -59,3 +60,13 @@ class User(AbstractUser):
 
     def __str__(self):
         return f'{self.email} - {self.first_name} {self.last_name}'
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE
+    )
+    country = models.CharField(max_length=30, blank=True)
+
+    def __str__(self):
+        return self.user.email
