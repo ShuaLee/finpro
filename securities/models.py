@@ -8,8 +8,14 @@ from core.models import Profile
 class StockTag(models.Model):
     # e.g. "Coal Producer", "Tech", etc.
     name = models.CharField(max_length=100)
+    """
+    profile = models.ForeignKey(
+        Profile, on_delete=models.CASCADE, related_name='stock_tags'
+    )
+    """
     stock_account = models.ForeignKey(
-        'StockAccount', on_delete=models.CASCADE, related_name='stock_tags')
+        'StockAccount', on_delete=models.CASCADE, related_name='stock_tags'
+    )
 
     def __str__(self):
         return self.name
@@ -29,7 +35,6 @@ class StockAccount(models.Model):
     )
     account_name = models.CharField(max_length=255, default='Stock Account')
     created_at = models.DateTimeField(auto_now_add=True)
-    tags = models.ManyToManyField(StockTag, related_name='portfolios')
 
     def __str__(self):
         return f"{self.account_name} - {self.portfolio.name}"

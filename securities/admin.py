@@ -1,7 +1,10 @@
 from django.contrib import admin
 from .models import Stock, StockAccount, StockTag
 
-# StockTag Admin
+
+class StockTagInline(admin.TabularInline):
+    model = StockTag
+    extra = 1  # Number of empty forms to show for creating new tags
 
 
 @admin.register(StockTag)
@@ -17,7 +20,8 @@ class StockAccountAdmin(admin.ModelAdmin):
     list_display = ('account_type', 'account_name', 'portfolio', 'created_at')
     search_fields = ('account_name',)
     list_filter = ('account_type',)
-    filter_horizontal = ('tags',)  # To make selecting tags easier
+
+    inlines = [StockTagInline]
 
 # Stock Admin
 
