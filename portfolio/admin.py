@@ -1,11 +1,9 @@
 from django.contrib import admin
-from core.models import Profile
-from portfolio.models import Portfolio
-
+from portfolio.models import IndividualPortfolio
 # Register your models here.
 
 
-@admin.register(Portfolio)
-class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ('name', 'created_at', 'individual_profile',
-                    'asset_manager_profile')
+@admin.register(IndividualPortfolio)
+class IndividualPortfolioAdmin(admin.ModelAdmin):
+    list_display = ('name', 'profile', 'created_at')
+    search_fields = ('profile__user__email', 'name')

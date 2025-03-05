@@ -63,15 +63,15 @@ class User(AbstractUser):
 
 
 class Profile(models.Model):
-    ROLE_CHOICES = [
+    ACCOUNT_CHOICES = [
         ('individual', 'Individual Account'),
         ('asset_manager', 'Asset Manager'),
     ]
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE
     )
-    role = models.CharField(
-        max_length=20, choices=ROLE_CHOICES, default='individual')
+    account_type = models.CharField(
+        max_length=20, choices=ACCOUNT_CHOICES, default='individual')
     country = models.CharField(max_length=30, blank=True)
 
     def __str__(self):
