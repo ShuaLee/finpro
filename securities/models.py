@@ -17,6 +17,11 @@ class StockTag(models.Model):
         'StockAccount', on_delete=models.CASCADE, related_name='stock_tags'
     )
 
+    # Nested sub-tags
+    parent = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.CASCADE, related_name='sub_tags'
+    )
+
     def __str__(self):
         return self.name
 
