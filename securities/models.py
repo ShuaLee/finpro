@@ -40,6 +40,8 @@ class StockAccount(models.Model):
     )
     account_name = models.CharField(max_length=255, default='Stock Account')
     created_at = models.DateTimeField(auto_now_add=True)
+    stocks = models.ManyToManyField(
+        'Stock', related_name='stock_accounts', blank=True)
 
     def __str__(self):
         return f"{self.account_name} - {self.portfolio.name}"
