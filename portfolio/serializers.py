@@ -6,7 +6,7 @@ from securities.serializers import StockAccountSerializer
 
 class IndividualPortfolioSerializer(serializers.ModelSerializer):
     stock_accounts = StockAccountSerializer(
-        many=True, read_only=True, source='stock_account')
+        many=True, read_only=True)
 
     class Meta:
         model = IndividualPortfolio

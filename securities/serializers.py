@@ -1,17 +1,26 @@
 from rest_framework import serializers
-from .models import StockAccount, Stock
+from .models import StockAccount, Stock, StockHolding
 
 
 class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock
-        fields = ['ticker', 'name', 'exchange', 'current_price', 'currency',
-                  'dividends', 'sector', 'country', 'stock_type', 'last_updated']
+        fields = ['ticker']
+
+
+class StockHoldingSerializer(serializers.ModelSerializer):
+    stock = StockSerializer()  # Nested serializer to include stock details
+
+    class Meta:
+        model = StockHolding
+        fields = ['stock', 'shares']
 
 
 class StockAccountSerializer(serializers.ModelSerializer):
-    stocks = StockSerializer(many=True, read_only=True)
+    # Access stocks via StockHolding
+    stocks = StockHoldingSerializer(
+        source='stockholding_set', many=True, read_only=True)
 
     class Meta:
         model = StockAccount
-        fields = ['id', 'account_type', 'account_name', 'created_at', 'stocks']
+        fields = ['id', 'account_name', 'account_type', 'stocks']
