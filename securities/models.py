@@ -26,6 +26,13 @@ class StockTag(models.Model):
         return self.name
 
 
+class Stock(models.Model):
+    ticker = models.CharField(max_length=10, unique=True)
+
+    def __str__(self):
+        return self.ticker
+
+
 class StockAccount(models.Model):
     ACCOUNT_TYPE_CHOICES = [
         ('self_managed', 'Self Managed'),
@@ -33,7 +40,7 @@ class StockAccount(models.Model):
     ]
 
     portfolio = models.ForeignKey(
-        IndividualPortfolio, on_delete=models.CASCADE, related_name='stock_account'
+        IndividualPortfolio, on_delete=models.CASCADE, related_name='stock_accounts'
     )
     account_type = models.CharField(
         max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='self_managed'
@@ -41,7 +48,7 @@ class StockAccount(models.Model):
     account_name = models.CharField(max_length=255, default='Stock Account')
     created_at = models.DateTimeField(auto_now_add=True)
     stocks = models.ManyToManyField(
-        'Stock', related_name='stock_accounts', blank=True)
+        Stock, through='StockHolding', related_name='stock_accounts', blank=True)
 
     def __str__(self):
         return f"{self.account_name} - {self.portfolio.name}"
@@ -51,25 +58,10 @@ class StockAccount(models.Model):
         verbose_name_plural = "Stock Accounts"
 
 
-class Stock(models.Model):
-    STOCK_TYPE_CHOICES = [
-        ('stock', 'Stock'),
-        ('etf', 'ETF'),
-    ]
-
-    ticker = models.CharField(max_length=10, unique=True)
-    name = models.CharField(max_length=255)
-    exchange = models.CharField(max_length=100)
-    current_price = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True)
-    currency = models.CharField(max_length=10)
-    dividends = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True)
-    sector = models.CharField(max_length=100, null=True, blank=True)
-    country = models.CharField(max_length=100, null=True, blank=True)
-    stock_type = models.CharField(
-        max_length=20, choices=STOCK_TYPE_CHOICES, default='stock')
-    last_updated = models.DateTimeField(auto_now=True)
+class StockHolding(models.Model):
+    stock_account = models.ForeignKey(StockAccount, on_delete=models.CASCADE)
+    stock = models.ForeignKey('Stock', on_delete=models.CASCADE)
+    shares = models.DecimalField(max_digits=15, decimal_places=4)
 
     def __str__(self):
-        return f"{self.ticker} - {self.name} ({self.stock_type})"
+        return f"{self.stock.ticker} ({self.shares} shares)"
