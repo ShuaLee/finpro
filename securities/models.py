@@ -65,3 +65,6 @@ class StockHolding(models.Model):
 
     def __str__(self):
         return f"{self.stock.ticker} ({self.shares} shares)"
+
+    class Meta:
+        unique_together = ('stock_account', 'stock')
