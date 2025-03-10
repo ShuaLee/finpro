@@ -9,6 +9,8 @@ mysqlclient = "*"
 djangorestframework = "*"
 drf-nested-routers = "*"
 yfinance = "*"
+djoser = "*"
+djangorestframework-simplejwt = "*"
 
 [dev-packages]
 
