@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from django.db import IntegrityError
+import yfinance as yf
 from .models import StockAccount, Stock, StockHolding
 
 
@@ -33,14 +35,32 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
     """
     ticker = serializers.CharField(write_only=True)
 
+    def validate_ticker(self, value):
+        """
+        Verify the ticker exists using yfinance.
+        """
+        ticker = value.upper()
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info  # Fetch basic info to verify
+            if not info or 'symbol' not in info or info['symbol'] != ticker:
+                raise serializers.ValidationError(
+                    f"Ticker '{ticker}' is not valid.")
+        except Exception as e:
+            raise serializers.ValidationError(
+                f"Unable to verify ticker '{ticker}': {str(e)}")
+        return ticker
+
+    def create(self, validated_data):
+        ticker = validated_data.pop('ticker')
+        stock, _ = Stock.objects.get_or_create(ticker=ticker)
+        stock_account = self.context['stock_account']
+        try:
+            return StockHolding.objects.create(stock_account=stock_account, stock=stock, **validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                f"Stock '{ticker}' is already in this account.")
+
     class Meta:
         model = StockHolding
         fields = ['ticker', 'shares']
-
-    def create(self, validated_data):
-        # Get or create the Stock instance based on ticker
-        ticker = validated_data.pop('ticker')
-        stock, _ = Stock.objects.get_or_create(ticker=ticker)
-        # Create StockHolding with the stock_account from context
-        stock_account = self.context['stock_account']
-        return StockHolding.objects.create(stock_account=stock_account, stock=stock, **validated_data)
