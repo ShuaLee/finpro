@@ -32,6 +32,7 @@ class Stock(models.Model):
         max_digits=15, decimal_places=2, null=True, blank=True)  # Cached dividends
     last_updated = models.DateTimeField(
         null=True, blank=True)  # When data was last fetched
+    is_etf = models.BooleanField(default=False)
 
     def __str__(self):
         return self.ticker
@@ -39,13 +40,41 @@ class Stock(models.Model):
     def update_from_yfinance(self):
         import yfinance as yf
         ticker = yf.Ticker(self.ticker)
-        info = ticker.info
-        self.price = info.get('currentPrice')
-        self.dividends = info.get('dividendRate')
-        self.name = info.get('longName', self.name)
-        self.currency = info.get('currency', self.currency)
-        self.last_updated = timezone.now()
-        self.save()
+        try:
+            info = ticker.info
+            # Determine if it's an ETF
+            self.is_etf = info.get('quoteType') == 'ETF'
+
+            # Price: Handle stocks vs ETFs
+            if self.is_etf:
+                self.price = info.get(
+                    'regularMarketPrice') or info.get('previousClose')
+            else:
+                self.price = info.get('currentPrice') or info.get(
+                    'regularMarketPrice') or info.get('previousClose')
+
+            # Dividends: Handle stocks vs ETFs
+            if self.is_etf:
+                # ETFs often report yield or trailing annual dividend
+                self.dividends = info.get(
+                    'trailingAnnualDividendRate') or info.get('dividendRate')
+            else:
+                self.dividends = info.get('dividendRate')
+
+            # Common fields
+            self.name = info.get(
+                'longName', info.get('shortName', self.ticker))
+            self.currency = info.get('currency', 'USD')
+            self.last_updated = timezone.now()
+            self.save()
+        except Exception as e:
+            print(f"Failed to update {self.ticker}: {e}")
+            if not self.name:
+                self.name = self.ticker
+            if not self.currency:
+                self.currency = 'USD'
+            self.last_updated = timezone.now()
+            self.save()
 
 
 class StockAccount(models.Model):
