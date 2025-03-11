@@ -10,7 +10,7 @@ class StockTagInline(admin.TabularInline):
 
 @admin.register(StockTag)
 class StockTagAdmin(admin.ModelAdmin):
-    list_display = ('name', 'stock_account', 'parent')
+    list_display = ('name', 'stock_holding', 'parent')
     search_fields = ('name',)
 
     # Add the inline for managing sub-tags

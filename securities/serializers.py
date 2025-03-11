@@ -1,7 +1,14 @@
 from rest_framework import serializers
 from django.db import IntegrityError
+from decimal import Decimal
 import yfinance as yf
-from .models import StockAccount, Stock, StockHolding
+from .models import StockAccount, Stock, StockHolding, StockTag
+
+
+class StockTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StockTag
+        fields = ['id', 'name', 'arent']
 
 
 class StockSerializer(serializers.ModelSerializer):
@@ -12,20 +19,56 @@ class StockSerializer(serializers.ModelSerializer):
 
 class StockHoldingSerializer(serializers.ModelSerializer):
     stock = StockSerializer()  # Nested serializer to include stock details
+    price = serializers.SerializerMethodField()
+    total_investment = serializers.SerializerMethodField()
+    dividends = serializers.SerializerMethodField()
+    stock_tags = StockTagSerializer(many=True)
 
     class Meta:
         model = StockHolding
-        fields = ['stock', 'shares']
+        fields = [
+            'stock', 'shares', 'purchase_price', 'stock_tags',
+            'price', 'total_investment', 'dividends'
+        ]
+
+    def get_price(self, obj):
+        ticker = yf.Ticker(obj.stock.ticker)
+        return ticker.info.get('currentPrice', None)
+
+    def get_total_investment(self, obj):
+        price = self.get_price(obj)
+        if price is not None:
+            return Decimal(str(price)) * obj.shares  # Convert float to Decimal
+        return None
+
+    def get_dividends(self, obj):
+        ticker = yf.Ticker(obj.stock.ticker)
+        return ticker.info.get('dividendRate', None)
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        stock_account = instance.stock_account
+        allowed_columns = stock_account.custom_columns or stock_account.get_default_columns()
+        # Ensure 'stock' is always included, then filter others
+        filtered = {'stock': representation['stock']}
+        filtered.update(
+            {key: value for key, value in representation.items(
+            ) if key in allowed_columns and key != 'stock'}
+        )
+        return filtered
 
 
 class StockAccountSerializer(serializers.ModelSerializer):
     # Access stocks via StockHolding
     stocks = StockHoldingSerializer(
         source='stockholding_set', many=True, read_only=True)
+    custom_columns = serializers.ListField(
+        child=serializers.CharField(), required=False)
 
     class Meta:
         model = StockAccount
-        fields = ['id', 'account_name', 'account_type', 'stocks']
+        fields = ['id', 'account_name', 'account_type',
+                  'created_at', 'stocks', 'custom_columns']
 
 
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
