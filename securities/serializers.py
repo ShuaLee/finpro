@@ -4,7 +4,7 @@ from django.utils import timezone
 from decimal import Decimal
 from datetime import timedelta
 import yfinance as yf
-from .models import StockAccount, Stock, StockHolding, StockTag
+from .models import StockAccount, Stock, StockHolding, StockTag, StockPortfolio
 
 
 class StockTagSerializer(serializers.ModelSerializer):
@@ -111,3 +111,25 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockHolding
         fields = ['ticker', 'shares']
+
+
+class StockPortfolioSerializer(serializers.ModelSerializer):
+    stock_portfolios = StockAccountSerializer(many=True, read_only=True)
+    custom_columns = serializers.DictField(
+        child=serializers.JSONField(), required=False)
+
+    class Meta:
+        model = StockPortfolio
+        fields = ['id', 'name', 'created_at',
+                  'stock_accounts', 'custom_columns']
+
+    def validate_custom_columns(self, value):
+        for col, data in value.items():
+            if data is not None:
+                if not isinstance(data, dict) or 'override' not in data or 'value' not in data:
+                    raise serializers.ValidationError(
+                        f"Invalid format for column '{col}'. Use {{'value': <val>, 'override': bool}} or null.")
+                if not isinstance(data['override'], bool):
+                    raise serializers.ValidationError(
+                        f"'override' for '{col}' must be a boolean.")
+        return value

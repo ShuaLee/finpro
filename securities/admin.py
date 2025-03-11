@@ -27,15 +27,11 @@ class StockHoldingInline(admin.TabularInline):
 # StockAccount Admin
 @admin.register(StockAccount)
 class StockAccountAdmin(admin.ModelAdmin):
-    list_display = ('account_type', 'account_name',
-                    'portfolio', 'stock_count', 'created_at')
-    search_fields = ('account_name',)
-    list_filter = ('account_type',)
-    inlines = [StockHoldingInline]
-
-    def stock_count(self, obj):
-        return obj.stocks.count()
-    stock_count.short_description = "Stocks Owned"
+    # Changed 'portfolio' to 'stock_portfolio'
+    list_display = ['account_name', 'account_type',
+                    'stock_portfolio', 'created_at']
+    list_filter = ['account_type', 'stock_portfolio']  # Updated
+    search_fields = ['account_name', 'stock_portfolio__name']
 
 # Stock Admin
 
@@ -55,6 +51,6 @@ class StockAdmin(admin.ModelAdmin):
 
 @admin.register(StockHolding)
 class StockHoldingAdmin(admin.ModelAdmin):
-    list_display = ('stock', 'stock_account', 'shares')
-    search_fields = ('stock__ticker', 'stock_account__account_name')
-    list_filter = ('stock_account__portfolio',)
+    list_display = ['stock', 'stock_account', 'shares', 'purchase_price']
+    # Updated to new relationship
+    list_filter = ['stock_account__stock_portfolio']

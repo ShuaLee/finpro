@@ -5,6 +5,31 @@ from django.utils import timezone
 # Create your models here.
 
 
+class StockPortfolio(models.Model):
+    individual_portfolio = models.ForeignKey(
+        'portfolio.IndividualPortfolio', on_delete=models.CASCADE, related_name='stock_portfolios'
+    )
+    name = models.CharField(max_length=255, default="Stock Portfolio")
+    created_at = models.DateTimeField(auto_now_add=True)
+    custom_columns = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.individual_portfolio.name}"
+
+    def get_default_columns(self):
+        return {
+            "ticker": None,
+            "name": None,
+            "price": None,
+            "shares": None,
+            "total_investment": None,
+            "currency": None,
+            "purchase_price": None,
+            "dividends": None,
+            "stock_tags": None
+        }
+
+
 class StockTag(models.Model):
     # e.g. "Coal Producer", "Tech", etc.
     name = models.CharField(max_length=100)
@@ -83,8 +108,8 @@ class StockAccount(models.Model):
         ('managed', 'Managed'),
     ]
 
-    portfolio = models.ForeignKey(
-        IndividualPortfolio, on_delete=models.CASCADE, related_name='stock_accounts'
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio, on_delete=models.CASCADE, related_name='stock_accounts'
     )
     account_type = models.CharField(
         max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='self_managed'
@@ -98,7 +123,7 @@ class StockAccount(models.Model):
     custom_columns = models.JSONField(default=list, blank=True)
 
     def __str__(self):
-        return f"{self.account_name} - {self.portfolio.name}"
+        return f"{self.account_name} - {self.stock_portfolio.name}"
 
     def get_default_columns(self):
         return [

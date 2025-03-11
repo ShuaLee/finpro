@@ -1,17 +1,15 @@
 from django.contrib import admin
 from .models import IndividualPortfolio
-from securities.models import StockAccount
+from securities.models import StockPortfolio
 # Register your models here.
 
 
-class StockPortfolioInline(admin.StackedInline):
-    model = StockAccount
-    extra = 0
-    fields = ('account_type', 'account_name')
+class StockPortfolioInline(admin.TabularInline):
+    model = StockPortfolio
+    extra = 1
 
 
 @admin.register(IndividualPortfolio)
 class IndividualPortfolioAdmin(admin.ModelAdmin):
-    list_display = ('name', 'profile', 'created_at')
-    search_fields = ('profile__user__email', 'name')
+    list_display = ['name', 'created_at']
     inlines = [StockPortfolioInline]
