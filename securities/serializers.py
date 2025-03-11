@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.db import IntegrityError
+from django.utils import timezone
 from decimal import Decimal
+from datetime import timedelta
 import yfinance as yf
 from .models import StockAccount, Stock, StockHolding, StockTag
 
@@ -32,8 +34,9 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         ]
 
     def get_price(self, obj):
-        ticker = yf.Ticker(obj.stock.ticker)
-        return ticker.info.get('currentPrice', None)
+        if not obj.stock.last_updated or (timezone.now() - obj.stock.last_updated) > timedelta(hours=1):
+            obj.stock.update_from_yfinance()
+        return obj.stock.price
 
     def get_total_investment(self, obj):
         price = self.get_price(obj)
@@ -42,8 +45,9 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return None
 
     def get_dividends(self, obj):
-        ticker = yf.Ticker(obj.stock.ticker)
-        return ticker.info.get('dividendRate', None)
+        if not obj.stock.last_updated or (timezone.now() - obj.stock.last_updated) > timedelta(hours=1):
+            obj.stock.update_from_yfinance()
+        return obj.stock.dividends
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

@@ -1,6 +1,6 @@
 from django.db import models
 from portfolio.models import IndividualPortfolio
-from core.models import Profile
+from django.utils import timezone
 
 # Create your models here.
 
@@ -25,9 +25,27 @@ class Stock(models.Model):
     ticker = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=255, blank=True)
     currency = models.CharField(max_length=10, blank=True)
+    # Fetched Data
+    price = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True)  # Cached price
+    dividends = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True)  # Cached dividends
+    last_updated = models.DateTimeField(
+        null=True, blank=True)  # When data was last fetched
 
     def __str__(self):
         return self.ticker
+
+    def update_from_yfinance(self):
+        import yfinance as yf
+        ticker = yf.Ticker(self.ticker)
+        info = ticker.info
+        self.price = info.get('currentPrice')
+        self.dividends = info.get('dividendRate')
+        self.name = info.get('longName', self.name)
+        self.currency = info.get('currency', self.currency)
+        self.last_updated = timezone.now()
+        self.save()
 
 
 class StockAccount(models.Model):
