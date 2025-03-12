@@ -5,8 +5,8 @@ from securities.serializers import StockAccountSerializer, StockPortfolioSeriali
 
 
 class IndividualPortfolioSerializer(serializers.ModelSerializer):
-    stock_portfolios = StockPortfolioSerializer(many=True, read_only=True)
+    stock_portfolio = StockPortfolioSerializer(read_only=True)
 
     class Meta:
         model = IndividualPortfolio
-        fields = ['id', 'name', 'created_at', 'stock_portfolios']
+        fields = ['id', 'name', 'created_at', 'stock_portfolio']
