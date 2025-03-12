@@ -6,7 +6,7 @@ from django.utils import timezone
 
 
 class StockPortfolio(models.Model):
-    individual_portfolio = models.ForeignKey(
+    individual_portfolio = models.OneToOneField(
         'portfolio.IndividualPortfolio', on_delete=models.CASCADE, related_name='stock_portfolios'
     )
     name = models.CharField(max_length=255, default="Stock Portfolio")
