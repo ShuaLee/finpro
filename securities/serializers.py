@@ -50,10 +50,11 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return obj.stock.dividends
 
     def to_representation(self, instance):
+        # Should be correct
+        self.context['custom_columns'] = instance.stock_account.stock_portfolio.custom_columns
         representation = super().to_representation(instance)
-        stock_account = instance.stock_account
-        allowed_columns = stock_account.custom_columns or stock_account.get_default_columns()
-        # Ensure 'stock' is always included, then filter others
+        allowed_columns = instance.stock_account.stock_portfolio.custom_columns.keys(
+        ) or instance.stock_account.stock_portfolio.get_default_columns().keys()
         filtered = {'stock': representation['stock']}
         filtered.update(
             {key: value for key, value in representation.items(
@@ -63,16 +64,12 @@ class StockHoldingSerializer(serializers.ModelSerializer):
 
 
 class StockAccountSerializer(serializers.ModelSerializer):
-    # Access stocks via StockHolding
     stocks = StockHoldingSerializer(
         source='stockholding_set', many=True, read_only=True)
-    custom_columns = serializers.ListField(
-        child=serializers.CharField(), required=False)
 
     class Meta:
         model = StockAccount
-        fields = ['id', 'account_name', 'account_type',
-                  'created_at', 'stocks', 'custom_columns']
+        fields = ['id', 'account_name', 'account_type', 'created_at', 'stocks']
 
 
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
@@ -114,9 +111,7 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):
-    stock_portfolios = StockAccountSerializer(many=True, read_only=True)
-    custom_columns = serializers.DictField(
-        child=serializers.JSONField(), required=False)
+    stock_accounts = StockAccountSerializer(many=True, read_only=True)
 
     class Meta:
         model = StockPortfolio

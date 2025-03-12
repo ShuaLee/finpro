@@ -10,7 +10,7 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
     serializer_class = StockPortfolioSerializer
 
     def get_queryset(self):
-        individual_portfolio_id = self.kwargs['individual_portfolio_pk']
+        individual_portfolio_id = self.kwargs['portfolio_pk']
         return StockPortfolio.objects.filter(individual_portfolio_id=individual_portfolio_id)
 
     @action(detail=True, methods=['post'], url_path='reset-columns')

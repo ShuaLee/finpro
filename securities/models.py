@@ -7,7 +7,7 @@ from django.utils import timezone
 
 class StockPortfolio(models.Model):
     individual_portfolio = models.OneToOneField(
-        'portfolio.IndividualPortfolio', on_delete=models.CASCADE, related_name='stock_portfolios'
+        'portfolio.IndividualPortfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
     name = models.CharField(max_length=255, default="Stock Portfolio")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -119,21 +119,8 @@ class StockAccount(models.Model):
     stocks = models.ManyToManyField(
         Stock, through='StockHolding', related_name='stock_accounts', blank=True)
 
-    # Custom columns as a list (e.g., ['ticker', 'name', 'price', ...])
-    custom_columns = models.JSONField(default=list, blank=True)
-
     def __str__(self):
         return f"{self.account_name} - {self.stock_portfolio.name}"
-
-    def get_default_columns(self):
-        return [
-            "ticker", "name", "price", "shares", "total_investment",
-            "currency", "purchase_price", "dividends", "stock_tags"
-        ]
-
-    class Meta:
-        verbose_name = "Stock Account"
-        verbose_name_plural = "Stock Accounts"
 
 
 class StockHolding(models.Model):
