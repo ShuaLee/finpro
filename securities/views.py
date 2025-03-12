@@ -36,11 +36,11 @@ class StockAccountViewSet(viewsets.ModelViewSet):
         """
         Filter StockAccounts by the portfolio ID from the URL.
         """
-        portfolio_id = self.kwargs['portfolio_pk']
-        return StockAccount.objects.filter(portfolio_id=portfolio_id)
+        stock_portfolio_id = self.kwargs['stock_portfolio_pk']
+        return StockAccount.objects.filter(stock_portfolio_id=stock_portfolio_id)
 
     @action(detail=True, methods=['post'], serializer_class=StockHoldingCreateSerializer, url_path='add-stock')
-    def add_stock(self, request, profile_pk=None, portfolio_pk=None, pk=None):
+    def add_stock(self, request, profile_pk=None, portfolio_pk=None, stock_portfolio_pk=None, pk=None):
         """
         Add stock to this StockAccount.
         """

@@ -1,6 +1,8 @@
 from django.db import models
 from portfolio.models import IndividualPortfolio
 from django.utils import timezone
+from decimal import Decimal
+import yfinance as yf
 
 # Create your models here.
 
@@ -18,15 +20,11 @@ class StockPortfolio(models.Model):
 
     def get_default_columns(self):
         return {
-            "ticker": None,
-            "name": None,
             "price": None,
-            "shares": None,
-            "total_investment": None,
-            "currency": None,
-            "purchase_price": None,
             "dividends": None,
-            "stock_tags": None
+            "name": None,
+            "market_cap": None,
+            # Add more as needed
         }
 
 
@@ -48,58 +46,53 @@ class StockTag(models.Model):
 
 class Stock(models.Model):
     ticker = models.CharField(max_length=10, unique=True)
-    name = models.CharField(max_length=255, blank=True)
     currency = models.CharField(max_length=10, blank=True)
-    # Fetched Data
-    price = models.DecimalField(
-        max_digits=15, decimal_places=2, null=True, blank=True)  # Cached price
-    dividends = models.DecimalField(
-        max_digits=15, decimal_places=2, null=True, blank=True)  # Cached dividends
-    last_updated = models.DateTimeField(
-        null=True, blank=True)  # When data was last fetched
     is_etf = models.BooleanField(default=False)
 
     def __str__(self):
         return self.ticker
 
-    def update_from_yfinance(self):
-        import yfinance as yf
+    def fetch_yfinance_data(self, fields):
         ticker = yf.Ticker(self.ticker)
         try:
             info = ticker.info
             # Determine if it's an ETF
             self.is_etf = info.get('quoteType') == 'ETF'
+            result = {}
 
-            # Price: Handle stocks vs ETFs
-            if self.is_etf:
-                self.price = info.get(
-                    'regularMarketPrice') or info.get('previousClose')
-            else:
-                self.price = info.get('currentPrice') or info.get(
-                    'regularMarketPrice') or info.get('previousClose')
+            # Map requested fields to yfinance keys, with ETF handling
+            for field in fields:
+                if field == 'price':
+                    if self.is_etf:
+                        value = info.get('regularMarketPrice') or info.get(
+                            'previousClose')
+                    else:
+                        value = info.get('currentPrice') or info.get(
+                            'regularMarketPrice') or info.get('previousClose')
+                elif field == 'dividends':
+                    if self.is_etf:
+                        value = info.get('trailingAnnualDividendRate') or info.get(
+                            'dividendRate')
+                    else:
+                        value = info.get('dividendRate')
+                elif field == 'name':
+                    value = info.get('longName', info.get(
+                        'shortName', self.ticker))
+                else:
+                    # Generic fetch for other fields (e.g., marketCap)
+                    value = info.get(field)
 
-            # Dividends: Handle stocks vs ETFs
-            if self.is_etf:
-                # ETFs often report yield or trailing annual dividend
-                self.dividends = info.get(
-                    'trailingAnnualDividendRate') or info.get('dividendRate')
-            else:
-                self.dividends = info.get('dividendRate')
+                # Convert to Decimal for monetary fields
+                if value is not None and field in ['price', 'dividends', 'marketCap', 'regularMarketPrice', 'previousClose', 'trailingAnnualDividendRate']:
+                    value = Decimal(str(value))
+                result[field] = value
 
-            # Common fields
-            self.name = info.get(
-                'longName', info.get('shortName', self.ticker))
-            self.currency = info.get('currency', 'USD')
-            self.last_updated = timezone.now()
-            self.save()
+            # Update is_etf and save only if changed
+            self.save(update_fields=['is_etf'] if self.pk else None)
+            return result
         except Exception as e:
-            print(f"Failed to update {self.ticker}: {e}")
-            if not self.name:
-                self.name = self.ticker
-            if not self.currency:
-                self.currency = 'USD'
-            self.last_updated = timezone.now()
-            self.save()
+            print(f"Failed to fetch {self.ticker}: {e}")
+            return {}
 
 
 class StockAccount(models.Model):

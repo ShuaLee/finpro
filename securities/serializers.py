@@ -16,7 +16,7 @@ class StockTagSerializer(serializers.ModelSerializer):
 class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock
-        fields = ['ticker']
+        fields = ['ticker', 'currency']
 
 
 class StockHoldingSerializer(serializers.ModelSerializer):
@@ -34,23 +34,30 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         ]
 
     def get_price(self, obj):
-        if not obj.stock.last_updated or (timezone.now() - obj.stock.last_updated) > timedelta(hours=1):
-            obj.stock.update_from_yfinance()
-        return obj.stock.price
+        custom_cols = self.context.get('custom_columns', {})
+        price_data = custom_cols.get('price')
+        if price_data and price_data.get('override') and price_data.get('value') is not None:
+            return Decimal(str(price_data['value']))
+        data = obj.stock.fetch_yfinance_data(['price'])
+        price = data.get('price')
+        return Decimal(str(price)) if price is not None else None
 
     def get_total_investment(self, obj):
         price = self.get_price(obj)
         if price is not None:
-            return Decimal(str(price)) * obj.shares  # Convert float to Decimal
+            return price * obj.shares  # Both are Decimal now
         return None
 
     def get_dividends(self, obj):
-        if not obj.stock.last_updated or (timezone.now() - obj.stock.last_updated) > timedelta(hours=1):
-            obj.stock.update_from_yfinance()
-        return obj.stock.dividends
+        custom_cols = self.context.get('custom_columns', {})
+        div_data = custom_cols.get('dividends')
+        if div_data and div_data.get('override') and div_data.get('value') is not None:
+            return Decimal(str(div_data['value']))
+        data = obj.stock.fetch_yfinance_data(['dividends'])
+        dividends = data.get('dividends')
+        return Decimal(str(dividends)) if dividends is not None else None
 
     def to_representation(self, instance):
-        # Should be correct
         self.context['custom_columns'] = instance.stock_account.stock_portfolio.custom_columns
         representation = super().to_representation(instance)
         allowed_columns = instance.stock_account.stock_portfolio.custom_columns.keys(
