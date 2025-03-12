@@ -66,7 +66,10 @@ class Profile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE
     )
-    country = models.CharField(max_length=30, blank=True)
+    currency = models.CharField(max_length=10, blank=False, default="USD")
+    language = models.CharField(max_length=30, blank=False, default="english")
+    birth_date = models.DateField(null=True, blank=True)
+    is_asset_manager = models.BooleanField(default=False)
 
     def __str__(self):
         return self.user.email
