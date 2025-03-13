@@ -9,4 +9,4 @@ class IndividualPortfolioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = IndividualPortfolio
-        fields = ['id', 'name', 'created_at', 'stock_portfolio']
+        fields = ['id', 'created_at', 'stock_portfolio']

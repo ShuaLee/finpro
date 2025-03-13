@@ -6,7 +6,7 @@ from .serializers import IndividualPortfolioSerializer
 # Create your views here.
 
 
-class IndividualPortfolioViewSet(ListModelMixin, RetrieveModelMixin, UpdateModelMixin, GenericViewSet):
+class IndividualPortfolioViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     serializer_class = IndividualPortfolioSerializer
 
     def get_queryset(self):
