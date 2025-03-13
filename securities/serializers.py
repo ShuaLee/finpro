@@ -118,20 +118,8 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):
-    stock_accounts = StockAccountSerializer(many=True, read_only=True)
+    # stock_accounts = StockAccountSerializer(many=True, read_only=True)
 
     class Meta:
         model = StockPortfolio
-        fields = ['id', 'name', 'created_at',
-                  'stock_accounts', 'custom_columns']
-
-    def validate_custom_columns(self, value):
-        for col, data in value.items():
-            if data is not None:
-                if not isinstance(data, dict) or 'override' not in data or 'value' not in data:
-                    raise serializers.ValidationError(
-                        f"Invalid format for column '{col}'. Use {{'value': <val>, 'override': bool}} or null.")
-                if not isinstance(data['override'], bool):
-                    raise serializers.ValidationError(
-                        f"'override' for '{col}' must be a boolean.")
-        return value
+        fields = ['id', 'created_at']

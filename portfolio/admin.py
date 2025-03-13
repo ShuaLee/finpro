@@ -11,5 +11,5 @@ class StockPortfolioInline(admin.TabularInline):
 
 @admin.register(IndividualPortfolio)
 class IndividualPortfolioAdmin(admin.ModelAdmin):
-    list_display = ['created_at',]
+    list_display = ['profile', 'created_at',]
     inlines = [StockPortfolioInline]

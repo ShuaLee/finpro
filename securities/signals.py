@@ -8,6 +8,5 @@ from .models import StockPortfolio
 def create_stock_portfolio(sender, instance, created, **kwargs):
     if created:
         StockPortfolio.objects.create(
-            individual_portfolio=instance,
-            name=f"{instance.name} Stock Portfolio"
+            individual_portfolio=instance
         )

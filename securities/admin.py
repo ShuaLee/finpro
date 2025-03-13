@@ -1,11 +1,31 @@
 from django.contrib import admin
-from .models import Stock, StockAccount, StockTag, StockHolding
+from .models import Stock, StockAccount, StockTag, StockHolding, StockPortfolio
 
 
 class StockTagInline(admin.TabularInline):
     model = StockTag
     fk_name = 'parent'
     extra = 1  # Number of empty forms to show for creating new tags
+
+
+@admin.register(StockPortfolio)
+class StockPortfolioAdmin(admin.ModelAdmin):
+    # Fields to display in the list view
+    list_display = ['get_user_email', 'created_at']
+
+    # Fields to search by
+    search_fields = ['individual_portfolio__profile__user__email']
+
+    # Fields to filter by
+    list_filter = ['created_at']
+
+    # Make these fields read-only in the detail view
+    readonly_fields = ['individual_portfolio', 'created_at']
+
+    # Custom method for list_display
+    def get_user_email(self, obj):
+        return obj.individual_portfolio.profile.user.email
+    get_user_email.short_description = "User Email"
 
 
 @admin.register(StockTag)

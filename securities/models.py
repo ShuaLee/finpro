@@ -11,21 +11,10 @@ class StockPortfolio(models.Model):
     individual_portfolio = models.OneToOneField(
         'portfolio.IndividualPortfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
-    name = models.CharField(max_length=255, default="Stock Portfolio")
     created_at = models.DateTimeField(auto_now_add=True)
-    custom_columns = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
-        return f"{self.name} - {self.individual_portfolio.name}"
-
-    def get_default_columns(self):
-        return {
-            "price": None,
-            "dividends": None,
-            "name": None,
-            "market_cap": None,
-            # Add more as needed
-        }
+        return f"{self.individual_portfolio}"
 
 
 class StockTag(models.Model):

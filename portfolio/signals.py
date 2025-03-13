@@ -9,5 +9,5 @@ def create_individual_portfolio(sender, instance, created, **kwargs):
     # Create an IndividualPortfolio when a profile is first created
     if created:
         IndividualPortfolio.objects.create(
-            profile=instance, name=f"{instance.user.email}'s Portfolio"
+            profile=instance
         )
