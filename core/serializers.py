@@ -5,9 +5,13 @@ from portfolio.serializers import IndividualPortfolioSerializer
 
 class ProfileSerializer(serializers.ModelSerializer):
     individual_portfolio = IndividualPortfolioSerializer(read_only=True)
+    email = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = ['id', 'user', 'currency', 'language',
+        fields = ['id', 'user', 'email', 'currency', 'language',
                   'birth_date', 'is_asset_manager', 'individual_portfolio']
         read_only_fields = ['user']
+
+    def get_email(self, obj):
+        return obj.user.email

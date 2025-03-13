@@ -8,25 +8,30 @@ from securities.views import StockAccountViewSet, StockPortfolioViewSet
 router = DefaultRouter()
 router.register(r'profiles', ProfileViewSet, basename='profile')
 
-# Nested router for portfolios under profiles
+# Nested router for endpoints under profiles
 profile_router = routers.NestedDefaultRouter(
     router, r'profiles', lookup='profile'
 )
+
+# Register portfolio as a single endpoint (no PK)
 profile_router.register(
     r'portfolio', IndividualPortfolioViewSet, basename='profile-portfolio'
 )
 
-# Nested router for stockportfolios under portfolios
+urlpatterns = router.urls + profile_router.urls
+
+
+"""
 portfolio_router = routers.NestedDefaultRouter(
     profile_router, r'portfolio', lookup='portfolio'
 )
 portfolio_router.register(
-    r'stockportfolios', StockPortfolioViewSet, basename='portfolio-stockportfolios'
+    r'stockportfolio', StockPortfolioViewSet, basename='portfolio-stockportfolio'
 )
 
-# Nested router for stockaccounts under stockportfolios
+# Nested router for stockaccounts under stockportfolio
 stockportfolio_router = routers.NestedDefaultRouter(
-    portfolio_router, r'stockportfolios', lookup='stock_portfolio'
+    portfolio_router, r'stockportfolio', lookup='stockportfolio'
 )
 stockportfolio_router.register(
     r'stockaccounts', StockAccountViewSet, basename='stockportfolio-stockaccounts'
@@ -34,3 +39,6 @@ stockportfolio_router.register(
 
 urlpatterns = router.urls + profile_router.urls + \
     portfolio_router.urls + stockportfolio_router.urls
+
+"""
+# Nested router for stockportfolio under portfolio

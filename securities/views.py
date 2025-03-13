@@ -10,11 +10,18 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
     serializer_class = StockPortfolioSerializer
 
     def get_queryset(self):
-        individual_portfolio_id = self.kwargs['portfolio_pk']
-        return StockPortfolio.objects.filter(individual_portfolio_id=individual_portfolio_id)
+        profile_id = self.kwargs['profile_pk']
+        return StockPortfolio.objects.filter(individual_portfolio__profile_id=profile_id)
+
+    def get_object(self):
+        """
+        Retrieve the single StockPortfolio for the profile's IndividualPortfolio.
+        """
+        profile_id = self.kwargs['profile_pk']
+        return StockPortfolio.objects.get(individual_portfolio__profile_id=profile_id)
 
     @action(detail=True, methods=['post'], url_path='reset-columns')
-    def reset_columns(self, request, profile_pk=None, individual_portfolio_pk=None, pk=None):
+    def reset_columns(self, request, profile_pk=None):
         stock_portfolio = self.get_object()
         custom_columns = stock_portfolio.custom_columns
         for col in custom_columns:
@@ -33,18 +40,12 @@ class StockAccountViewSet(viewsets.ModelViewSet):
     serializer_class = StockAccountSerializer
 
     def get_queryset(self):
-        """
-        Filter StockAccounts by the portfolio ID from the URL.
-        """
-        stock_portfolio_id = self.kwargs['stock_portfolio_pk']
-        return StockAccount.objects.filter(stock_portfolio_id=stock_portfolio_id)
+        profile_id = self.kwargs['profile_pk']
+        return StockAccount.objects.filter(stock_portfolio__individual_portfolio__profile_id=profile_id)
 
     @action(detail=True, methods=['post'], serializer_class=StockHoldingCreateSerializer, url_path='add-stock')
-    def add_stock(self, request, profile_pk=None, portfolio_pk=None, stock_portfolio_pk=None, pk=None):
-        """
-        Add stock to this StockAccount.
-        """
-        stock_account = self.get_object()  # Get the specific StockAccount instance
+    def add_stock(self, request, profile_pk=None, pk=None):
+        stock_account = self.get_object()
         serializer = self.get_serializer(data=request.data, context={
                                          'stock_account': stock_account})
         serializer.is_valid(raise_exception=True)
