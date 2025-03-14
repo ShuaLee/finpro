@@ -1,6 +1,14 @@
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from .models import Profile
 from portfolio.serializers import PortfolioSerializer
+
+
+class UserCreateSerializer(BaseUserCreateSerializer):
+    class Meta(BaseUserCreateSerializer.Meta):
+        model = get_user_model()
+        fields = ('id', 'email', 'first_name', 'last_name', 'password')
 
 
 class ProfileSerializer(serializers.ModelSerializer):
