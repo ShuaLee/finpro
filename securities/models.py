@@ -8,6 +8,9 @@ import yfinance as yf
 
 
 class StockPortfolio(models.Model):
+    """
+    StockPortfolio is the main container for all StockAccounts. 
+    """
     portfolio = models.OneToOneField(
         'portfolio.Portfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
@@ -15,6 +18,8 @@ class StockPortfolio(models.Model):
 
     def __str__(self):
         return f"{self.portfolio}"
+
+# ------------------------------------------------------------------------------------------- #
 
 
 class StockTag(models.Model):

@@ -20,20 +20,18 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
         profile_id = self.kwargs['profile_pk']
         return StockPortfolio.objects.get(portfolio__profile_id=profile_id)
 
-    @action(detail=True, methods=['post'], url_path='reset-columns')
-    def reset_columns(self, request, profile_pk=None):
-        stock_portfolio = self.get_object()
-        custom_columns = stock_portfolio.custom_columns
-        for col in custom_columns:
-            if custom_columns[col] and custom_columns[col].get('override'):
-                custom_columns[col] = None
-        stock_portfolio.custom_columns = custom_columns
-        stock_portfolio.save()
-        for account in stock_portfolio.stock_accounts.all():
-            for holding in account.stockholding_set.all():
-                holding.stock.update_from_yfinance()
-        serializer = self.get_serializer(stock_portfolio)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    """
+    THIS HASNT BEEN IMPLEMENTED CORRECTLY
+    @action(detail=True, methods=['post'], url_path='add-stockaccount')
+    def add_stockaccount(self, request, profile_pk=None):
+        stock_portfolio = self.get_object()  # Get the StockPortfolio instance
+        serializer = StockAccountSerializer(data=request.data, context={
+                                            'stock_portfolio': stock_portfolio})
+        if serializer.is_valid():
+            serializer.save(stock_portfolio=stock_portfolio)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)"
+    """
 
 
 class StockAccountViewSet(viewsets.ModelViewSet):
