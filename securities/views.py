@@ -11,14 +11,14 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         profile_id = self.kwargs['profile_pk']
-        return StockPortfolio.objects.filter(individual_portfolio__profile_id=profile_id)
+        return StockPortfolio.objects.filter(portfolio__profile_id=profile_id)
 
     def get_object(self):
         """
         Retrieve the single StockPortfolio for the profile's IndividualPortfolio.
         """
         profile_id = self.kwargs['profile_pk']
-        return StockPortfolio.objects.get(individual_portfolio__profile_id=profile_id)
+        return StockPortfolio.objects.get(portfolio__profile_id=profile_id)
 
     @action(detail=True, methods=['post'], url_path='reset-columns')
     def reset_columns(self, request, profile_pk=None):
@@ -41,7 +41,7 @@ class StockAccountViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         profile_id = self.kwargs['profile_pk']
-        return StockAccount.objects.filter(stock_portfolio__individual_portfolio__profile_id=profile_id)
+        return StockAccount.objects.filter(stock_portfolio__portfolio__profile_id=profile_id)
 
     @action(detail=True, methods=['post'], serializer_class=StockHoldingCreateSerializer, url_path='add-stock')
     def add_stock(self, request, profile_pk=None, pk=None):

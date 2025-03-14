@@ -1,4 +1,4 @@
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, UpdateModelMixin
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.viewsets import GenericViewSet
 from .models import Portfolio
 from .serializers import PortfolioSerializer
