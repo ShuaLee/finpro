@@ -1,10 +1,10 @@
 from rest_framework import serializers
 from .models import Profile
-from portfolio.serializers import IndividualPortfolioSerializer
+from portfolio.serializers import PortfolioSerializer
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-    individual_portfolio = IndividualPortfolioSerializer(read_only=True)
+    individual_portfolio = PortfolioSerializer(read_only=True)
     email = serializers.SerializerMethodField()
 
     class Meta:

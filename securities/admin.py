@@ -14,17 +14,17 @@ class StockPortfolioAdmin(admin.ModelAdmin):
     list_display = ['get_user_email', 'created_at']
 
     # Fields to search by
-    search_fields = ['individual_portfolio__profile__user__email']
+    search_fields = ['portfolio__profile__user__email']
 
     # Fields to filter by
     list_filter = ['created_at']
 
     # Make these fields read-only in the detail view
-    readonly_fields = ['individual_portfolio', 'created_at']
+    readonly_fields = ['portfolio', 'created_at']
 
     # Custom method for list_display
     def get_user_email(self, obj):
-        return obj.individual_portfolio.profile.user.email
+        return obj.portfolio.profile.user.email
     get_user_email.short_description = "User Email"
 
 

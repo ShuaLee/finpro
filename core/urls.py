@@ -2,7 +2,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_nested import routers
 from django.urls import path
 from .views import ProfileViewSet
-from portfolio.views import IndividualPortfolioViewSet
+from portfolio.views import PortfolioViewSet
 from securities.views import StockAccountViewSet, StockPortfolioViewSet
 
 router = DefaultRouter()
@@ -15,7 +15,7 @@ profile_router = routers.NestedDefaultRouter(
 
 # Register portfolio as a single endpoint (no PK)
 profile_router.register(
-    r'portfolio', IndividualPortfolioViewSet, basename='profile-portfolio'
+    r'portfolio', PortfolioViewSet, basename='profile-portfolio'
 )
 
 urlpatterns = router.urls + profile_router.urls

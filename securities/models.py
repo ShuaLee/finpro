@@ -1,5 +1,5 @@
 from django.db import models
-from portfolio.models import IndividualPortfolio
+from portfolio.models import Portfolio
 from django.utils import timezone
 from decimal import Decimal
 import yfinance as yf
@@ -8,13 +8,13 @@ import yfinance as yf
 
 
 class StockPortfolio(models.Model):
-    individual_portfolio = models.OneToOneField(
-        'portfolio.IndividualPortfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
+    portfolio = models.OneToOneField(
+        'portfolio.Portfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.individual_portfolio}"
+        return f"{self.portfolio}"
 
 
 class StockTag(models.Model):
