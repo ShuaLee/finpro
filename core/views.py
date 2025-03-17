@@ -28,4 +28,4 @@ class ProfileViewSet(RetrieveModelMixin, UpdateModelMixin, GenericViewSet):
             return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_403_FORBIDDEN)
+        return Response(status=status.HTTP_404_NOT_FOUND)
