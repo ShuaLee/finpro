@@ -70,26 +70,6 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return filtered
 
 
-"""
-class StockAccountSerializer(serializers.ModelSerializer):
-    stocks = StockHoldingSerializer(
-        source='stockholding_set', many=True, read_only=True)
-
-    class Meta:
-        model = StockAccount
-        fields = ['id', 'account_name', 'account_type', 'created_at', 'stocks']
-
-"""
-"""
-    # THIS HASNT BEEN IMPLEMENTED CORRECTLY
-    def create(self, validated_data):
-        # Use stock_portfolio from context or kwargs
-        stock_portfolio = self.context.get('stock_portfolio')
-        return StockAccount.objects.create(stock_portfolio=stock_portfolio, **validated_data)
-
-"""
-
-
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
     """
     StockHoldingCreateSerilaizer: Uses ticker(a string) instead of requiring a Stock object ID,
