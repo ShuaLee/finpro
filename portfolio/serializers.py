@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import Portfolio
-from securities.models import StockAccount
-from securities.serializers import StockAccountSerializer, StockPortfolioSerializer
+from securities.serializers import StockPortfolioSerializer
 
 
 class PortfolioSerializer(serializers.ModelSerializer):

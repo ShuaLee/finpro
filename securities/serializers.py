@@ -4,7 +4,7 @@ from django.utils import timezone
 from decimal import Decimal
 from datetime import timedelta
 import yfinance as yf
-from .models import StockAccount, Stock, StockHolding, StockTag, StockPortfolio
+from .models import Stock, StockHolding, StockTag, StockPortfolio
 
 
 class StockTagSerializer(serializers.ModelSerializer):
@@ -70,6 +70,7 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return filtered
 
 
+"""
 class StockAccountSerializer(serializers.ModelSerializer):
     stocks = StockHoldingSerializer(
         source='stockholding_set', many=True, read_only=True)
@@ -78,18 +79,20 @@ class StockAccountSerializer(serializers.ModelSerializer):
         model = StockAccount
         fields = ['id', 'account_name', 'account_type', 'created_at', 'stocks']
 
-    """
-    THIS HASNT BEEN IMPLEMENTED CORRECTLY
+"""
+"""
+    # THIS HASNT BEEN IMPLEMENTED CORRECTLY
     def create(self, validated_data):
         # Use stock_portfolio from context or kwargs
         stock_portfolio = self.context.get('stock_portfolio')
         return StockAccount.objects.create(stock_portfolio=stock_portfolio, **validated_data)
-    """
+
+"""
 
 
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
     """
-    StockHoldingCreateSerilaizer: Uses ticker (a string) instead of requiring a Stock object ID,
+    StockHoldingCreateSerilaizer: Uses ticker(a string) instead of requiring a Stock object ID,
     making it user-friendly. It creates or fetches the Stock and links it to the StockAccount.
     """
     ticker = serializers.CharField(write_only=True)

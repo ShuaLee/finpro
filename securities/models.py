@@ -89,29 +89,24 @@ class Stock(models.Model):
             return {}
 
 
-class StockAccount(models.Model):
-    ACCOUNT_TYPE_CHOICES = [
-        ('self_managed', 'Self Managed'),
-        ('managed', 'Managed'),
-    ]
-
+class SelfManagedAccount(models.Model):
     stock_portfolio = models.ForeignKey(
-        StockPortfolio, on_delete=models.CASCADE, related_name='stock_accounts'
+        StockPortfolio, on_delete=models.CASCADE, related_name='self_managed_accounts'
     )
-    account_type = models.CharField(
-        max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='self_managed'
-    )
-    account_name = models.CharField(max_length=255, default='Stock Account')
+    account_name = models.CharField(
+        max_length=255, default='Self Managed Account')
     created_at = models.DateTimeField(auto_now_add=True)
     stocks = models.ManyToManyField(
-        Stock, through='StockHolding', related_name='stock_accounts', blank=True)
+        Stock, through='StockHolding', related_name='self_managed_accounts', blank=True
+    )
 
     def __str__(self):
         return f"{self.account_name} - {self.stock_portfolio.name}"
 
 
 class StockHolding(models.Model):
-    stock_account = models.ForeignKey(StockAccount, on_delete=models.CASCADE)
+    stock_account = models.ForeignKey(
+        SelfManagedAccount, on_delete=models.CASCADE)
     stock = models.ForeignKey('Stock', on_delete=models.CASCADE)
     shares = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(

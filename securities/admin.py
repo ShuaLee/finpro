@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Stock, StockAccount, StockTag, StockHolding, StockPortfolio
+from .models import Stock, StockTag, StockHolding, StockPortfolio
 
 
 class StockTagInline(admin.TabularInline):
@@ -44,6 +44,7 @@ class StockHoldingInline(admin.TabularInline):
     fields = ('stock', 'shares')
 
 
+"""
 # StockAccount Admin
 @admin.register(StockAccount)
 class StockAccountAdmin(admin.ModelAdmin):
@@ -52,7 +53,7 @@ class StockAccountAdmin(admin.ModelAdmin):
                     'stock_portfolio', 'created_at']
     list_filter = ['account_type', 'stock_portfolio']  # Updated
     search_fields = ['account_name', 'stock_portfolio__name']
-
+"""
 # Stock Admin
 
 
