@@ -1,9 +1,11 @@
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, CreateModelMixin
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.viewsets import GenericViewSet
 from rest_framework.response import Response
-from .models import StockPortfolio
-from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer
+from .models import StockPortfolio, SelfManagedAccount
+from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer, SelfManagedAccountSerializer
 
 
 # Create your views here.
@@ -40,3 +42,27 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, GenericViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return SelfManagedAccountCreateSerializer
+        return SelfManagedAccountSerializer
+
+    def get_queryset(self):
+        # Filter to the user's stock portfolio
+        profile = self.request.user.profile
+        stock_portfolio = profile.portfolio.stock_portfolio
+        return SelfManagedAccount.objects.filter(stock_portfolio=stock_portfolio)
+
+    def create(self, request, *args, **kwargs):
+        profile = request.user.profile
+        stock_portfolio = profile.portfolio.stock_portfolio
+        serializer = self.get_serializer(data=request.data, context={
+                                         'stock_portfolio': stock_portfolio})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

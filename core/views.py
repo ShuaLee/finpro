@@ -14,13 +14,17 @@ class ProfileViewSet(RetrieveModelMixin, UpdateModelMixin, GenericViewSet):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_object(self):
+        # Ignore any pk in the URL and return the authenticated user's profile
+        return self.request.user.profile
+
     def retrieve(self, request, *args, **kwargs):
-        profile = request.user.profile
+        profile = self.get_object()
         serializer = self.get_serializer(profile)
         return Response(serializer.data)
 
     def update(self, request, *args, **kwargs):
-        profile = request.user.profile
+        profile = self.get_object()
         serializer = self.get_serializer(
             profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
