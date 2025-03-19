@@ -15,5 +15,7 @@ urlpatterns = [
     path('profile/portfolio/stock-accounts/', SelfManagedAccountViewSet.as_view(
         {'get': 'list', 'post': 'create'}), name='stock-accounts-list'),
     path('profile/portfolio/stock-accounts/<int:pk>/',
-         SelfManagedAccountViewSet.as_view({'get': 'retrieve'}), name='stock-accounts-detail'),
+         SelfManagedAccountViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}), name='stock-accounts-detail'),
+    path('profile/portfolio/stock-accounts/add-self-managed-account/', PortfolioViewSet.as_view(
+        {'post': 'add_self_managed_account'}), name='add-self-managed-account'),
 ]

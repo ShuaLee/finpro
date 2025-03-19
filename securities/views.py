@@ -1,4 +1,4 @@
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, CreateModelMixin
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, CreateModelMixin, DestroyModelMixin
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -44,7 +44,7 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, GenericViewSet):
+class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelMixin, DestroyModelMixin, GenericViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
@@ -66,3 +66,9 @@ class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelM
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        # Gets the SelfManagedAccount by pk, scoped to the user's stock_portfolio
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
