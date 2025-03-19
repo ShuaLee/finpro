@@ -4,7 +4,7 @@ from django.utils import timezone
 from decimal import Decimal
 from datetime import timedelta
 import yfinance as yf
-from .models import Stock, StockHolding, StockTag, StockPortfolio
+from .models import Stock, StockHolding, StockTag, StockPortfolio, SelfManagedAccount
 
 
 class StockTagSerializer(serializers.ModelSerializer):
@@ -108,9 +108,33 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
         fields = ['ticker', 'shares']
 
 
+class SelfManagedAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SelfManagedAccount
+        fields = ['id', 'account_name', 'created_at']
+
+    def create(self, validated_data):
+        stock_portfolio = validated_data.pop('stock_portfolio', None)
+        return SelfManagedAccount.objects.create(stock_portfolio, **validated_data)
+
+
 class StockPortfolioSerializer(serializers.ModelSerializer):
-    # stock_accounts = StockAccountSerializer(many=True, read_only=True)
+    self_managed_accounts = SelfManagedAccountSerializer(
+        many=True, read_only=True)
 
     class Meta:
         model = StockPortfolio
-        fields = ['id', 'created_at']
+        fields = ['id', 'created_at', 'self_managed_accounts']
+
+
+class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SelfManagedAccount
+        fields = ['account_name']
+
+    def create(self, validated_data):
+        stock_portfolio = self.context.get('stock_portfolio')
+        if not stock_portfolio:
+            raise serializers.ValidationError(
+                "stock_portfolio is required in context")
+        return SelfManagedAccount.objects.create(stock_portfolio=stock_portfolio, **validated_data)

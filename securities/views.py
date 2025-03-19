@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import StockPortfolio
-from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer
+from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer
 
 
 # Create your views here.
@@ -17,6 +17,26 @@ class StockPortfolioViewSet(viewsets.ModelViewSet):
         stock_portfolio = profile.portfolio.stock_portfolio
         serializer = StockPortfolioSerializer(stock_portfolio)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['POST'], url_path='add-self-managed-account')
+    def add_self_managed_account(self, request, pk=None):
+        """
+        Add a self managed account to the user's StockPortfolio.
+        """
+        profile = request.user.profile
+        stock_portfolio = profile.portfolio.stock_portfolio
+
+        # Pass stock_portfolio to serializer context
+        serializer = SelfManagedAccountCreateSerializer(
+            data=request.data,
+            context={'stock_portfolio': stock_portfolio}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print(f"Serializer errors: {serializer.errors}")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request, *args, **kwargs):
         return Response(status=status.HTTP_404_NOT_FOUND)

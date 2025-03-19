@@ -12,20 +12,17 @@ from .models import Profile
 
 class ProfileViewSet(RetrieveModelMixin, UpdateModelMixin, GenericViewSet):
     serializer_class = ProfileSerializer
-    queryset = Profile.objects.all()
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=['GET', 'PUT'])
-    def me(self, request):
-        profile = Profile.objects.get(user_id=request.user.id)
-        if request.method == 'GET':
-            serializer = ProfileSerializer(profile)
-            return Response(serializer.data)
-        elif request.method == 'PUT':
-            serializer = ProfileSerializer(profile, data=request.data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response(serializer.data)
+    def retrieve(self, request, *args, **kwargs):
+        profile = request.user.profile
+        serializer = self.get_serializer(profile)
+        return Response(serializer.data)
 
-    def list(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_404_NOT_FOUND)
+    def update(self, request, *args, **kwargs):
+        profile = request.user.profile
+        serializer = self.get_serializer(
+            profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

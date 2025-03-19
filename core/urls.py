@@ -5,6 +5,7 @@ from .views import ProfileViewSet
 from portfolio.views import PortfolioViewSet
 from securities.views import StockPortfolioViewSet
 
+"""
 # Main router
 router = DefaultRouter()
 
@@ -13,7 +14,22 @@ router.register(r'profile', ProfileViewSet, basename='profile')
 router.register(r'portfolio', PortfolioViewSet, basename='portfolio')
 router.register(r'stockportfolio', StockPortfolioViewSet,
                 basename='stock-portfolio')
+urlpatterns = [
+    path('profile/', ProfileViewSet.as_view(
+        {'get': 'retrieve', 'put': 'update'}), name='profile-detail'),
+    path('portfolio/',
+         PortfolioViewSet.as_view({'get': 'retrieve'}), name='portfolio-detail'),
+    path('', include(router.urls)),
+]
+"""
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('profile/', ProfileViewSet.as_view(
+        {'get': 'retrieve', 'put': 'update'}), name='profile-detail'),
+    path('portfolio/',
+         PortfolioViewSet.as_view({'get': 'retrieve'}), name='portfolio-detail'),
+    path('portfolio/stock-accounts/', PortfolioViewSet.as_view(
+        {'get': 'stock_portfolio'}), name='portfolio-stock-accounts'),
+    path('portfolio/stock-accounts/add-self-managed-account/', PortfolioViewSet.as_view(
+        {'post': 'add_self_managed_account'}), name='portfolio-add-self-managed-account'),
 ]
