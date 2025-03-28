@@ -15,6 +15,18 @@ class StockPortfolio(models.Model):
         'portfolio.Portfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    custom_columns = models.JSONField(default=dict, blank=True)
+
+    def get_default_columns(self):
+        # Return a dict of default columns
+        return {
+            'stock': True,
+            'shares': True,
+            'purchase_price': True,
+            'price': True,
+            'total_investment': True,
+            'dividends': True
+        }
 
     def __str__(self):
         return f"{self.portfolio}"
@@ -42,50 +54,62 @@ class Stock(models.Model):
     ticker = models.CharField(max_length=10, unique=True)
     currency = models.CharField(max_length=10, blank=True)
     is_etf = models.BooleanField(default=False)
+    stock_exchange = models.CharField(max_length=50, blank=True, null=True)
+    dividend_rate = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True)
+    last_price = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True)
+    last_updated = models.DateTimeField(null=True, blank=True)
+    is_not_in_database = models.BooleanField(default=False)
 
     def __str__(self):
         return self.ticker
 
-    def fetch_yfinance_data(self, fields):
+    def fetch_yfinance_data(self, force_update=False):
+        """
+        Fetch data from yfinance and update the model. If force_update=False, use cached data if recent.
+        """
+        # Check if data is recent (e.g., within 1 day) and not forced.
+        if not force_update and self.last_updated and (timezone.now() - self.last_updated.days < 1):
+            return {
+                'price': self.last_price,
+                'dividends': self.dividend_rate,
+                'currency': self.currency,
+                'stock_exchange': self.stock_exchange,
+                'is_etf': self.is_etf,
+            }
+
         ticker = yf.Ticker(self.ticker)
         try:
             info = ticker.info
-            # Determine if it's an ETF
+            if not info or 'symbol' not in info or info['symbol'] != self.ticker.upper():
+                self.is_not_in_database = True
+                self.save(update_fields=['is_not_in_database'])
+                return {}
+
+            # Update fields based on yfinance data
             self.is_etf = info.get('quoteType') == 'ETF'
-            result = {}
+            self.currency = info.get('currency')
+            self.stock_exchange = info.get('exchange')
+            self.dividend_rate = Decimal(str(info.get('dividendRate', 0) or 0))
+            self.last_price = Decimal(str(info.get('currentPrice') or info.get(
+                'regularMarketPrice') or info.get('previousClose') or 0))
+            self.last_updated = timezone.now()
+            self.is_not_in_database = False
 
-            # Map requested fields to yfinance keys, with ETF handling
-            for field in fields:
-                if field == 'price':
-                    if self.is_etf:
-                        value = info.get('regularMarketPrice') or info.get(
-                            'previousClose')
-                    else:
-                        value = info.get('currentPrice') or info.get(
-                            'regularMarketPrice') or info.get('previousClose')
-                elif field == 'dividends':
-                    if self.is_etf:
-                        value = info.get('trailingAnnualDividendRate') or info.get(
-                            'dividendRate')
-                    else:
-                        value = info.get('dividendRate')
-                elif field == 'name':
-                    value = info.get('longName', info.get(
-                        'shortName', self.ticker))
-                else:
-                    # Generic fetch for other fields (e.g., marketCap)
-                    value = info.get(field)
-
-                # Convert to Decimal for monetary fields
-                if value is not None and field in ['price', 'dividends', 'marketCap', 'regularMarketPrice', 'previousClose', 'trailingAnnualDividendRate']:
-                    value = Decimal(str(value))
-                result[field] = value
-
-            # Update is_etf and save only if changed
-            self.save(update_fields=['is_etf'] if self.pk else None)
-            return result
+            # Save updated fields
+            self.save(update_fields=['is_etf', 'currency', 'stock_exchange',
+                      'dividend_rate', 'last_price', 'last_updated', 'is_not_in_database'])
+            return {
+                'price': self.last_price,
+                'dividends': self.dividend_rate,
+                'currency': self.currency,
+                'stock_exchange': self.stock_exchange,
+                'is_etf': self.is_etf,
+            }
         except Exception as e:
-            print(f"Failed to fetch {self.ticker}: {e}")
+            self.is_not_in_database = True
+            self.save(update_fields=['is_not_in_database'])
             return {}
 
 
@@ -107,13 +131,31 @@ class SelfManagedAccount(models.Model):
 class StockHolding(models.Model):
     stock_account = models.ForeignKey(
         SelfManagedAccount, on_delete=models.CASCADE)
-    stock = models.ForeignKey('Stock', on_delete=models.CASCADE)
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
     shares = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
         max_digits=15, decimal_places=2, null=True, blank=True)
+    custom_data = models.JSONField(default=dict, blank=True)
+    custom_ticker = models.CharField(max_length=10, null=True, blank=True)
 
     class Meta:
-        unique_together = ('stock_account', 'stock')
+        unique_together = ('stock_account', 'stock', 'custom_ticker')
 
     def __str__(self):
-        return f"{self.stock.ticker} ({self.shares} shares)"
+        return f"{self.stock.ticker if self.stock else self.custom_ticker} ({self.shares} shares)"
+
+
+class CustomStockHolding(models.Model):
+    stock_account = models.ForeignKey(
+        SelfManagedAccount, on_delete=models.CASCADE)
+    ticker = models.CharField(max_length=10)
+    shares = models.DecimalField(max_digits=15, decimal_places=4)
+    purchase_price = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True)
+    custom_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        unique_together = ('stock_account', 'ticker')
+
+    def __str__(self):
+        return f"{self.ticker} ({self.shares} shares)"

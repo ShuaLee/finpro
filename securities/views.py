@@ -4,8 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.response import Response
-from .models import StockPortfolio, SelfManagedAccount
-from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer, SelfManagedAccountSerializer
+from .models import StockPortfolio, SelfManagedAccount, StockHolding, CustomStockHolding
+from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer, SelfManagedAccountSerializer, StockHoldingSerializer, CustomStockHoldingSerializer
 
 
 # Create your views here.
@@ -50,6 +50,8 @@ class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelM
     def get_serializer_class(self):
         if self.action == 'create':
             return SelfManagedAccountCreateSerializer
+        elif self.action == 'add_stock':
+            return StockHoldingCreateSerializer
         return SelfManagedAccountSerializer
 
     def get_queryset(self):
@@ -72,3 +74,24 @@ class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelM
         instance = self.get_object()
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['POST'], url_path='add-stock')
+    def add_stock(self, request, pk=None):
+        account = self.get_object()  # SelfManagedAccount instance
+        serializer = StockHoldingCreateSerializer(
+            data=request.data, context={'stock_account': account})
+        serializer.is_valid(raise_exception=True)
+
+        # Create the holding (could be StockHolding or CustomStockHolding)
+        holding = serializer.create(serializer.validated_data)
+
+        # Choose the appropriate serializer based on the instance type
+        if isinstance(holding, StockHolding):
+            response_serializer = StockHoldingSerializer(holding)
+        elif isinstance(holding, CustomStockHolding):
+            response_serializer = CustomStockHoldingSerializer(holding)
+        else:
+            raise ValueError(
+                "Unexpected holding type returned from serializer")
+
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
