@@ -3,6 +3,9 @@ from portfolio.models import Portfolio
 from django.utils import timezone
 from decimal import Decimal
 import yfinance as yf
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create your models here.
 
@@ -20,7 +23,7 @@ class StockPortfolio(models.Model):
     def get_default_columns(self):
         # Return a dict of default columns
         return {
-            'stock': True,
+            'ticker': True,
             'shares': True,
             'purchase_price': True,
             'price': True,
@@ -57,10 +60,11 @@ class Stock(models.Model):
     stock_exchange = models.CharField(max_length=50, blank=True, null=True)
     dividend_rate = models.DecimalField(
         max_digits=15, decimal_places=4, null=True, blank=True)
+    dividend_yield = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True)
     last_price = models.DecimalField(
         max_digits=15, decimal_places=2, null=True, blank=True)
     last_updated = models.DateTimeField(null=True, blank=True)
-    is_not_in_database = models.BooleanField(default=False)
 
     def __str__(self):
         return self.ticker
@@ -70,46 +74,63 @@ class Stock(models.Model):
         Fetch data from yfinance and update the model. If force_update=False, use cached data if recent.
         """
         # Check if data is recent (e.g., within 1 day) and not forced.
-        if not force_update and self.last_updated and (timezone.now() - self.last_updated.days < 1):
-            return {
-                'price': self.last_price,
-                'dividends': self.dividend_rate,
-                'currency': self.currency,
-                'stock_exchange': self.stock_exchange,
-                'is_etf': self.is_etf,
-            }
+        if not force_update and self.last_updated:
+            time_diff = timezone.now() - self.last_updated
+            if time_diff.days < 1:
+                logger.info(
+                    f"Using cached data for {self.ticker}: price={self.last_price}, rate={self.dividend_rate}, yield={self.dividend_yield}")
+                return {
+                    'price': self.last_price,
+                    'dividend_rate': self.dividend_rate,
+                    'dividend_yield': self.dividend_yield,
+                    'currency': self.currency,
+                    'stock_exchange': self.stock_exchange,
+                    'is_etf': self.is_etf,
+                }
 
         ticker = yf.Ticker(self.ticker)
         try:
             info = ticker.info
             if not info or 'symbol' not in info or info['symbol'] != self.ticker.upper():
-                self.is_not_in_database = True
-                self.save(update_fields=['is_not_in_database'])
+                logger.warning(f"No valid data for {self.ticker}")
                 return {}
 
             # Update fields based on yfinance data
             self.is_etf = info.get('quoteType') == 'ETF'
             self.currency = info.get('currency')
             self.stock_exchange = info.get('exchange')
-            self.dividend_rate = Decimal(str(info.get('dividendRate', 0) or 0))
             self.last_price = Decimal(str(info.get('currentPrice') or info.get(
                 'regularMarketPrice') or info.get('previousClose') or 0))
             self.last_updated = timezone.now()
-            self.is_not_in_database = False
+
+            # Handle dividends/yield based on ETF status
+            if self.is_etf:
+                self.dividend_yield = Decimal(
+                    # Convert to percentage
+                    str(info.get('dividendYield', 0) or 0)) * 100
+                self.dividend_rate = None  # ETFs typically don’t use rate
+            else:
+                self.dividend_rate = Decimal(
+                    str(info.get('dividendRate', 0) or 0))
+                self.dividend_yield = Decimal(
+                    # Optional for stocks
+                    str(info.get('dividendYield', 0) or 0)) * 100
 
             # Save updated fields
             self.save(update_fields=['is_etf', 'currency', 'stock_exchange',
-                      'dividend_rate', 'last_price', 'last_updated', 'is_not_in_database'])
+                      'dividend_rate', 'dividend_yield', 'last_price', 'last_updated'])
+            logger.info(
+                f"Updated {self.ticker}: price={self.last_price}, dividends={self.dividend_rate}")
             return {
                 'price': self.last_price,
-                'dividends': self.dividend_rate,
+                'dividend_rate': self.dividend_rate,
+                'dividend_yield': self.dividend_yield,
                 'currency': self.currency,
                 'stock_exchange': self.stock_exchange,
                 'is_etf': self.is_etf,
             }
         except Exception as e:
-            self.is_not_in_database = True
-            self.save(update_fields=['is_not_in_database'])
+            logger.error(f"Error fetching data for {self.ticker}: {str(e)}")
             return {}
 
 
@@ -131,23 +152,7 @@ class SelfManagedAccount(models.Model):
 class StockHolding(models.Model):
     stock_account = models.ForeignKey(
         SelfManagedAccount, on_delete=models.CASCADE)
-    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
-    shares = models.DecimalField(max_digits=15, decimal_places=4)
-    purchase_price = models.DecimalField(
-        max_digits=15, decimal_places=2, null=True, blank=True)
-    custom_data = models.JSONField(default=dict, blank=True)
-    custom_ticker = models.CharField(max_length=10, null=True, blank=True)
-
-    class Meta:
-        unique_together = ('stock_account', 'stock', 'custom_ticker')
-
-    def __str__(self):
-        return f"{self.stock.ticker if self.stock else self.custom_ticker} ({self.shares} shares)"
-
-
-class CustomStockHolding(models.Model):
-    stock_account = models.ForeignKey(
-        SelfManagedAccount, on_delete=models.CASCADE)
+    stock = models.ForeignKey(Stock, null=True, on_delete=models.CASCADE)
     ticker = models.CharField(max_length=10)
     shares = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(

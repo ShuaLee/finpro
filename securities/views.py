@@ -4,8 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.response import Response
-from .models import StockPortfolio, SelfManagedAccount, StockHolding, CustomStockHolding
-from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer, SelfManagedAccountSerializer, StockHoldingSerializer, CustomStockHoldingSerializer
+from .models import StockPortfolio, SelfManagedAccount, StockHolding
+from .serializers import StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer, SelfManagedAccountSerializer, StockHoldingSerializer
 
 
 # Create your views here.
@@ -79,19 +79,14 @@ class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelM
     def add_stock(self, request, pk=None):
         account = self.get_object()  # SelfManagedAccount instance
         serializer = StockHoldingCreateSerializer(
-            data=request.data, context={'stock_account': account})
+            data=request.data, context={'stock_account': account}
+        )
         serializer.is_valid(raise_exception=True)
 
-        # Create the holding (could be StockHolding or CustomStockHolding)
+        # Create the holding (always a StockHolding instance)
         holding = serializer.create(serializer.validated_data)
 
-        # Choose the appropriate serializer based on the instance type
-        if isinstance(holding, StockHolding):
-            response_serializer = StockHoldingSerializer(holding)
-        elif isinstance(holding, CustomStockHolding):
-            response_serializer = CustomStockHoldingSerializer(holding)
-        else:
-            raise ValueError(
-                "Unexpected holding type returned from serializer")
+        # Serialize with StockHoldingSerializer (only one type now)
+        response_serializer = StockHoldingSerializer(holding)
 
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)

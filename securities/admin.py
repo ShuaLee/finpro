@@ -60,8 +60,8 @@ class StockAccountAdmin(admin.ModelAdmin):
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
     list_display = ('ticker', 'currency', 'is_etf', 'stock_exchange',
-                    'dividend_rate', 'last_price', 'last_updated', 'is_not_in_database')
-    list_filter = ('is_not_in_database', 'is_etf', 'stock_exchange')
+                    'dividend_rate', 'last_price', 'last_updated')
+    list_filter = ('is_etf', 'stock_exchange')
     search_fields = ('ticker',)
     actions = ['refresh_yfinance_data']
 
