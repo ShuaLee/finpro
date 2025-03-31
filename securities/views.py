@@ -126,6 +126,17 @@ class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelM
         serializer.save()
         return Response(StockHoldingSerializer(holding).data)
 
+    @action(detail=True, methods=['DELETE'], url_path='remove-stock/(?P<holding_pk>[^/.]+)')
+    def remove_stock(self, request, pk=None, holding_pk=None):
+        account = self.get_object()
+        try:
+            holding = StockHolding.objects.get(
+                stock_account=account, pk=holding_pk)
+            holding.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except StockHolding.DoesNotExist:
+            return Response({"error": "Stock holding not found"}, status=status.HTTP_404_NOT_FOUND)
+
     @action(detail=True, methods=['POST'], url_path='reset-stock-column/(?P<holding_pk>[^/.]+)')
     def reset_stock_column(self, request, pk=None, holding_pk=None):
         account = self.get_object()

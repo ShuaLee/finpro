@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
 from .views import ProfileViewSet
 from portfolio.views import PortfolioViewSet
 from securities.views import SelfManagedAccountViewSet, StockPortfolioViewSet
@@ -34,6 +33,8 @@ urlpatterns = [
          SelfManagedAccountViewSet.as_view({'post': 'add_stock'}), name='self-managed-accounts-add-stock'),
     path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/update-stock/<int:holding_pk>/',
          SelfManagedAccountViewSet.as_view({'patch': 'update_stock'}), name='self-managed-accounts-update-stock'),
+    path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/remove-stock/<int:holding_pk>/',
+         SelfManagedAccountViewSet.as_view({'delete': 'remove_stock'}), name='self-managed-accounts-remove-stock'),
     path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/reset-stock-column/<int:holding_pk>/',
          SelfManagedAccountViewSet.as_view({'post': 'reset_stock_column'}), name='self-managed-accounts-reset-stock-column'),
 
@@ -41,23 +42,3 @@ urlpatterns = [
     # path('profile/portfolio/stock-portfolio/managed-accounts/', ManagedAccountViewSet.as_view(...)),
     # path('profile/portfolio/stock-portfolio/managed-accounts/<int:pk>/', ManagedAccountViewSet.as_view(...)),
 ]
-
-"""
-urlpatterns = [
-    # Profile endpoints
-    path('profile/', ProfileViewSet.as_view(
-        {'get': 'retrieve', 'put': 'update'}), name='profile-detail'),
-
-    # Portfolio endpoints
-    path('profile/portfolio/',
-         PortfolioViewSet.as_view({'get': 'retrieve'}), name='portfolio-detail'),
-    path('profile/portfolio/stock-accounts/', SelfManagedAccountViewSet.as_view(
-        {'get': 'list', 'post': 'create'}), name='stock-accounts-list'),
-    path('profile/portfolio/stock-accounts/<int:pk>/',
-         SelfManagedAccountViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}), name='stock-accounts-detail'),
-    path('profile/portfolio/stock-accounts/<int:pk>/add-stock/',
-         SelfManagedAccountViewSet.as_view({'post': 'add_stock'}), name='stock-accounts-add-stock'),
-    path('profile/portfolio/stock-accounts/add-self-managed-account/', PortfolioViewSet.as_view(
-        {'post': 'add_self_managed_account'}), name='add-self-managed-account'),
-]
-"""

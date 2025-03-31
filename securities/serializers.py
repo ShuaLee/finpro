@@ -148,6 +148,9 @@ class StockHoldingUpdateSerializer(serializers.ModelSerializer):
         fields = ['custom_data']
 
     def update(self, instance, validated_data):
+        instance.shares = validated_data.get('shares', instance.shares)
+        instance.purchase_price = validated_data.get(
+            'purchase_price', instance.purchase_price)
         instance.custom_data = validated_data.get(
             'custom_data', instance.custom_data)
         instance.save()
