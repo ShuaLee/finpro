@@ -11,6 +11,8 @@ drf-nested-routers = "*"
 yfinance = "*"
 djoser = "*"
 djangorestframework-simplejwt = "*"
+celery = "*"
+redis = "*"
 
 [dev-packages]
 

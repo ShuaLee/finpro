@@ -21,18 +21,30 @@ class StockPortfolio(models.Model):
     custom_columns = models.JSONField(default=dict, blank=True)
 
     def get_default_columns(self):
-        # Return a dict of default columns
+        # Default column configuration
         return {
-            'ticker': True,
-            'shares': True,
-            'purchase_price': True,
-            'price': True,
-            'total_investment': True,
-            'dividends': True
+            # Non-editable, always auto
+            'ticker': {'visible': True, 'editable': False, 'auto': True},
+            # From StockHolding
+            'shares': {'visible': True, 'editable': True, 'auto': True},
+            # From StockHolding
+            'purchase_price': {'visible': True, 'editable': True, 'auto': True},
+            # From Stock (Yahoo Finance)
+            'price': {'visible': True, 'editable': True, 'auto': True},
+            # Calculated
+            'total_investment': {'visible': True, 'editable': True, 'auto': True},
+            # Calculated
+            'dividends': {'visible': True, 'editable': True, 'auto': True},
         }
 
+    def save(self, *args, **kwargs):
+        # Initialize custom_columns with defaults if empty
+        if not self.custom_columns:
+            self.custom_columns = self.get_default_columns()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.portfolio}"
+        return f"Stock Portfolio for {self.portfolio.user.email}"
 
 # ------------------------------------------------------------------------------------------- #
 
@@ -106,15 +118,15 @@ class Stock(models.Model):
             # Handle dividends/yield based on ETF status
             if self.is_etf:
                 self.dividend_yield = Decimal(
-                    # Convert to percentage
-                    str(info.get('dividendYield', 0) or 0)) * 100
-                self.dividend_rate = None  # ETFs typically don’t use rate
+                    # Fraction (e.g., 0.0156)
+                    str(info.get('dividendYield', 0) or 0))
+                self.dividend_rate = None
             else:
                 self.dividend_rate = Decimal(
                     str(info.get('dividendRate', 0) or 0))
                 self.dividend_yield = Decimal(
                     # Optional for stocks
-                    str(info.get('dividendYield', 0) or 0)) * 100
+                    str(info.get('dividendYield', 0) or 0))
 
             # Save updated fields
             self.save(update_fields=['is_etf', 'currency', 'stock_exchange',
@@ -134,6 +146,30 @@ class Stock(models.Model):
             return {}
 
 
+class StockAccount(models.Model):
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio, on_delete=models.CASCADE, related_name='stock_accounts'
+    )
+    account_name = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True  # Base class for all account types
+
+    def __str__(self):
+        return f"{self.account_name} - {self.stock_portfolio}"
+
+
+class SelfManagedAccount(StockAccount):
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio, on_delete=models.CASCADE, related_name='self_managed_accounts'
+    )
+    stocks = models.ManyToManyField(
+        'Stock', through='StockHolding', related_name='self_managed_accounts', blank=True
+    )
+
+
+"""
 class SelfManagedAccount(models.Model):
     stock_portfolio = models.ForeignKey(
         StockPortfolio, on_delete=models.CASCADE, related_name='self_managed_accounts'
@@ -147,6 +183,7 @@ class SelfManagedAccount(models.Model):
 
     def __str__(self):
         return f"{self.account_name} - {self.stock_portfolio.name}"
+"""
 
 
 class StockHolding(models.Model):

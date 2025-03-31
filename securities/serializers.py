@@ -24,7 +24,7 @@ class StockSerializer(serializers.ModelSerializer):
 
 
 class StockHoldingSerializer(serializers.ModelSerializer):
-    stock = StockSerializer()
+    stock = StockSerializer(allow_null=True)
     price = serializers.SerializerMethodField()
     total_investment = serializers.SerializerMethodField()
     dividends = serializers.SerializerMethodField()
@@ -37,6 +37,66 @@ class StockHoldingSerializer(serializers.ModelSerializer):
             'ticker', 'stock', 'shares', 'purchase_price', 'stock_tags',
             'price', 'total_investment', 'dividends', 'custom_data'
         ]
+
+    def to_representation(self, instance):
+        # Get custom_columns from the portfolio via context
+        portfolio = instance.stock_account.stock_portfolio
+        custom_columns = portfolio.custom_columns
+
+        # Default representation
+        ret = super().to_representation(instance)
+
+        # Add dynamic fields based on custom_columns
+        for column_name, config in custom_columns.items():
+            if config.get('visible', True):
+                if column_name == 'ticker':
+                    ret[column_name] = instance.ticker
+                elif column_name == 'shares':
+                    ret[column_name] = str(instance.shares)
+                elif column_name == 'purchase_price':
+                    ret[column_name] = str(
+                        instance.purchase_price) if instance.purchase_price else None
+                elif column_name == 'price':
+                    override = instance.custom_data.get(
+                        column_name, {}).get('value')
+                    if override is not None and instance.custom_data.get(column_name, {}).get('override', False):
+                        ret[column_name] = str(Decimal(override))
+                    else:
+                        ret[column_name] = str(
+                            instance.stock.last_price) if instance.stock and instance.stock.last_price else None
+                elif column_name == 'total_investment':
+                    override = instance.custom_data.get(
+                        column_name, {}).get('value')
+                    if override is not None and instance.custom_data.get(column_name, {}).get('override', False):
+                        ret[column_name] = str(Decimal(override))
+                    else:
+                        price = Decimal(ret.get('price', '0')) if ret.get(
+                            'price') else Decimal('0')
+                        ret[column_name] = str(
+                            price * instance.shares) if price else None
+                elif column_name == 'dividends':
+                    override = instance.custom_data.get(
+                        column_name, {}).get('value')
+                    if override is not None and instance.custom_data.get(column_name, {}).get('override', False):
+                        ret[column_name] = str(Decimal(override))
+                    else:
+                        if instance.stock:
+                            if instance.stock.is_etf:
+                                yield_percent = instance.stock.dividend_yield or Decimal(
+                                    '0')
+                                total_investment = Decimal(ret.get('total_investment', '0')) if ret.get(
+                                    'total_investment') else Decimal('0')
+                                ret[column_name] = str(
+                                    (total_investment * yield_percent) / Decimal('100')) if yield_percent else None
+                            else:
+                                rate = instance.stock.dividend_rate or Decimal(
+                                    '0')
+                                ret[column_name] = str(
+                                    rate * instance.shares) if rate else None
+                        else:
+                            ret[column_name] = None
+
+        return ret
 
     def get_price(self, obj):
         custom_cols = self.context.get('custom_columns', {})
@@ -80,9 +140,24 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return None
 
 
+class StockHoldingUpdateSerializer(serializers.ModelSerializer):
+    custom_data = serializers.JSONField()
+
+    class Meta:
+        model = StockHolding
+        fields = ['custom_data']
+
+    def update(self, instance, validated_data):
+        instance.custom_data = validated_data.get(
+            'custom_data', instance.custom_data)
+        instance.save()
+        return instance
+
+
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
     ticker = serializers.CharField(write_only=True)
     confirmed = serializers.BooleanField(write_only=True, default=False)
+    shares = serializers.DecimalField(max_digits=15, decimal_places=4)
 
     def validate_ticker(self, value):
         ticker = value.upper()
@@ -92,6 +167,12 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
                 f"Ticker '{ticker}' is too long. Maximum length is {max_length} characters."
             )
         return ticker
+
+    def validate_shares(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Shares cannot be negative. Must be 0 or greater.")
+        return value
 
     def create(self, validated_data):
         ticker = validated_data.pop('ticker')
@@ -164,7 +245,15 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
 class StockPortfolioSerializer(serializers.ModelSerializer):
     self_managed_accounts = SelfManagedAccountSerializer(
         many=True, read_only=True)
+    custom_columns = serializers.JSONField()
 
     class Meta:
         model = StockPortfolio
-        fields = ['id', 'created_at', 'self_managed_accounts']
+        fields = ['id', 'created_at',
+                  'self_managed_accounts', 'custom_columns']
+
+    def update(self, instance, validated_data):
+        instance.custom_columns = validated_data.get(
+            'custom_columns', instance.custom_columns)
+        instance.save()
+        return instance
