@@ -25,17 +25,17 @@ urlpatterns = [
          StockPortfolioViewSet.as_view({'get': 'list'}), name='stock-accounts-list'),
 
     # Self Managed Accounts endpoints
-    path('profile/portfolio/stock-portfolio/self-managed-accounts/', SelfManagedAccountViewSet.as_view(
+    path('profile/portfolio/stock-portfolio/stock-accounts/self-managed-accounts/', SelfManagedAccountViewSet.as_view(
         {'get': 'list', 'post': 'create'}), name='self-managed-accounts-list'),
-    path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/',
+    path('profile/portfolio/stock-portfolio/stock-accounts/self-managed-accounts/<int:pk>/',
          SelfManagedAccountViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}), name='self-managed-accounts-detail'),
-    path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/add-stock/',
+    path('profile/portfolio/stock-portfolio/stock-accounts/self-managed-accounts/<int:pk>/add-stock/',
          SelfManagedAccountViewSet.as_view({'post': 'add_stock'}), name='self-managed-accounts-add-stock'),
-    path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/update-stock/<int:holding_pk>/',
+    path('profile/portfolio/stock-portfolio/stock-accounts/self-managed-accounts/<int:pk>/update-stock/<int:holding_pk>/',
          SelfManagedAccountViewSet.as_view({'patch': 'update_stock'}), name='self-managed-accounts-update-stock'),
-    path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/remove-stock/<int:holding_pk>/',
+    path('profile/portfolio/stock-portfolio/stock-accounts/self-managed-accounts/<int:pk>/remove-stock/<int:holding_pk>/',
          SelfManagedAccountViewSet.as_view({'delete': 'remove_stock'}), name='self-managed-accounts-remove-stock'),
-    path('profile/portfolio/stock-portfolio/self-managed-accounts/<int:pk>/reset-stock-column/<int:holding_pk>/',
+    path('profile/portfolio/stock-portfolio/stock-accounts/self-managed-accounts/<int:pk>/reset-stock-column/<int:holding_pk>/',
          SelfManagedAccountViewSet.as_view({'post': 'reset_stock_column'}), name='self-managed-accounts-reset-stock-column'),
 
     # Managed Accounts endpoints (placeholder for future)

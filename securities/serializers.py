@@ -29,78 +29,27 @@ class StockHoldingSerializer(serializers.ModelSerializer):
     total_investment = serializers.SerializerMethodField()
     dividends = serializers.SerializerMethodField()
     stock_tags = StockTagSerializer(many=True)
-    custom_data = serializers.JSONField()
+    holding_display = serializers.JSONField()
 
     class Meta:
         model = StockHolding
         fields = [
             'ticker', 'stock', 'shares', 'purchase_price', 'stock_tags',
-            'price', 'total_investment', 'dividends', 'custom_data'
+            'price', 'total_investment', 'dividends', 'holding_display'
         ]
 
     def to_representation(self, instance):
-        # Get custom_columns from the portfolio via context
-        portfolio = instance.stock_account.stock_portfolio
-        custom_columns = portfolio.custom_columns
-
-        # Default representation
         ret = super().to_representation(instance)
-
-        # Add dynamic fields based on custom_columns
-        for column_name, config in custom_columns.items():
+        for column_name, config in instance.holding_display.items():
             if config.get('visible', True):
-                if column_name == 'ticker':
-                    ret[column_name] = instance.ticker
-                elif column_name == 'shares':
-                    ret[column_name] = str(instance.shares)
-                elif column_name == 'purchase_price':
-                    ret[column_name] = str(
-                        instance.purchase_price) if instance.purchase_price else None
-                elif column_name == 'price':
-                    override = instance.custom_data.get(
-                        column_name, {}).get('value')
-                    if override is not None and instance.custom_data.get(column_name, {}).get('override', False):
-                        ret[column_name] = str(Decimal(override))
-                    else:
-                        ret[column_name] = str(
-                            instance.stock.last_price) if instance.stock and instance.stock.last_price else None
-                elif column_name == 'total_investment':
-                    override = instance.custom_data.get(
-                        column_name, {}).get('value')
-                    if override is not None and instance.custom_data.get(column_name, {}).get('override', False):
-                        ret[column_name] = str(Decimal(override))
-                    else:
-                        price = Decimal(ret.get('price', '0')) if ret.get(
-                            'price') else Decimal('0')
-                        ret[column_name] = str(
-                            price * instance.shares) if price else None
-                elif column_name == 'dividends':
-                    override = instance.custom_data.get(
-                        column_name, {}).get('value')
-                    if override is not None and instance.custom_data.get(column_name, {}).get('override', False):
-                        ret[column_name] = str(Decimal(override))
-                    else:
-                        if instance.stock:
-                            if instance.stock.is_etf:
-                                yield_percent = instance.stock.dividend_yield or Decimal(
-                                    '0')
-                                total_investment = Decimal(ret.get('total_investment', '0')) if ret.get(
-                                    'total_investment') else Decimal('0')
-                                ret[column_name] = str(
-                                    (total_investment * yield_percent) / Decimal('100')) if yield_percent else None
-                            else:
-                                rate = instance.stock.dividend_rate or Decimal(
-                                    '0')
-                                ret[column_name] = str(
-                                    rate * instance.shares) if rate else None
-                        else:
-                            ret[column_name] = None
-
+                # Keep flattening value for app compatibility
+                ret[column_name] = config.get('value')
+        # No flattening of "edited" — it stays in holding_display
         return ret
 
     def get_price(self, obj):
-        custom_cols = self.context.get('custom_columns', {})
-        price_data = custom_cols.get('price', {})
+        holding_display = obj.holding_display
+        price_data = holding_display.get('price', {})
         if price_data.get('override') and price_data.get('value') is not None:
             return Decimal(str(price_data['value']))
         if obj.stock:  # Check if stock exists
@@ -115,8 +64,8 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return price * obj.shares if price is not None else None
 
     def get_dividends(self, obj):
-        custom_cols = self.context.get('custom_columns', {})
-        div_data = custom_cols.get('dividends', {})
+        holding_display = obj.holding_display
+        div_data = holding_display.get('dividends', {})
         if div_data.get('override') and div_data.get('value') is not None:
             return Decimal(str(div_data['value']))
         if obj.stock:
@@ -141,19 +90,36 @@ class StockHoldingSerializer(serializers.ModelSerializer):
 
 
 class StockHoldingUpdateSerializer(serializers.ModelSerializer):
-    custom_data = serializers.JSONField()
+    holding_display = serializers.JSONField()
 
     class Meta:
         model = StockHolding
-        fields = ['custom_data']
+        fields = ['shares', 'purchase_price', 'holding_display']
 
     def update(self, instance, validated_data):
         instance.shares = validated_data.get('shares', instance.shares)
         instance.purchase_price = validated_data.get(
             'purchase_price', instance.purchase_price)
-        instance.custom_data = validated_data.get(
-            'custom_data', instance.custom_data)
-        instance.save()
+        new_display = validated_data.get(
+            'holding_display', instance.holding_display)
+
+        # Update holding_display and set 'edited' for user changes
+        for column_name, config in instance.holding_display.items():
+            if config.get('editable', False) and column_name in new_display:
+                new_value = new_display[column_name].get('value')
+                if new_value is not None:
+                    instance.holding_display[column_name]['value'] = new_value
+                    # Set edited if the new value differs from the default
+                    if column_name == 'shares' and new_value != str(instance.shares):
+                        instance.holding_display[column_name]['edited'] = True
+                    elif column_name == 'purchase_price' and new_value != (str(instance.purchase_price) if instance.purchase_price else None):
+                        instance.holding_display[column_name]['edited'] = True
+                    elif column_name == 'price' and new_value != (str(instance.stock.last_price) if instance.stock and instance.stock.last_price else None):
+                        instance.holding_display[column_name]['edited'] = True
+                    elif column_name in ['total_investment', 'dividends']:
+                        # Assume edited for calculated fields
+                        instance.holding_display[column_name]['edited'] = True
+        instance.save()  # Triggers sync_holding_display to recompute 'edited'
         return instance
 
 
@@ -181,15 +147,13 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
         ticker = validated_data.pop('ticker')
         confirmed = validated_data.pop('confirmed')
         stock_account = self.context['stock_account']
-        holding_data = {k: v for k, v in validated_data.items(
-        ) if k in ['shares', 'purchase_price', 'custom_data']}
+        holding_data = {k: v for k, v in validated_data.items() if k in [
+            'shares', 'purchase_price']}
 
-        # Check for duplicates based on ticker
         if StockHolding.objects.filter(stock_account=stock_account, ticker=ticker).exists():
             raise serializers.ValidationError(
                 f"Ticker '{ticker}' is already in this account.")
 
-        # Check if ticker is verified
         stock = None
         yf_ticker = yf.Ticker(ticker)
         try:
@@ -197,25 +161,23 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
             if info and 'symbol' in info and info['symbol'] == ticker:
                 stock, _ = Stock.objects.get_or_create(ticker=ticker)
                 stock.fetch_yfinance_data()
-                stock.refresh_from_db()  # Ensure we get the latest data
+                stock.refresh_from_db()
                 logger.info(
                     f"Created/Updated stock {ticker} with price={stock.last_price}")
         except Exception as e:
             logger.error(f"Error verifying {ticker}: {str(e)}")
             if not confirmed:
                 raise serializers.ValidationError(
-                    f"Stock '{ticker}' does not exist on Yahoo Finance. "
-                    "Confirm with 'confirmed=True' to add it."
-                )
-            # Stock remains None for unverified tickers
+                    f"Stock '{ticker}' does not exist on Yahoo Finance. Confirm with 'confirmed=True' to add it.")
 
-        # Create StockHolding
-        return StockHolding.objects.create(
+        holding = StockHolding(
             stock_account=stock_account,
-            ticker=ticker,  # Always save the ticker
-            stock=stock,    # Link to Stock if verified, otherwise None
+            ticker=ticker,
+            stock=stock,
             **holding_data
         )
+        holding.save()  # Triggers initial sync with 'edited': False
+        return holding
 
     class Meta:
         model = StockHolding  # Still used for the endpoint, but creates either model
@@ -241,22 +203,21 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SelfManagedAccount
-        fields = ['id', 'account_name', 'created_at',
-                  'stock_holdings']
+        fields = ['id', 'account_name', 'created_at', 'stock_holdings']
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):
     self_managed_accounts = SelfManagedAccountSerializer(
         many=True, read_only=True)
-    custom_columns = serializers.JSONField()
+    holding_display = serializers.JSONField()
 
     class Meta:
         model = StockPortfolio
         fields = ['id', 'created_at',
-                  'self_managed_accounts', 'custom_columns']
+                  'self_managed_accounts', 'holding_display']
 
     def update(self, instance, validated_data):
-        instance.custom_columns = validated_data.get(
-            'custom_columns', instance.custom_columns)
+        instance.holding_display = validated_data.get(
+            'holding_display', instance.holding_display)
         instance.save()
         return instance

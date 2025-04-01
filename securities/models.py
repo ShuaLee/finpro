@@ -18,30 +18,26 @@ class StockPortfolio(models.Model):
         'portfolio.Portfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    custom_columns = models.JSONField(default=dict, blank=True)
+    holding_display = models.JSONField(default=dict, blank=True)
 
-    def get_default_columns(self):
-        # Default column configuration
+    def get_default_holding_display_config(self):
         return {
-            # Non-editable, always auto
-            'ticker': {'visible': True, 'editable': False, 'auto': True},
-            # From StockHolding
-            'shares': {'visible': True, 'editable': True, 'auto': True},
-            # From StockHolding
-            'purchase_price': {'visible': True, 'editable': True, 'auto': True},
-            # From Stock (Yahoo Finance)
-            'price': {'visible': True, 'editable': True, 'auto': True},
-            # Calculated
-            'total_investment': {'visible': True, 'editable': True, 'auto': True},
-            # Calculated
-            'dividends': {'visible': True, 'editable': True, 'auto': True},
+            'ticker': {'visible': True, 'editable': False, 'auto': True, 'edited': False},
+            'shares': {'visible': True, 'editable': True, 'auto': True, 'edited': False},
+            'purchase_price': {'visible': True, 'editable': True, 'auto': True, 'edited': False},
+            'price': {'visible': True, 'editable': True, 'auto': True, 'edited': False},
+            'total_investment': {'visible': True, 'editable': True, 'auto': True, 'edited': False},
+            'dividends': {'visible': True, 'editable': True, 'auto': True, 'edited': False},
         }
 
     def save(self, *args, **kwargs):
-        # Initialize custom_columns with defaults if empty
-        if not self.custom_columns:
-            self.custom_columns = self.get_default_columns()
+        if not self.holding_display:
+            self.holding_display = self.get_default_holding_display_config()
         super().save(*args, **kwargs)
+        if 'update_fields' not in kwargs or 'holding_display' in kwargs.get('update_fields', []):
+            for account in self.self_managed_accounts.all():
+                for holding in account.stockholding_set.all():
+                    holding.sync_holding_display(save=False)
 
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.user.email}"
@@ -177,10 +173,96 @@ class StockHolding(models.Model):
     shares = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
         max_digits=15, decimal_places=2, null=True, blank=True)
-    custom_data = models.JSONField(default=dict, blank=True)
+    holding_display = models.JSONField(default=dict, blank=True)
 
     class Meta:
         unique_together = ('stock_account', 'ticker')
 
     def __str__(self):
         return f"{self.ticker} ({self.shares} shares)"
+
+    def sync_holding_display(self, save=True):
+        portfolio = self.stock_account.stock_portfolio
+        template = portfolio.holding_display
+        updated_display = {}
+
+        for column_name, config in template.items():
+            # Copy the full config, including 'edited': False
+            updated_display[column_name] = config.copy()
+
+            if column_name == 'ticker':
+                updated_display[column_name]['value'] = self.ticker
+                # ticker is not editable, so 'edited' stays False
+            elif column_name == 'shares':
+                updated_display[column_name]['value'] = str(self.shares)
+                existing = self.holding_display.get(
+                    column_name, {}).get('value')
+                if existing and existing != str(self.shares):
+                    updated_display[column_name]['edited'] = True
+            elif column_name == 'purchase_price':
+                updated_display[column_name]['value'] = str(
+                    self.purchase_price) if self.purchase_price else None
+                existing = self.holding_display.get(
+                    column_name, {}).get('value')
+                if existing and existing != (str(self.purchase_price) if self.purchase_price else None):
+                    updated_display[column_name]['edited'] = True
+            elif column_name == 'price':
+                default_value = str(
+                    self.stock.last_price) if self.stock and self.stock.last_price else None
+                existing = self.holding_display.get(
+                    column_name, {}).get('value')
+                if existing and existing != default_value:
+                    updated_display[column_name]['value'] = existing
+                    updated_display[column_name]['edited'] = True
+                else:
+                    updated_display[column_name]['value'] = default_value
+                    # Explicitly reset to False if matching default
+                    updated_display[column_name]['edited'] = False
+            elif column_name == 'total_investment':
+                default_price = Decimal(self.holding_display.get(
+                    'price', {}).get('value', '0') or '0')
+                default_value = str(
+                    default_price * self.shares) if default_price else None
+                existing = self.holding_display.get(
+                    column_name, {}).get('value')
+                if existing and existing != default_value:
+                    updated_display[column_name]['value'] = existing
+                    updated_display[column_name]['edited'] = True
+                else:
+                    updated_display[column_name]['value'] = default_value
+                    # Explicitly reset to False if matching default
+                    updated_display[column_name]['edited'] = False
+            elif column_name == 'dividends':
+                if self.stock:
+                    if self.stock.is_etf:
+                        yield_percent = self.stock.dividend_yield or Decimal(
+                            '0')
+                        total_investment = Decimal(updated_display.get(
+                            'total_investment', {}).get('value', '0') or '0')
+                        default_value = str(
+                            (total_investment * yield_percent) / Decimal('100')) if yield_percent else None
+                    else:
+                        rate = self.stock.dividend_rate or Decimal('0')
+                        default_value = str(
+                            rate * self.shares) if rate else None
+                else:
+                    default_value = None
+                existing = self.holding_display.get(
+                    column_name, {}).get('value')
+                if existing and existing != default_value:
+                    updated_display[column_name]['value'] = existing
+                    updated_display[column_name]['edited'] = True
+                else:
+                    updated_display[column_name]['value'] = default_value
+                    # Explicitly reset to False if matching default
+                    updated_display[column_name]['edited'] = False
+
+        self.holding_display = updated_display
+        if save:
+            super().save(update_fields=['holding_display'])
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new:
+            self.sync_holding_display(save=False)
