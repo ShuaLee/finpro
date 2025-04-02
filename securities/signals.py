@@ -7,6 +7,5 @@ from .models import StockPortfolio
 @receiver(post_save, sender=Portfolio)
 def create_stock_portfolio(sender, instance, created, **kwargs):
     if created:
-        StockPortfolio.objects.create(
-            portfolio=instance
-        )
+        stock_portfolio = StockPortfolio.objects.create(portfolio=instance)
+        # stock_portfolio.save()  # Explicitly call save to trigger initialize_default_schema

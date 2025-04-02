@@ -1,9 +1,9 @@
 from rest_framework import serializers
 from django.db import IntegrityError, DataError
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import timedelta
-from .models import Stock, StockHolding, StockTag, StockPortfolio, SelfManagedAccount
+from .models import Stock, StockHolding, StockTag, StockPortfolio, SelfManagedAccount, SchemaColumn, HoldingValue, StockPortfolioSchema
 import yfinance as yf
 import logging
 
@@ -23,51 +23,57 @@ class StockSerializer(serializers.ModelSerializer):
                   'dividend_rate', 'dividend_yield']
 
 
+class HoldingValueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HoldingValue
+        fields = ['column', 'value_text',
+                  'value_number', 'value_boolean', 'edited']
+
+    def to_representation(self, instance):
+        value = instance.get_value()
+        return {'column': instance.column.title, 'value': value, 'edited': instance.edited}
+
+
 class StockHoldingSerializer(serializers.ModelSerializer):
     stock = StockSerializer(allow_null=True)
+    values = HoldingValueSerializer(many=True, read_only=True)
     price = serializers.SerializerMethodField()
     total_investment = serializers.SerializerMethodField()
     dividends = serializers.SerializerMethodField()
-    stock_tags = StockTagSerializer(many=True)
-    holding_display = serializers.JSONField()
 
     class Meta:
         model = StockHolding
-        fields = [
-            'ticker', 'stock', 'shares', 'purchase_price', 'stock_tags',
-            'price', 'total_investment', 'dividends', 'holding_display'
-        ]
+        fields = ['ticker', 'stock', 'shares', 'purchase_price',
+                  'values', 'price', 'total_investment', 'dividends']
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        for column_name, config in instance.holding_display.items():
-            if config.get('visible', True):
-                # Keep flattening value for app compatibility
-                ret[column_name] = config.get('value')
-        # No flattening of "edited" — it stays in holding_display
+        ret['table_data'] = {value['column']: {'value': value['value'], 'edited': value['edited']}
+                             for value in ret['values']}
+        del ret['values']  # Remove raw values list, keep table_data
         return ret
 
     def get_price(self, obj):
-        holding_display = obj.holding_display
-        price_data = holding_display.get('price', {})
-        if price_data.get('override') and price_data.get('value') is not None:
-            return Decimal(str(price_data['value']))
-        if obj.stock:  # Check if stock exists
+        # Fetch the 'Price' value from HoldingValue
+        price_obj = obj.values.filter(column__title='Price').first()
+        if price_obj and price_obj.edited and price_obj.get_value() is not None:
+            return Decimal(str(price_obj.get_value()))
+        if obj.stock:
             data = obj.stock.fetch_yfinance_data()
             price = data.get('price')
             logger.debug(f"Price for {obj.ticker}: {price}")
             return Decimal(str(price)) if price is not None else None
-        return None  # Return None for unverified tickers
+        return None
 
     def get_total_investment(self, obj):
         price = self.get_price(obj)
         return price * obj.shares if price is not None else None
 
     def get_dividends(self, obj):
-        holding_display = obj.holding_display
-        div_data = holding_display.get('dividends', {})
-        if div_data.get('override') and div_data.get('value') is not None:
-            return Decimal(str(div_data['value']))
+        # Fetch the 'Dividends' value from HoldingValue
+        div_obj = obj.values.filter(column__title='Dividends').first()
+        if div_obj and div_obj.edited and div_obj.get_value() is not None:
+            return Decimal(str(div_obj.get_value()))
         if obj.stock:
             data = obj.stock.fetch_yfinance_data()
             total_investment = self.get_total_investment(obj)
@@ -96,6 +102,29 @@ class StockHoldingUpdateSerializer(serializers.ModelSerializer):
         model = StockHolding
         fields = ['shares', 'purchase_price', 'holding_display']
 
+    def validate_holding_display(self, value):
+        portfolio = self.instance.stock_account.stock_portfolio
+        for title, config in value.items():
+            schema_col = next(
+                (col for col in portfolio.column_schema if col['title'] == title), None)
+            if not schema_col or not schema_col.get('editable', False):
+                continue  # Skip non-editable or undefined columns
+
+            new_value = config.get('value')
+            value_type = schema_col.get('value_type', 'text')
+            if new_value is not None:
+                if value_type == 'number':
+                    try:
+                        Decimal(new_value)
+                    except (ValueError, TypeError, InvalidOperation):
+                        raise serializers.ValidationError(
+                            f"Column '{title}' must be a number.")
+                elif value_type == 'boolean':
+                    if str(new_value).lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
+                        raise serializers.ValidationError(
+                            f"Column '{title}' must be a boolean (true/false).")
+        return value
+
     def update(self, instance, validated_data):
         instance.shares = validated_data.get('shares', instance.shares)
         instance.purchase_price = validated_data.get(
@@ -103,23 +132,30 @@ class StockHoldingUpdateSerializer(serializers.ModelSerializer):
         new_display = validated_data.get(
             'holding_display', instance.holding_display)
 
-        # Update holding_display and set 'edited' for user changes
-        for column_name, config in instance.holding_display.items():
-            if config.get('editable', False) and column_name in new_display:
-                new_value = new_display[column_name].get('value')
-                if new_value is not None:
-                    instance.holding_display[column_name]['value'] = new_value
-                    # Set edited if the new value differs from the default
-                    if column_name == 'shares' and new_value != str(instance.shares):
-                        instance.holding_display[column_name]['edited'] = True
-                    elif column_name == 'purchase_price' and new_value != (str(instance.purchase_price) if instance.purchase_price else None):
-                        instance.holding_display[column_name]['edited'] = True
-                    elif column_name == 'price' and new_value != (str(instance.stock.last_price) if instance.stock and instance.stock.last_price else None):
-                        instance.holding_display[column_name]['edited'] = True
-                    elif column_name in ['total_investment', 'dividends']:
-                        # Assume edited for calculated fields
-                        instance.holding_display[column_name]['edited'] = True
-        instance.save()  # Triggers sync_holding_display to recompute 'edited'
+        portfolio = instance.stock_account.stock_portfolio
+        for column in portfolio.column_schema:
+            title = column['title']
+            if column.get('editable', False) and title in new_display:
+                new_value = new_display[title].get('value')
+                existing = instance.holding_display.get(title, {})
+                if new_value != existing.get('value'):
+                    # Cast value to match value_type
+                    value_type = column.get('value_type', 'text')
+                    if value_type == 'number':
+                        new_value = str(Decimal(new_value)
+                                        ) if new_value else None
+                    elif value_type == 'boolean':
+                        new_value = str(new_value).lower() in (
+                            'true', '1', 'yes') if new_value else False
+                    elif value_type == 'text':
+                        new_value = str(new_value) if new_value else None
+
+                    instance.holding_display[title] = {
+                        'value': new_value,
+                        'edited': True
+                    }
+
+        instance.sync_holding_display(save=True)
         return instance
 
 
@@ -187,7 +223,7 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
 class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SelfManagedAccount
-        fields = ['account_name']
+        fields = ['account_name']  # Only require account_name for creation
 
     def create(self, validated_data):
         stock_portfolio = self.context.get('stock_portfolio')
@@ -206,18 +242,80 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
         fields = ['id', 'account_name', 'created_at', 'stock_holdings']
 
 
+class StockPortfolioColumnSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=100)
+    source = serializers.ChoiceField(
+        choices=[
+            ('manual', 'Manual Input'),
+            ('stock.ticker', 'Stock Ticker'),
+            ('holding.shares', 'Shares'),
+            ('holding.purchase_price', 'Purchase Price'),
+            ('stock.price', 'Current Price'),
+            ('calculated.total_investment', 'Total Investment'),
+            ('calculated.dividends', 'Dividends')
+        ],
+        default='manual'
+    )
+    editable = serializers.BooleanField(default=True)
+    value_type = serializers.ChoiceField(
+        choices=[
+            ('text', 'Text'),
+            ('number', 'Number'),
+            ('boolean', 'Boolean')
+        ],
+        default='text'
+    )
+
+    def update(self, instance, validated_data):
+        title = validated_data['title']
+        source = validated_data['source']
+        editable = validated_data['editable']
+        value_type = validated_data['value_type']
+
+        existing = next(
+            (col for col in instance.column_schema if col['title'] == title), None)
+        if existing:
+            existing.update(
+                {'source': source, 'editable': editable, 'value_type': value_type})
+        else:
+            instance.column_schema.append({
+                'title': title,
+                'source': source,
+                'editable': editable,
+                'value_type': value_type
+            })
+
+        instance.save()
+        return instance
+
+
+class SchemaColumnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SchemaColumn
+        fields = ['title', 'source', 'editable', 'value_type']
+
+
+class StockPortfolioSchemaSerializer(serializers.ModelSerializer):
+    columns = SchemaColumnSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = StockPortfolioSchema
+        fields = ['id', 'name', 'is_active',
+                  'is_deletable', 'columns']  # Added is_deletable
+
+
 class StockPortfolioSerializer(serializers.ModelSerializer):
     self_managed_accounts = SelfManagedAccountSerializer(
         many=True, read_only=True)
-    holding_display = serializers.JSONField()
+    schemas = StockPortfolioSchemaSerializer(
+        many=True, read_only=True)  # Updated from column_schema
 
     class Meta:
         model = StockPortfolio
-        fields = ['id', 'created_at',
-                  'self_managed_accounts', 'holding_display']
+        fields = ['id', 'created_at', 'self_managed_accounts', 'schemas']
 
     def update(self, instance, validated_data):
-        instance.holding_display = validated_data.get(
-            'holding_display', instance.holding_display)
+        instance.column_schema = validated_data.get(
+            'column_schema', instance.column_schema)
         instance.save()
         return instance
