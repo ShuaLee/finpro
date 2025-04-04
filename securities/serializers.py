@@ -319,3 +319,32 @@ class StockPortfolioSerializer(serializers.ModelSerializer):
             'column_schema', instance.column_schema)
         instance.save()
         return instance
+
+
+class SchemaColumnAddSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=100, required=True)
+    source = serializers.ChoiceField(
+        choices=[
+            ('manual', 'Manual Input'),
+            ('stock.ticker', 'Stock Ticker'),
+            ('holding.shares', 'Shares'),
+            ('stock.price', 'Current Price'),
+            ('calculated.total_investment', 'Total Investment'),
+            ('calculated.dividends', 'Dividends')
+        ],
+        default='manual',
+        required=False
+    )
+    editable = serializers.BooleanField(default=True, required=False)
+    value_type = serializers.ChoiceField(
+        choices=[('text', 'Text'), ('number', 'Number'),
+                 ('boolean', 'Boolean')],
+        default='text',
+        required=False
+    )
+
+    def validate_title(self, value):
+        # Optional: Add custom validation if needed
+        if not value.strip():
+            raise serializers.ValidationError("Title cannot be empty.")
+        return value

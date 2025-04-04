@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from portfolio.models import Portfolio
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
@@ -231,6 +232,8 @@ class StockHolding(models.Model):
         if is_new:
             self.sync_values()
 
+### ------------------------------ Stock Portfolio Schema ------------------------------ ###
+
 
 class StockPortfolioSchema(models.Model):
     stock_portfolio = models.ForeignKey(
@@ -243,15 +246,66 @@ class StockPortfolioSchema(models.Model):
         unique_together = ('stock_portfolio', 'name')
 
     def save(self, *args, **kwargs):
+        # Enforce is_deletable rules based on schema name
+        if self.name == "Basic":
+            if self.pk is not None:  # Existing "Basic" schema
+                original = StockPortfolioSchema.objects.get(pk=self.pk)
+                if original.is_deletable != False:
+                    raise ValidationError(
+                        "Cannot change 'is_deletable' for the 'Basic' schema from its original value of False.")
+                self.is_deletable = False  # Lock to False
+            else:
+                self.is_deletable = False  # New "Basic" schema, set to False
+        else:
+            if self.pk is not None:  # Existing non-"Basic" schema
+                original = StockPortfolioSchema.objects.get(pk=self.pk)
+                if original.is_deletable != True:
+                    raise ValidationError(
+                        "Cannot change 'is_deletable' for non-'Basic' schemas from its original value of True.")
+                self.is_deletable = True  # Lock to True
+            else:
+                self.is_deletable = True  # New non-"Basic" schema, set to True
+
+        # Enforce one active schema rule
         if self.is_active:
-            StockPortfolioSchema.objects.filter(stock_portfolio=self.stock_portfolio, is_active=True).exclude(
-                pk=self.pk).update(is_active=False)
+            StockPortfolioSchema.objects.filter(
+                stock_portfolio=self.stock_portfolio,
+                is_active=True
+            ).exclude(pk=self.pk).update(is_active=False)
+        else:
+            active_schemas = StockPortfolioSchema.objects.filter(
+                stock_portfolio=self.stock_portfolio,
+                is_active=True
+            )
+            if active_schemas.count() == 1 and active_schemas.first().pk == self.pk:
+                raise ValidationError(
+                    "Cannot deactivate the only active schema. At least one schema must remain active.")
+
         super().save(*args, **kwargs)
+
+        # Post-save check: Ensure at least one schema is active
+        if not StockPortfolioSchema.objects.filter(stock_portfolio=self.stock_portfolio, is_active=True).exists():
+            # Fallback: Activate the "Basic" schema if it exists, or the first schema
+            basic_schema = StockPortfolioSchema.objects.filter(
+                stock_portfolio=self.stock_portfolio,
+                name="Basic"
+            ).first()
+            if basic_schema:
+                basic_schema.is_active = True
+                basic_schema.save()
+            else:
+                first_schema = StockPortfolioSchema.objects.filter(
+                    stock_portfolio=self.stock_portfolio
+                ).first()
+                if first_schema:
+                    first_schema.is_active = True
+                    first_schema.save()
+                else:
+                    raise ValidationError(
+                        "No schemas available to activate. At least one schema must exist and be active.")
 
     def __str__(self):
         return f"{self.name} ({self.stock_portfolio})"
-
-# SchemaColumn: Defines columns within a schema
 
 
 class SchemaColumn(models.Model):

@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import ProfileViewSet
 from portfolio.views import PortfolioViewSet
-from securities.views import SelfManagedAccountViewSet, StockPortfolioViewSet
+from securities.views import SelfManagedAccountViewSet, StockPortfolioViewSet, StockPortfolioSchemaViewSet
 
 
 urlpatterns = [
@@ -19,6 +19,16 @@ urlpatterns = [
     path('profile/portfolio/stock-portfolio/add-self-managed-account/',
          StockPortfolioViewSet.as_view({'post': 'add_self_managed_account'}), name='stock-portfolio-add-self-managed-account'),
     # Future: path('profile/portfolio/stock-portfolio/add-managed-account/', ...),
+
+    # Schema Management Endpoints
+    path('profile/portfolio/stock-portfolio/schemas/',
+         StockPortfolioSchemaViewSet.as_view({'get': 'list', 'post': 'create'}), name='schema-list'),
+    path('profile/portfolio/stock-portfolio/schemas/<int:pk>/',
+         StockPortfolioSchemaViewSet.as_view({'get': 'retrieve', 'patch': 'update', 'delete': 'destroy'}), name='schema-detail'),
+    path('profile/portfolio/stock-portfolio/schemas/<int:pk>/add-column/',
+         StockPortfolioSchemaViewSet.as_view({'post': 'add_column'}), name='schema-add-column'),
+    path('profile/portfolio/stock-portfolio/schemas/<int:pk>/update-column/',
+         StockPortfolioSchemaViewSet.as_view({'patch': 'update_column'}), name='schema-update-column'),
 
     # All Stock Accounts endpoint
     path('profile/portfolio/stock-portfolio/stock-accounts/',

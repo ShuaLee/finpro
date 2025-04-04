@@ -1,14 +1,17 @@
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, CreateModelMixin, DestroyModelMixin
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.response import Response
-from .models import StockPortfolio, SelfManagedAccount, StockHolding
+from .models import StockPortfolio, SelfManagedAccount, StockHolding, StockPortfolioSchema, SchemaColumn
 from .serializers import (
     StockHoldingCreateSerializer, StockPortfolioSerializer, SelfManagedAccountCreateSerializer,
-    SelfManagedAccountSerializer, StockHoldingSerializer, StockHoldingUpdateSerializer
+    SelfManagedAccountSerializer, StockHoldingSerializer, StockHoldingUpdateSerializer, StockPortfolioSchemaSerializer, SchemaColumnAddSerializer
 )
+from django.core.exceptions import ValidationError
+from django.shortcuts import get_object_or_404
 import logging
 
 logger = logging.getLogger(__name__)
@@ -151,3 +154,113 @@ class SelfManagedAccountViewSet(ListModelMixin, RetrieveModelMixin, CreateModelM
             holding.save()
             return Response(StockHoldingSerializer(holding).data)
         return Response({"error": "Invalid column name"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
+    serializer_class = StockPortfolioSchemaSerializer
+    lookup_field = 'pk'
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Return schemas ties to the authenticated user's StockPortfolio.
+        """
+        profile = self.request.user.profile
+        stock_portfolio = profile.portfolio.stock_portfolio
+        return StockPortfolioSchema.objects.filter(stock_portfolio=stock_portfolio)
+
+    def get_stock_portfolio(self):
+        profile = self.request.user.profile
+        portfolio = profile.portfolio
+        return get_object_or_404(StockPortfolio, portfolio=portfolio)
+
+    def perform_create(self, serializer):
+        """
+        Create a new schema tied to the user's Stock Portfolio.
+        """
+        stock_portfolio = self.get_stock_portfolio()
+        serializer.save(stock_portfolio=stock_portfolio)
+
+    def perform_update(self, serializer):
+        # Handle updates (e.g., PATCH to change is_active)
+        try:
+            serializer.save()
+        except ValidationError as e:
+            raise DRFValidationError({"detail": str(e)})
+
+    def perform_destroy(self, instance):
+        """
+        Prevent deletion of non-deletable schemas and ensure an active schema remains.
+        """
+        if not instance.is_deletable:
+            raise PermissionDenied(
+                "Cannot delete a non-deletable schema like 'Basic'.")
+        if instance.is_active and instance.stock_portfolio.schemas.count() > 1:
+            next_schema = instance.stock_portfolio.schemas.exclude(
+                id=instance.id).first()
+            next_schema.is_active = True
+            next_schema.save()
+        instance.delete()
+
+    @action(detail=True, methods=['post'], url_path='add-column')
+    def add_column(self, request, pk=None):
+        schema = self.get_object()
+        serializer = SchemaColumnAddSerializer(data=request.data)
+
+        if serializer.is_valid():
+            title = serializer.validated_data['title']
+            source = serializer.validated_data['source']
+            editable = serializer.validated_data['editable']
+            value_type = serializer.validated_data['value_type']
+
+            column, created = SchemaColumn.objects.get_or_create(
+                schema=schema,
+                title=title,
+                defaults={'source': source, 'editable': editable,
+                          'value_type': value_type}
+            )
+            if not created:
+                return Response({"error": "Column already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Sync all holdings to include the new column
+            for account in schema.stock_portfolio.self_managed_accounts.all():
+                for holding in account.stockholding_set.all():
+                    holding.sync_values()
+
+            return Response({
+                "message": "Column added",
+                "column": {"title": title, "source": source, "editable": editable, "value_type": value_type}
+            }, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['patch'], url_path='update-column')
+    def update_column(self, request, pk=None):
+        schema = self.get_object()
+        title = request.data.get('title')
+        source = request.data.get('source')
+        editable = request.data.get('editable')
+        value_type = request.data.get('value_type')
+
+        if not title:
+            return Response({"error": "Title is required to identify the column"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            column = SchemaColumn.objects.get(schema=schema, title=title)
+        except SchemaColumn.DoesNotExist:
+            return Response({"error": "Column not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if source is not None:
+            column.source = source
+        if editable is not None:
+            column.editable = editable
+        if value_type is not None:
+            column.value_type = value_type
+        column.save()
+
+        # Sync all holdings if the column definition changed
+        for account in schema.stock_portfolio.self_managed_accounts.all():
+            for holding in account.stockholding_set.all():
+                holding.sync_values()
+
+        return Response({"message": "Column updated", "column": {"title": column.title, "source": column.source, "editable": column.editable, "value_type": column.value_type}}, status=status.HTTP_200_OK)
