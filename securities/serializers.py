@@ -54,15 +54,20 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return ret
 
     def get_price(self, obj):
-        # Fetch the 'Price' value from HoldingValue
+    # Fetch the 'Price' value from HoldingValue
         price_obj = obj.values.filter(column__title='Price').first()
         if price_obj and price_obj.edited and price_obj.get_value() is not None:
             return Decimal(str(price_obj.get_value()))
+    
         if obj.stock:
             data = obj.stock.fetch_yfinance_data()
-            price = data.get('price')
-            logger.debug(f"Price for {obj.ticker}: {price}")
-            return Decimal(str(price)) if price is not None else None
+            if data:
+                price = data.get('last_price')
+                logger.debug(f"Price for {obj.ticker}: {price}")
+                return Decimal(str(price)) if price is not None else None
+            else:
+                logger.warning(f"No data returned for stock: {obj.ticker}")
+    
         return None
 
     def get_total_investment(self, obj):
@@ -76,6 +81,9 @@ class StockHoldingSerializer(serializers.ModelSerializer):
             return Decimal(str(div_obj.get_value()))
         if obj.stock:
             data = obj.stock.fetch_yfinance_data()
+            if not data:
+                return None  # Avoid NoneType error if data is missing
+        
             total_investment = self.get_total_investment(obj)
             if obj.stock.is_etf and total_investment is not None:
                 yield_percent = data.get('dividend_yield')
