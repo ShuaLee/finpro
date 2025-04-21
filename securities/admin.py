@@ -1,11 +1,5 @@
 from django.contrib import admin
-from .models import Stock, StockTag, StockHolding, StockPortfolio
-
-
-class StockTagInline(admin.TabularInline):
-    model = StockTag
-    fk_name = 'parent'
-    extra = 1  # Number of empty forms to show for creating new tags
+from .models import Stock, StockHolding, StockPortfolio
 
 
 @admin.register(StockPortfolio)
@@ -28,15 +22,6 @@ class StockPortfolioAdmin(admin.ModelAdmin):
     get_user_email.short_description = "User Email"
 
 
-@admin.register(StockTag)
-class StockTagAdmin(admin.ModelAdmin):
-    list_display = ('name', 'stock_holding', 'parent')
-    search_fields = ('name',)
-
-    # Add the inline for managing sub-tags
-    inlines = [StockTagInline]
-
-
 # StockHolding Inline for StockAccount
 class StockHoldingInline(admin.TabularInline):
     model = StockHolding
@@ -55,6 +40,7 @@ class StockAccountAdmin(admin.ModelAdmin):
     search_fields = ['account_name', 'stock_portfolio__name']
 """
 # Stock Admin
+
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):

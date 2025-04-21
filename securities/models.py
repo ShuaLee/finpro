@@ -1,20 +1,21 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from portfolio.models import Portfolio
 from django.utils import timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from datetime import datetime
 import yfinance as yf
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 def parse_decimal(value):
     try:
         return Decimal(str(value)) if value is not None else None
     except:
         return None
-    
+
+
 def parse_date(value):
     try:
         return datetime.fromtimestamp(value).date() if value else None
@@ -27,7 +28,19 @@ class StockPortfolio(models.Model):
         'portfolio.Portfolio', on_delete=models.CASCADE, related_name='stock_portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    default_schema = models.ForeignKey('StockPortfolioSchema', null=True, blank=True, on_delete=models.SET_NULL, related_name='default_for_portfolios')
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+        if is_new:
+            self.create_default_schema()
+
+    def create_default_schema(self):
+        schema = StockPortfolioSchema.objects.create(
+            stock_portfolio=self,
+            name='Default'
+        )
+        schema.create_default_columns()
 
     def get_active_schema(self):
         return self.schemas.filter(is_active=True).first()
@@ -57,30 +70,8 @@ class StockPortfolio(models.Model):
             self.default_schema = schema
             self.save(update_fields=["default_schema"])
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        self.initialize_default_schema()
-
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
-
-# ------------------------------------------------------------------------------------------- #
-
-
-class StockTag(models.Model):
-    # e.g. "Coal Producer", "Tech", etc.
-    name = models.CharField(max_length=100)
-    stock_holding = models.ForeignKey(
-        'StockHolding', on_delete=models.CASCADE, related_name='stock_tags'
-    )
-
-    # Nested sub-tags
-    parent = models.ForeignKey(
-        'self', null=True, blank=True, on_delete=models.CASCADE, related_name='sub_tags'
-    )
-
-    def __str__(self):
-        return self.name
 
 
 class Stock(models.Model):
@@ -95,15 +86,22 @@ class Stock(models.Model):
     market = models.CharField(max_length=50, blank=True, null=True)
 
     # Price-related data
-    last_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    previous_close = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    open_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    day_high = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    day_low = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    last_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    previous_close = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    open_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    day_high = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    day_low = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
 
     # 52-week range
-    fifty_two_week_high = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    fifty_two_week_low = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    fifty_two_week_high = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    fifty_two_week_low = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
 
     # Volume
     average_volume = models.BigIntegerField(null=True, blank=True)
@@ -112,15 +110,22 @@ class Stock(models.Model):
 
     # Valuation
     market_cap = models.BigIntegerField(null=True, blank=True)
-    beta = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
-    pe_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    forward_pe = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    price_to_book = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    beta = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
+    pe_ratio = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    forward_pe = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    price_to_book = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
 
     # Dividends
-    dividend_rate = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    dividend_yield = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    payout_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    dividend_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    dividend_yield = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    payout_ratio = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
     ex_dividend_date = models.DateField(null=True, blank=True)
 
     # Company Profile
@@ -159,14 +164,17 @@ class Stock(models.Model):
             self.quote_type = info.get('quoteType')
             self.market = info.get('market')
 
-            self.last_price = parse_decimal(info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose'))
+            self.last_price = parse_decimal(info.get('currentPrice') or info.get(
+                'regularMarketPrice') or info.get('previousClose'))
             self.previous_close = parse_decimal(info.get('previousClose'))
             self.open_price = parse_decimal(info.get('open'))
             self.day_high = parse_decimal(info.get('dayHigh'))
             self.day_low = parse_decimal(info.get('dayLow'))
 
-            self.fifty_two_week_high = parse_decimal(info.get('fiftyTwoWeekHigh'))
-            self.fifty_two_week_low = parse_decimal(info.get('fiftyTwoWeekLow'))
+            self.fifty_two_week_high = parse_decimal(
+                info.get('fiftyTwoWeekHigh'))
+            self.fifty_two_week_low = parse_decimal(
+                info.get('fiftyTwoWeekLow'))
 
             self.average_volume = info.get('averageVolume')
             self.average_volume_10d = info.get('averageDailyVolume10Day')
@@ -282,108 +290,44 @@ class StockHolding(models.Model):
 ### ------------------------------ Stock Portfolio Schema ------------------------------ ###
 
 
-
 class StockPortfolioSchema(models.Model):
     stock_portfolio = models.ForeignKey(
         StockPortfolio, on_delete=models.CASCADE, related_name='schemas')
     name = models.CharField(max_length=100)
-    is_deletable = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ('stock_portfolio', 'name')
-
-    def save(self, *args, **kwargs):
-        # Enforce is_deletable rules based on schema name
-        if self.name == "Basic":
-            if self.pk is not None:  # Existing "Basic" schema
-                original = StockPortfolioSchema.objects.get(pk=self.pk)
-                if original.is_deletable != False:
-                    raise ValidationError(
-                        "Cannot change 'is_deletable' for the 'Basic' schema from its original value of False.")
-                self.is_deletable = False  # Lock to False
-            else:
-                self.is_deletable = False  # New "Basic" schema, set to False
-        else:
-            if self.pk is not None:  # Existing non-"Basic" schema
-                original = StockPortfolioSchema.objects.get(pk=self.pk)
-                if original.is_deletable != True:
-                    raise ValidationError(
-                        "Cannot change 'is_deletable' for non-'Basic' schemas from its original value of True.")
-                self.is_deletable = True  # Lock to True
-            else:
-                self.is_deletable = True  # New non-"Basic" schema, set to True
-
-        # Enforce one active schema rule
-        if self.is_active:
-            StockPortfolioSchema.objects.filter(
-                stock_portfolio=self.stock_portfolio,
-                is_active=True
-            ).exclude(pk=self.pk).update(is_active=False)
-        else:
-            active_schemas = StockPortfolioSchema.objects.filter(
-                stock_portfolio=self.stock_portfolio,
-                is_active=True
-            )
-            if active_schemas.count() == 1 and active_schemas.first().pk == self.pk:
-                raise ValidationError(
-                    "Cannot deactivate the only active schema. At least one schema must remain active.")
-
-        super().save(*args, **kwargs)
-
-        # Post-save check: Ensure at least one schema is active
-        if not StockPortfolioSchema.objects.filter(stock_portfolio=self.stock_portfolio, is_active=True).exists():
-            # Fallback: Activate the "Basic" schema if it exists, or the first schema
-            basic_schema = StockPortfolioSchema.objects.filter(
-                stock_portfolio=self.stock_portfolio,
-                name="Basic"
-            ).first()
-            if basic_schema:
-                basic_schema.is_active = True
-                basic_schema.save()
-            else:
-                first_schema = StockPortfolioSchema.objects.filter(
-                    stock_portfolio=self.stock_portfolio
-                ).first()
-                if first_schema:
-                    first_schema.is_active = True
-                    first_schema.save()
-                else:
-                    raise ValidationError(
-                        "No schemas available to activate. At least one schema must exist and be active.")
-
-    def __str__(self):
-        return f"{self.name} ({self.stock_portfolio})"
+    def create_default_columns(self):
+        default_columns = [
+            {"title": "Ticker", "source": "stock.ticker",
+                "editable": False, "value_type": "text", "is_deletable": False},
+            {"title": "Company Name", "source": "stock.long_name",
+                "editable": True, "value_type": "text", "is_deletable": True},
+            {"title": "Shares", "source": "holding.shares",
+                "editable": True, "value_type": "number", "is_deletable": True},
+            {"title": "Price", "source": "stock.price",
+                "editable": True, "value_type": "number", "is_deletable": True},
+            {"title": "Total Value", "source": "calculated.total_value",
+                "editable": False, "value_type": "number", "is_deletable": True},
+        ]
+        for col in default_columns:
+            SchemaColumn.objects.create(schema=self, **col)
 
 
 class SchemaColumn(models.Model):
+    VALUE_TYPE_CHOICES = [
+        ('text', 'Text'),
+        ('number', 'Number'),
+        ('boolean', 'Boolean'),
+    ]
+
     schema = models.ForeignKey(
         StockPortfolioSchema, on_delete=models.CASCADE, related_name='columns')
     title = models.CharField(max_length=100)
-    source = models.CharField(
-        max_length=50,
-        choices=[
-            ('manual', 'Manual Input'),
-            ('stock.ticker', 'Stock Ticker'),
-            ('holding.shares', 'Shares'),
-            ('stock.price', 'Current Price'),
-            ('calculated.total_investment', 'Total Investment'),
-            ('calculated.dividends', 'Dividends')
-        ],
-        default='manual'
-    )
-    editable = models.BooleanField(default=True)
-    value_type = models.CharField(
-        max_length=10,
-        choices=[('text', 'Text'), ('number', 'Number'),
-                 ('boolean', 'Boolean')],
-        default='text'
-    )
+    source = models.CharField(max_length=255)
+    editable = models.BooleanField(default=False)
+    value_type = models.CharField(max_length=50, choices=VALUE_TYPE_CHOICES)
+    is_deletable = models.BooleanField(default=True)
 
-    class Meta:
-        unique_together = ('schema', 'title')
-
-    def __str__(self):
-        return f"{self.title} ({self.schema})"
 
 # HoldingValue: Stores values for each holding based on the active schema
 
@@ -426,9 +370,3 @@ class HoldingValue(models.Model):
             self.value_text = None
             self.value_number = None
         self.save()
-
-
-class TickerHistory(models.Model):
-    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
-    old_ticker = models.CharField(max_length=10)
-    changed_at = models.DateTimeField(auto_now_add=True)

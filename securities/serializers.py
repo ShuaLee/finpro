@@ -3,17 +3,11 @@ from django.db import IntegrityError, DataError
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
-from .models import Stock, StockHolding, StockTag, StockPortfolio, SelfManagedAccount, SchemaColumn, HoldingValue, StockPortfolioSchema
+from .models import Stock, StockHolding, StockPortfolio, SelfManagedAccount, SchemaColumn, HoldingValue, StockPortfolioSchema
 import yfinance as yf
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-class StockTagSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = StockTag
-        fields = ['id', 'name', 'parent']
 
 
 class StockSerializer(serializers.ModelSerializer):
@@ -54,11 +48,11 @@ class StockHoldingSerializer(serializers.ModelSerializer):
         return ret
 
     def get_price(self, obj):
-    # Fetch the 'Price' value from HoldingValue
+        # Fetch the 'Price' value from HoldingValue
         price_obj = obj.values.filter(column__title='Price').first()
         if price_obj and price_obj.edited and price_obj.get_value() is not None:
             return Decimal(str(price_obj.get_value()))
-    
+
         if obj.stock:
             data = obj.stock.fetch_yfinance_data()
             if data:
@@ -67,7 +61,7 @@ class StockHoldingSerializer(serializers.ModelSerializer):
                 return Decimal(str(price)) if price is not None else None
             else:
                 logger.warning(f"No data returned for stock: {obj.ticker}")
-    
+
         return None
 
     def get_total_investment(self, obj):
@@ -83,7 +77,7 @@ class StockHoldingSerializer(serializers.ModelSerializer):
             data = obj.stock.fetch_yfinance_data()
             if not data:
                 return None  # Avoid NoneType error if data is missing
-        
+
             total_investment = self.get_total_investment(obj)
             if obj.stock.is_etf and total_investment is not None:
                 yield_percent = data.get('dividend_yield')
@@ -308,8 +302,7 @@ class StockPortfolioSchemaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StockPortfolioSchema
-        fields = ['id', 'name', 'is_active',
-                  'is_deletable', 'columns']  # Added is_deletable
+        fields = ['id', 'name', 'columns']  # Added is_deletable
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):
