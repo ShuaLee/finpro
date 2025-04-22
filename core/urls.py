@@ -1,9 +1,18 @@
-from django.urls import path
+from django.urls import path, include
 from .views import ProfileViewSet
-from portfolio.views import PortfolioViewSet
-from securities.views import SelfManagedAccountViewSet, StockPortfolioViewSet, StockPortfolioSchemaViewSet
+
+urlpatterns = [
+    # Profile endpoint (returns logged-in user's profile)
+    path('profile/', ProfileViewSet.as_view({'get': 'retrieve', 'put': 'update'}), name='profile-detail'),
+    path('profile/portfolio/', include('portfolio.urls')),
+]
 
 
+
+
+
+
+"""
 urlpatterns = [
     # Profile endpoint (returns logged-in user's profile)
     path('profile/', ProfileViewSet.as_view(
@@ -52,3 +61,4 @@ urlpatterns = [
     # path('profile/portfolio/stock-portfolio/managed-accounts/', ManagedAccountViewSet.as_view(...)),
     # path('profile/portfolio/stock-portfolio/managed-accounts/<int:pk>/', ManagedAccountViewSet.as_view(...)),
 ]
+"""

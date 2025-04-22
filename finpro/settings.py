@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     'djoser',
     'core',
     'portfolio',
-    'securities',
+    # 'securities',
+    'stock_portfolio',
 ]
 
 MIDDLEWARE = [
