@@ -294,7 +294,7 @@ class StockPortfolioColumnSerializer(serializers.Serializer):
 class SchemaColumnSerializer(serializers.ModelSerializer):
     class Meta:
         model = SchemaColumn
-        fields = ['title', 'source', 'editable']
+        fields = ['title', 'source', 'editable', 'value_type', 'column_type']
 
 
 class StockPortfolioSchemaSerializer(serializers.ModelSerializer):
@@ -323,8 +323,10 @@ class StockPortfolioSerializer(serializers.ModelSerializer):
 
 
 class SchemaColumnAddSerializer(serializers.Serializer):
+    """
     title = serializers.CharField(
         max_length=100, required=False, allow_blank=True)
+    """
     column_type = serializers.ChoiceField(
         choices=SchemaColumn.COLUMN_CATEGORY_CHOICES)
     source = serializers.CharField(required=False)
@@ -364,12 +366,13 @@ class SchemaColumnAddSerializer(serializers.Serializer):
             'calculated': dict(SchemaColumn.CALCULATED_SOURCE_CHOICES),
         }
 
+        if column_type == 'custom' and source:
+            raise serializers.ValidationError(
+                f"Custom columns cannot have a source. You provided source='{source}'."
+            )
+
         if column_type == 'custom':
-            if source:
-                raise serializers.ValidationError(
-                    "Custom columns should not have a source.")
             data['title'] = "Custom"
-            # Use provided value_type or default to 'text' for custom columns
             data['value_type'] = value_type or 'text'
         else:
             if not source:

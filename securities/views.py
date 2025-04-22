@@ -257,6 +257,8 @@ class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
                     "column_type": column_type,
                     "source": source,
                     "editable": editable,
+                    "value_type": value_type,
+                    "column_type": column_type
                 }
             }, status=status.HTTP_201_CREATED)
 

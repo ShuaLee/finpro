@@ -32,15 +32,7 @@ class StockPortfolio(models.Model):
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         super().save(*args, **kwargs)
-        if is_new:
-            self.create_default_schema()
 
-    def create_default_schema(self):
-        schema = StockPortfolioSchema.objects.create(
-            stock_portfolio=self,
-            name='Default'
-        )
-        schema.create_default_columns()
 
     def get_active_schema(self):
         return self.schemas.filter(is_active=True).first()
@@ -296,22 +288,6 @@ class StockPortfolioSchema(models.Model):
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def create_default_columns(self):
-        default_columns = [
-            {"title": "Ticker", "source": "stock.ticker",
-                "editable": False, "value_type": "text", "is_deletable": False},
-            {"title": "Company Name", "source": "stock.long_name",
-                "editable": True, "value_type": "text", "is_deletable": True},
-            {"title": "Shares", "source": "holding.shares",
-                "editable": True, "value_type": "number", "is_deletable": True},
-            {"title": "Price", "source": "stock.price",
-                "editable": True, "value_type": "number", "is_deletable": True},
-            {"title": "Total Value", "source": "calculated.total_value",
-                "editable": False, "value_type": "number", "is_deletable": True},
-        ]
-        for col in default_columns:
-            SchemaColumn.objects.create(schema=self, **col)
-
 
 class SchemaColumn(models.Model):
     COLUMN_CATEGORY_CHOICES = [
@@ -414,6 +390,7 @@ class SchemaColumn(models.Model):
     is_deletable = models.BooleanField(default=True)
     column_type = models.CharField(
         max_length=20, choices=COLUMN_CATEGORY_CHOICES)
+    value_type = models.CharField(max_length=50)
 
 
 # HoldingValue: Stores values for each holding based on the active schema
