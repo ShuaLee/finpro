@@ -294,7 +294,7 @@ class StockPortfolioColumnSerializer(serializers.Serializer):
 class SchemaColumnSerializer(serializers.ModelSerializer):
     class Meta:
         model = SchemaColumn
-        fields = ['title', 'source', 'editable', 'value_type']
+        fields = ['title', 'source', 'editable']
 
 
 class StockPortfolioSchemaSerializer(serializers.ModelSerializer):
@@ -323,29 +323,71 @@ class StockPortfolioSerializer(serializers.ModelSerializer):
 
 
 class SchemaColumnAddSerializer(serializers.Serializer):
-    title = serializers.CharField(max_length=100, required=True)
-    source = serializers.ChoiceField(
-        choices=[
-            ('manual', 'Manual Input'),
-            ('stock.ticker', 'Stock Ticker'),
-            ('holding.shares', 'Shares'),
-            ('stock.price', 'Current Price'),
-            ('calculated.total_investment', 'Total Investment'),
-            ('calculated.dividends', 'Dividends')
-        ],
-        default='manual',
-        required=False
-    )
+    title = serializers.CharField(
+        max_length=100, required=False, allow_blank=True)
+    column_type = serializers.ChoiceField(
+        choices=SchemaColumn.COLUMN_CATEGORY_CHOICES)
+    source = serializers.CharField(required=False)
     editable = serializers.BooleanField(default=True, required=False)
     value_type = serializers.ChoiceField(
         choices=[('text', 'Text'), ('number', 'Number'),
-                 ('boolean', 'Boolean')],
+                 ('boolean', 'Boolean'), ('date', 'Date')],
         default='text',
         required=False
     )
 
+    def validate_value_type(self, value):
+        source = self.initial_data.get('source', None)
+
+        if source:
+            # Automatically set value_type based on source
+            expected_value_type = SchemaColumn.SOURCE_VALUE_TYPE_MAP.get(
+                source)
+
+            if expected_value_type and value != expected_value_type:
+                raise serializers.ValidationError(
+                    f"Value type must be '{expected_value_type}' for the selected source."
+                )
+            return expected_value_type  # Return the expected value_type if source exists
+
+        # If no source, return the provided value_type (or default to 'text')
+        return value or 'text'  # Default to 'text' if not provided
+
+    def validate(self, data):
+        column_type = data.get('column_type')
+        source = data.get('source')
+        value_type = data.get('value_type')
+
+        valid_sources = {
+            'stock': dict(SchemaColumn.STOCK_SOURCE_CHOICES),
+            'holding': dict(SchemaColumn.HOLDING_SOURCE_CHOICES),
+            'calculated': dict(SchemaColumn.CALCULATED_SOURCE_CHOICES),
+        }
+
+        if column_type == 'custom':
+            if source:
+                raise serializers.ValidationError(
+                    "Custom columns should not have a source.")
+            data['title'] = "Custom"
+            # Use provided value_type or default to 'text' for custom columns
+            data['value_type'] = value_type or 'text'
+        else:
+            if not source:
+                raise serializers.ValidationError(
+                    f"Source is required for column type '{column_type}'."
+                )
+            if column_type in valid_sources and source not in valid_sources[column_type]:
+                raise serializers.ValidationError(
+                    f"Invalid source '{source}' for column type '{column_type}'."
+                )
+            # Auto-fill title with the source's display name
+            data['title'] = valid_sources[column_type][source]
+            # Auto-set value_type based on source for non-custom columns, ignoring provided value_type
+            data['value_type'] = SchemaColumn.SOURCE_VALUE_TYPE_MAP.get(
+                source, 'text')
+
+        return data
+
     def validate_title(self, value):
-        # Optional: Add custom validation if needed
-        if not value.strip():
-            raise serializers.ValidationError("Title cannot be empty.")
-        return value
+        # Allow blank title since it will be auto-filled in validate()
+        return value or ""

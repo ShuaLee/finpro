@@ -314,19 +314,106 @@ class StockPortfolioSchema(models.Model):
 
 
 class SchemaColumn(models.Model):
-    VALUE_TYPE_CHOICES = [
-        ('text', 'Text'),
-        ('number', 'Number'),
-        ('boolean', 'Boolean'),
+    COLUMN_CATEGORY_CHOICES = [
+        ('custom', 'Custom'),
+        ('stock', 'Stock Info'),
+        ('holding', 'Holding Info'),
+        ('calculated', 'Calculated'),
     ]
+
+    STOCK_SOURCE_CHOICES = [
+        # Price
+        ('last_price', 'Last Price'),
+        ('previous_close', 'Previous Close'),
+        ('open_price', 'Open Price'),
+        ('day_high', 'Day High'),
+        ('day_low', 'Day Low'),
+        ('fifty_two_week_high', '52-Week High'),
+        ('fifty_two_week_low', '52-Week Low'),
+
+        # Volume
+        ('volume', 'Volume'),
+        ('average_volume', 'Avg Volume (30d)'),
+        ('average_volume_10d', 'Avg Volume (10d)'),
+
+        # Valuation
+        ('market_cap', 'Market Cap'),
+        ('beta', 'Beta'),
+        ('pe_ratio', 'P/E Ratio'),
+        ('forward_pe', 'Forward P/E'),
+        ('price_to_book', 'Price/Book'),
+
+        # Dividends
+        ('dividend_rate', 'Dividend Rate'),
+        ('dividend_yield', 'Dividend Yield'),
+        ('payout_ratio', 'Payout Ratio'),
+        ('ex_dividend_date', 'Ex-Dividend Date'),
+
+        # Company Info
+        ('sector', 'Sector'),
+        ('industry', 'Industry'),
+        ('website', 'Website'),
+        ('full_time_employees', 'Employees'),
+
+        # Identity
+        ('short_name', 'Short Name'),
+        ('long_name', 'Long Name'),
+        ('currency', 'Currency'),
+        ('exchange', 'Exchange'),
+        ('quote_type', 'Quote Type'),
+        ('market', 'Market'),
+    ]
+
+    HOLDING_SOURCE_CHOICES = [
+        ('shares', 'Shares Held'),
+        ('purchase_price', 'Purchase Price'),
+    ]
+
+    CALCULATED_SOURCE_CHOICES = [
+        ('total_investment', 'Total Investment'),
+        ('dividends', 'Dividends Earned'),
+    ]
+
+    SOURCE_VALUE_TYPE_MAP = {
+        'last_price': 'number',
+        'previous_close': 'number',
+        'open_price': 'number',
+        'day_high': 'number',
+        'day_low': 'number',
+        'fifty_two_week_high': 'number',
+        'fifty_two_week_low': 'number',
+        'volume': 'number',
+        'average_volume': 'number',
+        'average_volume_10d': 'number',
+        'market_cap': 'number',
+        'beta': 'number',
+        'pe_ratio': 'number',
+        'forward_pe': 'number',
+        'price_to_book': 'number',
+        'dividend_rate': 'number',
+        'dividend_yield': 'number',
+        'payout_ratio': 'number',
+        'ex_dividend_date': 'date',
+        'sector': 'text',
+        'industry': 'text',
+        'website': 'text',
+        'full_time_employees': 'number',
+        'short_name': 'text',
+        'long_name': 'text',
+        'currency': 'text',
+        'exchange': 'text',
+        'quote_type': 'text',
+        'market': 'text',
+    }
 
     schema = models.ForeignKey(
         StockPortfolioSchema, on_delete=models.CASCADE, related_name='columns')
     title = models.CharField(max_length=100)
-    source = models.CharField(max_length=255)
+    source = models.CharField(max_length=50, null=True, blank=True)
     editable = models.BooleanField(default=False)
-    value_type = models.CharField(max_length=50, choices=VALUE_TYPE_CHOICES)
     is_deletable = models.BooleanField(default=True)
+    column_type = models.CharField(
+        max_length=20, choices=COLUMN_CATEGORY_CHOICES)
 
 
 # HoldingValue: Stores values for each holding based on the active schema

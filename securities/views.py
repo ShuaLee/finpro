@@ -161,6 +161,11 @@ class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
     lookup_field = 'pk'
     permission_classes = [IsAuthenticated]
 
+    def get_serializer_class(self):
+        if self.action == 'add_column':
+            return SchemaColumnAddSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """
         Return schemas ties to the authenticated user's StockPortfolio.
@@ -202,34 +207,57 @@ class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
             next_schema.save()
         instance.delete()
 
-    @action(detail=True, methods=['post'], url_path='add-column')
+    @action(detail=True, methods=['post'], url_path='add-column', serializer_class=SchemaColumnAddSerializer)
     def add_column(self, request, pk=None):
         schema = self.get_object()
-        serializer = SchemaColumnAddSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
 
         if serializer.is_valid():
             title = serializer.validated_data['title']
-            source = serializer.validated_data['source']
-            editable = serializer.validated_data['editable']
-            value_type = serializer.validated_data['value_type']
+            column_type = serializer.validated_data['column_type']
+            source = serializer.validated_data.get('source', None)
+            editable = serializer.validated_data.get('editable', True)
+
+            # 🔄 Automatically determine value_type based on source
+            if source:
+                value_type = SchemaColumn.SOURCE_VALUE_TYPE_MAP.get(
+                    source, 'text')  # fallback to 'text'
+            else:
+                # Use column_type-based fallback
+                if column_type in ('custom', 'calculated'):
+                    value_type = 'text'  # or let user define it manually if you expose it
+                else:
+                    value_type = 'number'
 
             column, created = SchemaColumn.objects.get_or_create(
                 schema=schema,
                 title=title,
-                defaults={'source': source, 'editable': editable,
-                          'value_type': value_type}
+                defaults={
+                    'source': source,
+                    'editable': editable,
+                    'column_type': column_type,
+                }
             )
-            if not created:
-                return Response({"error": "Column already exists"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Sync all holdings to include the new column
+            if not created:
+                return Response(
+                    {"error": "Column with this title already exists."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Sync holdings
             for account in schema.stock_portfolio.self_managed_accounts.all():
                 for holding in account.stockholding_set.all():
                     holding.sync_values()
 
             return Response({
-                "message": "Column added",
-                "column": {"title": title, "source": source, "editable": editable, "value_type": value_type}
+                "message": "Column added successfully.",
+                "column": {
+                    "title": title,
+                    "column_type": column_type,
+                    "source": source,
+                    "editable": editable,
+                }
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -240,7 +268,7 @@ class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
         title = request.data.get('title')
         source = request.data.get('source')
         editable = request.data.get('editable')
-        value_type = request.data.get('value_type')
+        column_type = request.data.get('column_type')
 
         if not title:
             return Response({"error": "Title is required to identify the column"}, status=status.HTTP_400_BAD_REQUEST)
@@ -250,12 +278,27 @@ class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
         except SchemaColumn.DoesNotExist:
             return Response({"error": "Column not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Update fields if provided
         if source is not None:
             column.source = source
+
+            # 🔄 Automatically update value_type based on new source
+            column.value_type = SchemaColumn.SOURCE_VALUE_TYPE_MAP.get(
+                source, 'text')
+
         if editable is not None:
             column.editable = editable
-        if value_type is not None:
-            column.value_type = value_type
+
+        if column_type is not None:
+            column.column_type = column_type
+
+            # Fallback to type-based value_type if no source provided
+            if not source:
+                if column_type in ('custom', 'calculated'):
+                    column.value_type = 'text'
+                else:
+                    column.value_type = 'number'
+
         column.save()
 
         # Sync all holdings if the column definition changed
@@ -263,4 +306,4 @@ class StockPortfolioSchemaViewSet(viewsets.ModelViewSet):
             for holding in account.stockholding_set.all():
                 holding.sync_values()
 
-        return Response({"message": "Column updated", "column": {"title": column.title, "source": column.source, "editable": column.editable, "value_type": column.value_type}}, status=status.HTTP_200_OK)
+        return Response({"message": "Column updated", "column": {"title": column.title, "source": column.source, "editable": column.editable, "value_type": column.value_type, "column_type": column.column_type}}, status=status.HTTP_200_OK)
