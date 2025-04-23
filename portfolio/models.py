@@ -12,24 +12,37 @@ class Portfolio(models.Model):
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
 
+
+class BaseAssetPortfolio(models.Model):
+    portfolio = models.ForeignKey(
+        Portfolio, on_delete=models.CASCADE, related_name="sub_portfolios")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
 class Asset(models.Model):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
-    investment_theme = models.ManyToManyField('InvestmentTheme', related_name="assets", blank=True)
+    investment_theme = models.ManyToManyField(
+        'InvestmentTheme', related_name="assets", blank=True)
 
     class Meta:
         abstract = True
 
     def get_type(self):
         return self.__class__.__name__
-    
+
     def get_current_value(self):
         raise NotImplementedError
-    
+
 
 class InvestmentTheme(models.Model):
-    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='asset_tags')
+    portfolio = models.ForeignKey(
+        Portfolio, on_delete=models.CASCADE, related_name='asset_tags')
     name = models.CharField(max_length=100, unique=True)
-    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtags')
+    parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtags')
 
     class Meta:
         unique_together = ('portfolio', 'name')
