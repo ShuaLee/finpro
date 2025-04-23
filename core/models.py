@@ -63,9 +63,25 @@ class User(AbstractUser):
 
 
 class Profile(models.Model):
+    ACCOUNT_TYPES = [
+        ('individual', 'Individual'),
+        ('manager', 'Manager'),
+    ]
+    PLAN_TIERS = [
+        ('free', 'Free'),
+        ('premium', 'Premium'),
+    ]
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE
     )
+    account_type = models.CharField(
+        max_length=20, choices=ACCOUNT_TYPES, default='individual')
+    plan = models.CharField(max_length=20, choices=PLAN_TIERS, default='free')
+
+    # Common Field
+    created_at = models.DateTimeField(auto_now_add=True)
+
     currency = models.CharField(max_length=10, blank=False, default="USD")
     language = models.CharField(max_length=30, blank=False, default="english")
     birth_date = models.DateField(null=True, blank=True)
