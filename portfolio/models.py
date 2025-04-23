@@ -23,9 +23,8 @@ class BaseAssetPortfolio(models.Model):
 
 
 class Asset(models.Model):
-    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
     investment_theme = models.ManyToManyField(
-        'InvestmentTheme', related_name="assets", blank=True)
+        'portfolio.InvestmentTheme', related_name="assets", blank=True)
 
     class Meta:
         abstract = True
