@@ -1,7 +1,8 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from portfolio.models import Asset, BaseAssetPortfolio
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 import yfinance as yf
 import logging
@@ -21,6 +22,7 @@ def parse_date(value):
         return datetime.fromtimestamp(value).date() if value else None
     except:
         return None
+        
 
 # -------------------- STOCK PORTFOLIO -------------------- #
 
@@ -225,12 +227,55 @@ class Stock(Asset):
 class StockHolding(models.Model):
     stock_account = models.ForeignKey(SelfManagedAccount, on_delete=models.CASCADE)
     stock = models.ForeignKey(Stock, null=True, on_delete=models.SET_NULL)
-    ticker = models.CharField(max_length=10)
     shares = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
 
     class Meta:
-        unique_together = ('stock_account', 'ticker')
+        unique_together = ('stock_account', 'stock')
 
     def __str__(self):
-        return f"{self.ticker} ({self.shares} shares)"
+        return f"{self.stock} ({self.shares} shares)"
+    
+# -------------------- SCHEMA -------------------- #
+
+class Schema(models.Model):
+    stock_portfolio = models.ForeignKey(StockPortfolio, on_delete=models.CASCADE, related_name="schemas")
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+    
+class SchemaColumn(models.Model):
+    DATA_TYPES = [
+        ('decimal', 'Decimal'),
+        ('integer', 'Integer'),
+        ('string', 'String'),
+        ('date', 'Date'),
+        ('url', 'URL'),
+    ]
+    SOURCE_TYPE = [
+        ('stock', 'Stock'),
+        ('holding', 'StockHolding'),
+        ('custom', 'Custom'),
+    ]
+
+    schema = models.ForeignKey(Schema, on_delete=models.CASCADE, related_name='columns')
+    name = models.CharField(max_length=100)
+    data_type = models.CharField(max_length=10, choices=DATA_TYPES)
+    source = models.CharField(max_length=20, choices=SOURCE_TYPE)
+    source_field = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.source})"
+    
+class SchemaColumnValue(models.Model):
+    stock_holding = models.ForeignKey(StockHolding, on_delete=models.CASCADE, related_name='column_values')
+    column = models.ForeignKey(SchemaColumn, on_delete=models.CASCADE, related_name='values')
+    value = models.TextField(blank=True, null=True) # Storing values as Text and parse when retreived.
+
+    class Meta:
+        unique_together = ('stock_holding', 'column')
+
+    def __str__(self):
+        return f"{self.stock_holding} | {self.column.name} = {self.value}"
