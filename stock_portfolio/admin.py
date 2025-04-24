@@ -15,7 +15,7 @@ class ManagedAccountAdmin(admin.ModelAdmin):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display = ('ticker', 'currency', 'quote_type', 'exchange',
+    list_display = ('ticker', 'is_custom', 'currency', 'quote_type', 'exchange',
                     'dividend_rate', 'last_price', 'last_updated')
     list_filter = ('exchange',)
     search_fields = ('ticker',)
@@ -61,9 +61,18 @@ class StockAdmin(admin.ModelAdmin):
     )
 
     def refresh_yfinance_data(self, request, queryset):
+        updated = 0
         for stock in queryset:
-            stock.fetch_yfinance_data(force_update=True)
-        self.message_user(request, "Selected stocks have been refreshed from yfinance.")
+            if stock.fetch_yfinance_data(force_update=True):
+                stock.is_custom = not any([
+                    stock.short_name,
+                    stock.long_name,
+                    stock.exchange
+                ])
+                stock.save()
+                updated += 1
+        self.message_user(request, f"{updated} stocks refreshed and custom status updated.")
+            
     refresh_yfinance_data.short_description = "Refresh selected stocks from yfinance."
 
 @admin.register(StockHolding)

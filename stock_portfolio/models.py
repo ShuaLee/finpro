@@ -57,6 +57,9 @@ class ManagedAccount(BaseAccount):
 class Stock(Asset):
     id = models.AutoField(primary_key=True)
     ticker = models.CharField(max_length=10, unique=True)
+    is_custom = models.BooleanField(default=False)
+
+    # Stock data
     short_name = models.CharField(max_length=100, blank=True, null=True)
     long_name = models.CharField(max_length=200, blank=True, null=True)
     currency = models.CharField(max_length=10, blank=True)
@@ -122,21 +125,22 @@ class Stock(Asset):
     
     def fetch_yfinance_data(self, force_update=False):
         """
-        Gets data from yfinance. This logic should be moved later?
+        Gets data from yfinance and updates model fields.
+        Returns True if fetch was successful, False otherwise.
         """
-        ticker_obj = yf.Ticker(self.ticker)
-        
         if not force_update and self.last_updated:
             time_diff = timezone.now() - self.last_updated
             if time_diff.days < 1:
                 logger.info(f"Using cached data for {self.ticker}")
-                return
+                return True
 
         try:
+            ticker_obj = yf.Ticker(self.ticker)
             info = ticker_obj.info
-            if not info or 'symbol' not in info:
-                logger.warning(f"No valid info for {self.ticker}")
-                return
+
+            if not isinstance(info, dict) or 'symbol' not in info:
+                logger.warning(f"Invalid or missing data for {self.ticker}: {info}")
+                return False
             
             self.short_name = info.get('shortName')
             self.long_name = info.get('longName')
@@ -182,26 +186,40 @@ class Stock(Asset):
             self.save()
 
             logger.info(f"Stock {self.ticker} updated successfully.")
+            return True
         
         except Exception as e:
-            logger.error(f"Failed to fetch data for {self.ticker}: {e}")
-        
+            logger.error(f"Failed to fetch data for {self.ticker}: {e}", exc_info=False)
+            return False
+    
     @classmethod
     def create_from_ticker(cls, ticker):
+        """
+        Creates a Stock instance from a ticker and fetches yfinance data.
+        Returns the instance if successful, None otherwise.
+        """
         ticker = ticker.upper()
         instance = cls(ticker=ticker)
 
-        try:
-            instance.fetch_yfinance_data()
+        if instance.fetch_yfinance_data():
+            instance.is_custom = not any([
+                instance.short_name, 
+                instance.long_name, 
+                instance.exchange
+            ])
             instance.save()
             return instance
-        except ValueError as e:
-            logger.error(f"Stock creation failed for {ticker}: {e}")
-            return None
+        else:
+            instance.is_custom = True
+            logger.warning(f"Stock creation failed for {ticker}: No data fetched")
+        
+        instance.save()
+        return instance
 
     def save(self, *args, **kwargs):
         if self.ticker:
             self.ticker = self.ticker.upper()
+        # Prevent redundant fetch during save
         super().save(*args, **kwargs)
 
 class StockHolding(models.Model):
