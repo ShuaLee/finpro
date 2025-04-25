@@ -248,8 +248,7 @@ class Schema(models.Model):
     
 class SchemaColumn(models.Model):
     DATA_TYPES = [
-        ('decimal', 'Decimal'),
-        ('integer', 'Integer'),
+        ('decimal', 'Number'),
         ('string', 'String'),
         ('date', 'Date'),
         ('url', 'URL'),

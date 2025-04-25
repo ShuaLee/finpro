@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, Stock, StockHolding
+from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, Stock, StockHolding, Schema, SchemaColumn, SchemaColumnValue
 
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
@@ -79,3 +79,15 @@ class StockAdmin(admin.ModelAdmin):
 class StockHoldingAdmin(admin.ModelAdmin):
     list_display = ['stock', 'stock_account', 'shares', 'purchase_price']
     list_filter = ['stock_account__stock_portfolio']
+
+@admin.register(Schema)
+class SchemaAdmin(admin.ModelAdmin):
+    list_display = ['stock_portfolio', 'name', 'created_at']
+
+@admin.register(SchemaColumn)
+class SchemaColumn(admin.ModelAdmin):
+    list_display = ['schema', 'name', 'data_type', 'source', 'source_field']
+
+@admin.register(SchemaColumnValue)
+class SchemaColumnValue(admin.ModelAdmin):
+    list_display = ['stock_holding', 'column', 'value']
