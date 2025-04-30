@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from .constants import PREDEFINED_COLUMNS
-from .models import Stock, StockHolding, SchemaColumnValue, Schema
+from .constants import PREDEFINED_COLUMNS, SKELETON_SCHEMA
+from .models import Stock, StockHolding, StockPortfolio, SchemaColumn, SchemaColumnValue, Schema
 import logging
 
 logger = logging.getLogger(__name__)
@@ -68,4 +68,26 @@ def create_schema_column_values(sender, instance, created, **kwargs):
                 stock_holding=instance,
                 column=column,
                 defaults={'value': str(value) if value is not None else None}
+            )
+
+
+@receiver(post_save, sender=StockPortfolio)
+def create_default_schema(sender, instance, created, **kwargs):
+    if not created:
+        return
+
+    schema = Schema.objects.create(
+        stock_portfolio=instance,
+        name=SKELETON_SCHEMA['name'],
+        is_default=SKELETON_SCHEMA['is_default']
+    )
+
+    for source, columns in SKELETON_SCHEMA['columns'].items():
+        for column in columns:
+            SchemaColumn.objects.create(
+                schema=schema,
+                name=column['label'],
+                data_type=column['type'],
+                source=source,
+                source_field=column['field'],
             )

@@ -4,6 +4,7 @@ from django.utils import timezone
 from portfolio.models import Asset, BaseAssetPortfolio
 from datetime import date, datetime
 from decimal import Decimal
+from .constants import CURRENCY_CHOICES
 import yfinance as yf
 import logging
 
@@ -11,43 +12,101 @@ logger = logging.getLogger(__name__)
 
 # -------------------- HELPER FUNCTIONS -------------------- #
 
+
 def parse_decimal(value):
     try:
         return Decimal(str(value)) if value is not None else None
     except:
         return None
-    
+
+
 def parse_date(value):
     try:
         return datetime.fromtimestamp(value).date() if value else None
     except:
         return None
-        
+
+
+# -------------------- Cash Balances -------------------- #
+
+class CashBalance(models.Model):
+    account = models.ForeignKey(
+        'SelfManagedAccount', on_delete=models.CASCADE, related_name='cash_balances')
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+
+    class Meta:
+        unique_together = ('account', 'currency')
+
+    def __str__(self):
+        return f"{self.amount} {self.currency}"
 
 # -------------------- STOCK PORTFOLIO -------------------- #
+
 
 class StockPortfolio(BaseAssetPortfolio):
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
-    
+
 # -------------------- STOCK ACCOUNTS -------------------- #
+
 
 class BaseAccount(models.Model):
     """
     Abstract class for all stock account models.
     """
-    stock_portfolio = models.ForeignKey(StockPortfolio, on_delete=models.CASCADE, related_name='%(class)s_set')
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio, on_delete=models.CASCADE, related_name='%(class)s_set')
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    currency = models.CharField(
+        max_length=3,
+        choices=CURRENCY_CHOICES,
+        blank=True,
+        help_text="Currency of the account (e.g., USD, CAD, etc.)"
+    )
+    broker = models.CharField(max_length=100, blank=True, null=True,
+                              help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)")
+    tax_status = models.CharField(
+        max_length=50,
+        choices=[('taxable', 'Taxable'),
+                 ('tax_deferred', 'Tax-Deferred'),
+                 ('tax_exempt', 'Tax-Exempt'),],
+        default='taxable'
+    )
+    account_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('individual', 'Individual'),
+            ('retirement', 'Retirement'),
+            ('speculative', 'Speculative'),
+            ('dividend', 'Dividend Focus'),
+        ],
+        default='individual',
+        help_text="Purpose or strategy of the account."
+    )
+    last_synced = models.DateTimeField(
+        null=True, blank=True, help_text="Last sync with broker.")
 
     class Meta:
         abstract = True
-    
+
     def __str__(self):
         return self.name
-    
+
+    def save(self, *args, **kwargs):
+        if not self.pk and not self.currency:
+            try:
+                profile = self.stock_portfolio.portfolio.profile
+                self.currency = profile.currency or 'USD'
+            except AttributeError:
+                self.currency = 'USD'  # Fallback
+        super().save(*args, **kwargs)
+
+
 class SelfManagedAccount(BaseAccount):
     pass
+
 
 class ManagedAccount(BaseAccount):
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
@@ -55,6 +114,7 @@ class ManagedAccount(BaseAccount):
     strategy = models.CharField(max_length=100, null=True, blank=True)
 
 # -------------------- STOCK & STOCK HOLDING -------------------- #
+
 
 class Stock(Asset):
     id = models.AutoField(primary_key=True)
@@ -124,7 +184,7 @@ class Stock(Asset):
 
     def __str__(self):
         return self.ticker
-    
+
     def fetch_yfinance_data(self, force_update=False):
         """
         Gets data from yfinance and updates model fields.
@@ -141,9 +201,10 @@ class Stock(Asset):
             info = ticker_obj.info
 
             if not isinstance(info, dict) or 'symbol' not in info:
-                logger.warning(f"Invalid or missing data for {self.ticker}: {info}")
+                logger.warning(
+                    f"Invalid or missing data for {self.ticker}: {info}")
                 return False
-            
+
             self.short_name = info.get('shortName')
             self.long_name = info.get('longName')
             self.currency = info.get('currency')
@@ -189,11 +250,12 @@ class Stock(Asset):
 
             logger.info(f"Stock {self.ticker} updated successfully.")
             return True
-        
+
         except Exception as e:
-            logger.error(f"Failed to fetch data for {self.ticker}: {e}", exc_info=False)
+            logger.error(
+                f"Failed to fetch data for {self.ticker}: {e}", exc_info=False)
             return False
-    
+
     @classmethod
     def create_from_ticker(cls, ticker):
         """
@@ -205,16 +267,17 @@ class Stock(Asset):
 
         if instance.fetch_yfinance_data():
             instance.is_custom = not any([
-                instance.short_name, 
-                instance.long_name, 
+                instance.short_name,
+                instance.long_name,
                 instance.exchange
             ])
             instance.save()
             return instance
         else:
             instance.is_custom = True
-            logger.warning(f"Stock creation failed for {ticker}: No data fetched")
-        
+            logger.warning(
+                f"Stock creation failed for {ticker}: No data fetched")
+
         instance.save()
         return instance
 
@@ -224,28 +287,39 @@ class Stock(Asset):
         # Prevent redundant fetch during save
         super().save(*args, **kwargs)
 
+
 class StockHolding(models.Model):
-    stock_account = models.ForeignKey(SelfManagedAccount, on_delete=models.CASCADE)
+    stock_account = models.ForeignKey(
+        SelfManagedAccount, on_delete=models.CASCADE)
     stock = models.ForeignKey(Stock, null=True, on_delete=models.SET_NULL)
     shares = models.DecimalField(max_digits=15, decimal_places=4)
-    purchase_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    purchase_price = models.DecimalField(
+        max_digits=20, decimal_places=2, null=True, blank=True)
 
     class Meta:
         unique_together = ('stock_account', 'stock')
 
     def __str__(self):
         return f"{self.stock} ({self.shares} shares)"
-    
+
 # -------------------- SCHEMA -------------------- #
 
+
 class Schema(models.Model):
-    stock_portfolio = models.ForeignKey(StockPortfolio, on_delete=models.CASCADE, related_name="schemas")
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio, on_delete=models.CASCADE, related_name="schemas")
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_default = models.BooleanField(
+        default=False, help_text="Set as default stock holding schema for the portfolio.")
+
+    class Meta:
+        unique_together = ('stock_portfolio', 'name')
 
     def __str__(self):
         return self.name
-    
+
+
 class SchemaColumn(models.Model):
     DATA_TYPES = [
         ('decimal', 'Number'),
@@ -259,19 +333,29 @@ class SchemaColumn(models.Model):
         ('custom', 'Custom'),
     ]
 
-    schema = models.ForeignKey(Schema, on_delete=models.CASCADE, related_name='columns')
+    schema = models.ForeignKey(
+        Schema, on_delete=models.CASCADE, related_name='columns')
     name = models.CharField(max_length=100)
     data_type = models.CharField(max_length=10, choices=DATA_TYPES)
     source = models.CharField(max_length=20, choices=SOURCE_TYPE)
     source_field = models.CharField(max_length=100, blank=True, null=True)
+    editable = models.BooleanField(
+        default=True,
+    )
 
     def __str__(self):
         return f"{self.name} ({self.source})"
-    
+
+
 class SchemaColumnValue(models.Model):
-    stock_holding = models.ForeignKey(StockHolding, on_delete=models.CASCADE, related_name='column_values')
-    column = models.ForeignKey(SchemaColumn, on_delete=models.CASCADE, related_name='values')
-    value = models.TextField(blank=True, null=True) # Storing values as Text and parse when retreived.
+    stock_holding = models.ForeignKey(
+        StockHolding, on_delete=models.CASCADE, related_name='column_values')
+    column = models.ForeignKey(
+        SchemaColumn, on_delete=models.CASCADE, related_name='values')
+    value = models.TextField(blank=True, null=True)
+    is_edited = models.BooleanField(
+        default=False,
+    )
 
     class Meta:
         unique_together = ('stock_holding', 'column')
