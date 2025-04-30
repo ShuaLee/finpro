@@ -1,17 +1,65 @@
+from django import forms
 from django.contrib import admin
+from .constants import PREDEFINED_COLUMNS
 from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, Stock, StockHolding, Schema, SchemaColumn, SchemaColumnValue
+
+
+class SchemaColumnForm(forms.ModelForm):
+    predefined_choice = forms.ChoiceField(
+        choices=[('', 'Select a column…')] + [
+            (f"{source}:{item['field']}",
+             f"{source.title()}: {item['label']} ({item['type']})")
+            for source, items in PREDEFINED_COLUMNS.items()
+            for item in items
+        ] + [('custom', 'Custom')],
+        required=False,
+        label="Predefined Column"
+    )
+
+    class Meta:
+        model = SchemaColumn
+        fields = ['schema', 'predefined_choice', 'name',
+                  'data_type', 'source', 'source_field']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        choice = cleaned_data.get('predefined_choice')
+
+        if choice and choice != 'custom':
+            try:
+                source, field = choice.split(':')
+                column = next(
+                    item for item in PREDEFINED_COLUMNS[source] if item['field'] == field)
+            except (ValueError, KeyError, StopIteration):
+                raise forms.ValidationError(
+                    "Invalid predefined column selected.")
+
+            cleaned_data['source'] = source
+            cleaned_data['source_field'] = column['field']
+            cleaned_data['data_type'] = column['type']
+            cleaned_data['name'] = column['label']
+
+        elif not all([cleaned_data.get('name'), cleaned_data.get('data_type'), cleaned_data.get('source')]):
+            raise forms.ValidationError(
+                "For a custom column, all fields must be filled out manually.")
+
+        return cleaned_data
+
 
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
     list_display = ['portfolio', 'created_at']
 
+
 @admin.register(SelfManagedAccount)
 class SelfManagedAccountAdmin(admin.ModelAdmin):
     list_display = ['stock_portfolio', 'name', 'created_at']
 
+
 @admin.register(ManagedAccount)
 class ManagedAccountAdmin(admin.ModelAdmin):
     list_display = ['stock_portfolio', 'name', 'created_at']
+
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
@@ -71,22 +119,28 @@ class StockAdmin(admin.ModelAdmin):
                 ])
                 stock.save()
                 updated += 1
-        self.message_user(request, f"{updated} stocks refreshed and custom status updated.")
-            
+        self.message_user(
+            request, f"{updated} stocks refreshed and custom status updated.")
+
     refresh_yfinance_data.short_description = "Refresh selected stocks from yfinance."
+
 
 @admin.register(StockHolding)
 class StockHoldingAdmin(admin.ModelAdmin):
     list_display = ['stock', 'stock_account', 'shares', 'purchase_price']
     list_filter = ['stock_account__stock_portfolio']
 
+
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
     list_display = ['stock_portfolio', 'name', 'created_at']
 
+
 @admin.register(SchemaColumn)
 class SchemaColumn(admin.ModelAdmin):
     list_display = ['schema', 'name', 'data_type', 'source', 'source_field']
+    form = SchemaColumnForm
+
 
 @admin.register(SchemaColumnValue)
 class SchemaColumnValue(admin.ModelAdmin):
