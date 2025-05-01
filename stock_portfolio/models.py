@@ -330,6 +330,7 @@ class SchemaColumn(models.Model):
     SOURCE_TYPE = [
         ('stock', 'Stock'),
         ('holding', 'StockHolding'),
+        ('calculated', 'Calculated'),
         ('custom', 'Custom'),
     ]
 
@@ -339,6 +340,7 @@ class SchemaColumn(models.Model):
     data_type = models.CharField(max_length=10, choices=DATA_TYPES)
     source = models.CharField(max_length=20, choices=SOURCE_TYPE)
     source_field = models.CharField(max_length=100, blank=True, null=True)
+    formula = models.TextField(blank=True, null=True)
     editable = models.BooleanField(
         default=True,
     )

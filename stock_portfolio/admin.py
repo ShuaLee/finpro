@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib import admin
-from .constants import PREDEFINED_COLUMNS
+from .constants import PREDEFINED_COLUMNS, PREDEFINED_CALCULATED_COLUMNS
 from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, Stock, StockHolding, Schema, SchemaColumn, SchemaColumnValue
 
 
@@ -11,6 +11,9 @@ class SchemaColumnForm(forms.ModelForm):
              f"{source.title()}: {item['label']} ({item['type']})")
             for source, items in PREDEFINED_COLUMNS.items()
             for item in items
+        ] + [
+            (f"calculated:{key}", f"Calculated: {key} ({val['type']})")
+            for key, val in PREDEFINED_CALCULATED_COLUMNS.items()
         ] + [('custom', 'Custom')],
         required=False,
         label="Predefined Column"
@@ -27,17 +30,28 @@ class SchemaColumnForm(forms.ModelForm):
 
         if choice and choice != 'custom':
             try:
-                source, field = choice.split(':')
-                column = next(
-                    item for item in PREDEFINED_COLUMNS[source] if item['field'] == field)
-            except (ValueError, KeyError, StopIteration):
+                source, key = choice.split(':')
+            except ValueError:
                 raise forms.ValidationError(
-                    "Invalid predefined column selected.")
+                    "Invalid predefined column format.")
 
-            cleaned_data['source'] = source
-            cleaned_data['source_field'] = column['field']
-            cleaned_data['data_type'] = column['type']
-            cleaned_data['name'] = column['label']
+            if source in PREDEFINED_COLUMNS:
+                column = next(
+                    item for item in PREDEFINED_COLUMNS[source] if item['field'] == key)
+                cleaned_data['source'] = source
+                cleaned_data['source_field'] = column['field']
+                cleaned_data['data_type'] = column['type']
+                cleaned_data['name'] = column['label']
+
+            elif source == 'calculated':
+                column = PREDEFINED_CALCULATED_COLUMNS.get(key)
+                if not column:
+                    raise forms.ValidationError(
+                        "Invalid calculated column selected.")
+                cleaned_data['source'] = 'calculated'
+                cleaned_data['source_field'] = column['formula']
+                cleaned_data['data_type'] = column['type']
+                cleaned_data['name'] = key
 
         elif not all([cleaned_data.get('name'), cleaned_data.get('data_type'), cleaned_data.get('source')]):
             raise forms.ValidationError(

@@ -12,6 +12,17 @@ PREDEFINED_COLUMNS = {
     ],
 }
 
+PREDEFINED_CALCULATED_COLUMNS = {
+    'Total Investment': {
+        'formula': 'shares * last_price',
+        'dependencies': [
+            {'source': 'holding', 'field': 'shares'},
+            {'source': 'stock', 'field': 'last_price'},
+        ],
+        'type': 'decimal',
+    },
+}
+
 CURRENCY_CHOICES = [
     (currency.alpha_3, currency.name)
     for currency in pycountry.currencies

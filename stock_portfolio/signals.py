@@ -2,6 +2,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .constants import PREDEFINED_COLUMNS, SKELETON_SCHEMA
 from .models import Stock, StockHolding, StockPortfolio, SchemaColumn, SchemaColumnValue, Schema
+from .utils import evaluate_formula
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,11 @@ def create_schema_column_values(sender, instance, created, **kwargs):
                     logger.warning(
                         f"No matching predefined field for {column.source}.{column.source_field}")
 
+            elif column.source == 'calculated' and column.source_field:
+                value = evaluate_formula(column.source_field, instance)
+                logger.debug(
+                    f"calculated value {value} for formula {column.source_field}"
+                )
             # Create or update SchemaColumnValue
             SchemaColumnValue.objects.get_or_create(
                 stock_holding=instance,
