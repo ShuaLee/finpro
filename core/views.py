@@ -12,12 +12,12 @@ class ProfileViewSet(RetrieveModelMixin, UpdateModelMixin, GenericViewSet):
     def get_object(self):
         # Ignore any pk in the URL and return the authenticated user's profile
         return self.request.user.profile
-    
+
     def retrieve(self, request, *args, **kwargs):
         profile = self.get_object()
         serializer = self.get_serializer(profile)
         return Response(serializer.data)
-    
+
     def update(self, request, *args, **kwargs):
         profile = self.get_object()
         serializer = self.get_serializer(
