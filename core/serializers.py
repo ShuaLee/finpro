@@ -14,12 +14,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
 class UserSerializer(BaseUserSerializer):
     class Meta(BaseUserSerializer.Meta):
         fields = ['id', 'email', 'first_name', 'last_name']
-
-
-class UserUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = get_user_model()
-        fields = ['first_name', 'last_name', 'email']
+        read_only_fields = ['id']
 
 
 class ProfileSerializer(serializers.ModelSerializer):
