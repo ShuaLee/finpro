@@ -25,7 +25,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = ['id', 'user', 'email', 'currency', 'language',
                   'birth_date', 'is_asset_manager', 'portfolio']
-        read_only_fields = ['user']
+        read_only_fields = ['user', 'is_asset_manager']
 
     def get_email(self, obj):
         return obj.user.email

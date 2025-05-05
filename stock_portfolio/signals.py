@@ -7,7 +7,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 @receiver(post_save, sender=Stock)
 def fetch_stock_data(sender, instance, created, **kwargs):
     if created:
