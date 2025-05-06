@@ -105,7 +105,8 @@ class BaseAccount(models.Model):
 
 
 class SelfManagedAccount(BaseAccount):
-    pass
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio, on_delete=models.CASCADE, related_name="self_managed_accounts")
 
 
 class ManagedAccount(BaseAccount):
@@ -315,6 +316,7 @@ class Schema(models.Model):
 
     class Meta:
         unique_together = ('stock_portfolio', 'name')
+        verbose_name_plural = "Schemas"
 
     def __str__(self):
         return self.name
