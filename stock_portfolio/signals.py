@@ -84,7 +84,6 @@ def create_default_schema(sender, instance, created, **kwargs):
     schema = Schema.objects.create(
         stock_portfolio=instance,
         name=SKELETON_SCHEMA['name'],
-        is_default=SKELETON_SCHEMA['is_default']
     )
 
     for source, columns in SKELETON_SCHEMA['columns'].items():
@@ -96,3 +95,6 @@ def create_default_schema(sender, instance, created, **kwargs):
                 source=source,
                 source_field=column['field'],
             )
+            
+    instance.default_schema = schema
+    instance.save(update_fields=['default_schema'])

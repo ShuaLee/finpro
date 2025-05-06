@@ -4,7 +4,7 @@ from django.utils import timezone
 from portfolio.models import Asset, BaseAssetPortfolio
 from datetime import date, datetime
 from decimal import Decimal
-from .constants import CURRENCY_CHOICES
+from .constants import CURRENCY_CHOICES, SKELETON_SCHEMA
 import yfinance as yf
 import logging
 
@@ -45,8 +45,25 @@ class CashBalance(models.Model):
 
 
 class StockPortfolio(BaseAssetPortfolio):
+    default_schema = models.ForeignKey(
+        'Schema',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_for_portfolios',
+    )
+
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
+    
+    def clean(self):
+        if self.default_schema and self.default_schema.stock_portfolio != self:
+            raise ValidationError("Default schema must belong to this portfolio.")
+    
+    def save(self, *args, **kwargs):
+        if not self._state.adding and self.default_schema is None:
+            raise ValueError("default_schema must not be null after creation.")
+        super().save(*args, **kwargs)
 
 # -------------------- STOCK ACCOUNTS -------------------- #
 
@@ -87,20 +104,41 @@ class BaseAccount(models.Model):
     )
     last_synced = models.DateTimeField(
         null=True, blank=True, help_text="Last sync with broker.")
+    active_schema = models.ForeignKey(
+        'Schema', 
+        on_delete=models.CASCADE, 
+        help_text="Schema used to display stock holdings for this account."
+        )
 
     class Meta:
         abstract = True
 
     def __str__(self):
         return self.name
+    
+    def clean(self):
+        super().clean()
+        if self.active_schema:
+            if self.active_schema.stock_portfolio != self.stock_portfolio:
+                raise ValidationError("Selected schema does not belong to this account's stock portfolio.")
 
     def save(self, *args, **kwargs):
+        # Enforce default schema if not set
+        if not self.active_schema and self.stock_portfolio.default_schema:
+            self.active_schema = self.stock_portfolio.default_schema
+
+        # Validate schema-portfolio consistency
+        if self.active_schema and self.active_schema.stock_portfolio != self.stock_portfolio:
+            raise ValueError("Selected schema does not belong to this account's stock portfolio.")
+
+        # Set default currency
         if not self.pk and not self.currency:
             try:
                 profile = self.stock_portfolio.portfolio.profile
                 self.currency = profile.currency or 'USD'
             except AttributeError:
                 self.currency = 'USD'  # Fallback
+
         super().save(*args, **kwargs)
 
 
@@ -311,8 +349,6 @@ class Schema(models.Model):
         StockPortfolio, on_delete=models.CASCADE, related_name="schemas")
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    is_default = models.BooleanField(
-        default=False, help_text="Set as default stock holding schema for the portfolio.")
 
     class Meta:
         unique_together = ('stock_portfolio', 'name')
@@ -320,6 +356,19 @@ class Schema(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def delete(self, *args, **kwargs):
+        schemas = Schema.objects.filter(stock_portfolio=self.stock_portfolio)
+        if schemas.count() <= 1:
+            raise ValidationError("Cannot delete the last remaining schema.")
+
+        # Remove reference from the portfolio if this is the default
+        portfolio = self.stock_portfolio
+        if portfolio.default_schema_id == self.id:
+            portfolio.default_schema = None
+            portfolio.save(update_fields=["default_schema"])
+
+        super().delete(*args, **kwargs)
 
 
 class SchemaColumn(models.Model):

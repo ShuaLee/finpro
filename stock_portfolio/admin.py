@@ -1,7 +1,24 @@
 from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from .constants import PREDEFINED_COLUMNS, PREDEFINED_CALCULATED_COLUMNS
 from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, Stock, StockHolding, Schema, SchemaColumn, SchemaColumnValue
+
+class StockPortfolioForm(forms.ModelForm):
+    class Meta:
+        model = StockPortfolio
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Filter default_schema choices to only schemas beloning to this portfolio
+        if self.instance.pk:
+            self.fields['default_schema'].queryset = Schema.objects.filter(
+                stock_portfolio=self.instance
+            )
+        else:
+            self.fields['default_schema'].queryset = Schema.objects.none()
 
 
 class SchemaColumnForm(forms.ModelForm):
@@ -63,6 +80,7 @@ class SchemaColumnForm(forms.ModelForm):
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
     list_display = ['portfolio', 'created_at']
+    form = StockPortfolioForm
 
 
 @admin.register(SelfManagedAccount)

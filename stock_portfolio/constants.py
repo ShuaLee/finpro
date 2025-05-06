@@ -30,7 +30,6 @@ CURRENCY_CHOICES = [
 
 SKELETON_SCHEMA = {
     'name': 'Default Schema',
-    'is_default': False,
     'columns': {
         'stock': [
             {'field': 'ticker', 'label': 'Stock Ticker',
