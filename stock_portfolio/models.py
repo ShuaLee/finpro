@@ -45,25 +45,46 @@ class CashBalance(models.Model):
 
 
 class StockPortfolio(BaseAssetPortfolio):
-    default_schema = models.ForeignKey(
+    default_self_managed_schema = models.ForeignKey(
         'Schema',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='default_for_portfolios',
+        related_name='default_for_self_managed_accounts',
+    )
+    default_managed_schema = models.ForeignKey(
+        'Schema',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_for_managed_accounts',
     )
 
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
-    
+
     def clean(self):
-        if self.default_schema and self.default_schema.stock_portfolio != self:
-            raise ValidationError("Default schema must belong to this portfolio.")
-    
+        if self.default_self_managed_schema and self.default_self_managed_schema.stock_portfolio != self:
+            raise ValidationError(
+                "Default schema must belong to this portfolio.")
+
     def save(self, *args, **kwargs):
-        if not self._state.adding and self.default_schema is None:
+        if not self._state.adding and self.default_self_managed_schema is None:
             raise ValueError("default_schema must not be null after creation.")
+
+        if self.pk:
+            old = StockPortfolio.objects.get(pk=self.pk)
+            old_default = old.default_self_managed_schema
+        else:
+            old_default = None
+
         super().save(*args, **kwargs)
+
+        # Now update only accounts still using the old default
+        if self.default_self_managed_schema and old_default and self.default_self_managed_schema != old_default:
+            self.self_managed_accounts.filter(
+                active_schema=old_default
+            ).update(active_schema=self.default_self_managed_schema)
 
 # -------------------- STOCK ACCOUNTS -------------------- #
 
@@ -104,33 +125,15 @@ class BaseAccount(models.Model):
     )
     last_synced = models.DateTimeField(
         null=True, blank=True, help_text="Last sync with broker.")
-    active_schema = models.ForeignKey(
-        'Schema', 
-        on_delete=models.CASCADE, 
-        help_text="Schema used to display stock holdings for this account."
-        )
+    use_default_schema = models.BooleanField(default=True)
 
     class Meta:
         abstract = True
 
     def __str__(self):
         return self.name
-    
-    def clean(self):
-        super().clean()
-        if self.active_schema:
-            if self.active_schema.stock_portfolio != self.stock_portfolio:
-                raise ValidationError("Selected schema does not belong to this account's stock portfolio.")
 
     def save(self, *args, **kwargs):
-        # Enforce default schema if not set
-        if not self.active_schema and self.stock_portfolio.default_schema:
-            self.active_schema = self.stock_portfolio.default_schema
-
-        # Validate schema-portfolio consistency
-        if self.active_schema and self.active_schema.stock_portfolio != self.stock_portfolio:
-            raise ValueError("Selected schema does not belong to this account's stock portfolio.")
-
         # Set default currency
         if not self.pk and not self.currency:
             try:
@@ -145,12 +148,38 @@ class BaseAccount(models.Model):
 class SelfManagedAccount(BaseAccount):
     stock_portfolio = models.ForeignKey(
         StockPortfolio, on_delete=models.CASCADE, related_name="self_managed_accounts")
+    active_schema = models.ForeignKey(
+        'Schema',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Schema used to display stock holdings for this account."
+    )
+
+    def save(self, *args, **kwargs):
+        if self.use_default_schema:
+            self.active_schema = self.stock_portfolio.default_self_managed_schema
+
+        if self.active_schema and self.active_schema.stock_portfolio != self.stock_portfolio:
+            raise ValidationError(
+                "Selected schema does not belong to this account's stock portfolio.")
+
+        super().save(*args, **kwargs)
 
 
 class ManagedAccount(BaseAccount):
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
+    """
+    active_schema = models.ForeignKey(
+        'Schema',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Schema used to display stock holdings for this account."
+    )
+    """
 
 # -------------------- STOCK & STOCK HOLDING -------------------- #
 
@@ -356,17 +385,17 @@ class Schema(models.Model):
 
     def __str__(self):
         return self.name
-    
+
     def delete(self, *args, **kwargs):
         schemas = Schema.objects.filter(stock_portfolio=self.stock_portfolio)
         if schemas.count() <= 1:
             raise ValidationError("Cannot delete the last remaining schema.")
 
-        # Remove reference from the portfolio if this is the default
-        portfolio = self.stock_portfolio
-        if portfolio.default_schema_id == self.id:
-            portfolio.default_schema = None
-            portfolio.save(update_fields=["default_schema"])
+        if self == self.stock_portfolio.default_schema:
+            fallback = schemas.exclude(id=self.id).first()
+            if fallback:
+                self.stock_portfolio.default_schema = fallback
+                self.stock_portfolio.save(update_fields=["default_schema"])
 
         super().delete(*args, **kwargs)
 

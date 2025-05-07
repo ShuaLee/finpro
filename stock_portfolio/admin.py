@@ -1,24 +1,27 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 from .constants import PREDEFINED_COLUMNS, PREDEFINED_CALCULATED_COLUMNS
 from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, Stock, StockHolding, Schema, SchemaColumn, SchemaColumnValue
+
 
 class StockPortfolioForm(forms.ModelForm):
     class Meta:
         model = StockPortfolio
         fields = '__all__'
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Filter default_schema choices to only schemas beloning to this portfolio
         if self.instance.pk:
-            self.fields['default_schema'].queryset = Schema.objects.filter(
+            self.fields['default_self_managed_schema'].queryset = Schema.objects.filter(
                 stock_portfolio=self.instance
             )
         else:
-            self.fields['default_schema'].queryset = Schema.objects.none()
+            self.fields['default_self_managed_schema'].queryset = Schema.objects.none()
 
 
 class SchemaColumnForm(forms.ModelForm):
@@ -85,7 +88,13 @@ class StockPortfolioAdmin(admin.ModelAdmin):
 
 @admin.register(SelfManagedAccount)
 class SelfManagedAccountAdmin(admin.ModelAdmin):
-    list_display = ['stock_portfolio', 'name', 'created_at']
+    list_display = ['stock_portfolio', 'name', 'created_at', 'active_schema']
+    list_filter = ('stock_portfolio', 'active_schema')
+
+    def save_model(self, request, obj, form, change):
+        if not obj.active_schema and obj.stock_portfolio.default_self_managed_schema:
+            obj.active_schema = obj.stock_portfolio.default_self_managed_schema
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(ManagedAccount)
@@ -166,6 +175,33 @@ class StockHoldingAdmin(admin.ModelAdmin):
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
     list_display = ['stock_portfolio', 'name', 'created_at']
+
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            try:
+                obj.delete()
+            except ValidationError as e:
+                self.message_user(
+                    request,
+                    f"Error deleting schema '{obj.name}': {e.messages[0]}",
+                    level=messages.ERROR
+                )
+
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, object_id)
+
+        if request.method == "POST":
+            try:
+                obj.delete()
+                self.message_user(
+                    request, "The schema was deleted successfully.", level=messages.SUCCESS)
+                return HttpResponseRedirect(reverse("admin:stock_portfolio_schema_changelist"))
+            except ValidationError as e:
+                self.message_user(
+                    request, f"Error: {e.messages[0]}", level=messages.ERROR)
+                return HttpResponseRedirect(reverse("admin:stock_portfolio_schema_change", args=[object_id]))
+
+        return super().delete_view(request, object_id, extra_context)
 
 
 @admin.register(SchemaColumn)
