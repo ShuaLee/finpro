@@ -1,36 +1,12 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .constants import PREDEFINED_COLUMNS, SKELETON_SCHEMA
-from .models import Stock, StockHolding, StockPortfolio, SchemaColumn, SchemaColumnValue, Schema, SelfManagedAccount
+from .models import StockHolding, StockPortfolio, SchemaColumn, SchemaColumnValue, Schema, SelfManagedAccount
 from .utils import evaluate_formula
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-@receiver(post_save, sender=Stock)
-def fetch_stock_data(sender, instance, created, **kwargs):
-    if created:
-        success = instance.fetch_yfinance_data(force_update=True)
-
-        if success:
-            instance.is_custom = not any([
-                instance.short_name,
-                instance.long_name,
-                instance.exchange,
-            ])
-            logger.info(f"Stock {instance.ticker} fetched successfully.")
-        else:
-            instance.is_custom = True
-            logger.warning(
-                f"Stock creation failed for {instance.ticker}: No data fetched.")
-
-        instance.save()
-
-
-"""
-Refractor
-"""
 # -------------------
 
 
@@ -70,7 +46,7 @@ def generate_schema_column_values_for_holding(holding):
 def generate_schema_column_values_for_column(column):
     schema = column.schema
     holdings = StockHolding.objects.filter(
-        account__stock_portfolio=schema.stock_portfolio
+        stock_account__stock_portfolio=schema.stock_portfolio
     ).select_related('stock', 'stock_account')
 
     for holding in holdings:
@@ -113,21 +89,3 @@ def create_default_schema(sender, instance, created, **kwargs):
 
     instance.default_self_managed_schema = schema
     instance.save(update_fields=['default_self_managed_schema'])
-
-
-"""
-@receiver(post_save, sender=StockPortfolio)
-def update_account_schemas_when_default_changes(sender, instance, created, **kwargs):
-    if created:
-        return  # It is alreay assigned at creation elsewhere
-
-    # Update all accounts whose active_schema matches the old default or is null
-    accounts = SelfManagedAccount.objects.filter(
-        stock_portfolio=instance
-    )
-
-    for account in accounts:
-        if account.active_schema != instance.default_schema:
-            account.active_schema = instance.default_schema
-            account.save(update_fields=['active_schema'])
-"""

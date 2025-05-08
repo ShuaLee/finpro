@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'djoser',
     'core',
     'portfolio',
+    'stocks',
     'stock_portfolio',
 ]
 
