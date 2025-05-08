@@ -1,10 +1,11 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Prefetch
 from django.utils import timezone
 from portfolio.models import Asset, BaseAssetPortfolio
 from datetime import date, datetime
 from decimal import Decimal
-from .constants import CURRENCY_CHOICES, SKELETON_SCHEMA
+from .constants import CURRENCY_CHOICES, SKELETON_SCHEMA, PREDEFINED_CALCULATED_COLUMNS
 import yfinance as yf
 import logging
 
@@ -358,7 +359,7 @@ class Stock(Asset):
 
 class StockHolding(models.Model):
     stock_account = models.ForeignKey(
-        SelfManagedAccount, on_delete=models.CASCADE)
+        SelfManagedAccount, on_delete=models.CASCADE, related_name='stockholdings')
     stock = models.ForeignKey(Stock, null=True, on_delete=models.SET_NULL)
     shares = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
@@ -369,6 +370,11 @@ class StockHolding(models.Model):
 
     def __str__(self):
         return f"{self.stock} ({self.shares} shares)"
+
+    def save(self, *args, **kwargs):
+        logger.debug(f"Saving StockHolding {self.id}, shares={self.shares}")
+        super().save(*args, **kwargs)
+        return self
 
 # -------------------- SCHEMA -------------------- #
 
@@ -385,6 +391,57 @@ class Schema(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_structured_holdings(self, account):
+        schema_columns = list(self.columns.all())
+        holdings = account.stockholdings.select_related(
+            'stock').prefetch_related('column_values')
+
+        columns = [
+            {
+                "id": col.id,
+                "name": col.name,
+                "data_type": col.data_type,
+                "source": col.source,
+                "source_field": col.source_field
+            }
+            for col in schema_columns
+        ]
+
+        rows = []
+        for holding in holdings:
+            row_values = []
+            for col in schema_columns:
+                value_obj = holding.column_values.filter(column=col).first()
+                if not value_obj:
+                    value_obj, created = SchemaColumnValue.objects.get_or_create(
+                        stock_holding=holding,
+                        column=col,
+                        defaults={"value": None}
+                    )
+                    if created:
+                        if col.source == 'stock':
+                            value_obj.value = str(
+                                getattr(holding.stock, col.source_field, None))
+                        elif col.source == 'holding':
+                            value_obj.value = str(
+                                getattr(holding, col.source_field, None))
+                        value_obj.save()
+                row_values.append({
+                    "column_id": col.id,
+                    "value_id": value_obj.id,
+                    "value": value_obj.value,
+                    "is_edited": value_obj.is_edited if col.source == 'stock' else False
+                })
+            rows.append({
+                "holding_id": holding.id,
+                "values": row_values
+            })
+
+        return {
+            "columns": columns,
+            "rows": rows
+        }
 
     def delete(self, *args, **kwargs):
         schemas = Schema.objects.filter(stock_portfolio=self.stock_portfolio)
@@ -435,12 +492,71 @@ class SchemaColumnValue(models.Model):
     column = models.ForeignKey(
         SchemaColumn, on_delete=models.CASCADE, related_name='values')
     value = models.TextField(blank=True, null=True)
-    is_edited = models.BooleanField(
-        default=False,
-    )
+    is_edited = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('stock_holding', 'column')
 
     def __str__(self):
         return f"{self.stock_holding} | {self.column.name} = {self.value}"
+
+    def validate_value(self, value):
+        """Validate that the value matches the column's data type."""
+        if value is None:
+            return
+        data_type = self.column.data_type
+        try:
+            if data_type == 'decimal':
+                # Convert to Decimal, strip whitespace
+                decimal_value = Decimal(str(value).strip())
+                if self.column.source == 'holding' and self.column.source_field == 'shares':
+                    # Match StockHolding.shares constraints (max_digits=15, decimal_places=4)
+                    decimal_value = decimal_value.quantize(
+                        Decimal('0.0001'), rounding='ROUND_HALF_UP')
+                    # Check total digits (11 before decimal + 4 after = 15)
+                    if len(str(abs(decimal_value).quantize(Decimal('1'))).split('.')[0]) > 11:
+                        raise ValueError("Too many digits for shares")
+                return decimal_value
+            elif data_type == 'date':
+                datetime.strptime(value, '%Y-%m-%d')
+            elif data_type == 'url':
+                from django.core.validators import URLValidator
+                URLValidator()(value)
+            # 'string' type needs no validation
+        except (ValueError, TypeError, ValidationError) as e:
+            logger.error(
+                f"Validation failed for value '{value}' (data_type={data_type}): {str(e)}")
+            raise ValidationError(
+                f"Invalid value for {self.column.source_field or 'value'}: {value}"
+            )
+        return value
+
+    def reset_to_default(self):
+        """Reset the value to the default from stock or holding without updating StockHolding."""
+        if self.column.source == 'stock':
+            default_value = getattr(
+                self.stock_holding.stock, self.column.source_field, None)
+            self.is_edited = False
+        elif self.column.source == 'holding':
+            default_value = getattr(
+                self.stock_holding, self.column.source_field, None)
+            self.is_edited = False  # Not used for holding, but set to False for consistency
+        else:
+            default_value = None
+            self.is_edited = False
+
+        self.value = str(default_value) if default_value is not None else None
+        super().save()
+        logger.debug(
+            f"Reset SchemaColumnValue {self.id}, value={self.value}, is_edited={self.is_edited}")
+
+    def save(self, *args, **kwargs):
+        # Validate the value if it's being set manually
+        if 'value' in kwargs.get('update_fields', []) or not self.pk:
+            validated_value = self.validate_value(self.value)
+            if self.column.data_type == 'decimal':
+                self.value = str(validated_value)  # Store as string
+
+        super().save(*args, **kwargs)
+        logger.debug(
+            f"Saved SchemaColumnValue {self.id}, value={self.value}, is_edited={self.is_edited}")

@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import StockPortfolioDetailView, SelfManagedAccountViewSet
+from rest_framework_nested import routers
+from .views import StockPortfolioDetailView, SelfManagedAccountViewSet, SchemaColumnValueViewSet
+
 
 router = DefaultRouter()
 router.register(

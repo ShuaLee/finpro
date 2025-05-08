@@ -28,53 +28,67 @@ def fetch_stock_data(sender, instance, created, **kwargs):
         instance.save()
 
 
-@receiver(post_save, sender=StockHolding)
-def create_schema_column_values(sender, instance, created, **kwargs):
-    if not created:
-        return
+"""
+Refractor
+"""
+# -------------------
 
-    stock_portfolio = instance.stock_account.stock_portfolio
-    schemas = stock_portfolio.schemas.all()
+
+def generate_schema_column_values_for_holding(holding):
+    stock_portfolio = holding.stock_account.stock_portfolio
+    schemas = stock_portfolio.schemas.prefetch_related('columns')
 
     for schema in schemas:
         for column in schema.columns.all():
             value = None
 
-            # Fetch value from stock or holding if it's a predefined field
+            # Handle predefined fields
             if column.source in PREDEFINED_COLUMNS:
-                # Use source_field instead of column.name to match predefined field
-                predefined_field = None
-                if column.source_field:
-                    predefined_field = next(
-                        (item['field'] for item in PREDEFINED_COLUMNS[column.source]
-                         if item['field'] == column.source_field),
-                        None
-                    )
-
+                predefined_field = column.source_field
                 if predefined_field:
-                    source_object = instance.stock if column.source == 'stock' else instance
+                    source_object = holding.stock if column.source == 'stock' else holding
                     if hasattr(source_object, predefined_field):
                         value = getattr(source_object, predefined_field)
-                        logger.debug(
-                            f"Assigned value {value} for {column.source}.{predefined_field}")
                     else:
                         logger.warning(
-                            f"Field {predefined_field} not found on {column.source} object")
+                            f"Field '{predefined_field}' not found on '{column.source}' object."
+                        )
                 else:
-                    logger.warning(
-                        f"No matching predefined field for {column.source}.{column.source_field}")
+                    logger.warning(f"No source_field defined for {column}")
 
+            # Handle calculated fields
             elif column.source == 'calculated' and column.source_field:
-                value = evaluate_formula(column.source_field, instance)
-                logger.debug(
-                    f"calculated value {value} for formula {column.source_field}"
-                )
-            # Create or update SchemaColumnValue
+                value = evaluate_formula(column.source_field, holding)
+
             SchemaColumnValue.objects.get_or_create(
-                stock_holding=instance,
+                stock_holding=holding,
                 column=column,
                 defaults={'value': str(value) if value is not None else None}
             )
+
+
+def generate_schema_column_values_for_column(column):
+    schema = column.schema
+    holdings = StockHolding.objects.filter(
+        account__stock_portfolio=schema.stock_portfolio
+    ).select_related('stock', 'stock_account')
+
+    for holding in holdings:
+        generate_schema_column_values_for_holding(holding)
+
+
+@receiver(post_save, sender=StockHolding)
+def create_column_values_on_holding_create(sender, instance, created, **kwargs):
+    if created:
+        generate_schema_column_values_for_holding(instance)
+
+
+@receiver(post_save, sender=SchemaColumn)
+def create_values_on_column_create(sender, instance, created, **kwargs):
+    if created:
+        generate_schema_column_values_for_column(instance)
+
+# -------------------
 
 
 @receiver(post_save, sender=StockPortfolio)
