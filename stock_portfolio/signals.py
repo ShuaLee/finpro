@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
+"""
 @receiver(post_save, sender=StockPortfolio)
 def create_default_schema(sender, instance, created, **kwargs):
     if created:
@@ -37,3 +37,4 @@ def create_default_schema(sender, instance, created, **kwargs):
         instance.save()
         logger.debug(
             f"Created default schema for StockPortfolio {instance.id}")
+"""

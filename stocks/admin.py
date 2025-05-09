@@ -51,18 +51,16 @@ class StockAdmin(admin.ModelAdmin):
         }),
     )
 
+    def save_model(self, request, obj, form, change):
+        if not change:  # New stock
+            obj = Stock.create_from_ticker(form.cleaned_data['ticker'])
+        else:
+            super().save_model(request, obj, form, change)
+
     def refresh_yfinance_data(self, request, queryset):
-        updated = 0
-        for stock in queryset:
-            if stock.fetch_yfinance_data(force_update=True):
-                stock.is_custom = not any([
-                    stock.short_name,
-                    stock.long_name,
-                    stock.exchange
-                ])
-                stock.save()
-                updated += 1
+        updated, failed, invalid = Stock.bulk_update_from_yfinance(list(queryset))
         self.message_user(
-            request, f"{updated} stocks refreshed and custom status updated.")
+            request, f"{updated} stocks refreshed, {failed} failed, {invalid} invalid tickers."
+        )
 
     refresh_yfinance_data.short_description = "Refresh selected stocks from yfinance."

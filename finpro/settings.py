@@ -23,6 +23,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-rwt2!_cv%dsrqt@qfa(crx%z%g85mzml7k58r5^0)y%qj3nd*4'
 
+FMP_API_KEY = 'OUhgmsouzr7iyAeEf0ktRtn69OfjF7W4'
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -168,3 +170,19 @@ DJOSER = {
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'stocks.models': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
+}

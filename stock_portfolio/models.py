@@ -1,10 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from portfolio.models import BaseAssetPortfolio
-from datetime import datetime
-from decimal import Decimal
+from portfolio.models import BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema
-from stocks.models import Stock
 from .constants import CURRENCY_CHOICES
 import logging
 
@@ -155,19 +152,14 @@ class ManagedAccount(BaseAccount):
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
-    """
-    active_schema = models.ForeignKey(
-        'Schema',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        help_text="Schema used to display stock holdings for this account."
-    )
-    """
 
 # -------------------- STOCK & STOCK HOLDING -------------------- #
 
+class StockHolding(AssetHolding):
+    def __str__(self):
+        return f"{self.asset} ({self.quantity} shares)"
 
+"""
 class StockHolding(models.Model):
     stock_account = models.ForeignKey(
         SelfManagedAccount, on_delete=models.CASCADE, related_name='stockholdings')
@@ -186,3 +178,4 @@ class StockHolding(models.Model):
         logger.debug(f"Saving StockHolding {self.id}, shares={self.shares}")
         super().save(*args, **kwargs)
         return self
+"""

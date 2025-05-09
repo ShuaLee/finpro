@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import models
@@ -10,16 +11,21 @@ logger = logging.getLogger(__name__)
 
 
 class Schema(models.Model):
-    base_asset_portfolio = models.ForeignKey(
-        'portfolio.BaseAssetPortfolio',
+    # GenericForeignKey to reference concrete sub-portfolios (e.g., StockPortfolio)
+    portfolio_content_type = models.ForeignKey(
+        ContentType,
         on_delete=models.CASCADE,
-        related_name='schemas'
+        related_name='schemas',
+        limit_choices_to={'app_label': 'stock_portfolio', 'model__in': ['stockportfolio']}
     )
+    portfolio_object_id = models.PositiveIntegerField()
+    base_asset_portfolio = GenericForeignKey('portfolio_content_type', 'portfolio_object_id')
+
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('stock_portfolio', 'name')
+        unique_together = (('portfolio_content_type', 'portfolio_object_id', 'name'),)
         verbose_name_plural = "Schema"
 
     def __str__(self):

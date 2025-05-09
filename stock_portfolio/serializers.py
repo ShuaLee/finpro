@@ -6,6 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+"""
 
 class SchemaColumnSerializer(serializers.ModelSerializer):
     class Meta:
@@ -25,7 +26,7 @@ class SchemaColumnValueSerializer(serializers.ModelSerializer):
         read_only_fields = ['stock_holding', 'column', 'is_edited']
 
     def validate_value(self, value):
-        """Validate the value against the column's data type."""
+        # Validate the value against the column's data type.
         column = self.instance.column if self.instance else SchemaColumn.objects.get(
             id=self.initial_data.get('column'))
         try:
@@ -114,3 +115,4 @@ class StockPortfolioSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockPortfolio
         fields = ['id', 'created_at', 'self_managed_accounts']
+"""

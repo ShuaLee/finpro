@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
+"""
 @receiver(post_save, sender=SchemaColumn)
 def create_values_on_column_create(sender, instance, created, **kwargs):
     if created:
@@ -45,3 +45,4 @@ def create_values_on_column_create(sender, instance, created, **kwargs):
         except Exception as e:
             logger.error(f"Error generating SchemaColumnValues: {str(e)}")
             raise
+"""
