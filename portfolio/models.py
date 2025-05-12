@@ -27,9 +27,6 @@ class BaseAssetPortfolio(models.Model):
 
 
 class Asset(models.Model):
-    investment_theme = models.ManyToManyField(
-        'portfolio.InvestmentTheme', related_name="assets", blank=True)
-
     class Meta:
         abstract = True
 
