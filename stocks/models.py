@@ -135,15 +135,10 @@ class Stock(BaseStock):
     
     @classmethod
     def bulk_update_from_fmp(cls, batch_size=100, stocks=None):
-        """
-        Updates specified stocks (or all if stocks=None) with FMP /api/v3/quote and /api/v3/profile data.
-        Returns (updated_count, failed_count, invalid_count).
-        """
         stocks = stocks if stocks is not None else cls.objects.exclude(ticker__endswith='.AX')
         if not stocks:
             logger.info("No stocks to update.")
             return 0, 0, 0
-
         updated = 0
         failed = 0
         invalid = 0
@@ -162,15 +157,14 @@ class Stock(BaseStock):
         updated = 0
         failed = 0
         invalid = 0
-
         api_key = settings.FMP_API_KEY
         ticker_str = ",".join(tickers)
-        url = f"https://financialmodelingprep.com/api/v3/quote/{ticker_str}?apikey={api_key}"
+        quote_url = f"https://financialmodelingprep.com/api/v3/quote/{ticker_str}?apikey={api_key}"
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(quote_url, timeout=10)
             response.raise_for_status()
             data = response.json()
-            logger.debug(f"FMP bulk quote response for {tickers}: {data}")
+            logger.debug(f"FMP quote response for {tickers}: {data}")
 
             fields_to_update = [
                 'name', 'price', 'average_volume', 'volume',
@@ -181,7 +175,8 @@ class Stock(BaseStock):
             for stock in stocks:
                 ticker_data = next((item for item in data if item['symbol'] == stock.ticker.upper()), None)
                 if not ticker_data or 'error' in ticker_data:
-                    logger.warning(f"Invalid ticker {stock.ticker}")
+                    logger.warning(f"Invalid ticker {stock.ticker} - possible ticker change, please review")
+                    InvalidTicker.objects.get_or_create(ticker=stock.ticker, defaults={'resolved': False})
                     invalid += 1
                     continue
 
@@ -203,15 +198,21 @@ class Stock(BaseStock):
                         stock.sector = profile_info.get('sector')
                         stock.industry = profile_info.get('industry')
                         stock.currency = profile_info.get('currency')
-                        stock.dividend_yield = profile_info.get('dividendYield')
-                        stock.dividend_yield = parse_decimal(profile_info.get('dividendYield'))
                         stock.quote_type = profile_info.get('quoteType', 'EQUITY')
                         if stock.quote_type not in ['EQUITY', 'ETF', 'MUTUAL FUND', 'INDEX']:
-                            stock.quote_type = 'EQUITY'  # Default for invalid types
+                            stock.quote_type = 'EQUITY'
+                            logger.warning(f"Invalid quoteType for {stock.ticker}, using EQUITY")
                         if not stock.quote_type:
                             logger.warning(f"Missing quoteType for {stock.ticker}, using EQUITY")
                             stock.quote_type = 'EQUITY'
 
+                        last_div = parse_decimal(profile_info.get('lastDiv'))
+                        if last_div and stock.price:
+                            stock.dividend_yield = (last_div * 4) / stock.price
+                            logger.info(f"Calculated dividend_yield for {stock.ticker}: {stock.dividend_yield}")
+                        else:
+                            stock.dividend_yield = None
+                            logger.warning(f"No lastDiv or price for {stock.ticker}, dividend_yield set to None")
 
                     stock.last_updated = timezone.now()
                     updated += 1
@@ -219,18 +220,17 @@ class Stock(BaseStock):
                     logger.error(f"Failed to fetch data for {stock.ticker}: {str(e)}")
                     failed += 1
                     continue
-
                 except Exception as e:
                     logger.error(f"Failed to process data for {stock.ticker}: {str(e)}")
                     failed += 1
                     continue
 
             cls.objects.bulk_update(stocks, fields_to_update)
-            logger.info(f"Bulk update: {updated} updated, {failed} failed, {invalid} invalid.")
+            logger.info(f"Batch update: {updated} updated, {failed} failed, {invalid} invalid.")
             return updated, failed, invalid
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Bulk fetch failed for tickers {tickers}: {str(e)}")
+            logger.error(f"Bulk fetch failed for {tickers}: {str(e)}")
             return 0, len(stocks), 0
 
 
@@ -238,3 +238,14 @@ class CustomStock(BaseStock):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+class InvalidTicker(models.Model):
+    ticker = models.CharField(max_length=10)
+    detected_at = models.DateTimeField(auto_now_add=True)
+    resolved = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('ticker', 'detected_at')
+
+    def __str__(self):
+        return f"{self.ticker} (Detected: {self.detected_at})"

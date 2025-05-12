@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Stock, CustomStock
+from .models import Stock, CustomStock, InvalidTicker
 
 # Register your models here.
 
@@ -12,7 +12,7 @@ class StockAdmin(admin.ModelAdmin):
     actions = ['refresh_fmp_data']
 
     readonly_fields = (
-        'name', 'currency', 'price',
+        'name', 'currency', 'price', 'quote_type',
         'average_volume', 'volume', 'pe_ratio', 'dividend_yield', 'sector', 'industry',
         'last_updated',
     )
@@ -87,3 +87,15 @@ class CustomStockAdmin(admin.ModelAdmin):
             self.message_user(request, f"Ticker {ticker} already exists as a CustomStock.", level='error')
             return
         super().save_model(request, obj, form, change)
+
+@admin.register(InvalidTicker)
+class InvalidTickerAdmin(admin.ModelAdmin):
+    list_display = ('ticker', 'detected_at', 'resolved')
+    search_fields = ('ticker',)
+    list_filter = ('resolved',)
+    actions = ['mark_resolved']
+
+    def mark_resolved(self, request, queryset):
+        queryset.update(resolved=True)
+        self.message_user(request, f"Marked {queryset.count()} tickers as resolved.")
+    mark_resolved.short_description = "Mark selected tickers as resolved"
