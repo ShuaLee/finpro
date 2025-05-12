@@ -6,20 +6,14 @@ from .models import Stock
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display = ('ticker', 'is_custom', 'currency', 'quote_type', 'exchange',
-                    'dividend_rate', 'last_price', 'last_updated')
-    list_filter = ('exchange',)
+    list_display = ('ticker', 'is_custom', 'short_name', 'price',
+                    'pe_ratio', 'quote_type', 'sector', 'last_updated')
     search_fields = ('ticker',)
-    actions = ['refresh_yfinance_data']
+    actions = ['refresh_fmp_data']
 
     readonly_fields = (
-        'short_name', 'long_name', 'currency', 'exchange', 'quote_type', 'market',
-        'last_price', 'previous_close', 'open_price', 'day_high', 'day_low',
-        'fifty_two_week_high', 'fifty_two_week_low',
-        'average_volume', 'average_volume_10d', 'volume',
-        'market_cap', 'beta', 'pe_ratio', 'forward_pe', 'price_to_book',
-        'dividend_rate', 'dividend_yield', 'payout_ratio', 'ex_dividend_date',
-        'sector', 'industry', 'website', 'full_time_employees', 'long_business_summary',
+        'short_name', 'long_name', 'price',
+        'average_volume', 'volume', 'pe_ratio', 'quote_type', 'sector', 'industry',
         'last_updated',
     )
 
@@ -27,24 +21,17 @@ class StockAdmin(admin.ModelAdmin):
         ('Basic Info', {
             'fields': ('ticker',)
         }),
-        ('Price Data', {
-            'fields': ('last_price', 'previous_close', 'open_price', 'day_high', 'day_low')
+        ('Company Data', {
+            'fields': ('short_name', 'long_name', 'quote_type', 'sector', 'industry')
         }),
-        ('52-Week Range', {
-            'fields': ('fifty_two_week_high', 'fifty_two_week_low')
+        ('Price Data', {
+            'fields': ('price',)
         }),
         ('Volume', {
-            'fields': ('average_volume', 'average_volume_10d', 'volume')
+            'fields': ('average_volume', 'volume')
         }),
         ('Valuation', {
-            'fields': ('market_cap', 'beta', 'pe_ratio', 'forward_pe', 'price_to_book')
-        }),
-        ('Dividends', {
-            'fields': ('dividend_rate', 'dividend_yield', 'payout_ratio', 'ex_dividend_date')
-        }),
-        ('Company Profile', {
-            'fields': ('short_name', 'long_name', 'currency', 'exchange', 'quote_type', 'market',
-                       'sector', 'industry', 'website', 'full_time_employees', 'long_business_summary')
+            'fields': ('pe_ratio',)
         }),
         ('Timestamps', {
             'fields': ('last_updated',)
@@ -57,10 +44,10 @@ class StockAdmin(admin.ModelAdmin):
         else:
             super().save_model(request, obj, form, change)
 
-    def refresh_yfinance_data(self, request, queryset):
-        updated, failed, invalid = Stock.bulk_update_from_yfinance(list(queryset))
+    def refresh_fmp_data(self, request, queryset):
+        updated, failed, invalid = Stock.bulk_update_batch(list(queryset))
         self.message_user(
             request, f"{updated} stocks refreshed, {failed} failed, {invalid} invalid tickers."
         )
 
-    refresh_yfinance_data.short_description = "Refresh selected stocks from yfinance."
+    refresh_fmp_data.short_description = "Refresh selected stocks from FMP."
