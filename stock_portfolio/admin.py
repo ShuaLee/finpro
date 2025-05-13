@@ -2,18 +2,28 @@ from django import forms
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from .models import BaseAccount, StockPortfolio, StockHolding, SelfManagedAccount, ManagedAccount
+from .models import BaseStockAccount, StockPortfolio, StockHolding, SelfManagedAccount, ManagedAccount
 from stocks.models import Stock
 
+@admin.register(SelfManagedAccount)
+class SelfManagedAccountAdmin(admin.ModelAdmin):
+    list_display = ('name', 'get_user_email', 'currency', 'stock_portfolio', 'account_type', 'created_at', 'last_synced')
+    list_filter = ('account_type', 'created_at')
+    search_fields = ('name', 'stock_portfolio__name', 'stock_portfolio__portfolio__profile__user__email')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'last_synced')
 
+    def get_user_email(self, obj):
+        try:
+            return obj.stock_portfolio.portfolio.profile.user.email
+        except AttributeError:
+            return "-"
+    get_user_email.short_description = "User Email"
+    get_user_email.admin_order_field = "stock_portfolio__portfolio__profile__user__email"
+
+
+"""
 class StockHoldingAdminForm(forms.ModelForm):
-    # Dropdown for selecting the StockPortfolio
-    portfolio_object_id = forms.ModelChoiceField(
-        queryset=StockPortfolio.objects.all(),
-        label="Portfolio",
-        required=True
-    )
-
     # Dropdown for selecting the Stock
     asset_object_id = forms.ModelChoiceField(
         queryset=Stock.objects.all(),
@@ -31,7 +41,7 @@ class StockHoldingAdminForm(forms.ModelForm):
     class Meta:
         model = StockHolding
         fields = [
-            'portfolio_object_id', 'asset_object_id', 'account_object_id',
+            'asset_object_id', 'account_object_id',
             'quantity', 'purchase_price', 'purchase_date', 'investment_theme'
         ]
 
@@ -65,7 +75,7 @@ class StockHoldingAdminForm(forms.ModelForm):
             self.initial['asset_content_type'] = self.stock_ct
 
     def get_account_choices(self):
-        """Generate choices for SelfManagedAccount and ManagedAccount."""
+        Generate choices for SelfManagedAccount and ManagedAccount.
         choices = [("", "---------")]  # Blank choice for nullable field
         for account in SelfManagedAccount.objects.all():
             choices.append((f"SelfManagedAccount:{account.id}", str(account)))
@@ -126,14 +136,14 @@ class StockHoldingAdmin(admin.ModelAdmin):
     )
 
     def get_portfolio(self, obj):
-        """Display the related StockPortfolio in the admin list view."""
+        Display the related StockPortfolio in the admin list view.
         if obj.base_asset_portfolio:
             return str(obj.base_asset_portfolio)
         return "-"
     get_portfolio.short_description = "Portfolio"
 
     def get_account(self, obj):
-        """Display the related Account in the admin list view."""
+        Display the related Account in the admin list view.
         if obj.account:
             return str(obj.account)
         return "-"
@@ -148,7 +158,7 @@ class StockHoldingAdmin(admin.ModelAdmin):
             'investment_theme'
         ).prefetch_related('base_asset_portfolio', 'asset', 'account')
 
-
+"""
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
     list_display = ['portfolio', 'created_at']

@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from portfolio.models import BaseAssetPortfolio, AssetHolding
+from portfolio.models import BaseAssetPortfolio, AssetHolding, BaseInvestmentAccount
 from schemas.models import Schema
 from .constants import CURRENCY_CHOICES
 import logging
@@ -69,21 +69,16 @@ class StockPortfolio(BaseAssetPortfolio):
 
 # -------------------- STOCK ACCOUNTS -------------------- #
 
-
-class BaseAccount(models.Model):
+class BaseStockAccount(BaseInvestmentAccount):
     """
     Abstract class for all stock account models.
     """
     stock_portfolio = models.ForeignKey(
-        StockPortfolio, on_delete=models.CASCADE, related_name='%(class)s_set')
-    name = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    currency = models.CharField(
-        max_length=3,
-        choices=CURRENCY_CHOICES,
-        blank=True,
-        help_text="Currency of the account (e.g., USD, CAD, etc.)"
+        StockPortfolio,
+        on_delete=models.CASCADE,
+        related_name='%(class)s_set'
     )
+    # Stock account specific fields
     broker = models.CharField(max_length=100, blank=True, null=True,
                               help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)")
     tax_status = models.CharField(
@@ -126,9 +121,7 @@ class BaseAccount(models.Model):
         super().save(*args, **kwargs)
 
 
-class SelfManagedAccount(BaseAccount):
-    stock_portfolio = models.ForeignKey(
-        StockPortfolio, on_delete=models.CASCADE, related_name="self_managed_accounts")
+class SelfManagedAccount(BaseStockAccount):
     active_schema = models.ForeignKey(
         Schema,
         on_delete=models.CASCADE,
@@ -148,7 +141,7 @@ class SelfManagedAccount(BaseAccount):
         super().save(*args, **kwargs)
 
 
-class ManagedAccount(BaseAccount):
+class ManagedAccount(BaseStockAccount):
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)

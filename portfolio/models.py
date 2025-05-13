@@ -3,6 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from core.models import Profile
+from stock_portfolio.constants import CURRENCY_CHOICES
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,22 @@ class BaseAssetPortfolio(models.Model):
     class Meta:
         abstract = True
 
+class BaseInvestmentAccount(models.Model):
+    # Account Information
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    currency = models.CharField(
+        max_length=3,
+        choices=CURRENCY_CHOICES,
+        blank=True,
+        help_text="Currency of the account (e.g., USD, CAD, etc.)"
+    )
+
+    class Meta:
+        abstract = True
+
+    def __str__(self):
+        return f"{self.name} ({self.currency})"
 
 class Asset(models.Model):
     class Meta:
@@ -58,16 +75,6 @@ class Asset(models.Model):
 
 
 class AssetHolding(models.Model):
-    # Generic foreign key to BaseAssetPortfolio (e.g., StockPortfolio, CryptoPortfolio, etc.)
-    portfolio_content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        related_name='portfolio_holdings'
-    )
-    portfolio_object_id = models.PositiveIntegerField()
-    base_asset_portfolio = GenericForeignKey(
-        'portfolio_content_type', 'portfolio_object_id')
-
     # Generic foreign key to Asset (e.g., Stock, Bitcoin, etc.)
     asset_content_type = models.ForeignKey(
         ContentType,
@@ -108,8 +115,6 @@ class AssetHolding(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=[
-                    'portfolio_content_type',
-                    'portfolio_object_id',
                     'asset_content_type',
                     'asset_object_id',
                     'account_content_type',
