@@ -155,27 +155,7 @@ class ManagedAccount(BaseAccount):
 
 # -------------------- STOCK & STOCK HOLDING -------------------- #
 
+
 class StockHolding(AssetHolding):
     def __str__(self):
         return f"{self.asset} ({self.quantity} shares)"
-
-"""
-class StockHolding(models.Model):
-    stock_account = models.ForeignKey(
-        SelfManagedAccount, on_delete=models.CASCADE, related_name='stockholdings')
-    stock = models.ForeignKey(Stock, null=True, on_delete=models.SET_NULL)
-    shares = models.DecimalField(max_digits=15, decimal_places=4)
-    purchase_price = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True)
-
-    class Meta:
-        unique_together = ('stock_account', 'stock')
-
-    def __str__(self):
-        return f"{self.stock} ({self.shares} shares)"
-
-    def save(self, *args, **kwargs):
-        logger.debug(f"Saving StockHolding {self.id}, shares={self.shares}")
-        super().save(*args, **kwargs)
-        return self
-"""
