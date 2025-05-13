@@ -39,28 +39,32 @@ class StockAdmin(admin.ModelAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        if not change: # New stock
+        if not change:  # New stock
             ticker = form.cleaned_data['ticker'].upper()
             # check for duplicates
             if Stock.objects.filter(ticker=ticker).exists() or CustomStock.objects.filter(ticker=ticker).exists():
-                self.message_user(request, f"Ticker {ticker} already exists.", level='error')
+                self.message_user(
+                    request, f"Ticker {ticker} already exists.", level='error')
                 return
             # Try creating Stock
             stock = Stock.create_from_ticker(ticker)
             if stock:
                 obj = stock
-                self.message_user(request, f"Created Stock for {ticker} with FMP data.")
+                self.message_user(
+                    request, f"Created Stock for {ticker} with FMP data.")
             else:
                 # Create CustomStock if invalid
                 obj = CustomStock(ticker=ticker)
                 obj.save()
-                self.message_user(request, f"Ticker {ticker} not found in FMP, created as CustomStock.")
+                self.message_user(
+                    request, f"Ticker {ticker} not found in FMP, created as CustomStock.")
         else:
             super().save_model(request, obj, form, change)
 
     def refresh_fmp_data(self, request, queryset):
         if queryset.exists():
-            updated, failed, invalid = Stock.bulk_update_from_fmp(stocks=queryset)
+            updated, failed, invalid = Stock.bulk_update_from_fmp(
+                stocks=queryset)
             self.message_user(
                 request,
                 f"Refreshed {updated} selected stocks, {failed} failed, {invalid} invalid tickers."
@@ -73,6 +77,7 @@ class StockAdmin(admin.ModelAdmin):
             )
     refresh_fmp_data.short_description = "Refresh selected stocks from FMP"
 
+
 @admin.register(CustomStock)
 class CustomStockAdmin(admin.ModelAdmin):
     list_display = ('ticker',)
@@ -81,12 +86,15 @@ class CustomStockAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         ticker = form.cleaned_data['ticker'].upper()
         if Stock.objects.filter(ticker=ticker).exists():
-            self.message_user(request, f"Ticker {ticker} exists as a Stock.", level='error')
+            self.message_user(
+                request, f"Ticker {ticker} exists as a Stock.", level='error')
             return
         if not change and CustomStock.objects.filter(ticker=ticker).exists():
-            self.message_user(request, f"Ticker {ticker} already exists as a CustomStock.", level='error')
+            self.message_user(
+                request, f"Ticker {ticker} already exists as a CustomStock.", level='error')
             return
         super().save_model(request, obj, form, change)
+
 
 @admin.register(InvalidTicker)
 class InvalidTickerAdmin(admin.ModelAdmin):
@@ -97,5 +105,6 @@ class InvalidTickerAdmin(admin.ModelAdmin):
 
     def mark_resolved(self, request, queryset):
         queryset.update(resolved=True)
-        self.message_user(request, f"Marked {queryset.count()} tickers as resolved.")
+        self.message_user(
+            request, f"Marked {queryset.count()} tickers as resolved.")
     mark_resolved.short_description = "Mark selected tickers as resolved"
