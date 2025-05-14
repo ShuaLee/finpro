@@ -11,33 +11,36 @@ logger = logging.getLogger(__name__)
 
 
 class Schema(models.Model):
-    # GenericForeignKey to reference concrete sub-portfolios (e.g., StockPortfolio)
-    portfolio_content_type = models.ForeignKey(
+    # GenericForeignKey to reference sub-portfolios (e.g., StockPortfolio)
+    sub_portfolio_content_type = models.ForeignKey(
         ContentType,
         on_delete=models.CASCADE,
         related_name='schemas',
-        limit_choices_to={'app_label': 'stock_portfolio', 'model__in': ['stockportfolio']}
+        limit_choices_to={'app_label': 'stock_portfolio',
+                          'model__in': ['stockportfolio']}
     )
-    portfolio_object_id = models.PositiveIntegerField()
-    base_asset_portfolio = GenericForeignKey('portfolio_content_type', 'portfolio_object_id')
+    sub_portfolio_object_id = models.PositiveIntegerField()
+    base_asset_portfolio = GenericForeignKey(
+        'sub_portfolio_content_type', 'sub_portfolio_object_id')
 
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (('portfolio_content_type', 'portfolio_object_id', 'name'),)
-        verbose_name_plural = "Schema"
+        unique_together = (('sub_portfolio_content_type',
+                           'sub_portfolio_object_id', 'name'),)
 
     def __str__(self):
         return self.name
-
+    """
     def get_structured_holdings(self, account, holding_model, holding_field='stockholdings'):
-        """
+
         Generic method to get structured holdings for any account and holding model.
         :param account: Instance of an account model (e.g., SelfManagedAccount).
         :param holding_model: Model class for holdings (e.g., StockHolding, CryptoHolding).
         :param holding_field: Related name for holdings on account (e.g., 'stockholdings').
-        """
+
         schema_columns = list(self.columns.all())
         holdings = getattr(account, holding_field).select_related(
             'asset').prefetch_related('column_values')
@@ -89,12 +92,14 @@ class Schema(models.Model):
             "columns": columns,
             "rows": rows
         }
-
+    """
+    """
     def delete(self, *args, **kwargs):
         schemas = Schema.objects.filter(portfolio=self.base_asset_portfolio)
         if schemas.count() <= 1:
             raise ValidationError("Cannot delete the last remaining schema.")
         super().delete(*args, **kwargs)
+    """
 
 
 class SchemaColumn(models.Model):
