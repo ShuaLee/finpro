@@ -1,7 +1,9 @@
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from portfolio.models import BaseAssetPortfolio, AssetHolding, BaseInvestmentAccount
 from schemas.models import Schema
+from stocks.models import Stock, CustomStock
 from .constants import CURRENCY_CHOICES
 import logging
 
@@ -68,6 +70,7 @@ class StockPortfolio(BaseAssetPortfolio):
             ).update(active_schema=self.default_self_managed_schema)
 
 # -------------------- STOCK ACCOUNTS -------------------- #
+
 
 class BaseStockAccount(BaseInvestmentAccount):
     """
@@ -152,3 +155,16 @@ class ManagedAccount(BaseStockAccount):
 class StockHolding(AssetHolding):
     def __str__(self):
         return f"{self.asset} ({self.quantity} shares)"
+
+    def clean(self):
+        super().clean()  # Call parent clean method for quantity and purchase_price validation
+        # Restrict asset_content_type to Stock or CustomStock, if set
+        if self.asset_content_type_id:  # Check the raw ID field instead of the descriptor
+            valid_content_types = ContentType.objects.get_for_models(
+                Stock, CustomStock).values()
+            asset_content_type = ContentType.objects.get(
+                id=self.asset_content_type_id)
+            if asset_content_type not in valid_content_types:
+                raise ValidationError(
+                    f"Asset must be a Stock or CustomStock, not {asset_content_type}."
+                )
