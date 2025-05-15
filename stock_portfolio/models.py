@@ -9,6 +9,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+# ------------------ Schema -------------------- #
+class StockPortfolioSchema(Schema):
+    stock_portfolio = models.ForeignKey(
+        'stock_portfolio.StockPortfolio',
+        on_delete=models.CASCADE,
+        related_name='schemas'
+    )
+
+    class Meta:
+        unique_together = (('stock_portfolio', 'name'))
+
 # -------------------- Cash Balances -------------------- #
 
 

@@ -82,7 +82,6 @@ class Profile(models.Model):
     # Common Field
     created_at = models.DateTimeField(auto_now_add=True)
 
-    currency = models.CharField(max_length=10, blank=False, default="USD")
     language = models.CharField(max_length=30, blank=False, default="english")
     birth_date = models.DateField(null=True, blank=True)
     is_asset_manager = models.BooleanField(default=False)

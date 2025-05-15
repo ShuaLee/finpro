@@ -14,6 +14,7 @@ class Portfolio(models.Model):
         Profile, on_delete=models.CASCADE, related_name='portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    currency = models.CharField(max_length=10, blank=False, default="USD")
 
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
@@ -46,6 +47,7 @@ class BaseAssetPortfolio(models.Model):
     class Meta:
         abstract = True
 
+
 class BaseInvestmentAccount(models.Model):
     # Account Information
     name = models.CharField(max_length=100)
@@ -62,6 +64,7 @@ class BaseInvestmentAccount(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.currency})"
+
 
 class Asset(models.Model):
     class Meta:
