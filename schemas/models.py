@@ -1,11 +1,4 @@
-from datetime import datetime
-from decimal import Decimal
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
 from django.db import models
-from .constants import SOURCE_FIELD_CHOICES, FIELD_DATA_TYPES
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,6 +14,36 @@ class Schema(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class SchemaColumn(models.Model):
+    DATA_TYPES = [
+        ('decimal', 'Number'),
+        ('string', 'Text'),
+        ('date', 'Date'),
+        ('url', 'URL'),
+    ]
+    SOURCE_TYPE = [
+        ('asset', 'Asset'),
+        ('holding', 'Holding'),
+        ('calculated', 'Calculated'),
+        ('custom', 'Custom'),
+    ]
+
+    name = models.CharField(max_length=100)
+    data_type = models.CharField(max_length=10, choices=DATA_TYPES)
+    source = models.CharField(max_length=20, choices=SOURCE_TYPE)
+    source_field = models.CharField(max_length=100)
+    formula = models.TextField(blank=True, null=True)
+    editable = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.source})"
+
+
+class SchemaColumnValue(models.Model):
+    value = models.TextField(blank=True, null=True)
+    is_edited = models.BooleanField(default=False)
 
 
 """

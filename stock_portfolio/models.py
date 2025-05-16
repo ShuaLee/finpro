@@ -2,7 +2,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from portfolio.models import BaseAssetPortfolio, AssetHolding, BaseInvestmentAccount
-from schemas.models import Schema
+from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from stocks.models import Stock, CustomStock
 from .constants import CURRENCY_CHOICES
 import logging
@@ -20,6 +20,21 @@ class StockPortfolioSchema(Schema):
 
     class Meta:
         unique_together = (('stock_portfolio', 'name'))
+
+
+class StockPortfolioSchemaColumn(SchemaColumn):
+    schema = models.ForeignKey(
+        'stock_portfolio.StockPortfolioSchema',
+        on_delete=models.CASCADE,
+        related_name='columns'
+    )
+
+    class Meta:
+        unique_together = (('schema', 'name'))
+
+
+class StockPortfolioSchemaColumnValue(SchemaColumnValue):
+    pass
 
 # -------------------- Cash Balances -------------------- #
 
@@ -41,14 +56,14 @@ class CashBalance(models.Model):
 
 class StockPortfolio(BaseAssetPortfolio):
     default_self_managed_schema = models.ForeignKey(
-        Schema,
+        StockPortfolioSchema,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='default_for_self_managed_accounts',
     )
     default_managed_schema = models.ForeignKey(
-        Schema,
+        StockPortfolioSchema,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -138,7 +153,7 @@ class BaseStockAccount(BaseInvestmentAccount):
 
 class SelfManagedAccount(BaseStockAccount):
     active_schema = models.ForeignKey(
-        Schema,
+        StockPortfolioSchema,
         on_delete=models.CASCADE,
         null=True,
         blank=True,

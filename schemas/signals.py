@@ -1,8 +1,4 @@
-from django.apps import apps
-from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from .models import SchemaColumn, SchemaColumnValue
+
 import logging
 
 logger = logging.getLogger(__name__)
