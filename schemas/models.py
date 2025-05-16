@@ -37,6 +37,9 @@ class SchemaColumn(models.Model):
     formula = models.TextField(blank=True, null=True)
     editable = models.BooleanField(default=True)
 
+    class Meta:
+        abstract = True
+
     def __str__(self):
         return f"{self.name} ({self.source})"
 
@@ -44,6 +47,9 @@ class SchemaColumn(models.Model):
 class SchemaColumnValue(models.Model):
     value = models.TextField(blank=True, null=True)
     is_edited = models.BooleanField(default=False)
+
+    class Meta:
+        abstract = True
 
 
 """
