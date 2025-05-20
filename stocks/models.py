@@ -1,20 +1,35 @@
+from core.models import Profile
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from portfolio.models import Asset
-from .constants import FMP_FIELD_MAPPINGS
 from .utils import parse_decimal
 import logging
 import requests
 
 logger = logging.getLogger(__name__)
 
+FMP_FIELD_MAPPINGS = [
+    # (model_field, api_field, source, data_type, required, default)
+    ('name', 'name', 'quote', 'string', False, None),
+    ('exchange', 'exchangeShortName', 'profile', 'string', False, None),
+    ('price', 'price', 'quote', 'decimal', True, None),
+    ('volume', 'volume', 'quote', 'integer', False, None),
+    ('average_volume', 'avgVolume', 'quote', 'integer', False, None),
+    ('pe_ratio', 'pe', 'quote', 'decimal', False, None),
+    ('sector', 'sector', 'profile', 'string', False, None),
+    ('industry', 'industry', 'profile', 'string', False, None),
+    ('currency', 'currency', 'profile', 'string', False, None),
+    ('dividend_yield', None, 'profile', 'decimal', False, None),  # Calculated
+    ('quote_type', 'quoteType', 'profile', 'string', False, 'EQUITY'),
+]
+
 
 class Stock(Asset):
     ticker = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=200, blank=True, null=True)
-    is_custom = models.BooleanField(default=False)
+    exchange = models.CharField(max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
     price = models.DecimalField(
         max_digits=20, decimal_places=4, null=True, blank=True)
     currency = models.CharField(max_length=3, blank=True, null=True)
@@ -27,13 +42,17 @@ class Stock(Asset):
     quote_type = models.CharField(max_length=50, blank=True, null=True)
     sector = models.CharField(max_length=100, null=True, blank=True)
     industry = models.CharField(max_length=100, null=True, blank=True)
+
+    is_custom = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         indexes = [
             models.Index(fields=['ticker']),
-            models.Index(fields=['is_custom'])
+            models.Index(fields=['is_custom']),
+            models.Index(fields=['exchange'])
         ]
 
     def __str__(self):
@@ -43,11 +62,7 @@ class Stock(Asset):
         if self.ticker:
             self.ticker = self.ticker.upper()
         super().save(*args, **kwargs)
-
-    def clean(self):
-        # No validation to allow null fields for custom stocks
-        pass
-
+        
     def get_current_value(self):
         return self.price or 0
 
@@ -184,93 +199,63 @@ class Stock(Asset):
             return None
 
     @classmethod
-    def bulk_update_from_fmp(cls, batch_size=100, stocks=None):
-        stocks = stocks if stocks is not None else cls.objects.exclude(
-            ticker__endswith='.AX')
+    def refresh_all_stocks(cls, batch_size=100, exchange=None):
+        query = cls.objects.filter(is_custom=False)
+        if exchange:
+            query = query.filter(exchange=exchange)  # Assumes exchange field
+        stocks = query
+
         if not stocks:
-            logger.info("No stocks to update.")
-            return 0, 0, 0
+            logger.info("No stocks to refresh.")
+            return 0, 0
 
         updated = 0
         failed = 0
-        invalid = 0
+        api_key = settings.FMP_API_KEY
+        fields_to_update = [f for f, _, _, _, _, _ in FMP_FIELD_MAPPINGS] + ['last_updated']
+
         for i in range(0, len(stocks), batch_size):
             batch = stocks[i:i + batch_size]
-            u, f, inv = cls._bulk_update_batch(batch)
-            updated += u
-            failed += f
-            invalid += inv
-        logger.info(
-            f"Total: {updated} updated, {failed} failed, {invalid} invalid.")
-        return updated, failed, invalid
+            tickers = [stock.ticker.upper() for stock in batch]
+            ticker_str = ",".join(tickers)
+            quote_url = f"https://financialmodelingprep.com/api/v3/quote/{ticker_str}?apikey={api_key}"
+            profile_url = f"https://financialmodelingprep.com/api/v3/profile/{ticker_str}?apikey={api_key}"
 
-    @classmethod
-    def _bulk_update_batch(cls, stocks):
-        tickers = [stock.ticker.upper() for stock in stocks]
-        ticker_str = ",".join(tickers)
-        api_key = settings.FMP_API_KEY
-        quote_url = f"https://financialmodelingprep.com/api/v3/quote/{ticker_str}?apikey={api_key}"
-        profile_url = f"https://financialmodelingprep.com/api/v3/profile/{ticker_str}?apikey={api_key}"
-
-        try:
-            quote_response = requests.get(quote_url, timeout=10)
-            quote_response.raise_for_status()
-            quote_data_list = quote_response.json()
-            logger.debug(
-                f"FMP quote response for {tickers}: {quote_data_list}")
-
-            profile_data_list = []
             try:
-                profile_response = requests.get(profile_url, timeout=10)
-                profile_response.raise_for_status()
-                profile_data_list = profile_response.json()
-                logger.debug(
-                    f"FMP profile response for {tickers}: {profile_data_list}")
-            except Exception as e:
-                logger.warning(
-                    f"Failed to fetch profile data for {tickers}: {str(e)}")
+                quote_response = requests.get(quote_url, timeout=10)
+                quote_response.raise_for_status()
+                quote_data_list = quote_response.json()
 
-            updated = 0
-            failed = 0
-            invalid = 0
-            fields_to_update = [model_field for model_field, _,
-                                _, _, _, _ in FMP_FIELD_MAPPINGS] + ['last_updated']
-
-            for stock in stocks:
-                if stock.is_custom:
-                    continue
-
-                quote_data = next(
-                    (item for item in quote_data_list if item.get(
-                        'symbol') == stock.ticker.upper()),
-                    None
-                )
-                if not quote_data or 'error' in quote_data:
-                    logger.warning(f"Invalid ticker {stock.ticker}")
-                    invalid += 1
-                    continue
-
-                profile_data = next(
-                    (item for item in profile_data_list if item.get(
-                        'symbol') == stock.ticker.upper()),
-                    {}
-                )
-
+                profile_data_list = []
                 try:
-                    success = stock._process_fmp_data(quote_data, profile_data)
-                    if success:
+                    profile_response = requests.get(profile_url, timeout=10)
+                    profile_response.raise_for_status()
+                    profile_data_list = profile_response.json()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch profile data for batch: {str(e)}")
+
+                for stock in batch:
+                    quote_data = next(
+                        (item for item in quote_data_list if item.get('symbol') == stock.ticker.upper()), None
+                    )
+                    if not quote_data or 'error' in quote_data:
+                        logger.warning(f"Invalid ticker {stock.ticker}")
+                        failed += 1
+                        continue
+                    profile_data = next(
+                        (item for item in profile_data_list if item.get('symbol') == stock.ticker.upper()), {}
+                    )
+                    if stock._process_fmp_data(quote_data, profile_data):
                         updated += 1
                     else:
+                        logger.warning(f"Failed to process {stock.ticker}")
                         failed += 1
-                except Exception as e:
-                    logger.error(
-                        f"Failed to process data for {stock.ticker}: {str(e)}")
-                    failed += 1
-                    continue
 
-            cls.objects.bulk_update(stocks, fields_to_update)
-            return updated, failed, invalid
+                cls.objects.bulk_update(batch, fields_to_update)
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Bulk fetch failed for {tickers}: {str(e)}")
-            return 0, len(stocks), 0
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Batch refresh failed for {tickers[:50]}...: {str(e)}")
+                failed += len(batch)
+
+        logger.info(f"Refreshed {updated} stocks, {failed} failed.")
+        return updated, failed
