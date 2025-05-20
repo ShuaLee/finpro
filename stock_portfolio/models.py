@@ -3,8 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from portfolio.models import BaseAssetPortfolio, AssetHolding, BaseInvestmentAccount
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
-from stocks.models import Stock, CustomStock
-from .constants import CURRENCY_CHOICES
+from stocks.models import Stock
+from .constants import STOCK_FIELDS, CALCULATION_FORMULAS, FIELD_DATA_TYPES
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,32 +24,87 @@ class StockPortfolioSchema(Schema):
 
 class StockPortfolioSchemaColumn(SchemaColumn):
     schema = models.ForeignKey(
-        'stock_portfolio.StockPortfolioSchema',
+        StockPortfolioSchema,
         on_delete=models.CASCADE,
         related_name='columns'
     )
 
     class Meta:
-        unique_together = (('schema', 'name'))
+        unique_together = (('schema', 'name'), ('schema', 'source_field'))
+
+    def save(self, *args, **kwargs):
+        # Ensure source_field and data_type align with constants
+        if self.source in ['asset', 'holding', 'calculated']:
+            valid_fields = {f[0] for f in STOCK_FIELDS if f[2] == self.source}
+            if self.source_field not in valid_fields:
+                raise ValidationError(
+                    f"Invalid source_field '{self.source_field}' for source '{self.source}'.")
+            expected_data_type = FIELD_DATA_TYPES.get(self.source_field)
+            if self.data_type != expected_data_type:
+                logger.warning(
+                    f"Data type mismatch for {self.source_field}: expected {expected_data_type}, got {self.data_type}"
+                )
+                self.data_type = expected_data_type
+        if self.source == 'calculated':
+            self.formula = CALCULATION_FORMULAS.get(self.source_field, '')
+        super().save(*args, **kwargs)
 
 
 class StockPortfolioSchemaColumnValue(SchemaColumnValue):
-    pass
-
-# -------------------- Cash Balances -------------------- #
-
-
-class CashBalance(models.Model):
-    account = models.ForeignKey(
-        'SelfManagedAccount', on_delete=models.CASCADE, related_name='cash_balances')
-    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES)
-    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    column = models.ForeignKey(
+        StockPortfolioSchemaColumn,
+        on_delete=models.CASCADE,
+        related_name='values'
+    )
+    holding = models.ForeignKey(
+        'StockHolding',
+        on_delete=models.CASCADE,
+        related_name='column_values'
+    )
 
     class Meta:
-        unique_together = ('account', 'currency')
+        unique_together = (('column', 'holding'),)
 
-    def __str__(self):
-        return f"{self.amount} {self.currency}"
+    def get_value(self):
+        """Return the user-edited value or the derived value."""
+        if self.is_edited and self.value is not None:
+            return self.value
+        column = self.column
+        if column.source == 'asset' and self.holding.asset:
+            # Fetch from asset (Stock or CustomStock)
+            return getattr(self.holding.asset, column.source_field, None)
+        elif column.source == 'holding':
+            # Fetch from holding
+            return getattr(self.holding, column.source_field, None)
+        elif column.source == 'calculated':
+            # Evaluate formula
+            return self.evaluate_formula(column.formula)
+        return self.value
+
+    def evaluate_formula(self, formula):
+        """Evaluate the formula using holding and asset fields."""
+        if not formula:
+            return None
+        try:
+            # Replace field names with actual values
+            context = {}
+            for field, _, source, source_field in STOCK_FIELDS:
+                if source == 'asset' and self.holding.asset:
+                    context[field] = getattr(
+                        self.holding.asset, source_field, 0)
+                elif source == 'holding':
+                    context[field] = getattr(self.holding, source_field, 0)
+                else:
+                    context[field] = 0
+            # Safe evaluation (simplified; use a proper parser like numexpr in production)
+            formula = formula.replace(' * ', '*').replace(' / ', '/')
+            for field in context:
+                formula = formula.replace(field, str(context[field] or 0))
+            # WARNING: Use a safe evaluator in production
+            return eval(formula, {"__builtins__": {}}, {})
+        except Exception as e:
+            logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
+            return None
 
 # -------------------- STOCK PORTFOLIO -------------------- #
 
@@ -180,18 +235,11 @@ class ManagedAccount(BaseStockAccount):
 
 
 class StockHolding(AssetHolding):
+    asset = models.ForeignKey(
+        'stocks.Stock',
+        on_delete=models.CASCADE,
+        related_name='holdings'
+    )
+
     def __str__(self):
         return f"{self.asset} ({self.quantity} shares)"
-
-    def clean(self):
-        super().clean()  # Call parent clean method for quantity and purchase_price validation
-        # Restrict asset_content_type to Stock or CustomStock, if set
-        if self.asset_content_type_id:  # Check the raw ID field instead of the descriptor
-            valid_content_types = ContentType.objects.get_for_models(
-                Stock, CustomStock).values()
-            asset_content_type = ContentType.objects.get(
-                id=self.asset_content_type_id)
-            if asset_content_type not in valid_content_types:
-                raise ValidationError(
-                    f"Asset must be a Stock or CustomStock, not {asset_content_type}."
-                )

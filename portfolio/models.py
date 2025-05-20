@@ -78,33 +78,10 @@ class Asset(models.Model):
 
 
 class AssetHolding(models.Model):
-    # Generic foreign key to Asset (e.g., Stock, Bitcoin, etc.)
-    asset_content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        related_name='asset_holdings'
-    )
-    asset_object_id = models.PositiveIntegerField()
-    asset = GenericForeignKey('asset_content_type', 'asset_object_id')
-
-    # Generic foreign ket to Account (e.g., SelfManagedAccount, CryptoWallet, etc.) nullable
-    account_content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='account_holdings'
-    )
-    account_object_id = models.PositiveIntegerField()
-    account = GenericForeignKey('account_content_type', 'account_object_id')
-
-    # Characteristics
     quantity = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
         max_digits=20, decimal_places=2, null=True, blank=True)
     purchase_date = models.DateTimeField(null=True, blank=True)
-
-    # Investment Themes
     investment_theme = models.ForeignKey(
         InvestmentTheme,
         on_delete=models.SET_NULL,
@@ -115,21 +92,9 @@ class AssetHolding(models.Model):
 
     class Meta:
         abstract = True
-        constraints = [
-            models.UniqueConstraint(
-                fields=[
-                    'asset_content_type',
-                    'asset_object_id',
-                    'account_content_type',
-                    'account_object_id'
-                ],
-                name='unique_holding'
-            )
-        ]
 
     def get_current_value(self):
-        if self.asset and self.quantity:
-            # This is calling the ASSETS get_current_value() not the holding
+        if hasattr(self, 'asset') and self.quantity:
             return self.quantity * self.asset.get_current_value()
         return 0
 
@@ -138,7 +103,7 @@ class AssetHolding(models.Model):
             return self.quantity * self.purchase_price
         return 0
 
-    def get_performace(self):
+    def get_performance(self):
         total_cost = self.get_total_cost()
         if total_cost > 0:
             return (self.get_current_value() - total_cost) / total_cost * 100
@@ -153,6 +118,6 @@ class AssetHolding(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         logger.debug(
-            f"Saving {self.__class__.__name__} for asset {self.asset}, quantity={self.quantity}")
+            f"Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
         super().save(*args, **kwargs)
         return self
