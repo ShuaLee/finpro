@@ -1,11 +1,78 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
-from .models import StockPortfolio, SelfManagedAccount, StockHolding
+from .models import StockPortfolio, SelfManagedAccount, StockHolding, StockPortfolioSchema
 import logging
 
 logger = logging.getLogger(__name__)
 
+
+# -------------------- Schema -------------------- #
+
+@admin.register(StockPortfolioSchema)
+class StockPortfolioSchemaAdmin(admin.ModelAdmin):
+    list_display = ['name', 'stock_portfolio_link', 'created_at', 'updated_at']
+    list_filter = ['stock_portfolio__portfolio__profile__user__email', 'created_at']
+    search_fields = ['name', 'stock_portfolio__portfolio__profile__user__email']
+    list_per_page = 50
+    fields = ['name', 'stock_portfolio']
+    autocomplete_fields = ['stock_portfolio']
+
+    def stock_portfolio_link(self, obj):
+        url = reverse('admin:stock_portfolio_stockportfolio_change', args=[obj.stock_portfolio.id])
+        return format_html('<a href="{}">{}</a>', url, obj.stock_portfolio)
+    stock_portfolio_link.short_description = 'Stock Portfolio'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('stock_portfolio__portfolio__profile__user')
+    
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, object_id)
+        if obj and obj.stock_portfolio.schemas.count() <= 1:
+            # Clear all messages
+            storage = messages.get_messages(request)
+            storage.used = True
+            # Add error message
+            self.message_user(
+                request,
+                "Cannot delete the last schema for a StockPortfolio.",
+                level=messages.ERROR
+            )
+            # Redirect to list view
+            return HttpResponseRedirect(reverse('admin:stock_portfolio_stockportfolioschema_changelist'))
+        return super().delete_view(request, object_id, extra_context)
+
+    def delete_queryset(self, request, queryset):
+        blocked_schemas = [obj.name for obj in queryset if obj.stock_portfolio.schemas.count() <= 1]
+        if blocked_schemas:
+            storage = messages.get_messages(request)
+            storage.used = True
+            self.message_user(
+                request,
+                f"Cannot delete schema(s) {', '.join(blocked_schemas)} as they are the last schemas for their StockPortfolio.",
+                level=messages.ERROR
+            )
+            return
+        super().delete_queryset(request, queryset)
+
+    def delete_selected(self, request, queryset):
+        if request.POST.get('post'):  # Confirmation page submitted
+            blocked_schemas = [obj.name for obj in queryset if obj.stock_portfolio.schemas.count() <= 1]
+            if blocked_schemas:
+                storage = messages.get_messages(request)
+                storage.used = True
+                self.message_user(
+                    request,
+                    f"Cannot delete schema(s) {', '.join(blocked_schemas)} as they are the last schemas for their StockPortfolio.",
+                    level=messages.ERROR
+                )
+                return HttpResponseRedirect(reverse('admin:stock_portfolio_stockportfolioschema_changelist'))
+            return super().delete_selected(request, queryset)
+        # Render confirmation page for GET or initial POST
+        return super().delete_selected(request, queryset)
+
+# ------------------------------------------------ #
 
 @admin.register(SelfManagedAccount)
 class SelfManagedAccountAdmin(admin.ModelAdmin):
@@ -29,6 +96,7 @@ class SelfManagedAccountAdmin(admin.ModelAdmin):
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
     list_display = ['portfolio', 'created_at']
+    search_fields = ['portfolio__profile__user__email']
 
 
 @admin.register(StockHolding)

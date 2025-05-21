@@ -1,9 +1,7 @@
-from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
 from portfolio.models import BaseAssetPortfolio, AssetHolding, BaseInvestmentAccount
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
-from stocks.models import Stock
 from .constants import STOCK_FIELDS, CALCULATION_FORMULAS, FIELD_DATA_TYPES
 import logging
 
@@ -20,6 +18,11 @@ class StockPortfolioSchema(Schema):
 
     class Meta:
         unique_together = (('stock_portfolio', 'name'))
+    
+    def delete(self, *args, **kwargs):
+        if self.stock_portfolio.schemas.count() <= 1:
+            raise PermissionDenied("Cannot delete the last schema for a StockPortfolio.")
+        super().delete(*args, **kwargs)
 
 
 class StockPortfolioSchemaColumn(SchemaColumn):
@@ -110,46 +113,17 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
 
 
 class StockPortfolio(BaseAssetPortfolio):
-    default_self_managed_schema = models.ForeignKey(
-        StockPortfolioSchema,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='default_for_self_managed_accounts',
-    )
-    default_managed_schema = models.ForeignKey(
-        StockPortfolioSchema,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='default_for_managed_accounts',
-    )
-
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
-
+    
     def clean(self):
-        if self.default_self_managed_schema and self.default_self_managed_schema.stock_portfolio != self:
-            raise ValidationError(
-                "Default schema must belong to this portfolio.")
-
+        if not self.schemas.exists():
+            raise ValidationError("StockPortfolio must have at least one schema.")
+    
     def save(self, *args, **kwargs):
-        if not self._state.adding and self.default_self_managed_schema is None:
-            raise ValueError("default_schema must not be null after creation.")
-
-        if self.pk:
-            old = StockPortfolio.objects.get(pk=self.pk)
-            old_default = old.default_self_managed_schema
-        else:
-            old_default = None
-
+        self.full_clean()  # Run clean before saving
         super().save(*args, **kwargs)
-
-        # Now update only accounts still using the old default
-        if self.default_self_managed_schema and old_default and self.default_self_managed_schema != old_default:
-            self.self_managed_accounts.filter(
-                active_schema=old_default
-            ).update(active_schema=self.default_self_managed_schema)
+        
 
 # -------------------- STOCK ACCOUNTS -------------------- #
 

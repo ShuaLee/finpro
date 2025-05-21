@@ -13,7 +13,3 @@ def create_individual_portfolio(sender, instance, created, **kwargs):
     # Create Portfolio
     portfolio = Portfolio.objects.create(profile=instance)
 
-    # Create StockPortfolio
-    stock_portfolio = StockPortfolio(portfolio=portfolio)
-
-    stock_portfolio.save()
