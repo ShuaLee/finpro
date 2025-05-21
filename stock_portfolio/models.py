@@ -235,11 +235,28 @@ class ManagedAccount(BaseStockAccount):
 
 
 class StockHolding(AssetHolding):
-    asset = models.ForeignKey(
+    self_managed_account = models.ForeignKey(
+        SelfManagedAccount,
+        on_delete=models.CASCADE,
+        related_name='holdings',
+    )
+    stock = models.ForeignKey(
         'stocks.Stock',
         on_delete=models.CASCADE,
         related_name='holdings'
     )
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['self_managed_account']),
+            models.Index(fields=['stock']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['self_managed_account', 'stock'],
+                name='unique_holding_per_account'
+            ),
+        ]
+
     def __str__(self):
-        return f"{self.asset} ({self.quantity} shares)"
+        return f"{self.stock} ({self.quantity} shares)"
