@@ -14,6 +14,7 @@ FMP_FIELD_MAPPINGS = [
     # (model_field, api_field, source, data_type, required, default)
     ('name', 'name', 'quote', 'string', False, None),
     ('exchange', 'exchangeShortName', 'profile', 'string', False, None),
+    ('is_adr', 'isAdr', 'profile', 'boolean', False, False),
     ('price', 'price', 'quote', 'decimal', True, None),
     ('volume', 'volume', 'quote', 'integer', False, None),
     ('average_volume', 'avgVolume', 'quote', 'integer', False, None),
@@ -29,7 +30,9 @@ FMP_FIELD_MAPPINGS = [
 class Stock(Asset):
     ticker = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=200, blank=True, null=True)
-    exchange = models.CharField(max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
+    exchange = models.CharField(
+        max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
+    is_adr = models.BooleanField(default=False)
     price = models.DecimalField(
         max_digits=20, decimal_places=4, null=True, blank=True)
     currency = models.CharField(max_length=3, blank=True, null=True)
@@ -62,7 +65,7 @@ class Stock(Asset):
         if self.ticker:
             self.ticker = self.ticker.upper()
         super().save(*args, **kwargs)
-        
+
     def get_current_value(self):
         return self.price or 0
 
@@ -107,12 +110,16 @@ class Stock(Asset):
             else:
                 self.dividend_yield = None
 
-            quote_type = profile_data.get('quoteType')
+            is_fund = profile_data.get('isFund', False)
             is_etf = profile_data.get('isEtf', False)
-            if quote_type in ['EQUITY', 'ETF', 'MUTUAL FUND', 'INDEX']:
-                self.quote_type = quote_type
+
+            quote_type = profile_data.get('quoteType')
+            if is_fund:
+                self.quote_type = 'FUND'
             elif is_etf:
                 self.quote_type = 'ETF'
+            elif quote_type in ['EQUITY', 'INDEX']:
+                self.quote_type = quote_type
             else:
                 self.quote_type = 'EQUITY'
 
@@ -212,7 +219,8 @@ class Stock(Asset):
         updated = 0
         failed = 0
         api_key = settings.FMP_API_KEY
-        fields_to_update = [f for f, _, _, _, _, _ in FMP_FIELD_MAPPINGS] + ['last_updated']
+        fields_to_update = [f for f, _, _, _, _,
+                            _ in FMP_FIELD_MAPPINGS] + ['last_updated']
 
         for i in range(0, len(stocks), batch_size):
             batch = stocks[i:i + batch_size]
@@ -232,18 +240,21 @@ class Stock(Asset):
                     profile_response.raise_for_status()
                     profile_data_list = profile_response.json()
                 except Exception as e:
-                    logger.warning(f"Failed to fetch profile data for batch: {str(e)}")
+                    logger.warning(
+                        f"Failed to fetch profile data for batch: {str(e)}")
 
                 for stock in batch:
                     quote_data = next(
-                        (item for item in quote_data_list if item.get('symbol') == stock.ticker.upper()), None
+                        (item for item in quote_data_list if item.get(
+                            'symbol') == stock.ticker.upper()), None
                     )
                     if not quote_data or 'error' in quote_data:
                         logger.warning(f"Invalid ticker {stock.ticker}")
                         failed += 1
                         continue
                     profile_data = next(
-                        (item for item in profile_data_list if item.get('symbol') == stock.ticker.upper()), {}
+                        (item for item in profile_data_list if item.get(
+                            'symbol') == stock.ticker.upper()), {}
                     )
                     if stock._process_fmp_data(quote_data, profile_data):
                         updated += 1
@@ -254,7 +265,8 @@ class Stock(Asset):
                 cls.objects.bulk_update(batch, fields_to_update)
 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Batch refresh failed for {tickers[:50]}...: {str(e)}")
+                logger.error(
+                    f"Batch refresh failed for {tickers[:50]}...: {str(e)}")
                 failed += len(batch)
 
         logger.info(f"Refreshed {updated} stocks, {failed} failed.")

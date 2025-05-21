@@ -36,11 +36,11 @@ class StockAdmin(admin.ModelAdmin):
     form = StockForm
     list_display = ['ticker', 'name', 'is_custom',
                     'price', 'sector', 'last_updated']
-    list_filter = ['is_custom', 'quote_type', 'sector']
+    list_filter = ['is_custom', 'quote_type', 'sector', 'exchange']
     search_fields = ['ticker', 'name']
     list_per_page = 50
     fields = [
-        'ticker', 'is_custom', 'price', 'name', 'currency', 'sector', 'industry',
+        'ticker', 'exchange', 'is_adr', 'is_custom', 'price', 'name', 'currency', 'sector', 'industry',
         'dividend_yield', 'pe_ratio', 'quote_type', 'average_volume', 'volume',
         'last_updated', 'created_at'
     ]
