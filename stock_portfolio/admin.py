@@ -34,9 +34,10 @@ class StockPortfolioAdmin(admin.ModelAdmin):
 @admin.register(StockHolding)
 class StockHoldingAdmin(admin.ModelAdmin):
     list_display = [
-        'stock_link', 'self_managed_account_link', 'quantity', 'purchase_price',
+        'holding_link', 'stock_link', 'self_managed_account_link', 'quantity', 'purchase_price',
         'purchase_date', 'current_value', 'performance', 'investment_theme'
     ]
+    list_display_links = ['holding_link']
     list_filter = [
         'self_managed_account__stock_portfolio__portfolio__profile',
         'stock__quote_type', 'stock__sector', 'stock__is_adr', 'investment_theme'
@@ -51,6 +52,11 @@ class StockHoldingAdmin(admin.ModelAdmin):
     ]
     autocomplete_fields = ['stock', 'self_managed_account']
     actions = ['refresh_holding_values']
+
+    def holding_link(self, obj):
+        url = reverse('admin:stock_portfolio_stockholding_change', args=[obj.id])
+        return format_html('<a href="{}">{}</a>', url, f"{obj.stock.ticker} ({obj.self_managed_account.name})")
+    holding_link.short_description = 'Holding'
 
     def stock_link(self, obj):
         url = reverse('admin:stocks_stock_change', args=[obj.stock.id])
