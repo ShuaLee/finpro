@@ -48,24 +48,6 @@ class BaseAssetPortfolio(models.Model):
         abstract = True
 
 
-class BaseInvestmentAccount(models.Model):
-    # Account Information
-    name = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    currency = models.CharField(
-        max_length=3,
-        choices=CURRENCY_CHOICES,
-        blank=True,
-        help_text="Currency of the account (e.g., USD, CAD, etc.)"
-    )
-
-    class Meta:
-        abstract = True
-
-    def __str__(self):
-        return f"{self.name} ({self.currency})"
-
-
 class Asset(models.Model):
     class Meta:
         abstract = True

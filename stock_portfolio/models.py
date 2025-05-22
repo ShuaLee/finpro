@@ -1,14 +1,15 @@
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
-from portfolio.models import BaseAssetPortfolio, AssetHolding, BaseInvestmentAccount
+from portfolio.models import BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
-from .constants import STOCK_FIELDS, CALCULATION_FORMULAS, FIELD_DATA_TYPES
+from .constants import STOCK_FIELDS, CALCULATION_FORMULAS, FIELD_DATA_TYPES, CURRENCY_CHOICES
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-# ------------------ Schema -------------------- #
+# ---------------------------- Schema ------------------------------ #
+
 class StockPortfolioSchema(Schema):
     stock_portfolio = models.ForeignKey(
         'stock_portfolio.StockPortfolio',
@@ -18,10 +19,11 @@ class StockPortfolioSchema(Schema):
 
     class Meta:
         unique_together = (('stock_portfolio', 'name'))
-    
+
     def delete(self, *args, **kwargs):
         if self.stock_portfolio.schemas.count() <= 1:
-            raise PermissionDenied("Cannot delete the last schema for a StockPortfolio.")
+            raise PermissionDenied(
+                "Cannot delete the last schema for a StockPortfolio.")
         super().delete(*args, **kwargs)
 
 
@@ -109,29 +111,40 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
             logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
             return None
 
+# ------------------------------------------------------------------ #
+
 # -------------------- STOCK PORTFOLIO -------------------- #
 
 
 class StockPortfolio(BaseAssetPortfolio):
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
-    
+
     def clean(self):
-        if not self.schemas.exists():
-            raise ValidationError("StockPortfolio must have at least one schema.")
-    
+        if self.pk and not self.schemas.exists():  # Only check schemas if saved
+            raise ValidationError(
+                "StockPortfolio must have at least one schema.")
+
     def save(self, *args, **kwargs):
         self.full_clean()  # Run clean before saving
         super().save(*args, **kwargs)
-        
+
 
 # -------------------- STOCK ACCOUNTS -------------------- #
 
 
-class BaseStockAccount(BaseInvestmentAccount):
+class BaseStockAccount(models.Model):
     """
     Abstract class for all stock account models.
     """
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    currency = models.CharField(
+        max_length=3,
+        choices=CURRENCY_CHOICES,
+        blank=True,
+        help_text="Currency of the account (e.g., USD, CAD, etc.)"
+    )
     stock_portfolio = models.ForeignKey(
         StockPortfolio,
         on_delete=models.CASCADE,
@@ -160,7 +173,6 @@ class BaseStockAccount(BaseInvestmentAccount):
     )
     last_synced = models.DateTimeField(
         null=True, blank=True, help_text="Last sync with broker.")
-    use_default_schema = models.BooleanField(default=True)
 
     class Meta:
         abstract = True
@@ -190,13 +202,12 @@ class SelfManagedAccount(BaseStockAccount):
     )
 
     def save(self, *args, **kwargs):
-        if self.use_default_schema:
-            self.active_schema = self.stock_portfolio.default_self_managed_schema
-
-        if self.active_schema and self.active_schema.stock_portfolio != self.stock_portfolio:
-            raise ValidationError(
-                "Selected schema does not belong to this account's stock portfolio.")
-
+        if not self.pk and not self.active_schema:  # On creation, set active_schema
+            if self.stock_portfolio and self.stock_portfolio.schemas.exists():
+                self.active_schema = self.stock_portfolio.schemas.first()
+            else:
+                raise ValidationError(
+                    "StockPortfolio must have at least one schema.")
         super().save(*args, **kwargs)
 
 
