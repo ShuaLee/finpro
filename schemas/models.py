@@ -31,18 +31,18 @@ class SchemaColumn(models.Model):
         ('custom', 'Custom'),
     ]
 
-    name = models.CharField(max_length=100)
+    title = models.CharField(max_length=100)
     data_type = models.CharField(max_length=10, choices=DATA_TYPES)
     source = models.CharField(max_length=20, choices=SOURCE_TYPE)
-    source_field = models.CharField(max_length=100)
     formula = models.TextField(blank=True, null=True)
     editable = models.BooleanField(default=True)
+    is_deletable = models.BooleanField(default=True)
 
     class Meta:
         abstract = True
 
     def __str__(self):
-        return f"{self.name} ({self.source})"
+        return f"{self.title} ({self.source})"
 
     def clean(self):
         if self.source in ['asset', 'holding'] and not self.source_field:

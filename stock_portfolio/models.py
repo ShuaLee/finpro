@@ -28,31 +28,51 @@ class StockPortfolioSchema(Schema):
 
 
 class StockPortfolioSchemaColumn(SchemaColumn):
+    SOURCE_FIELD_CHOICES = [
+        # Asset fields
+        ('ticker', 'Ticker'),
+        ('price', 'Price'),
+        ('name', 'Name'),  # Example; adjust based on Asset model
+        # Holding fields
+        ('quantity', 'Quantity'),
+        ('purchase_price', 'Purchase Price'),
+        ('holding.ticker', 'Holding Ticker'),  # For holding.ticker
+        # Calculated fields (optional, if formula-based)
+        ('current_value', 'Current Value'),
+    ]
+
     schema = models.ForeignKey(
         StockPortfolioSchema,
         on_delete=models.CASCADE,
         related_name='columns'
     )
+    source_field = models.CharField(max_length=100, choices=SOURCE_FIELD_CHOICES, blank=True)
 
     class Meta:
-        unique_together = (('schema', 'name'), ('schema', 'source_field'))
+        unique_together = (('schema', 'title'), ('schema', 'source_field'))
 
-    def save(self, *args, **kwargs):
-        # Ensure source_field and data_type align with constants
-        if self.source in ['asset', 'holding', 'calculated']:
-            valid_fields = {f[0] for f in STOCK_FIELDS if f[2] == self.source}
-            if self.source_field not in valid_fields:
-                raise ValidationError(
-                    f"Invalid source_field '{self.source_field}' for source '{self.source}'.")
-            expected_data_type = FIELD_DATA_TYPES.get(self.source_field)
-            if self.data_type != expected_data_type:
-                logger.warning(
-                    f"Data type mismatch for {self.source_field}: expected {expected_data_type}, got {self.data_type}"
-                )
-                self.data_type = expected_data_type
-        if self.source == 'calculated':
-            self.formula = CALCULATION_FORMULAS.get(self.source_field, '')
-        super().save(*args, **kwargs)
+    def __str__(self):
+        return f"{self.title} ({self.source})"
+
+    def clean(self):
+        if self.source in ['asset', 'holding'] and not self.source_field:
+            raise ValidationError("source_field is required for asset or holding sources.")
+        if self.source == 'calculated' and not self.formula:
+            raise ValidationError("formula is required for calculated sources.")
+        if self.source == 'custom' and (self.source_field or self.formula):
+            raise ValidationError("custom sources should not have source_field or formula.")
+        # Validate source_field matches source
+        if self.source == 'asset' and self.source_field not in ['ticker', 'price', 'name']:
+            raise ValidationError("Invalid source_field for asset source.")
+        if self.source == 'holding' and self.source_field not in ['quantity', 'purchase_price', 'holding.ticker']:
+            raise ValidationError("Invalid source_field for holding source.")
+        if self.source == 'calculated' and self.source_field not in ['current_value']:
+            raise ValidationError("Invalid source_field for calculated source.")
+
+    def delete(self, *args, **kwargs):
+        if not self.is_deletable:
+            raise PermissionDenied("This column is mandatory and cannot be deleted.")
+        super().delete(*args, **kwargs)
 
 
 class StockPortfolioSchemaColumnValue(SchemaColumnValue):
@@ -70,14 +90,25 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
     class Meta:
         unique_together = (('column', 'holding'),)
 
+    def clean(self):
+        if self.column and self.holding:
+            if self.holding.self_managed_account.stock_portfolio != self.column.schema.stock_portfolio:
+                raise ValidationError(
+                    "StockHolding and StockPortfolioSchemaColumn must belong to the same StockPortfolio."
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def get_value(self):
         """Return the user-edited value or the derived value."""
         if self.is_edited and self.value is not None:
             return self.value
         column = self.column
-        if column.source == 'asset' and self.holding.asset:
+        if column.source == 'asset' and self.holding.stock:
             # Fetch from asset (Stock or CustomStock)
-            return getattr(self.holding.asset, column.source_field, None)
+            return getattr(self.holding.stock, column.source_field, None)
         elif column.source == 'holding':
             # Fetch from holding
             return getattr(self.holding, column.source_field, None)
@@ -94,7 +125,7 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
             # Replace field names with actual values
             context = {}
             for field, _, source, source_field in STOCK_FIELDS:
-                if source == 'asset' and self.holding.asset:
+                if source == 'asset' and self.holding.stock:
                     context[field] = getattr(
                         self.holding.asset, source_field, 0)
                 elif source == 'holding':

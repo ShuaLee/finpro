@@ -1,14 +1,44 @@
+from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
-from .models import StockPortfolio, SelfManagedAccount, StockHolding, StockPortfolioSchema
+from .models import StockPortfolio, SelfManagedAccount, StockHolding, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue
 import logging
 
 logger = logging.getLogger(__name__)
 
+# ------------------------------ Forms ------------------------------ #
 
-# -------------------- Schema -------------------- #
+class StockPortfolioSchemaColumnAdminForm(forms.ModelForm):
+    class Meta:
+        model = StockPortfolioSchemaColumn
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'source' in self.fields and 'source_field' in self.fields:
+            # Get source from form data, instance, or initial
+            source = (
+                self.data.get('source') if self.data else
+                (self.initial.get('source') or (self.instance.source if self.instance else None))
+            )
+            # Filter source_field choices based on source
+            if source == 'asset':
+                self.fields['source_field'].choices = [
+                    ('ticker', 'Ticker'), ('price', 'Price'), ('name', 'Name')
+                ]
+            elif source == 'holding':
+                self.fields['source_field'].choices = [
+                    ('quantity', 'Quantity'), ('purchase_price', 'Purchase Price'), ('holding.ticker', 'Holding Ticker')
+                ]
+            elif source == 'calculated':
+                self.fields['source_field'].choices = [('current_value', 'Current Value')]
+            else:  # custom or None
+                self.fields['source_field'].choices = [('', '---------')]
+
+
+# ------------------------------ Schema ------------------------------ #
 
 @admin.register(StockPortfolioSchema)
 class StockPortfolioSchemaAdmin(admin.ModelAdmin):
@@ -71,8 +101,53 @@ class StockPortfolioSchemaAdmin(admin.ModelAdmin):
             return super().delete_selected(request, queryset)
         # Render confirmation page for GET or initial POST
         return super().delete_selected(request, queryset)
+    
+@admin.register(StockPortfolioSchemaColumn)
+class StockPortfolioSchemaColumn(admin.ModelAdmin):
+    form = StockPortfolioSchemaColumnAdminForm
+    list_display = ['title', 'schema', 'data_type', 'source', 'source_field', 'editable', 'is_deletable']
+    list_filter = ['schema__stock_portfolio', 'data_type', 'source', 'is_deletable']
+    search_fields = ['title', 'schema__name']
+    fields = ['title', 'schema', 'data_type', 'source', 'source_field', 'formula', 'editable', 'is_deletable']
+    readonly_fields = ['is_deletable']
+    autocomplete_fields = ['schema']
 
-# ------------------------------------------------ #
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, object_id)
+        if obj and not obj.is_deletable:
+            self.message_user(
+                request,
+                f"Cannot delete '{obj.title}' as it is a mandatory column.",
+                level=messages.ERROR
+            )
+            return HttpResponseRedirect(reverse('admin:stock_portfolio_stockportfolioschemacolumn_changelist'))
+        return super().delete_view(request, object_id, extra_context)
+
+    def delete_queryset(self, request, queryset):
+        blocked_columns = [obj.title for obj in queryset if not obj.is_deletable]
+        if blocked_columns:
+            self.message_user(
+                request,
+                f"Cannot delete column(s) {', '.join(blocked_columns)} as they are mandatory.",
+                level=messages.ERROR
+            )
+            return
+        super().delete_queryset(request, queryset)
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and not obj.is_deletable:
+            return self.readonly_fields + ['title', 'data_type', 'source', 'formula', 'editable']
+        return self.readonly_fields
+
+@admin.register(StockPortfolioSchemaColumnValue)
+class StockPortfolioSchemaColumnValueAdmin(admin.ModelAdmin):
+    list_display = ['column', 'holding', 'get_value', 'is_edited']
+    list_filter = ['column__schema__stock_portfolio', 'column__source', 'is_edited']
+    search_fields = ['column__title', 'holding__ticker']
+    fields = ['column', 'holding', 'value', 'is_edited']
+    autocomplete_fields = ['column', 'holding']
+
+# -------------------------------------------------------------------- #
 
 @admin.register(SelfManagedAccount)
 class SelfManagedAccountAdmin(admin.ModelAdmin):
