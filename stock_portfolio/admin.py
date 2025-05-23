@@ -18,12 +18,10 @@ class StockPortfolioSchemaColumnAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if 'source' in self.fields and 'source_field' in self.fields:
-            # Get source from form data, instance, or initial
             source = (
                 self.data.get('source') if self.data else
                 (self.initial.get('source') or (self.instance.source if self.instance else None))
             )
-            # Filter source_field choices based on source
             if source == 'asset':
                 self.fields['source_field'].choices = [
                     ('ticker', 'Ticker'), ('price', 'Price'), ('name', 'Name')
@@ -37,6 +35,37 @@ class StockPortfolioSchemaColumnAdminForm(forms.ModelForm):
             else:  # custom or None
                 self.fields['source_field'].choices = [('', '---------')]
 
+class StockPortfolioSchemaColumnValueAdminForm(forms.ModelForm):
+    class Meta:
+        model = StockPortfolioSchemaColumnValue
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Determine column source for new or existing instances
+        column_source = None
+        # Check form data (POST or GET with column selected)
+        if 'column' in self.data:
+            try:
+                column_id = self.data.get('column')
+                column = StockPortfolioSchemaColumn.objects.get(id=column_id)
+                column_source = column.source
+            except (ValueError, StockPortfolioSchemaColumn.DoesNotExist):
+                pass
+        # Check initial data (programmatic form initialization)
+        elif self.initial.get('column'):
+            try:
+                column = StockPortfolioSchemaColumn.objects.get(id=self.initial['column'])
+                column_source = column.source
+            except StockPortfolioSchemaColumn.DoesNotExist:
+                pass
+        # Check instance (editing existing value)
+        elif self.instance and hasattr(self.instance, 'column') and self.instance.column:
+            column_source = self.instance.column.source
+        # Apply holding-specific logic
+        if column_source == 'holding':
+            self.fields['value'].help_text = "Updates the StockHolding field directly (e.g., quantity, purchase_price)."
+            self.fields['is_edited'].widget = forms.HiddenInput()
 
 # ------------------------------ Schema ------------------------------ #
 
@@ -103,7 +132,7 @@ class StockPortfolioSchemaAdmin(admin.ModelAdmin):
         return super().delete_selected(request, queryset)
     
 @admin.register(StockPortfolioSchemaColumn)
-class StockPortfolioSchemaColumn(admin.ModelAdmin):
+class StockPortfolioSchemaColumnAdmin(admin.ModelAdmin):
     form = StockPortfolioSchemaColumnAdminForm
     list_display = ['title', 'schema', 'data_type', 'source', 'source_field', 'editable', 'is_deletable']
     list_filter = ['schema__stock_portfolio', 'data_type', 'source', 'is_deletable']
@@ -141,11 +170,13 @@ class StockPortfolioSchemaColumn(admin.ModelAdmin):
 
 @admin.register(StockPortfolioSchemaColumnValue)
 class StockPortfolioSchemaColumnValueAdmin(admin.ModelAdmin):
+    form = StockPortfolioSchemaColumnValueAdminForm
     list_display = ['column', 'holding', 'get_value', 'is_edited']
     list_filter = ['column__schema__stock_portfolio', 'column__source', 'is_edited']
-    search_fields = ['column__title', 'holding__ticker']
+    search_fields = ['column__title', 'holding__stock__ticker']
     fields = ['column', 'holding', 'value', 'is_edited']
     autocomplete_fields = ['column', 'holding']
+    readonly_fields = ['get_value']
 
 # -------------------------------------------------------------------- #
 

@@ -49,10 +49,10 @@ class StockPortfolioSchemaColumn(SchemaColumn):
     source_field = models.CharField(max_length=100, choices=SOURCE_FIELD_CHOICES, blank=True)
 
     class Meta:
-        unique_together = (('schema', 'title'), ('schema', 'source_field'))
+        unique_together = (('schema', 'title'),)
 
     def __str__(self):
-        return f"{self.title} ({self.source})"
+        return f"[{self.schema.stock_portfolio.portfolio.profile}] {self.title} ({self.source})"
 
     def clean(self):
         if self.source in ['asset', 'holding'] and not self.source_field:
@@ -96,48 +96,71 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
                 raise ValidationError(
                     "StockHolding and StockPortfolioSchemaColumn must belong to the same StockPortfolio."
                 )
+            # Validate value type for holding source
+            if self.column.source == 'holding' and self.value:
+                if self.column.source_field == 'quantity':
+                    try:
+                        float(self.value)  # Ensure decimal-compatible
+                    except ValueError:
+                        raise ValidationError("Quantity must be a valid number.")
+                elif self.column.source_field == 'purchase_price':
+                    try:
+                        float(self.value)  # Ensure decimal-compatible
+                    except ValueError:
+                        raise ValidationError("Purchase Price must be a valid number.")
+                elif self.column.source_field == 'holding.ticker':
+                    if not isinstance(self.value, str):
+                        raise ValidationError("Ticker must be a string.")
 
     def save(self, *args, **kwargs):
         self.full_clean()
+        if self.column.source == 'holding' and self.value:
+            # Update StockHolding field directly
+            if self.column.source_field == 'quantity':
+                self.holding.quantity = float(self.value)
+            elif self.column.source_field == 'purchase_price':
+                self.holding.purchase_price = float(self.value)
+            elif self.column.source_field == 'holding.ticker':
+                self.holding.stock.ticker = self.value  # Update Stock ticker
+            self.holding.save()
+            self.value = None  # Clear value for holding source
+            self.is_edited = False  # No override for holding
         super().save(*args, **kwargs)
 
     def get_value(self):
-        """Return the user-edited value or the derived value."""
+        if self.column.source == 'holding':
+            # Always return StockHolding field value
+            if self.column.source_field == 'quantity':
+                return self.holding.quantity
+            elif self.column.source_field == 'purchase_price':
+                return self.holding.purchase_price
+            elif self.column.source_field == 'holding.ticker':
+                return self.holding.stock.ticker
         if self.is_edited and self.value is not None:
             return self.value
         column = self.column
         if column.source == 'asset' and self.holding.stock:
-            # Fetch from asset (Stock or CustomStock)
             return getattr(self.holding.stock, column.source_field, None)
-        elif column.source == 'holding':
-            # Fetch from holding
-            return getattr(self.holding, column.source_field, None)
         elif column.source == 'calculated':
-            # Evaluate formula
             return self.evaluate_formula(column.formula)
         return self.value
 
     def evaluate_formula(self, formula):
-        """Evaluate the formula using holding and asset fields."""
         if not formula:
             return None
         try:
-            # Replace field names with actual values
             context = {}
             for field, _, source, source_field in STOCK_FIELDS:
                 if source == 'asset' and self.holding.stock:
-                    context[field] = getattr(
-                        self.holding.asset, source_field, 0)
+                    context[field] = getattr(self.holding.stock, source_field, 0)
                 elif source == 'holding':
                     context[field] = getattr(self.holding, source_field, 0)
                 else:
                     context[field] = 0
-            # Safe evaluation (simplified; use a proper parser like numexpr in production)
             formula = formula.replace(' * ', '*').replace(' / ', '/')
             for field in context:
                 formula = formula.replace(field, str(context[field] or 0))
-            # WARNING: Use a safe evaluator in production
-            return eval(formula, {"__builtins__": {}}, {})
+            return eval(formula, {"__builtins__": {}}, {})  # Use numexpr in production
         except Exception as e:
             logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
             return None
