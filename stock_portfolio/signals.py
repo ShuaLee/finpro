@@ -1,7 +1,7 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from portfolio.models import Portfolio
-from .models import StockPortfolio, StockPortfolioSchema, StockPortfolioSchemaColumn
+from .models import StockPortfolio, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue, StockHolding
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,3 +62,25 @@ def create_stock_portfolio(sender, instance, created, **kwargs):
             schema=schema,
             **column_data
         )
+
+@receiver(post_save, sender=StockHolding)
+def create_column_values(sender, instance, created, **kwargs):
+    if created:
+        account = instance.self_managed_account
+        schema = account.active_schema
+        if not schema:
+            logger.warning(f"No active schema for SelfManagedAccount {account.id}")
+            return
+        for column in schema.columns.all():
+            StockPortfolioSchemaColumnValue.objects.create(
+                column=column,
+                holding=instance,
+                value=None,
+                is_edited=False
+            )
+        logger.info(f"Created column values for StockHolding {instance.id} in schema {schema.id}")
+
+@receiver(post_delete, sender=StockHolding)
+def delete_column_values(sender, instance, **kwargs):
+    instance.column_values.all().delete()
+    logger.info(f"Deleted column values for StockHolding {instance.id}")

@@ -4,6 +4,7 @@ from portfolio.models import BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from .constants import STOCK_FIELDS, CALCULATION_FORMULAS, FIELD_DATA_TYPES, CURRENCY_CHOICES
 import logging
+import numexpr
 
 logger = logging.getLogger(__name__)
 
@@ -96,16 +97,21 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
                 raise ValidationError(
                     "StockHolding and StockPortfolioSchemaColumn must belong to the same StockPortfolio."
                 )
+            # Enforce non-editable columns
+            if not self.column.editable and (self.is_edited or self.value):
+                raise ValidationError(
+                    f"Cannot edit value for non-editable column '{self.column.title}'."
+                )
             # Validate value type for holding source
             if self.column.source == 'holding' and self.value:
                 if self.column.source_field == 'quantity':
                     try:
-                        float(self.value)  # Ensure decimal-compatible
+                        float(self.value)
                     except ValueError:
                         raise ValidationError("Quantity must be a valid number.")
                 elif self.column.source_field == 'purchase_price':
                     try:
-                        float(self.value)  # Ensure decimal-compatible
+                        float(self.value)
                     except ValueError:
                         raise ValidationError("Purchase Price must be a valid number.")
                 elif self.column.source_field == 'holding.ticker':
@@ -115,21 +121,19 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
     def save(self, *args, **kwargs):
         self.full_clean()
         if self.column.source == 'holding' and self.value:
-            # Update StockHolding field directly
             if self.column.source_field == 'quantity':
                 self.holding.quantity = float(self.value)
             elif self.column.source_field == 'purchase_price':
                 self.holding.purchase_price = float(self.value)
             elif self.column.source_field == 'holding.ticker':
-                self.holding.stock.ticker = self.value  # Update Stock ticker
+                self.holding.stock.ticker = self.value
             self.holding.save()
-            self.value = None  # Clear value for holding source
-            self.is_edited = False  # No override for holding
+            self.value = None
+            self.is_edited = False
         super().save(*args, **kwargs)
 
     def get_value(self):
         if self.column.source == 'holding':
-            # Always return StockHolding field value
             if self.column.source_field == 'quantity':
                 return self.holding.quantity
             elif self.column.source_field == 'purchase_price':
@@ -149,18 +153,14 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
         if not formula:
             return None
         try:
-            context = {}
-            for field, _, source, source_field in STOCK_FIELDS:
-                if source == 'asset' and self.holding.stock:
-                    context[field] = getattr(self.holding.stock, source_field, 0)
-                elif source == 'holding':
-                    context[field] = getattr(self.holding, source_field, 0)
-                else:
-                    context[field] = 0
-            formula = formula.replace(' * ', '*').replace(' / ', '/')
-            for field in context:
-                formula = formula.replace(field, str(context[field] or 0))
-            return eval(formula, {"__builtins__": {}}, {})  # Use numexpr in production
+            # Build context with quantity and price
+            context = {
+                'quantity': float(self.holding.quantity or 0),
+                'price': float(getattr(self.holding.stock, 'price', 0)),
+            }
+            # Evaluate using numexpr
+            result = numexpr.evaluate(formula, local_dict=context)
+            return float(result)  # Convert to float for decimal compatibility
         except Exception as e:
             logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
             return None

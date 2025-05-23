@@ -16,6 +16,7 @@ redis = "*"
 pycountry = "*"
 retrying = "*"
 requests = "*"
+numexpr = "*"
 
 [dev-packages]
 

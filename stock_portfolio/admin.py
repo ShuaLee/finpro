@@ -38,34 +38,45 @@ class StockPortfolioSchemaColumnAdminForm(forms.ModelForm):
 class StockPortfolioSchemaColumnValueAdminForm(forms.ModelForm):
     class Meta:
         model = StockPortfolioSchemaColumnValue
-        fields = '__all__'
+        fields = ['column', 'holding', 'value', 'is_edited']  # Explicitly include is_edited
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Determine column source for new or existing instances
         column_source = None
-        # Check form data (POST or GET with column selected)
+        column_editable = True
+        # Determine column source and editable status
         if 'column' in self.data:
             try:
                 column_id = self.data.get('column')
                 column = StockPortfolioSchemaColumn.objects.get(id=column_id)
                 column_source = column.source
+                column_editable = column.editable
             except (ValueError, StockPortfolioSchemaColumn.DoesNotExist):
                 pass
-        # Check initial data (programmatic form initialization)
         elif self.initial.get('column'):
             try:
                 column = StockPortfolioSchemaColumn.objects.get(id=self.initial['column'])
                 column_source = column.source
+                column_editable = column.editable
             except StockPortfolioSchemaColumn.DoesNotExist:
                 pass
-        # Check instance (editing existing value)
         elif self.instance and hasattr(self.instance, 'column') and self.instance.column:
             column_source = self.instance.column.source
+            column_editable = self.instance.column.editable
         # Apply holding-specific logic
         if column_source == 'holding':
             self.fields['value'].help_text = "Updates the StockHolding field directly (e.g., quantity, purchase_price)."
-            self.fields['is_edited'].widget = forms.HiddenInput()
+            if 'is_edited' in self.fields:
+                self.fields['is_edited'].widget = forms.HiddenInput()
+                self.fields['is_edited'].disabled = True
+            self.fields['value'].initial = None
+        # Apply non-editable logic
+        if not column_editable:
+            self.fields['value'].disabled = True
+            self.fields['value'].help_text = "This column is not editable."
+            if 'is_edited' in self.fields:
+                self.fields['is_edited'].disabled = True
+                self.fields['is_edited'].widget = forms.HiddenInput()
 
 # ------------------------------ Schema ------------------------------ #
 
@@ -175,9 +186,18 @@ class StockPortfolioSchemaColumnValueAdmin(admin.ModelAdmin):
     list_filter = ['column__schema__stock_portfolio', 'column__source', 'is_edited']
     search_fields = ['column__title', 'holding__stock__ticker']
     fields = ['column', 'holding', 'value', 'is_edited']
-    autocomplete_fields = ['column', 'holding']
     readonly_fields = ['get_value']
+    autocomplete_fields = ['column', 'holding']
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and (obj.column.source == 'holding' or not obj.column.editable):
+            return self.readonly_fields + ['column', 'holding', 'is_edited']
+        return self.readonly_fields
+
+    def add_view(self, request, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['warning'] = "Column values are automatically created when a StockHolding is added. Only edit if necessary."
+        return super().add_view(request, form_url, extra_context)
 # -------------------------------------------------------------------- #
 
 @admin.register(SelfManagedAccount)
