@@ -6,11 +6,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @receiver(post_save, sender=Portfolio)
 def create_stock_portfolio(sender, instance, created, **kwargs):
     if not created:
         return
-    
+
     # Create StockPortfolio
     stock_portfolio = StockPortfolio.objects.create(portfolio=instance)
 
@@ -53,6 +54,7 @@ def create_stock_portfolio(sender, instance, created, **kwargs):
             'source_field': 'current_value',
             'editable': False,
             'is_deletable': False,
+            'formula': 'quantity * price'
         },
     ]
 
@@ -63,13 +65,15 @@ def create_stock_portfolio(sender, instance, created, **kwargs):
             **column_data
         )
 
+
 @receiver(post_save, sender=StockHolding)
 def create_column_values(sender, instance, created, **kwargs):
     if created:
         account = instance.self_managed_account
         schema = account.active_schema
         if not schema:
-            logger.warning(f"No active schema for SelfManagedAccount {account.id}")
+            logger.warning(
+                f"No active schema for SelfManagedAccount {account.id}")
             return
         for column in schema.columns.all():
             StockPortfolioSchemaColumnValue.objects.create(
@@ -78,7 +82,9 @@ def create_column_values(sender, instance, created, **kwargs):
                 value=None,
                 is_edited=False
             )
-        logger.info(f"Created column values for StockHolding {instance.id} in schema {schema.id}")
+        logger.info(
+            f"Created column values for StockHolding {instance.id} in schema {schema.id}")
+
 
 @receiver(post_delete, sender=StockHolding)
 def delete_column_values(sender, instance, **kwargs):
