@@ -1,14 +1,14 @@
+from datetime import date
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.db import models
-from zoneinfo import available_timezones
 
 # Create your models here.
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, password, first_name, last_name, birth_date=None, **extra_fields):
+    def create_user(self, email, password, first_name, last_name, birth_date, **extra_fields):
         if not email:
             raise ValueError("The Email field must be set.")
         if not first_name:
@@ -16,14 +16,21 @@ class UserManager(BaseUserManager):
         if not last_name:
             raise ValueError("The Last Name field must be set.")
         if not birth_date:
-            raise ValueError("Birth date is required for profile creation.")
+            raise ValueError("Birth date is required.")
 
         email = self.normalize_email(email)
-        user = self.model(email=email, first_name=first_name, last_name=last_name, **extra_fields)
+        user = self.model(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            birth_date=birth_date,
+            **extra_fields
+        )
         user.set_password(password)
         user.save(using=self._db)
 
-        Profile.objects.create(user=user, birth_date=birth_date)
+        # Create Profile (without birth_date, as it's now in User)
+        Profile.objects.get_or_create(user=user)
         return user
 
     def create_superuser(self, email, password, first_name, last_name, birth_date=None, **extra_fields):
@@ -33,6 +40,9 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get('is_superuser') is not True:
             raise ValueError("Superuser must have is_superuser=True.")
+
+        # Use a default birth_date for superusers to avoid terminal issues
+        birth_date = birth_date or date(1970, 1, 1)
         return self.create_user(
             email=email,
             password=password,
@@ -48,6 +58,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30, blank=False)
     last_name = models.CharField(max_length=30, blank=False)
+    birth_date = models.DateField(blank=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
@@ -56,7 +67,7 @@ class User(AbstractUser):
 
     objects = UserManager()
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['first_name', 'last_name']
+    REQUIRED_FIELDS = ['first_name', 'last_name', 'birth_date']
 
     def __str__(self):
         return f'{self.email} - {self.first_name} {self.last_name}'
@@ -83,7 +94,6 @@ class Profile(models.Model):
     language = models.CharField(max_length=30, blank=False, default="en")
     currency = models.CharField(max_length=10, blank=False, default="USD")
     theme = models.CharField(max_length=10, choices=THEME_CHOICES, default='system')
-    birth_date = models.DateField(blank=False)
     is_asset_manager = models.BooleanField(default=False)
     receive_email_updates = models.BooleanField(default=True)
     profile_setup_complete = models.BooleanField(default=False)
