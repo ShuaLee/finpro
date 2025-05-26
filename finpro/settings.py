@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'djoser',
-    'core',
+    'core.apps.CoreConfig',
     'schemas',
     'portfolio',
     'stocks',
@@ -57,6 +57,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'core.middleware.ProfileCompletionMiddleware',
 ]
 
 ROOT_URLCONF = 'finpro.urls'

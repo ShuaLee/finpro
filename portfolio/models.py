@@ -1,5 +1,3 @@
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from core.models import Profile
@@ -14,7 +12,6 @@ class Portfolio(models.Model):
         Profile, on_delete=models.CASCADE, related_name='portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    currency = models.CharField(max_length=10, blank=False, default="USD")
 
     def __str__(self):
         return f"{self.profile} - {self.created_at}"

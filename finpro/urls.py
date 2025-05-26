@@ -16,11 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from core.views import SignupCompleteView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/profile/', include('core.urls')),
     path('api/portfolio/', include('portfolio.urls')),
+    path('api/auth/signup-complete/', SignupCompleteView.as_view(), name='signup-complete'),
     path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.jwt')),
 ]
