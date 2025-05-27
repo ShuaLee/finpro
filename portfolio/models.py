@@ -36,8 +36,6 @@ class InvestmentTheme(models.Model):
 
 
 class BaseAssetPortfolio(models.Model):
-    portfolio = models.ForeignKey(
-        Portfolio, on_delete=models.CASCADE, related_name="sub_portfolios")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

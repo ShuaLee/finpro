@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
-from portfolio.models import BaseAssetPortfolio, AssetHolding
+from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from core.constants import CURRENCY_CHOICES
 import logging
@@ -171,10 +171,18 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
 
 
 class StockPortfolio(BaseAssetPortfolio):
+    portfolio = models.OneToOneField(
+        Portfolio,
+        on_delete=models.CASCADE,
+        related_name='stockportfolio'
+    )
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
 
     def clean(self):
+        if self.pk is None and StockPortfolio.objects.filter(portfolio=self.portfolio).exists():
+            raise ValidationError("Only one StockPortfolio is allowed per Portfolio.")
+        
         if self.pk and not self.schemas.exists():  # Only check schemas if saved
             raise ValidationError(
                 "StockPortfolio must have at least one schema.")
@@ -198,11 +206,6 @@ class BaseStockAccount(models.Model):
         choices=CURRENCY_CHOICES,
         blank=True,
         help_text="Currency of the account (e.g., USD, CAD, etc.)"
-    )
-    stock_portfolio = models.ForeignKey(
-        StockPortfolio,
-        on_delete=models.CASCADE,
-        related_name='%(class)s_set'
     )
     # Stock account specific fields
     broker = models.CharField(max_length=100, blank=True, null=True,
@@ -247,6 +250,11 @@ class BaseStockAccount(models.Model):
 
 
 class SelfManagedAccount(BaseStockAccount):
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio,
+        on_delete=models.CASCADE,
+        related_name='self_managed_accounts'
+    )
     active_schema = models.ForeignKey(
         StockPortfolioSchema,
         on_delete=models.CASCADE,
@@ -266,6 +274,11 @@ class SelfManagedAccount(BaseStockAccount):
 
 
 class ManagedAccount(BaseStockAccount):
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio,
+        on_delete=models.CASCADE,
+        related_name='managed_accounts'
+    )
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
