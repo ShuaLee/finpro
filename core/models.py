@@ -96,7 +96,6 @@ class Profile(models.Model):
     theme = models.CharField(max_length=10, choices=THEME_CHOICES, default='system')
     is_asset_manager = models.BooleanField(default=False)
     receive_email_updates = models.BooleanField(default=True)
-    profile_setup_complete = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

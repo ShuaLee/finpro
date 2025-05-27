@@ -1,7 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from core.models import Profile
-from stock_portfolio.constants import CURRENCY_CHOICES
 import logging
 
 logger = logging.getLogger(__name__)

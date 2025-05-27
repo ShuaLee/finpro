@@ -3,8 +3,9 @@ from djoser.serializers import UserSerializer as BaseUserSerializer, UserCreateS
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from core.constants import CURRENCY_CHOICES
 from .models import Profile
-import pycountry
+
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
@@ -78,27 +79,20 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            'id', 'user', 'email', 'currency', 'language',
-            'is_asset_manager', 'profile_setup_complete', 'created_at',
-            'receive_email_updates', 'theme'
+            'email', 'currency', 'language',
+            'created_at', 'receive_email_updates', 
+            'theme'
         ]
-        read_only_fields = ['user', 'is_asset_manager', 'profile_setup_complete', 'created_at']
+        read_only_fields = ['created_at', 'email']
 
     def get_email(self, obj):
         return obj.user.email
 
     def validate_currency(self, value):
-        valid_currencies = {currency.alpha_3 for currency in pycountry.currencies}
-        if value not in valid_currencies:
+        valid_codes = [code for code, name in CURRENCY_CHOICES]
+        if value not in valid_codes:
             raise serializers.ValidationError(f"Invalid currency code. Must be a valid ISO 4217 code (e.g., USD, EUR, AUD).")
         return value
-
-    def validate(self, data):
-        required_fields = ['currency']
-        for field in required_fields:
-            if field not in data:
-                raise serializers.ValidationError({field: f"{field.title()} is required."})
-        return data
 
     def update(self, instance, validated_data):
         for field in ['currency', 'language', 'theme', 'receive_email_updates']:

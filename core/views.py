@@ -1,13 +1,11 @@
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.mixins import RetrieveModelMixin, UpdateModelMixin
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.viewsets import GenericViewSet, ModelViewSet
+from rest_framework.viewsets import ModelViewSet
 from .models import Profile
 from .serializers import ProfileSerializer, SignupCompleteSerializer
-import requests
 
 class SignupCompleteView(generics.CreateAPIView):
     serializer_class = SignupCompleteSerializer
@@ -30,12 +28,25 @@ class SignupCompleteView(generics.CreateAPIView):
             }
         }, status=status.HTTP_201_CREATED)
 
-class ProfileViewSet(ModelViewSet):
+class ProfileView(generics.GenericAPIView):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        return self.request.user.profile
+    def get(self, request):
+        profile = request.user.profile
+        serializer = self.get_serializer(profile)
+        return Response(serializer.data)
 
-    def get_queryset(self):
-        return Profile.objects.filter(user=self.request.user)
+    def put(self, request):
+        profile = request.user.profile
+        serializer = self.get_serializer(profile, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def patch(self, request):
+        profile = request.user.profile
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
