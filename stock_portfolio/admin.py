@@ -202,7 +202,7 @@ class StockPortfolioSchemaColumnValueAdmin(admin.ModelAdmin):
 
 @admin.register(SelfManagedAccount)
 class SelfManagedAccountAdmin(admin.ModelAdmin):
-    list_display = ('name', 'get_user_email', 'currency',
+    list_display = ('name', 'get_user_email',
                     'stock_portfolio', 'account_type', 'created_at', 'last_synced')
     list_filter = ('account_type', 'created_at')
     search_fields = ('name', 'stock_portfolio__name',

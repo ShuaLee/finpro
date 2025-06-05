@@ -156,11 +156,12 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
             # Build context with quantity and price
             context = {
                 'quantity': float(self.holding.quantity or 0),
-                'price': float(getattr(self.holding.stock, 'price', 0)),
+                'price': float(getattr(self.holding.stock, 'price') or 0),
             }
             # Evaluate using numexpr
             result = numexpr.evaluate(formula, local_dict=context)
-            return float(result)  # Convert to float for decimal compatibility
+            return round(float(result), 2)  # Convert to float for decimal compatibility
+            # return f"{float(result):.2f}"  # Always 2 decimal places as string
         except Exception as e:
             logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
             return None
@@ -201,12 +202,6 @@ class BaseStockAccount(models.Model):
     """
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    currency = models.CharField(
-        max_length=3,
-        choices=CURRENCY_CHOICES,
-        blank=True,
-        help_text="Currency of the account (e.g., USD, CAD, etc.)"
-    )
     # Stock account specific fields
     broker = models.CharField(max_length=100, blank=True, null=True,
                               help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)")
@@ -236,17 +231,6 @@ class BaseStockAccount(models.Model):
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        # Set default currency
-        if not self.pk and not self.currency:
-            try:
-                profile = self.stock_portfolio.portfolio.profile
-                self.currency = profile.currency or 'USD'
-            except AttributeError:
-                self.currency = 'USD'  # Fallback
-
-        super().save(*args, **kwargs)
 
 
 class SelfManagedAccount(BaseStockAccount):
