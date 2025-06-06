@@ -184,6 +184,8 @@ class Stock(Asset):
             return existing_stock
 
         instance = cls(ticker=ticker, is_custom=is_custom)
+        if is_custom:
+            instance.price = 0
         if not is_custom:
             success = instance.fetch_fmp_data()
             if success:

@@ -4,8 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import StockPortfolio, SelfManagedAccount
-from .serializers import StockPortfolioSerializer, SelfManagedAccountSerializer, SelfManagedAccountCreateSerializer, StockHoldingCreateSerializer
+from .models import StockPortfolio, SelfManagedAccount, StockPortfolioSchemaColumnValue
+from .serializers import StockPortfolioSerializer, SelfManagedAccountSerializer, SelfManagedAccountCreateSerializer, StockHoldingCreateSerializer, StockPortfolioSchemaColumnValueEditSerializer
 
 class StockPortfolioDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -61,7 +61,6 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
         return Response({
             'account_id': account.id,
             'account_name': account.name,
-            'currency': account.currency,
             'schema_name': schema.name,
             'columns': [col.title for col in schema_columns],
             'holdings': holdings_data,
@@ -83,4 +82,21 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             {'detail': f"Holding added for {holding.stock.ticker}", 'holding': StockHoldingCreateSerializer(holding).data},
             status=status.HTTP_201_CREATED
         )
+    
+    @action(detail=True, methods=['get', 'patch'], url_path='edit-column-value/(?P<value_id>[^/.]+)')
+    def edit_column_value(self, request, pk=None, value_id=None):
+        try:
+            value_obj = StockPortfolioSchemaColumnValue.objects.get(
+                pk=value_id,
+                holding__self_managed_account__id=pk,
+                holding__self_managed_account__stock_portfolio__portfolio=request.user.profile.portfolio
+            )
+        except StockPortfolioSchemaColumnValue.DoesNotExist:
+            return Response({"detail": "Column value not found or unauthorized."}, status=404)
+        
+        serializer = StockPortfolioSchemaColumnValueEditSerializer(value_obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
     

@@ -4,6 +4,13 @@ from .models import SchemaColumn
 import math
 import re
 
+def set_nested_attr(obj, attr_path, value):
+    """Sets a value on a nested attribute path like 'holding.stock.price'."""
+    attrs = attr_path.split('.')
+    for attr in attrs[:-1]:
+        obj = getattr(obj, attr)
+    setattr(obj, attrs[-1], value)
+
 
 def get_predefined_column_metadata(source, field):
     for col in PREDEFINED_COLUMNS.get(source, []):

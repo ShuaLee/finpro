@@ -1,6 +1,7 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from portfolio.models import Portfolio
+from .constants import DEFAULT_STOCK_SCHEMA_COLUMNS
 from .models import StockPortfolio, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue, StockHolding
 import logging
 
@@ -22,48 +23,8 @@ def create_stock_portfolio(sender, instance, created, **kwargs):
     )
 
     # Define default columns (adjust as needed)
-    default_columns = [
-        {
-            'title': 'Ticker',
-            'data_type': 'string',
-            'source': 'asset',
-            'source_field': 'ticker',
-            'editable': False,
-            'is_deletable': False,
-        },
-        {
-            'title': 'Quantity',
-            'data_type': 'decimal',
-            'source': 'holding',
-            'source_field': 'quantity',
-            'editable': True,
-            'is_deletable': False,
-        },
-        {
-            'title': 'Price',
-            'data_type': 'decimal',
-            'source': 'asset',
-            'source_field': 'price',
-            'editable': True,
-            'is_deletable': False,
-        },
-        {
-            'title': 'Value',
-            'data_type': 'decimal',
-            'source': 'calculated',
-            'source_field': 'current_value',
-            'editable': False,
-            'is_deletable': False,
-            'formula': 'quantity * price'
-        },
-    ]
-
-    # Create default columns
-    for column_data in default_columns:
-        StockPortfolioSchemaColumn.objects.create(
-            schema=schema,
-            **column_data
-        )
+    for column_data in DEFAULT_STOCK_SCHEMA_COLUMNS:
+        StockPortfolioSchemaColumn.objects.create(schema=schema, **column_data)
 
 
 @receiver(post_save, sender=StockHolding)

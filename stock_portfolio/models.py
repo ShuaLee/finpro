@@ -3,6 +3,7 @@ from django.db import models
 from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from core.constants import CURRENCY_CHOICES
+from .constants import SCHEMA_COLUMN_CONFIG
 import logging
 import numexpr
 
@@ -29,18 +30,18 @@ class StockPortfolioSchema(Schema):
 
 
 class StockPortfolioSchemaColumn(SchemaColumn):
-    SOURCE_FIELD_CHOICES = [
-        # Asset fields
-        ('ticker', 'Ticker'),
-        ('price', 'Price'),
-        ('name', 'Name'),  # Example; adjust based on Asset model
-        # Holding fields
-        ('quantity', 'Quantity'),
-        ('purchase_price', 'Purchase Price'),
-        ('holding.ticker', 'Holding Ticker'),  # For holding.ticker
-        # Calculated fields (optional, if formula-based)
-        ('current_value', 'Current Value'),
-    ]
+    @staticmethod
+    def get_source_field_choices():
+        choices = []
+        for source, fields in SCHEMA_COLUMN_CONFIG.items():
+            for source_field in fields.keys():
+                if source_field is not None:
+                    label = source_field.replace('_', ' ').title()
+                    choices.append((source_field, label))
+        return choices
+    
+
+    SOURCE_FIELD_CHOICES = get_source_field_choices()
 
     schema = models.ForeignKey(
         StockPortfolioSchema,
