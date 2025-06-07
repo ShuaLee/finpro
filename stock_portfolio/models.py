@@ -39,7 +39,6 @@ class StockPortfolioSchemaColumn(SchemaColumn):
                     label = source_field.replace('_', ' ').title()
                     choices.append((source_field, label))
         return choices
-    
 
     SOURCE_FIELD_CHOICES = get_source_field_choices()
 
@@ -48,7 +47,8 @@ class StockPortfolioSchemaColumn(SchemaColumn):
         on_delete=models.CASCADE,
         related_name='columns'
     )
-    source_field = models.CharField(max_length=100, choices=SOURCE_FIELD_CHOICES, blank=True)
+    source_field = models.CharField(
+        max_length=100, choices=SOURCE_FIELD_CHOICES, blank=True)
 
     class Meta:
         unique_together = (('schema', 'title'),)
@@ -58,22 +58,27 @@ class StockPortfolioSchemaColumn(SchemaColumn):
 
     def clean(self):
         if self.source in ['asset', 'holding'] and not self.source_field:
-            raise ValidationError("source_field is required for asset or holding sources.")
+            raise ValidationError(
+                "source_field is required for asset or holding sources.")
         if self.source == 'calculated' and not self.formula:
-            raise ValidationError("formula is required for calculated sources.")
+            raise ValidationError(
+                "formula is required for calculated sources.")
         if self.source == 'custom' and (self.source_field or self.formula):
-            raise ValidationError("custom sources should not have source_field or formula.")
+            raise ValidationError(
+                "custom sources should not have source_field or formula.")
         # Validate source_field matches source
         if self.source == 'asset' and self.source_field not in ['ticker', 'price', 'name']:
             raise ValidationError("Invalid source_field for asset source.")
         if self.source == 'holding' and self.source_field not in ['quantity', 'purchase_price', 'holding.ticker']:
             raise ValidationError("Invalid source_field for holding source.")
         if self.source == 'calculated' and self.source_field not in ['current_value']:
-            raise ValidationError("Invalid source_field for calculated source.")
+            raise ValidationError(
+                "Invalid source_field for calculated source.")
 
     def delete(self, *args, **kwargs):
         if not self.is_deletable:
-            raise PermissionDenied("This column is mandatory and cannot be deleted.")
+            raise PermissionDenied(
+                "This column is mandatory and cannot be deleted.")
         super().delete(*args, **kwargs)
 
 
@@ -109,12 +114,14 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
                     try:
                         float(self.value)
                     except ValueError:
-                        raise ValidationError("Quantity must be a valid number.")
+                        raise ValidationError(
+                            "Quantity must be a valid number.")
                 elif self.column.source_field == 'purchase_price':
                     try:
                         float(self.value)
                     except ValueError:
-                        raise ValidationError("Purchase Price must be a valid number.")
+                        raise ValidationError(
+                            "Purchase Price must be a valid number.")
                 elif self.column.source_field == 'holding.ticker':
                     if not isinstance(self.value, str):
                         raise ValidationError("Ticker must be a string.")
@@ -134,21 +141,47 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
         super().save(*args, **kwargs)
 
     def get_value(self):
-        if self.column.source == 'holding':
-            if self.column.source_field == 'quantity':
-                return self.holding.quantity
-            elif self.column.source_field == 'purchase_price':
-                return self.holding.purchase_price
-            elif self.column.source_field == 'holding.ticker':
-                return self.holding.stock.ticker
-        if self.is_edited and self.value is not None:
-            return self.value
         column = self.column
-        if column.source == 'asset' and self.holding.stock:
-            return getattr(self.holding.stock, column.source_field, None)
-        elif column.source == 'calculated':
-            return self.evaluate_formula(column.formula)
-        return self.value
+        config = SCHEMA_COLUMN_CONFIG.get(
+            column.source, {}).get(column.source_field)
+
+        # Use edited value if present
+        if self.is_edited and self.value is not None:
+            raw = self.value
+        else:
+            # Derive the value from source
+            if column.source == 'holding':
+                if column.source_field == 'quantity':
+                    raw = self.holding.quantity
+                elif column.source_field == 'purchase_price':
+                    raw = self.holding.purchase_price
+                elif column.source_field == 'holding.ticker':
+                    raw = self.holding.stock.ticker
+                else:
+                    raw = None
+            elif column.source == 'asset' and self.holding.stock:
+                raw = getattr(self.holding.stock, column.source_field, None)
+            elif column.source == 'calculated':
+                return self.evaluate_formula(column.formula)
+            else:
+                raw = self.value
+
+        # Apply type casting
+        if config:
+            dtype = config.get("data_type")
+            try:
+                if dtype == "decimal":
+                    val = float(raw)
+                    # Limit to 2 decimal places if field is 'price'
+                    if column.source_field == 'price':
+                        return round(val, 2)
+                    return val
+                elif dtype == "string":
+                    return str(raw)
+            except (TypeError, ValueError):
+                return None
+
+        return raw
 
     def evaluate_formula(self, formula):
         if not formula:
@@ -161,7 +194,8 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
             }
             # Evaluate using numexpr
             result = numexpr.evaluate(formula, local_dict=context)
-            return round(float(result), 2)  # Convert to float for decimal compatibility
+            # Convert to float for decimal compatibility
+            return round(float(result), 2)
             # return f"{float(result):.2f}"  # Always 2 decimal places as string
         except Exception as e:
             logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
@@ -178,13 +212,15 @@ class StockPortfolio(BaseAssetPortfolio):
         on_delete=models.CASCADE,
         related_name='stockportfolio'
     )
+
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
 
     def clean(self):
         if self.pk is None and StockPortfolio.objects.filter(portfolio=self.portfolio).exists():
-            raise ValidationError("Only one StockPortfolio is allowed per Portfolio.")
-        
+            raise ValidationError(
+                "Only one StockPortfolio is allowed per Portfolio.")
+
         if self.pk and not self.schemas.exists():  # Only check schemas if saved
             raise ValidationError(
                 "StockPortfolio must have at least one schema.")

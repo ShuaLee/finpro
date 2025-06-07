@@ -3,23 +3,24 @@ from stocks.models import Stock
 from functools import reduce
 from .constants import SCHEMA_COLUMN_CONFIG
 from .models import StockPortfolio, SelfManagedAccount, StockPortfolioSchemaColumnValue, StockHolding
-from .utils import set_nested_attr
 import logging
-import operator
 
 logger = logging.getLogger(__name__)
+
 
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
     ticker = serializers.CharField(write_only=True)
     stock = serializers.PrimaryKeyRelatedField(read_only=True)
-    confirm_add = serializers.BooleanField(write_only=True, required=False, default=False)
+    confirm_add = serializers.BooleanField(
+        write_only=True, required=False, default=False)
 
     class Meta:
         model = StockHolding
-        fields = ['ticker', 'stock','quantity', 'purchase_price', 'purchase_date', 'investment_theme', 'confirm_add']
+        fields = ['ticker', 'stock', 'quantity', 'purchase_price',
+                  'purchase_date', 'investment_theme', 'confirm_add']
 
     def validate_ticker(self, value):
-        return value.upper()    
+        return value.upper()
 
     def create(self, validated_data):
         account = self.context['self_managed_account']
@@ -32,7 +33,8 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
             if confirm_add:
                 stock = Stock.create_from_ticker(ticker, is_custom=True)
                 if not stock:
-                    raise serializers.ValidationError({'ticker': f"Could not create stock for '{ticker}'."})
+                    raise serializers.ValidationError(
+                        {'ticker': f"Could not create stock for '{ticker}'."})
             else:
                 raise serializers.ValidationError({
                     'ticker': f"Stock '{ticker}' not found in database.",
@@ -54,13 +56,15 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
+
 class StockHoldingSerializer(serializers.ModelSerializer):
     stock_ticker = serializers.CharField(source='stock.ticker', read_only=True)
     stock_name = serializers.CharField(source='stock.name', read_only=True)
 
     class Meta:
         model = StockHolding
-        fields = ['id', 'stock_ticker', 'stock_name', 'quantity', 'purchase_price', 'purchase_date']
+        fields = ['id', 'stock_ticker', 'stock_name',
+                  'quantity', 'purchase_price', 'purchase_date']
 
 
 class SelfManagedAccountSerializer(serializers.ModelSerializer):
@@ -70,12 +74,15 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
         model = SelfManagedAccount
         fields = ['id', 'name', 'created_at', 'holdings']
 
+
 class StockPortfolioSerializer(serializers.ModelSerializer):
-    self_managed_accounts = SelfManagedAccountSerializer(many=True, read_only=True)
+    self_managed_accounts = SelfManagedAccountSerializer(
+        many=True, read_only=True)
 
     class Meta:
         model = StockPortfolio
         fields = ['created_at', 'self_managed_accounts']
+
 
 class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -93,118 +100,72 @@ class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
+
 class StockPortfolioSchemaColumnValueEditSerializer(serializers.ModelSerializer):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._dynamic_field_name = None  # For reference in to_representation
-
-        column = self.instance.column if self.instance else None
-        if column:
-            source = column.source
-            source_field = column.source_field
-            config = SCHEMA_COLUMN_CONFIG.get(source, {}).get(source_field)
-            if not config and source == 'custom':
-                config = SCHEMA_COLUMN_CONFIG['custom'][None]
-                source_field = 'value'
-
-            input_key = source_field if source != 'custom' else 'value'
-            self._dynamic_field_name = input_key
-            data_type = config.get('data_type') if config else 'string'
-
-            if data_type == 'decimal':
-                self.fields[input_key] = serializers.DecimalField(max_digits=20, decimal_places=4)
-            else:
-                self.fields[input_key] = serializers.CharField()
+    value = serializers.CharField(allow_null=True, required=False)
 
     class Meta:
         model = StockPortfolioSchemaColumnValue
-        fields = ['id']  # You'll override `to_representation` anyway
-
-    def to_representation(self, instance):
-        column = instance.column
-        source = column.source
-        source_field = column.source_field
-        config = SCHEMA_COLUMN_CONFIG.get(source, {}).get(source_field)
-        if not config and source == 'custom':
-            config = SCHEMA_COLUMN_CONFIG['custom'][None]
-
-        input_key = source_field if source != 'custom' else 'value'
-        value = instance.get_value()
-
-        return {
-            "id": instance.id,
-            input_key: value,
-            "column": column.title,
-            "editable": config.get('editable', False),
-            "data_type": config.get('data_type', 'string'),
-        }
+        fields = ['id', 'value']
 
     def validate(self, data):
-        column_value = self.instance
-        if not column_value.column.editable:
+        value = data.get('value')
+        column = self.instance.column
+        config = SCHEMA_COLUMN_CONFIG.get(
+            column.source, {}).get(column.source_field)
+
+        if not config:
+            raise serializers.ValidationError("Invalid column configuration.")
+
+        if not config.get('editable', False):
             raise serializers.ValidationError("This column is not editable.")
+
+        data_type = config.get('data_type')
+
+        if value is not None:
+            if data_type == 'decimal':
+                try:
+                    float(value)
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(
+                        {"value": "Must be a valid decimal number."})
+            elif data_type == 'string':
+                if not isinstance(value, str):
+                    raise serializers.ValidationError(
+                        {"value": "Must be a string."})
         return data
-    
+
     def update(self, instance, validated_data):
+        value = validated_data.get('value')
         column = instance.column
-        source = column.source
-        source_field = column.source_field
 
-        # Handle special case for custom
-        config = SCHEMA_COLUMN_CONFIG.get(source, {}).get(source_field)
-
-        if not config and source == 'custom':
+        # Get config
+        config = SCHEMA_COLUMN_CONFIG.get(
+            column.source, {}).get(column.source_field)
+        if not config and column.source == 'custom':
             config = SCHEMA_COLUMN_CONFIG['custom'][None]
 
         if not config:
-            raise serializers.ValidationError(f"Unsupported column source/field: {source}.{source_field}")
+            raise serializers.ValidationError("Invalid column configuration.")
 
-        if not config.get('editable', False):
-            raise serializers.ValidationError(f"{source_field} is not editable.")
+        if not config.get('editable'):
+            raise serializers.ValidationError("This column is not editable.")
 
-        # Determine field to extract from request
-        input_key = source_field if source != 'custom' else 'value'
-        if input_key not in validated_data:
-            raise serializers.ValidationError({input_key: "This field is required."})
+        data_type = config.get('data_type', 'string')
 
-        raw_value = validated_data[input_key]
-
-        # Attempt to cast the value based on data_type
-        data_type = config.get('data_type')
+        # Coerce to correct type
         try:
             if data_type == 'decimal':
-                casted_value = float(raw_value)
+                # store as string but keep precision
+                instance.value = str(round(float(value), 4))
             elif data_type == 'string':
-                casted_value = str(raw_value)
+                instance.value = str(value)
             else:
-                casted_value = raw_value  # fallback, use as-is
-        except (ValueError, TypeError):
-            raise serializers.ValidationError({input_key: f"Invalid value for type {data_type}."})
+                instance.value = value
+        except (TypeError, ValueError):
+            raise serializers.ValidationError(
+                {"value": f"Invalid value for type {data_type}."})
 
-        if source in ['holding', 'asset']:
-            # Resolve field_path and set value
-            field_path = config['field_path']
-            if not field_path:
-                raise serializers.ValidationError("Invalid field path.")
-            
-            parts = field_path.split('.')
-            target = reduce(getattr, [instance] + parts[:-1])
-            setattr(target, parts[-1], casted_value)
-            target.save()
-
-            instance.value = None
-            instance.is_edited = False
-
-        elif source == 'custom':
-            instance.value = casted_value
-            instance.is_edited = True
-
-        elif source == 'calculated':
-            raise serializers.ValidationError("Calculated columns cannot be edited.")
-
-        else:
-            raise serializers.ValidationError(f"Unknown source type '{source}'.")
-
+        instance.is_edited = True
         instance.save()
         return instance
