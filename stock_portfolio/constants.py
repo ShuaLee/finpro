@@ -9,6 +9,7 @@ SCHEMA_COLUMN_CONFIG = {
             'data_type': 'decimal',
             'editable': True,
             'field_path': 'holding.stock.price',
+            'decimal_spaces': 2,
         },
         'name': {
             'data_type': 'string',
@@ -21,11 +22,13 @@ SCHEMA_COLUMN_CONFIG = {
             'data_type': 'decimal',
             'editable': True,
             'field_path': 'holding.quantity',
+            'decimal_spaces': 4,
         },
         'purchase_price': {
             'data_type': 'decimal',
             'editable': True,
             'field_path': 'holding.purchase_price',
+            'decimal_spaces': 2,
         },
         'holding.ticker': {
             'data_type': 'string',
@@ -45,7 +48,18 @@ SCHEMA_COLUMN_CONFIG = {
             'data_type': 'decimal',
             'editable': False,
             'formula_required': True,
-        }
+            'formula': 'quantity * price',
+            'decimal_spaces': 2,
+            'context_fields': ['quantity', 'price']
+        },
+        'unrealized_gain': {
+            'data_type': 'decimal',
+            'editable': True,
+            'formula_required': True,
+            'formula': '(price * quantity) - (purchase_price * quantity)',
+            'decimal_spaces': 2,
+            'context_fields': ['quantity', 'price', 'purchase_price']
+        },
     }
 }
 
@@ -75,7 +89,7 @@ DEFAULT_STOCK_SCHEMA_COLUMNS = [
         'is_deletable': False,
     },
     {
-        'title': 'Value',
+        'title': 'Current Value',
         'data_type': 'decimal',
         'source': 'calculated',
         'source_field': 'current_value',
@@ -84,64 +98,3 @@ DEFAULT_STOCK_SCHEMA_COLUMNS = [
         'formula': 'quantity * price',
     },
 ]
-
-# Optional: for runtime validation
-EDITABLE_FIELD_RULES = {
-    ('holding', 'quantity'): float,
-    ('holding', 'purchase_price'): float,
-    ('holding', 'holding.ticker'): str,
-    ('asset', 'price'): float,
-    ('asset', 'industry'): str,
-    ('asset', 'sector'): str,
-    # Add more as needed
-}
-
-EDITABLE_COLUMN_HANDLERS = {
-    ('holding', 'quantity'): {
-        'field_path': 'holding.quantity',
-        'type': float,
-        'error': "Quantity must be a number."
-    },
-    ('holding', 'purchase_price'): {
-        'field_path': 'holding.purchase_price',
-        'type': float,
-        'error': "Purchase price must be a number."
-    },
-    ('holding', 'holding.ticker'): {
-        'field_path': 'holding.stock.ticker',
-        'type': str,
-        'error': "Ticker must be a string."
-    },
-    ('asset', 'price'): {
-        'field_path': 'holding.stock.price',
-        'type': float,
-        'error': "Price must be a number."
-    },
-    # Add more as needed
-}
-
-
-# ------------------------------------------------- #
-
-PREDEFINED_COLUMNS = {
-    'stock': [
-        {'field': 'ticker', 'label': 'Stock Ticker',
-            'type': 'string', 'editable': False},
-        {'field': 'last_price', 'label': 'Stock Price', 'type': 'decimal'},
-    ],
-    'holding': [
-        {'field': 'purchase_price', 'label': 'Purchase Price', 'type': 'decimal'},
-        {'field': 'shares', 'label': 'Shares Owned', 'type': 'decimal'},
-    ],
-}
-
-PREDEFINED_CALCULATED_COLUMNS = {
-    'Total Investment': {
-        'formula': 'shares * last_price',
-        'dependencies': [
-            {'source': 'holding', 'field': 'shares'},
-            {'source': 'stock', 'field': 'last_price'},
-        ],
-        'type': 'decimal',
-    },
-}

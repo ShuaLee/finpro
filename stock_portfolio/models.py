@@ -3,6 +3,7 @@ from django.db import models
 from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from .constants import SCHEMA_COLUMN_CONFIG
+from .utils import resolve_field_path
 import logging
 import numexpr
 
@@ -80,6 +81,54 @@ class StockPortfolioSchemaColumn(SchemaColumn):
                 "This column is mandatory and cannot be deleted.")
         super().delete(*args, **kwargs)
 
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+
+        if is_new:
+            holdings = StockHolding.objects.filter(
+                self_managed_account__stock_portfolio=self.schema.stock_portfolio
+            )
+
+            for holding in holdings:
+                StockPortfolioSchemaColumnValue.objects.get_or_create(
+                    column=self,
+                    holding=holding
+                )
+
+        # For calculated columns, ensure dependencies exist
+        if self.source == 'calculated':
+            from .constants import SCHEMA_COLUMN_CONFIG
+            dependency_fields = SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(
+                self.source_field, {}).get('context_fields', [])
+
+            for field in dependency_fields:
+                found = self.schema.columns.filter(source_field=field).exists()
+                if not found:
+                    # Search for which source it's in
+                    added = False
+                    for source_key, fields in SCHEMA_COLUMN_CONFIG.items():
+                        if field in fields:
+                            config = fields[field]
+                            StockPortfolioSchemaColumn.objects.create(
+                                schema=self.schema,
+                                title=field.replace('_', ' ').title(),
+                                source=source_key,
+                                source_field=field,
+                                data_type=config['data_type'],
+                                editable=config.get('editable', True),
+                                formula=config.get('formula', ''),
+                                is_deletable=True
+                            )
+                            added = True
+                            break
+                    if not added:
+                        logger.warning(
+                            f"Could not add dependency column '{field}' — missing from SCHEMA_COLUMN_CONFIG")
+
+    def get_decimal_places(self):
+        return SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field, {}).get('decimal_spaces', 2)
+
 
 class StockPortfolioSchemaColumnValue(SchemaColumnValue):
     column = models.ForeignKey(
@@ -140,65 +189,63 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
         super().save(*args, **kwargs)
 
     def get_value(self):
+        logger.debug(
+            f"→ get_value called for: column='{self.column.title}', holding='{self.holding}'")
         column = self.column
+        source = column.source
+        field = column.source_field
         config = SCHEMA_COLUMN_CONFIG.get(
             column.source, {}).get(column.source_field)
 
         # Use edited value if present
         if self.is_edited and self.value is not None:
             raw = self.value
+        elif source == 'calculated':
+            return self.evaluate_formula(column.formula)
         else:
-            # Derive the value from source
-            if column.source == 'holding':
-                if column.source_field == 'quantity':
-                    raw = self.holding.quantity
-                elif column.source_field == 'purchase_price':
-                    raw = self.holding.purchase_price
-                elif column.source_field == 'holding.ticker':
-                    raw = self.holding.stock.ticker
-                else:
-                    raw = None
-            elif column.source == 'asset' and self.holding.stock:
-                raw = getattr(self.holding.stock, column.source_field, None)
-            elif column.source == 'calculated':
-                return self.evaluate_formula(column.formula)
-            else:
-                raw = self.value
+            field_path = config.get('field_path')
+            raw = resolve_field_path(self, field_path) if field_path else None
 
-        # Apply type casting
-        if config:
-            dtype = config.get("data_type")
-            try:
-                if dtype == "decimal":
-                    val = float(raw)
-                    # Limit to 2 decimal places if field is 'price'
-                    if column.source_field == 'price':
-                        return round(val, 2)
-                    return val
-                elif dtype == "string":
-                    return str(raw)
-            except (TypeError, ValueError):
-                return None
+        dtype = config.get('data_type')
+        decimal_spaces = config.get('decimal_spaces', None)
 
-        return raw
+        try:
+            if dtype == 'decimal' and raw is not None:
+                val = float(raw)
+                return round(val, decimal_spaces) if decimal_spaces is not None else val
+            elif dtype == 'string':
+                return str(raw)
+            return raw
+        except (TypeError, ValueError):
+            return None
 
     def evaluate_formula(self, formula):
         if not formula:
             return None
+
         try:
-            # Build context with quantity and price
-            context = {
-                'quantity': float(self.holding.quantity or 0),
-                'price': float(getattr(self.holding.stock, 'price') or 0),
-            }
-            # Evaluate using numexpr
+            # Build context using other column values for this holding
+            context = {}
+            all_values = self.holding.column_values.select_related('column')
+
+            for val in all_values:
+                logger.debug(
+                    f"Checking value: column={val.column.title}, source_field={val.column.source_field}, is_edited={val.is_edited}")
+                field = val.column.source_field
+                # skip 'calculated' to avoid recursion
+                if field and val.column.source in ('holding', 'asset'):
+                    # will use edited if applicable
+                    context_key = field.split('.')[-1]
+                    context[context_key] = val.get_value()
+
+            logger.debug(f"Final formula context: {context}")
+
             result = numexpr.evaluate(formula, local_dict=context)
-            # Convert to float for decimal compatibility
-            return round(float(result), 2)
-            # return f"{float(result):.2f}"  # Always 2 decimal places as string
+            return round(float(result), self.column.get_decimal_places())
         except Exception as e:
             logger.error(f"Failed to evaluate formula '{formula}': {str(e)}")
             return None
+
 
 # ------------------------------------------------------------------ #
 

@@ -1,65 +1,21 @@
-from decimal import Decimal
-from .constants import PREDEFINED_COLUMNS
-from .models import SchemaColumn
-import math
-import re
+from .constants import SCHEMA_COLUMN_CONFIG
 
 
-def get_predefined_column_metadata(source, field):
-    for col in PREDEFINED_COLUMNS.get(source, []):
-        if col['field'] == field:
-            return {
-                'label': col['label'],
-                'data_type': col['type']
-            }
-    return None
-
-
-def ensure_required_columns(schema, formula):
-    """
-    For a given formula, ensure all required source columns exist in the schema.
-    """
-    referenced_fields = set(re.findall(r'\b\w+\b', formula))
-
-    for source_type, fields in PREDEFINED_COLUMNS.items():
-        for field in fields:
-            if field['field'] in referenced_fields:
-                exists = schema.columns.filter(
-                    source=source_type,
-                    source_field=field['field']
-                ).exists()
-
-                if not exists:
-                    SchemaColumn.objects.create(
-                        schema=schema,
-                        name=field['label'],
-                        data_type=field['type'],
-                        source_field=field['field'],
-                        editable=field.get('editable', True)
-                    )
-
-
-def evaluate_formula(formula, instance):
-    """
-    Evaluates a formula like 'shares * last_price' using values
-    from a StockHolding instance and its related stock.
-    """
-    context = {}
-
-    # Build context from holding
-    for item in PREDEFINED_COLUMNS['holding']:
-        context[item['field']] = getattr(instance, item['field'], None)
-
-    # Build context from stock
-    stock = getattr(instance, 'stock', None)
-    if stock:
-        for item in PREDEFINED_COLUMNS['stock']:
-            context[item['field']] = getattr(stock, item['field'], None)
-
-    # Clean None values
-    safe_context = {k: v for k, v in context.items() if v is not None}
-
+def resolve_field_path(instance, field_path: str):
     try:
-        return eval(formula, {"__builtins__": {}, "math": math, "Decimal": Decimal}, safe_context)
-    except Exception:
+        for attr in field_path.split('.'):
+            instance = getattr(instance, attr, None)
+            if instance is None:
+                return None
+        return instance
+    except AttributeError:
         return None
+
+
+def get_source_field_options():
+    choices = []
+    for source, fields in SCHEMA_COLUMN_CONFIG.items():
+        for field, config in fields.items():
+            label = field.replace('_', ' ').title() if field else "Custom"
+            choices.append((source, field, label))
+    return choices

@@ -185,5 +185,10 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'DEBUG',
         },
+        'stock_portfolio': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }
