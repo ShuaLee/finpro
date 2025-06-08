@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from stock_portfolio.models import StockPortfolio
-from stock_portfolio.serializers import StockPortfolioSerializer
 from .models import Portfolio
 
 

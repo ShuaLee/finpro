@@ -2,7 +2,6 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
 from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
-from core.constants import CURRENCY_CHOICES
 from .constants import SCHEMA_COLUMN_CONFIG
 import logging
 import numexpr

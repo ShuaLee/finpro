@@ -1,7 +1,6 @@
 from datetime import date
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-from django.core.validators import RegexValidator
 from django.db import models
 
 # Create your models here.
@@ -88,12 +87,15 @@ class Profile(models.Model):
         ('system', 'System Default'),
     ]
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='individual')
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    account_type = models.CharField(
+        max_length=20, choices=ACCOUNT_TYPES, default='individual')
     plan = models.CharField(max_length=20, choices=PLAN_TIERS, default='free')
     language = models.CharField(max_length=30, blank=False, default="en")
     currency = models.CharField(max_length=10, blank=False, default="USD")
-    theme = models.CharField(max_length=10, choices=THEME_CHOICES, default='system')
+    theme = models.CharField(
+        max_length=10, choices=THEME_CHOICES, default='system')
     is_asset_manager = models.BooleanField(default=False)
     receive_email_updates = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
