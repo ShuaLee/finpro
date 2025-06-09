@@ -69,10 +69,20 @@ class StockHoldingSerializer(serializers.ModelSerializer):
 
 class SelfManagedAccountSerializer(serializers.ModelSerializer):
     holdings = StockHoldingSerializer(many=True, read_only=True)
+    current_value_in_profile_fx = serializers.SerializerMethodField()
+
+    def get_current_value_in_profile_fx(self, obj):
+        total = 0
+        holdings = obj.holdings.select_related('stock').prefetch_related('column_values__column')
+        for holding in holdings:
+            val = holding.get_column_value('value_in_profile_fx')
+            if val is not None:
+                total += float(val)
+        return round(total, 2)
 
     class Meta:
         model = SelfManagedAccount
-        fields = ['id', 'name', 'created_at', 'holdings']
+        fields = ['id', 'name', 'current_value_in_profile_fx', 'created_at', 'holdings']
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):

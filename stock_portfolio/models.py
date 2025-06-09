@@ -6,6 +6,7 @@ from portfolio.utils import get_fx_rate
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from .constants import SCHEMA_COLUMN_CONFIG
 from .utils import resolve_field_path, get_default_for_type
+from decimal import Decimal
 import logging
 import numexpr
 
@@ -345,6 +346,7 @@ class BaseStockAccount(models.Model):
         return self.name
 
 
+
 class SelfManagedAccount(BaseStockAccount):
     stock_portfolio = models.ForeignKey(
         StockPortfolio,
@@ -358,6 +360,15 @@ class SelfManagedAccount(BaseStockAccount):
         blank=True,
         help_text="Schema used to display stock holdings for this account."
     )
+    current_value_fx = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    def get_total_current_value_in_profile_fx(self):
+        total = Decimal(0.0)
+        for holding in self.holdings.all():
+            value = holding.get_current_value_profile_fx()
+            if value is not None:
+                total += Decimal(str(value))
+        return round(total, 2)
 
     def save(self, *args, **kwargs):
         if not self.pk and not self.active_schema:  # On creation, set active_schema
@@ -366,6 +377,7 @@ class SelfManagedAccount(BaseStockAccount):
             else:
                 raise ValidationError(
                     "StockPortfolio must have at least one schema.")
+        self.current_value_fx = self.get_total_current_value_in_profile_fx()
         super().save(*args, **kwargs)
 
 
