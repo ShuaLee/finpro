@@ -5,7 +5,7 @@ from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
 from portfolio.utils import get_fx_rate
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from .constants import SCHEMA_COLUMN_CONFIG
-from .utils import resolve_field_path
+from .utils import resolve_field_path, get_default_for_type
 import logging
 import numexpr
 
@@ -84,6 +84,18 @@ class StockPortfolioSchemaColumn(SchemaColumn):
         super().delete(*args, **kwargs)
 
     def save(self, *args, **kwargs):
+        config = SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field)
+
+        # Auto-correct source config fields if config found
+        if config:
+            self.data_type = config.get('data_type')
+            self.editable = config.get('editable', True)
+            if self.source == 'calculated':
+                self.formula = config.get('formula', '')
+            # Auto-correct title to be human-friendly from source_field
+            if not self.title or self.title.strip().lower() == self.source_field.replace('_', ' ').lower():
+                self.title = self.source_field.replace('_', ' ').title()
+
         is_new = self.pk is None
         super().save(*args, **kwargs)
 
@@ -91,45 +103,43 @@ class StockPortfolioSchemaColumn(SchemaColumn):
             holdings = StockHolding.objects.filter(
                 self_managed_account__stock_portfolio=self.schema.stock_portfolio
             )
-
             for holding in holdings:
                 StockPortfolioSchemaColumnValue.objects.get_or_create(
                     column=self,
                     holding=holding
                 )
 
-        # For calculated columns, ensure dependencies exist
+        # Ensure dependencies for calculated fields
         if self.source == 'calculated':
-            from .constants import SCHEMA_COLUMN_CONFIG
-            dependency_fields = SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(
+            dependency_fields = SCHEMA_COLUMN_CONFIG.get('calculated', {}).get(
                 self.source_field, {}).get('context_fields', [])
 
             for field in dependency_fields:
                 found = self.schema.columns.filter(source_field=field).exists()
                 if not found:
-                    # Search for which source it's in
-                    added = False
                     for source_key, fields in SCHEMA_COLUMN_CONFIG.items():
                         if field in fields:
-                            config = fields[field]
-                            StockPortfolioSchemaColumn.objects.create(
+                            dep_config = fields[field]
+                            StockPortfolioSchemaColumn.objects.get_or_create(
                                 schema=self.schema,
-                                title=field.replace('_', ' ').title(),
                                 source=source_key,
                                 source_field=field,
-                                data_type=config['data_type'],
-                                editable=config.get('editable', True),
-                                formula=config.get('formula', ''),
-                                is_deletable=True
+                                defaults={
+                                    'title': field.replace('_', ' ').title(),
+                                    'data_type': dep_config['data_type'],
+                                    'editable': dep_config.get('editable', True),
+                                    'formula': dep_config.get('formula', ''),
+                                    'is_deletable': True
+                                }
                             )
-                            added = True
                             break
-                    if not added:
-                        logger.warning(
-                            f"Could not add dependency column '{field}' — missing from SCHEMA_COLUMN_CONFIG")
 
     def get_decimal_places(self):
         return SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field, {}).get('decimal_spaces', 2)
+    
+    def get_formula_method(self):
+        config = SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field, {})
+        return config.get('formula_method')
 
 
 class StockPortfolioSchemaColumnValue(SchemaColumnValue):
@@ -222,10 +232,17 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
             return None
 
     def evaluate_formula(self, formula):
-        if not formula:
-            return None
-
         try:
+            method_name = self.column.get_formula_method()
+            if method_name:
+                method = getattr(self.holding, method_name, None)
+                if method:
+                    result = method()
+                    return round(float(result), self.column.get_decimal_places()) if result is not None else None
+            
+            if not formula:
+                return None
+        
             # Build context using other column values for this holding
             context = {}
             all_values = self.holding.column_values.select_related('column')
@@ -391,3 +408,78 @@ class StockHolding(AssetHolding):
 
     def __str__(self):
         return f"{self.stock} ({self.quantity} shares)"
+    
+    def get_column_value(self, source_field):
+        # Try to find the existing value
+        val = self.column_values.select_related('column').filter(column__source_field=source_field).first()
+
+        if not val:
+            schema = self.self_managed_account.active_schema
+            config = SCHEMA_COLUMN_CONFIG.get('holding', {}).get(source_field)
+
+            if config:
+                # Try to find or create the missing column
+                column, created = StockPortfolioSchemaColumn.objects.get_or_create(
+                    schema=schema,
+                    source='holding',
+                    source_field=source_field,
+                    defaults={
+                        'title': source_field.replace('_', ' ').title(),
+                        'editable': config.get('editable', True)
+                    }
+                )
+
+                # Only create the value if it doesn't already exist
+                val, val_created = StockPortfolioSchemaColumnValue.objects.get_or_create(
+                    column=column,
+                    holding=self,
+                    defaults={
+                        'value': get_default_for_type(config.get('data_type')),
+                        'is_edited': False
+                    }
+                )
+
+        return val.get_value() if val else getattr(self, source_field, None)
+
+    
+    def get_current_value(self):
+        # Use edited values if available via SchemaColumnValue
+        quantity = self.get_column_value('quantity')
+        price = self.get_column_value('price')
+
+        if quantity is not None and price is not None:
+            return round(quantity * price, 2)
+        return None
+    
+    def get_current_value_profile_fx(self):
+        price = self.get_column_value('price')
+        quantity = self.get_column_value('quantity')
+        from_currency = self.stock.currency
+        to_currency = self.self_managed_account.stock_portfolio.portfolio.profile.currency
+        fx_rate = get_fx_rate(from_currency, to_currency)
+
+        if price is not None and quantity is not None and fx_rate is not None:
+            return round(price * quantity * fx_rate, 2)
+        return None
+    
+    def get_unrealized_gain(self):
+        quantity = self.get_column_value('quantity')
+        price = self.get_column_value('price')
+        purchase_price = self.get_column_value('purchase_price')
+
+        if quantity is not None and price is not None and purchase_price is not None:
+            return round((price - purchase_price) * quantity, 2)
+        return None
+    
+    def get_unrealized_gain_profile_fx(self):
+        quantity = self.get_column_value('quantity')
+        price = self.get_column_value('price')
+        purchase_price = self.get_column_value('purchase_price')
+        from_currency = self.stock.currency
+        to_currency = self.self_managed_account.stock_portfolio.portfolio.profile.currency
+        fx_rate = get_fx_rate(from_currency, to_currency)
+
+        if all(v is not None for v in [quantity, price, purchase_price, fx_rate]):
+            unrealized = (price - purchase_price) * quantity * fx_rate
+            return round(unrealized, 2)
+        return None

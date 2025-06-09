@@ -92,6 +92,8 @@ class AssetHolding(models.Model):
             raise ValidationError("Quantity cannot be negative.")
         if self.purchase_price and self.purchase_price < 0:
             raise ValidationError("Purchase price cannot be negative.")
+        if self.purchase_date and self.purchase_date > timezone.now():
+            raise ValidationError("Purchase date cannot be in the future.")
 
     def save(self, *args, **kwargs):
         self.full_clean()

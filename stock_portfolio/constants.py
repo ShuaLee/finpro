@@ -47,26 +47,26 @@ SCHEMA_COLUMN_CONFIG = {
         'current_value': {
             'data_type': 'decimal',
             'editable': False,
-            'formula_required': True,
-            'formula': 'quantity * price',
-            'decimal_spaces': 2,
-            'context_fields': ['quantity', 'price']
+            'formula_required': False,
+            'formula_method': 'get_current_value',
         },
-        'value_in_profile_currency': {
+        'value_in_profile_fx': {
             'data_type': 'decimal',
             'editable': False,
             'formula_required': True,
-            'formula': 'price * quantity * fx_rate',
-            'decimal_spaces': 2,
-            'context_fields': ['price', 'quantity', 'fx_rate']
+            'formula_method': 'get_current_value_profile_fx',
         },
         'unrealized_gain': {
             'data_type': 'decimal',
             'editable': False,
             'formula_required': True,
-            'formula': '(price * quantity) - (purchase_price * quantity)',
-            'decimal_spaces': 2,
-            'context_fields': ['quantity', 'price', 'purchase_price']
+            'formula_method': 'get_unrealized_gain',
+        },
+        'unrealized_gain_profile_fx': {
+            'data_type': 'decimal',
+            'editable': False,
+            'formula_required': True,
+            'formula_method': 'get_unrealized_gain_profile_fx',
         },
     }
 }

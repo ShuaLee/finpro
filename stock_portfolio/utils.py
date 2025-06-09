@@ -19,3 +19,14 @@ def get_source_field_options():
             label = field.replace('_', ' ').title() if field else "Custom"
             choices.append((source, field, label))
     return choices
+
+
+"""
+FUNCTIONS FOR GETTING METHODS IN THE STOCK HOLDING
+"""
+def get_default_for_type(data_type):
+    if data_type == 'decimal':
+        return 0
+    elif data_type == 'string':
+        return ''
+    return None
