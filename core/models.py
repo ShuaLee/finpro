@@ -2,6 +2,7 @@ from datetime import date
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from .constants import CURRENCY_CHOICES
 
 # Create your models here.
 
@@ -93,7 +94,12 @@ class Profile(models.Model):
         max_length=20, choices=ACCOUNT_TYPES, default='individual')
     plan = models.CharField(max_length=20, choices=PLAN_TIERS, default='free')
     language = models.CharField(max_length=30, blank=False, default="en")
-    currency = models.CharField(max_length=10, blank=False, default="USD")
+    currency = models.CharField(
+        max_length=3,
+        choices=CURRENCY_CHOICES, 
+        blank=False, 
+        default="USD"
+    )
     theme = models.CharField(
         max_length=10, choices=THEME_CHOICES, default='system')
     is_asset_manager = models.BooleanField(default=False)
@@ -102,3 +108,7 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.user.email
+    
+    def save(self, *args, **kwargs):
+        self.currency = self.currency.upper()
+        super().save(*args, **kwargs)
