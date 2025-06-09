@@ -52,9 +52,17 @@ SCHEMA_COLUMN_CONFIG = {
             'decimal_spaces': 2,
             'context_fields': ['quantity', 'price']
         },
+        'value_in_profile_currency': {
+            'data_type': 'decimal',
+            'editable': False,
+            'formula_required': True,
+            'formula': 'price * quantity * fx_rate',
+            'decimal_spaces': 2,
+            'context_fields': ['price', 'quantity', 'fx_rate']
+        },
         'unrealized_gain': {
             'data_type': 'decimal',
-            'editable': True,
+            'editable': False,
             'formula_required': True,
             'formula': '(price * quantity) - (purchase_price * quantity)',
             'decimal_spaces': 2,

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portfolio, InvestmentTheme
+from .models import Portfolio, InvestmentTheme, FXRate
 
 
 @admin.register(Portfolio)
@@ -21,3 +21,17 @@ class InvestmentThemeAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('portfolio', 'parent')
+
+
+@admin.register(FXRate)
+class FXRateAdmin(admin.ModelAdmin):
+    list_display = ('from_currency', 'to_currency',
+                    'rate', 'updated_at', 'is_stale')
+    search_fields = ('from_currency', 'to_currency')
+    list_filter = ('from_currency', 'to_currency', 'updated_at')
+    readonly_fields = ('updated_at',)
+
+    def is_stale(self, obj):
+        return obj.is_stale()
+    is_stale.boolean = True
+    is_stale.short_description = "Stale (>24h)"

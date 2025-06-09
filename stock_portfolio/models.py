@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
 from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
+from portfolio.utils import get_fx_rate
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from .constants import SCHEMA_COLUMN_CONFIG
 from .utils import resolve_field_path
@@ -237,6 +239,16 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
                     # will use edited if applicable
                     context_key = field.split('.')[-1]
                     context[context_key] = val.get_value()
+
+            if 'fx_rate' in formula:
+                from_currency = self.holding.stock.currency
+                to_currency = self.holding.self_managed_account.stock_portfolio.portfolio.profile.currency
+                # Set this in your settings file or use a .env loader
+                fx_rate = get_fx_rate(from_currency, to_currency)
+                # Fallback to 1 if not available
+                context['fx_rate'] = fx_rate or 1
+                logger.debug(
+                    f"FX: {from_currency} → {to_currency} = {fx_rate}")
 
             logger.debug(f"Final formula context: {context}")
 
