@@ -4,6 +4,9 @@ from portfolio.models import Portfolio
 from .constants import DEFAULT_STOCK_SCHEMA_COLUMNS
 from .models import StockPortfolio, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue, StockHolding
 import logging
+import threading
+
+_thread_local = threading.local()
 
 logger = logging.getLogger(__name__)
 
@@ -51,3 +54,27 @@ def create_column_values(sender, instance, created, **kwargs):
 def delete_column_values(sender, instance, **kwargs):
     instance.column_values.all().delete()
     logger.info(f"Deleted column values for StockHolding {instance.id}")
+
+
+"""
+Account values
+"""
+
+
+@receiver([post_save, post_delete], sender=StockHolding)
+def update_account_current_value_fx(sender, instance, **kwargs):
+    account = instance.self_managed_account
+    account.current_value_fx = account.get_total_current_value_in_profile_fx()
+    account.save(update_fields=['current_value_fx'])
+
+
+"""
+@receiver(post_save, sender=StockPortfolioSchemaColumnValue)
+def update_account_on_column_value_change(sender, instance, **kwargs):
+    if getattr(_thread_local, 'skip_column_value_signal', False):
+        return
+
+    account = instance.holding.self_managed_account
+    account.current_value_fx = account.get_total_current_value_in_profile_fx()
+    account.save(update_fields=['current_value_fx'])
+"""

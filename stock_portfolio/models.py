@@ -9,6 +9,9 @@ from .utils import resolve_field_path, get_default_for_type
 from decimal import Decimal
 import logging
 import numexpr
+import threading
+
+_thread_local = threading.local()
 
 logger = logging.getLogger(__name__)
 
@@ -418,6 +421,12 @@ class StockHolding(AssetHolding):
                 name='unique_holding_per_account'
             ),
         ]
+    """
+    def save(self, *args, **kwargs):
+        _thread_local.skip_column_value_signal = True
+        super().save(*args, **kwargs)
+        _thread_local.skip_column_value_signal = False
+    """
 
     def __str__(self):
         return f"{self.stock} ({self.quantity} shares)"

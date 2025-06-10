@@ -65,17 +65,11 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
                 ) if column_value else None
             holdings_data.append(row)
 
-        total_fx_value = 0
-        for holding in holdings:
-            val = holding.get_column_value('value_in_profile_fx')
-            print(f"Value for {holding}: {val}")
-            if val is not None:
-                total_fx_value += float(val)
-
         return Response({
             'account_id': account.id,
             'account_name': account.name,
             'schema_name': schema.name,
+            'current_value_fx': float(account.current_value_fx or 0),
             'columns': [col.title for col in schema_columns],
             'holdings': holdings_data,
         })
