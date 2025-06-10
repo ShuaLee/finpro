@@ -1,4 +1,6 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -89,7 +91,10 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data, context={
                                          'self_managed_account': account})
         serializer.is_valid(raise_exception=True)
-        holding = serializer.save()
+        try:
+            holding = serializer.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.message_dict)
 
         return Response(
             {'detail': f"Holding added for {holding.stock.ticker}",

@@ -2,6 +2,7 @@ from datetime import timedelta
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from decimal import Decimal
 from core.models import Profile
 import logging
 
@@ -83,8 +84,9 @@ class AssetHolding(models.Model):
 
     def get_performance(self):
         total_cost = self.get_total_cost()
+        current_value = Decimal(str(self.get_current_value()))  # cast safely
         if total_cost > 0:
-            return (self.get_current_value() - total_cost) / total_cost * 100
+            return (current_value - total_cost) / total_cost * 100
         return 0
 
     def clean(self):

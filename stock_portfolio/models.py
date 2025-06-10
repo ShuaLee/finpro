@@ -85,7 +85,8 @@ class StockPortfolioSchemaColumn(SchemaColumn):
         super().delete(*args, **kwargs)
 
     def save(self, *args, **kwargs):
-        config = SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field)
+        config = SCHEMA_COLUMN_CONFIG.get(
+            self.source, {}).get(self.source_field)
 
         # Auto-correct source config fields if config found
         if config:
@@ -137,9 +138,10 @@ class StockPortfolioSchemaColumn(SchemaColumn):
 
     def get_decimal_places(self):
         return SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field, {}).get('decimal_spaces', 2)
-    
+
     def get_formula_method(self):
-        config = SCHEMA_COLUMN_CONFIG.get(self.source, {}).get(self.source_field, {})
+        config = SCHEMA_COLUMN_CONFIG.get(
+            self.source, {}).get(self.source_field, {})
         return config.get('formula_method')
 
 
@@ -202,8 +204,6 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
         super().save(*args, **kwargs)
 
     def get_value(self):
-        logger.debug(
-            f"→ get_value called for: column='{self.column.title}', holding='{self.holding}'")
         column = self.column
         source = column.source
         field = column.source_field
@@ -223,14 +223,15 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
         decimal_spaces = config.get('decimal_spaces', None)
 
         try:
-            if dtype == 'decimal' and raw is not None:
-                val = float(raw)
-                return round(val, decimal_spaces) if decimal_spaces is not None else val
+            if dtype == 'decimal':
+                if raw is None:
+                    return 0.0
+                return round(float(raw), decimal_spaces)
             elif dtype == 'string':
-                return str(raw)
-            return raw
+                return str(raw) if raw else "-"
+            return raw if raw is not None else "-"
         except (TypeError, ValueError):
-            return None
+            return 0.0 if dtype == 'decimal' else "-"
 
     def evaluate_formula(self, formula):
         try:
@@ -240,10 +241,10 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
                 if method:
                     result = method()
                     return round(float(result), self.column.get_decimal_places()) if result is not None else None
-            
+
             if not formula:
                 return None
-        
+
             # Build context using other column values for this holding
             context = {}
             all_values = self.holding.column_values.select_related('column')
@@ -346,7 +347,6 @@ class BaseStockAccount(models.Model):
         return self.name
 
 
-
 class SelfManagedAccount(BaseStockAccount):
     stock_portfolio = models.ForeignKey(
         StockPortfolio,
@@ -360,7 +360,8 @@ class SelfManagedAccount(BaseStockAccount):
         blank=True,
         help_text="Schema used to display stock holdings for this account."
     )
-    current_value_fx = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    current_value_fx = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True)
 
     def get_total_current_value_in_profile_fx(self):
         total = Decimal(0.0)
@@ -377,7 +378,7 @@ class SelfManagedAccount(BaseStockAccount):
             else:
                 raise ValidationError(
                     "StockPortfolio must have at least one schema.")
-        self.current_value_fx = self.get_total_current_value_in_profile_fx()
+
         super().save(*args, **kwargs)
 
 
@@ -420,10 +421,11 @@ class StockHolding(AssetHolding):
 
     def __str__(self):
         return f"{self.stock} ({self.quantity} shares)"
-    
+
     def get_column_value(self, source_field):
         # Try to find the existing value
-        val = self.column_values.select_related('column').filter(column__source_field=source_field).first()
+        val = self.column_values.select_related('column').filter(
+            column__source_field=source_field).first()
 
         if not val:
             schema = self.self_managed_account.active_schema
@@ -453,7 +455,6 @@ class StockHolding(AssetHolding):
 
         return val.get_value() if val else getattr(self, source_field, None)
 
-    
     def get_current_value(self):
         # Use edited values if available via SchemaColumnValue
         quantity = self.get_column_value('quantity')
@@ -462,7 +463,7 @@ class StockHolding(AssetHolding):
         if quantity is not None and price is not None:
             return round(quantity * price, 2)
         return None
-    
+
     def get_current_value_profile_fx(self):
         price = self.get_column_value('price')
         quantity = self.get_column_value('quantity')
@@ -473,7 +474,7 @@ class StockHolding(AssetHolding):
         if price is not None and quantity is not None and fx_rate is not None:
             return round(price * quantity * fx_rate, 2)
         return None
-    
+
     def get_unrealized_gain(self):
         quantity = self.get_column_value('quantity')
         price = self.get_column_value('price')
@@ -482,7 +483,7 @@ class StockHolding(AssetHolding):
         if quantity is not None and price is not None and purchase_price is not None:
             return round((price - purchase_price) * quantity, 2)
         return None
-    
+
     def get_unrealized_gain_profile_fx(self):
         quantity = self.get_column_value('quantity')
         price = self.get_column_value('price')

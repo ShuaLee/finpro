@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 from stocks.models import Stock
 from functools import reduce
@@ -21,6 +22,12 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
 
     def validate_ticker(self, value):
         return value.upper()
+
+    def validate_purchase_date(self, value):
+        if value and value > timezone.now():
+            raise serializers.ValidationError(
+                "Purchase date cannot be in the future.")
+        return value
 
     def create(self, validated_data):
         account = self.context['self_managed_account']
@@ -73,7 +80,8 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
 
     def get_current_value_in_profile_fx(self, obj):
         total = 0
-        holdings = obj.holdings.select_related('stock').prefetch_related('column_values__column')
+        holdings = obj.holdings.select_related(
+            'stock').prefetch_related('column_values__column')
         for holding in holdings:
             val = holding.get_column_value('value_in_profile_fx')
             if val is not None:
@@ -82,7 +90,8 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SelfManagedAccount
-        fields = ['id', 'name', 'current_value_in_profile_fx', 'created_at', 'holdings']
+        fields = ['id', 'name', 'current_value_in_profile_fx',
+                  'created_at', 'holdings']
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):
@@ -103,6 +112,14 @@ class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
         request = self.context['request']
         profile = request.user.profile
         stock_portfolio = profile.portfolio.stockportfolio
+
+        # Grab the default schema (assuming it's the first one)
+        default_schema = stock_portfolio.schemas.first()
+
+        if not default_schema:
+            raise serializers.ValidationError(
+                "No schema available for this stock portfolio."
+            )
 
         # Attach the new account to the correct stock portfolio
         return SelfManagedAccount.objects.create(

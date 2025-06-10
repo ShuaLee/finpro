@@ -185,7 +185,8 @@ class Stock(Asset):
 
         instance = cls(ticker=ticker, is_custom=is_custom)
         if is_custom:
-            instance.price = 0
+            instance.price = 0.0
+            instance.currency = 'USD'
         if not is_custom:
             success = instance.fetch_fmp_data()
             if success:
@@ -200,8 +201,6 @@ class Stock(Asset):
         try:
             instance.full_clean()
             instance.save()
-            logger.info(
-                f"Created stock {ticker} (is_custom={instance.is_custom})")
             return instance
         except ValidationError as e:
             logger.error(f"Failed to create stock {ticker}: {str(e)}")
