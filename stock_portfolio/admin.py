@@ -350,8 +350,8 @@ class StockHoldingAdmin(admin.ModelAdmin):
     current_value.short_description = 'Current Value'
 
     def performance(self, obj):
-        return f"{obj.get_performance():.2f}%"
-    performance.short_description = 'Performance'
+        perf = obj.get_performance()
+        return f"{perf:.2f}%" if perf is not None else "-"
 
     def refresh_holding_values(self, request, queryset):
         updated = 0

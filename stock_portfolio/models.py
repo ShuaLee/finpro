@@ -6,7 +6,7 @@ from portfolio.utils import get_fx_rate
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from .constants import SCHEMA_COLUMN_CONFIG
 from .utils import resolve_field_path, get_default_for_type
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import logging
 import numexpr
 import threading
@@ -363,8 +363,6 @@ class SelfManagedAccount(BaseStockAccount):
         blank=True,
         help_text="Schema used to display stock holdings for this account."
     )
-    current_value_fx = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True)
 
     def get_total_current_value_in_profile_fx(self):
         total = Decimal(0.0)
@@ -421,12 +419,6 @@ class StockHolding(AssetHolding):
                 name='unique_holding_per_account'
             ),
         ]
-    """
-    def save(self, *args, **kwargs):
-        _thread_local.skip_column_value_signal = True
-        super().save(*args, **kwargs)
-        _thread_local.skip_column_value_signal = False
-    """
 
     def __str__(self):
         return f"{self.stock} ({self.quantity} shares)"
@@ -469,8 +461,11 @@ class StockHolding(AssetHolding):
         quantity = self.get_column_value('quantity')
         price = self.get_column_value('price')
 
-        if quantity is not None and price is not None:
-            return round(quantity * price, 2)
+        try:
+            if quantity is not None and price is not None:
+                return round(float(quantity) * float(price), 2)
+        except (TypeError, ValueError):
+            pass
         return None
 
     def get_current_value_profile_fx(self):
@@ -480,28 +475,58 @@ class StockHolding(AssetHolding):
         to_currency = self.self_managed_account.stock_portfolio.portfolio.profile.currency
         fx_rate = get_fx_rate(from_currency, to_currency)
 
-        if price is not None and quantity is not None and fx_rate is not None:
-            return round(price * quantity * fx_rate, 2)
+        try:
+            if quantity is not None and price is not None and fx_rate is not None:
+                return round(float(quantity) * float(price) * float(fx_rate), 2)
+        except (TypeError, ValueError):
+            pass
         return None
 
     def get_unrealized_gain(self):
-        quantity = self.get_column_value('quantity')
-        price = self.get_column_value('price')
-        purchase_price = self.get_column_value('purchase_price')
+        try:
+            quantity = self.get_column_value('quantity')
+            price = self.get_column_value('price')
+            purchase_price = self.get_column_value('purchase_price')
 
-        if quantity is not None and price is not None and purchase_price is not None:
+            if None in (quantity, price, purchase_price):
+                return None
+
+            quantity = Decimal(str(quantity))
+            price = Decimal(str(price))
+            purchase_price = Decimal(str(purchase_price))
+
             return round((price - purchase_price) * quantity, 2)
-        return None
+        except (InvalidOperation, TypeError, ValueError):
+            return None
 
     def get_unrealized_gain_profile_fx(self):
-        quantity = self.get_column_value('quantity')
-        price = self.get_column_value('price')
-        purchase_price = self.get_column_value('purchase_price')
-        from_currency = self.stock.currency
-        to_currency = self.self_managed_account.stock_portfolio.portfolio.profile.currency
-        fx_rate = get_fx_rate(from_currency, to_currency)
+        try:
+            quantity = self.get_column_value('quantity')
+            price = self.get_column_value('price')
+            purchase_price = self.get_column_value('purchase_price')
+            from_currency = self.stock.currency
+            to_currency = self.self_managed_account.stock_portfolio.portfolio.profile.currency
+            fx_rate = get_fx_rate(from_currency, to_currency)
 
-        if all(v is not None for v in [quantity, price, purchase_price, fx_rate]):
+            if None in (quantity, price, purchase_price, fx_rate):
+                return None
+
+            quantity = Decimal(str(quantity))
+            price = Decimal(str(price))
+            purchase_price = Decimal(str(purchase_price))
+            fx_rate = Decimal(str(fx_rate))
+
             unrealized = (price - purchase_price) * quantity * fx_rate
             return round(unrealized, 2)
-        return None
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+    def get_performance(self):
+        current_value = self.get_current_value()
+        invested = self.purchase_price or 0
+        try:
+            if current_value is None or invested in (None, 0):
+                return None
+            return ((Decimal(str(current_value)) - Decimal(str(invested))) / Decimal(str(invested))) * 100
+        except (InvalidOperation, ZeroDivisionError):
+            return None

@@ -60,13 +60,13 @@ def delete_column_values(sender, instance, **kwargs):
 Account values
 """
 
-
+"""
 @receiver([post_save, post_delete], sender=StockHolding)
 def update_account_current_value_fx(sender, instance, **kwargs):
     account = instance.self_managed_account
     account.current_value_fx = account.get_total_current_value_in_profile_fx()
     account.save(update_fields=['current_value_fx'])
-
+"""
 
 """
 @receiver(post_save, sender=StockPortfolioSchemaColumnValue)

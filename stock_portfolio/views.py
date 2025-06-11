@@ -69,7 +69,7 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             'account_id': account.id,
             'account_name': account.name,
             'schema_name': schema.name,
-            'current_value_fx': float(account.current_value_fx or 0),
+            'current_value_fx': float(account.get_total_current_value_in_profile_fx() or 0),
             'columns': [col.title for col in schema_columns],
             'holdings': holdings_data,
         })
