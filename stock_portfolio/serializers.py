@@ -1,9 +1,10 @@
 from django.utils import timezone
 from rest_framework import serializers
+from portfolio.utils import get_fx_rate
 from stocks.models import Stock
-from functools import reduce
+from decimal import Decimal
 from .constants import SCHEMA_COLUMN_CONFIG
-from .models import StockPortfolio, SelfManagedAccount, StockPortfolioSchemaColumnValue, StockHolding
+from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, StockPortfolioSchemaColumnValue, StockHolding
 import logging
 
 logger = logging.getLogger(__name__)
@@ -194,5 +195,55 @@ class StockPortfolioSchemaColumnValueEditSerializer(serializers.ModelSerializer)
                 {"value": f"Invalid value for type {data_type}."})
 
         instance.is_edited = True
+        instance.save()
+        return instance
+
+
+class ManagedAccountSerializer(serializers.ModelSerializer):
+    current_value_in_profile_fx = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ManagedAccount
+        fields = [
+            'id',
+            'name',
+            'broker',
+            'tax_status',
+            'account_type',
+            'strategy',
+            'currency',
+            'invested_amount',
+            'current_value',
+            'current_value_in_profile_fx',
+            'created_at'
+        ]
+
+    def get_current_value_in_profile_fx(self, obj):
+        profile_currency = obj.stock_portfolio.portfolio.profile.currency
+        fx = get_fx_rate(obj.currency, profile_currency)
+        try:
+            fx_decimal = Decimal(str(fx)) if fx else Decimal(1)
+        except Exception:
+            fx_decimal = Decimal(1)
+
+        return round(obj.current_value * fx_decimal, 2)
+
+    def create(self, validated_data):
+        request = self.context['request']
+        profile = request.user.profile
+        stock_portfolio = profile.portfolio.stockportfolio
+
+        if 'currency' not in validated_data or not validated_data['currency']:
+            validated_data['currency'] = profile.currency
+
+        return ManagedAccount.objects.create(
+            stock_portfolio=stock_portfolio,
+            **validated_data
+        )
+
+    def update(self, instance, validated_data):
+        for field in ['name', 'broker', 'tax_status', 'account_type', 'strategy', 'currency', 'invested_amount', 'current_value']:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
         instance.save()
         return instance

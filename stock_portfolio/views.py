@@ -5,8 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import StockPortfolio, SelfManagedAccount, StockPortfolioSchemaColumnValue
-from .serializers import StockPortfolioSerializer, SelfManagedAccountSerializer, SelfManagedAccountCreateSerializer, StockHoldingCreateSerializer, StockPortfolioSchemaColumnValueEditSerializer
+from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, StockPortfolioSchemaColumnValue
+from .serializers import StockPortfolioSerializer, SelfManagedAccountSerializer, ManagedAccountSerializer, SelfManagedAccountCreateSerializer, StockHoldingCreateSerializer, StockPortfolioSchemaColumnValueEditSerializer
 
 
 class StockPortfolioDashboardView(APIView):
@@ -37,6 +37,52 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
         if self.action == 'add_holding':
             return StockHoldingCreateSerializer
         return SelfManagedAccountSerializer
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset().select_related('active_schema').prefetch_related(
+            'holdings__stock',
+            'holdings__column_values__column'
+        )
+
+        accounts_data = []
+        total_value = 0
+
+        for account in queryset:
+            schema = account.active_schema
+            if not schema:
+                continue  # skip accounts with no schema
+
+            schema_columns = schema.columns.all()
+            holdings_data = []
+
+            for holding in account.holdings.all():
+                row = {}
+                for column in schema_columns:
+                    column_value = next(
+                        (cv for cv in holding.column_values.all()
+                         if cv.column_id == column.id),
+                        None
+                    )
+                    row[column.title] = column_value.get_value(
+                    ) if column_value else None
+                holdings_data.append(row)
+
+            value = float(account.get_total_current_value_in_profile_fx() or 0)
+            total_value += value
+
+            accounts_data.append({
+                'account_id': account.id,
+                'account_name': account.name,
+                'schema_name': schema.name,
+                'current_value_fx': value,
+                'columns': [col.title for col in schema_columns],
+                'holdings': holdings_data,
+            })
+
+        return Response({
+            'total_current_value_in_profile_fx': round(total_value, 2),
+            'accounts': accounts_data
+        })
 
     def retrieve(self, request, pk=None):
         account = self.get_object()
@@ -117,3 +163,13 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             "id": updated_instance.id,
             "value": updated_instance.get_value(),
         }, status=status.HTTP_200_OK)
+
+
+class ManagedAccountViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ManagedAccountSerializer
+
+    def get_queryset(self):
+        return ManagedAccount.objects.filter(
+            stock_portfolio__portfolio=self.request.user.profile.portfolio
+        )

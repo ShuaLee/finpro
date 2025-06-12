@@ -9,9 +9,6 @@ from .utils import resolve_field_path, get_default_for_type
 from decimal import Decimal, InvalidOperation
 import logging
 import numexpr
-import threading
-
-_thread_local = threading.local()
 
 logger = logging.getLogger(__name__)
 
@@ -281,8 +278,6 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
             return None
 
 
-# ------------------------------------------------------------------ #
-
 # -------------------- STOCK PORTFOLIO -------------------- #
 
 
@@ -392,6 +387,25 @@ class ManagedAccount(BaseStockAccount):
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
+    currency = models.CharField(
+        max_length=3,
+        choices=settings.CURRENCY_CHOICES,
+        blank=True,
+        null=True
+    )
+
+    class Meta:
+        unique_together = (('stock_portfolio', 'name'),)
+
+    def save(self, *args, **kwargs):
+        if not self.currency and self.stock_portfolio and self.stock_portfolio.portfolio:
+            self.currency = self.stock_portfolio.portfolio.profile.currency
+        super().save(*args, **kwargs)
+
+    def get_total_current_value_in_profile_fx(self):
+        to_currency = self.stock_portfolio.portfolio.profile.currency
+        fx = get_fx_rate(self.currency, to_currency)
+        return round(self.current_value * fx, 2) if fx else self.current_value
 
 # -------------------- STOCK & STOCK HOLDING -------------------- #
 

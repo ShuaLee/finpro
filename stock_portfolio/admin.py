@@ -4,7 +4,7 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
 from .constants import SCHEMA_COLUMN_CONFIG
-from .models import StockPortfolio, SelfManagedAccount, StockHolding, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue
+from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, StockHolding, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue
 import logging
 
 logger = logging.getLogger(__name__)
@@ -372,3 +372,12 @@ class StockHoldingAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('stock', 'self_managed_account', 'investment_theme')
+
+
+@admin.register(ManagedAccount)
+class ManagedAccountAdmin(admin.ModelAdmin):
+    list_display = ('name', 'stock_portfolio', 'current_value',
+                    'invested_amount', 'currency', 'created_at')
+    search_fields = (
+        'name', 'stock_portfolio__portfolio__profile__user__email')
+    list_filter = ('stock_portfolio', 'currency')
