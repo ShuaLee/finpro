@@ -405,7 +405,13 @@ class ManagedAccount(BaseStockAccount):
     def get_total_current_value_in_profile_fx(self):
         to_currency = self.stock_portfolio.portfolio.profile.currency
         fx = get_fx_rate(self.currency, to_currency)
-        return round(self.current_value * fx, 2) if fx else self.current_value
+
+        try:
+            fx_decimal = Decimal(str(fx)) if fx is not None else Decimal(1)
+        except:
+            fx_decimal = Decimal(1)
+
+        return round(self.current_value * fx_decimal, 2)
 
 # -------------------- STOCK & STOCK HOLDING -------------------- #
 
