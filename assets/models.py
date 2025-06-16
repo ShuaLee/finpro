@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 from portfolio.models import InvestmentTheme
+from stock_portfolio.models import SelfManagedAccount
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ class Asset(models.Model):
     def get_type(self):
         return self.__class__.__name__
 
-    def get_current_value(self):
+    def get_price(self):
         raise NotImplementedError
 
 
@@ -111,5 +112,32 @@ class Stock(Asset):
             self.ticker = self.ticker.upper()
         super().save(*args, **kwargs)
 
-    def get_current_value(self):
+    def get_price(self):
         return self.price or 0
+
+class StockHolding(AssetHolding):
+    self_managed_account = models.ForeignKey(
+        SelfManagedAccount,
+        on_delete=models.CASCADE,
+        related_name='stock_holdings'
+    )
+    stock = models.ForeignKey(
+        Stock,
+        on_delete=models.CASCADE,
+        related_name='stock_holdings'
+    )
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['self_managed_account']),
+            models.Index(fields=['stock'])
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['self_managed_account', 'stock'],
+                name='unique_holding_per_account'
+            ),
+        ]
+    
+    def __str__(self):
+        return f"{self.stock} ({self.quantity} shares)"
