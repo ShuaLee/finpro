@@ -43,13 +43,6 @@ ASSET_SCHEMA_CONFIG = {
                 'field_path': 'holding.stock.ticker',
             },
         },
-        'custom': {
-            None: {
-                'data_type': 'string',  # flexible
-                'editable': True,
-                'field_path': None,
-            }
-        },
         'calculated': {
             'current_value': {
                 'data_type': 'decimal',

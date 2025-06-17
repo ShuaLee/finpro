@@ -1,9 +1,9 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
-from portfolio.models import Portfolio, BaseAssetPortfolio, AssetHolding
+from portfolio.models import AssetHolding, StockPortfolio
 from portfolio.utils import get_fx_rate
-from schemas.models import Schema, SchemaColumn, SchemaColumnValue
+from schemas.models import StockPortfolioSchema, SchemaColumn, SchemaColumnValue
 from .constants import SCHEMA_COLUMN_CONFIG
 from .utils import resolve_field_path, get_default_for_type
 from decimal import Decimal, InvalidOperation
@@ -14,22 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------- Schema ------------------------------ #
-
-class StockPortfolioSchema(Schema):
-    stock_portfolio = models.ForeignKey(
-        'stock_portfolio.StockPortfolio',
-        on_delete=models.CASCADE,
-        related_name='schemas'
-    )
-
-    class Meta:
-        unique_together = (('stock_portfolio', 'name'))
-
-    def delete(self, *args, **kwargs):
-        if self.stock_portfolio.schemas.count() <= 1:
-            raise PermissionDenied(
-                "Cannot delete the last schema for a StockPortfolio.")
-        super().delete(*args, **kwargs)
 
 
 class StockPortfolioSchemaColumn(SchemaColumn):
@@ -279,30 +263,6 @@ class StockPortfolioSchemaColumnValue(SchemaColumnValue):
 
 
 # -------------------- STOCK PORTFOLIO -------------------- #
-
-
-class StockPortfolio(BaseAssetPortfolio):
-    portfolio = models.OneToOneField(
-        Portfolio,
-        on_delete=models.CASCADE,
-        related_name='stockportfolio'
-    )
-
-    def __str__(self):
-        return f"Stock Portfolio for {self.portfolio.profile.user.email}"
-
-    def clean(self):
-        if self.pk is None and StockPortfolio.objects.filter(portfolio=self.portfolio).exists():
-            raise ValidationError(
-                "Only one StockPortfolio is allowed per Portfolio.")
-
-        if self.pk and not self.schemas.exists():  # Only check schemas if saved
-            raise ValidationError(
-                "StockPortfolio must have at least one schema.")
-
-    def save(self, *args, **kwargs):
-        self.full_clean()  # Run clean before saving
-        super().save(*args, **kwargs)
 
 
 # -------------------- STOCK ACCOUNTS -------------------- #

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Portfolio, InvestmentTheme, FXRate
+from .models import Portfolio, InvestmentTheme, FXRate, StockPortfolio
 
 
 @admin.register(Portfolio)
@@ -35,3 +35,15 @@ class FXRateAdmin(admin.ModelAdmin):
         return obj.is_stale()
     is_stale.boolean = True
     is_stale.short_description = "Stale (>24h)"
+
+
+"""
+NEW STUFF
+"""
+# ------------------------------- Stock Portfolio ------------------------------ #
+
+
+@admin.register(StockPortfolio)
+class StockPortfolioAdmin(admin.ModelAdmin):
+    list_display = ['portfolio', 'created_at']
+    search_fields = ['portfolio__profile__user__email']

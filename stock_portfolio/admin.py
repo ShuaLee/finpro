@@ -3,8 +3,9 @@ from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
+from portfolio.models import StockPortfolio
 from .constants import SCHEMA_COLUMN_CONFIG
-from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, StockHolding, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue
+from .models import SelfManagedAccount, ManagedAccount, StockHolding, StockPortfolioSchema, StockPortfolioSchemaColumn, StockPortfolioSchemaColumnValue
 import logging
 
 logger = logging.getLogger(__name__)
@@ -298,12 +299,6 @@ class SelfManagedAccountAdmin(admin.ModelAdmin):
             return "-"
     get_user_email.short_description = "User Email"
     get_user_email.admin_order_field = "stock_portfolio__portfolio__profile__user__email"
-
-
-@admin.register(StockPortfolio)
-class StockPortfolioAdmin(admin.ModelAdmin):
-    list_display = ['portfolio', 'created_at']
-    search_fields = ['portfolio__profile__user__email']
 
 
 @admin.register(StockHolding)
