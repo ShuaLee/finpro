@@ -1,8 +1,6 @@
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
 from assets.constants import ASSET_SCHEMA_CONFIG
-from assets.models import StockHolding
-from stock_portfolio.models import StockPortfolio
 import logging
 
 logger = logging.getLogger(__name__)
@@ -168,19 +166,22 @@ class SchemaColumnValue(models.Model):
         # Apply directly to holding if column targets holding field
         if self.column.source == 'holding' and self.value:
             if hasattr(self.holding, self.column.source_field):
-                setattr(self.holding, self.column.source_field,
-                        float(self.value))
-                self.holding.save()
+                try:
+                    setattr(self.holding, self.column.source_field, val)
+                    self.holding.save()
 
-            # Clear override — the value was applied directly to the model
-            self.value = None
-            self.is_edited = False
+                    # Clear override, the value was applied directly to the model
+                    self.value = None
+                    self.is_edited = False
+                except (TypeError, ValueError):
+                    raise ValidationError(f"Invalid numeric value for '{self.column.title}'")
 
         super().save(*args, **kwargs)
 
     def get_value(self):
         """
         Return the user-edited value or the derived value.
+        Properly formatted using column's data_type and decimal places.
         """
         if self.is_edited:
             return self.value
@@ -194,8 +195,31 @@ class SchemaColumnValue(models.Model):
         elif column.source == 'holding':
             # Fetch from holding (e.g., quantity)
             return getattr(self.holding, column.source_field, None)
+        elif column.source == 'calculated':
+            method_name = ASSET_SCHEMA_CONFIG.get(
+                column.ASSET_TYPE, {}
+            ).get('calculated', {}).get(column.source_field, {}).get('formula_method')
 
-        return None
+            if method_name:
+                method = getattr(self.holding, method_name, None)
+                if callable(method):
+                    raw = method()
+        
+        # Format the raw value based on data_type
+        data_type = column.data_type
+        decimal_places = column.decimal_spaces or 2
+
+        try:
+            if data_type == 'decimal':
+                return round(float(raw), decimal_places) if raw is not None else 0.0
+            elif data_type == 'integer':
+                return int(raw) if raw is not None else 0
+            elif data_type == 'string':
+                return str(raw) if raw is not None else "-"
+            return raw
+        except (TypeError, ValueError):
+            return 0.0 if data_type == 'decimal' else "-"
+
 
 
 # ------------------------------ Stock Portfolio ------------------------------ #
@@ -203,7 +227,7 @@ class SchemaColumnValue(models.Model):
 
 class StockPortfolioSchema(Schema):
     stock_portfolio = models.ForeignKey(
-        StockPortfolio,
+        'portfolio.StockPortfolio',
         on_delete=models.CASCADE,
         related_name='schemas'
     )
@@ -228,7 +252,7 @@ class StockPortfolioSC(SchemaColumn):
     )
     source_field = models.CharField(
         max_length=100,
-        choices=SchemaColumn.get_source_field_choices.__func__(),
+        choices=SchemaColumn.get_source_field_choices(),
         blank=True
     )
 
@@ -239,6 +263,8 @@ class StockPortfolioSC(SchemaColumn):
         return f"[{self.schema.stock_portfolio.portfolio.profile}] {self.title} ({self.source})"
 
     def save(self, *args, **kwargs):
+        # this lazy import needs to be fixed
+        from assets.models import StockHolding
         is_new = self.pk is None
         super().save(*args, **kwargs)
 
@@ -261,7 +287,7 @@ class StockPortfolioSCV(SchemaColumnValue):
         related_name='values'
     )
     holding = models.ForeignKey(
-        StockHolding,
+        'assets.StockHolding',
         on_delete=models.CASCADE,
         related_name='column_values'
     )
@@ -275,4 +301,4 @@ class StockPortfolioSCV(SchemaColumnValue):
                 raise ValidationError(
                     "Mismatched portfolio between column and holding.")
 
-    super().clean()  # ← Run the base class validation
+        super().clean()  # ← Run the base class validation

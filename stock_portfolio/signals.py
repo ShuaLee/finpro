@@ -1,3 +1,4 @@
+"""
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from portfolio.models import Portfolio
@@ -56,19 +57,16 @@ def delete_column_values(sender, instance, **kwargs):
     logger.info(f"Deleted column values for StockHolding {instance.id}")
 
 
-"""
-Account values
-"""
 
-"""
+
+
 @receiver([post_save, post_delete], sender=StockHolding)
 def update_account_current_value_fx(sender, instance, **kwargs):
     account = instance.self_managed_account
     account.current_value_fx = account.get_total_current_value_in_profile_fx()
     account.save(update_fields=['current_value_fx'])
-"""
 
-"""
+
 @receiver(post_save, sender=StockPortfolioSchemaColumnValue)
 def update_account_on_column_value_change(sender, instance, **kwargs):
     if getattr(_thread_local, 'skip_column_value_signal', False):
@@ -77,4 +75,5 @@ def update_account_on_column_value_change(sender, instance, **kwargs):
     account = instance.holding.self_managed_account
     account.current_value_fx = account.get_total_current_value_in_profile_fx()
     account.save(update_fields=['current_value_fx'])
+
 """

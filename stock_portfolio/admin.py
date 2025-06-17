@@ -1,3 +1,4 @@
+"""
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
@@ -376,3 +377,4 @@ class ManagedAccountAdmin(admin.ModelAdmin):
     search_fields = (
         'name', 'stock_portfolio__portfolio__profile__user__email')
     list_filter = ('stock_portfolio', 'currency')
+"""

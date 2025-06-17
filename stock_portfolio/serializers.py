@@ -1,10 +1,12 @@
 from django.utils import timezone
 from rest_framework import serializers
+from portfolio.models import StockPortfolio
 from portfolio.utils import get_fx_rate
+from schemas.models import StockPortfolioSCV
 from stocks.models import Stock
 from decimal import Decimal
 from .constants import SCHEMA_COLUMN_CONFIG
-from .models import StockPortfolio, SelfManagedAccount, ManagedAccount, StockPortfolioSchemaColumnValue, StockHolding
+from .models import SelfManagedAccount, ManagedAccount, StockHolding
 import logging
 
 logger = logging.getLogger(__name__)
@@ -133,7 +135,7 @@ class StockPortfolioSchemaColumnValueEditSerializer(serializers.ModelSerializer)
     value = serializers.CharField(allow_null=True, required=False)
 
     class Meta:
-        model = StockPortfolioSchemaColumnValue
+        model = StockPortfolioSCV
         fields = ['id', 'value']
 
     def validate(self, data):
