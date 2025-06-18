@@ -1,18 +1,14 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from decimal import Decimal, InvalidOperation
-from .constants import ASSET_SCHEMA_CONFIG
-from .utils import get_default_for_type
 from portfolio.models import InvestmentTheme
 from portfolio.utils import get_fx_rate
-from schemas.models import StockPortfolioSC, StockPortfolioSCV
-from stock_portfolio.models import SelfManagedAccount
+from ..constants import ASSET_SCHEMA_CONFIG
+from ..utils import get_default_for_type
+from decimal import Decimal, InvalidOperation
 import logging
 
 logger = logging.getLogger(__name__)
-
-# ------------------------------ ABSTRACT CLASSES ----------------------------- #
 
 
 class Asset(models.Model):
@@ -24,6 +20,7 @@ class Asset(models.Model):
 
     def get_price(self):
         raise NotImplementedError
+
 
 class AssetHolding(models.Model):
     quantity = models.DecimalField(max_digits=15, decimal_places=4)
@@ -51,14 +48,17 @@ class AssetHolding(models.Model):
             f"{self.__class__.__name__} must implement the `asset` property.")
 
     def get_profile_currency(self):
-        raise NotImplementedError(f"{self.__class__.__name__} must implement get_profile_currency()")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement get_profile_currency()")
 
     def get_column_value(self, source_field, *, asset_type: str, get_schema, column_model, column_value_model):
-        val = self.column_values.select_related('column').filter(column__source_field=source_field).first()
+        val = self.column_values.select_related('column').filter(
+            column__source_field=source_field).first()
 
         if not val:
             schema = get_schema()
-            config = ASSET_SCHEMA_CONFIG.get(asset_type, {}).get('holding', {}).get(source_field)
+            config = ASSET_SCHEMA_CONFIG.get(asset_type, {}).get(
+                'holding', {}).get(source_field)
 
             if config:
                 column, _ = column_model.objects.get_or_create(
@@ -98,7 +98,7 @@ class AssetHolding(models.Model):
         except (TypeError, ValueError):
             pass
         return None
-    
+
     def get_current_value_in_profile_fx(self):
         """
         Converts current value to profile currency using FX rate.
@@ -109,17 +109,18 @@ class AssetHolding(models.Model):
         """
         current_value = self.get_current_value()
         from_currency = getattr(self.asset, 'currency', None)
-        to_currency = self.get_profile_currency() if hasattr(self, 'get_profile_currency') else None
+        to_currency = self.get_profile_currency() if hasattr(
+            self, 'get_profile_currency') else None
 
         if current_value is None or from_currency is None or to_currency is None:
             return None
-        
+
         fx_rate = get_fx_rate(from_currency, to_currency)
         try:
             return round(float(current_value) * float(fx_rate), 2)
         except (TypeError, ValueError):
             return None
-        
+
     def get_unrealized_gain(self):
         """
         Calculates unrealized gain: (current_price - purchase_price) * quantity.
@@ -132,7 +133,7 @@ class AssetHolding(models.Model):
 
             if None in (quantity, price, purchase_price):
                 return None
-            
+
             # Convert all to Decimal for accuracy
             quantity = Decimal(str(quantity))
             price = Decimal(str(price))
@@ -142,7 +143,7 @@ class AssetHolding(models.Model):
             return round(gain, 2)
         except (InvalidOperation, TypeError, ValueError):
             return None
-        
+
     def get_unrealized_gain_profile_fx(self):
         """
         Returns unrealized gain converted into the profile currency using FX rate.
@@ -151,13 +152,15 @@ class AssetHolding(models.Model):
         from_currency = getattr(self.asset, 'currency', None)
 
         if not hasattr(self, 'get_profile_currency'):
-            logger.warning(f"{self.__class__.__name__} missing get_profile_currency method.")
+            logger.warning(
+                f"{self.__class__.__name__} missing get_profile_currency method.")
 
-        to_currency = self.get_profile_currency() if hasattr(self, 'get_profile_currency') else None
+        to_currency = self.get_profile_currency() if hasattr(
+            self, 'get_profile_currency') else None
 
         if base_gain is None or not from_currency or not to_currency:
             return None
-        
+
         try:
             fx_rate = get_fx_rate(from_currency, to_currency)
             if fx_rate in (None, 0):
@@ -173,7 +176,7 @@ class AssetHolding(models.Model):
             raise ValidationError("Purchase price cannot be negative.")
         if self.purchase_date and self.purchase_date > timezone.now():
             raise ValidationError("Purchase date cannot be in the future.")
-        
+
         super().clean()
 
     def save(self, *args, **kwargs):
@@ -181,92 +184,3 @@ class AssetHolding(models.Model):
         logger.debug(
             f"Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
         return super().save(*args, **kwargs)
-
-# ------------------------------ STOCKS ------------------------------- #
-
-
-class Stock(Asset):
-    ticker = models.CharField(max_length=10, unique=True)
-    name = models.CharField(max_length=200, blank=True, null=True)
-    exchange = models.CharField(
-        max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
-    is_adr = models.BooleanField(default=False)
-    price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    currency = models.CharField(max_length=3, blank=True, null=True)
-    average_volume = models.BigIntegerField(null=True, blank=True)
-    volume = models.BigIntegerField(null=True, blank=True)
-    dividend_yield = models.DecimalField(
-        max_digits=6, decimal_places=4, blank=True, null=True)
-    pe_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    quote_type = models.CharField(max_length=50, blank=True, null=True)
-    sector = models.CharField(max_length=100, null=True, blank=True)
-    industry = models.CharField(max_length=100, null=True, blank=True)
-
-    is_custom = models.BooleanField(default=False)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_updated = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=['ticker']),
-            models.Index(fields=['is_custom']),
-            models.Index(fields=['exchange'])
-        ]
-
-    def __str__(self):
-        return self.ticker
-
-    def save(self, *args, **kwargs):
-        if self.ticker:
-            self.ticker = self.ticker.upper()
-        super().save(*args, **kwargs)
-
-    def get_price(self):
-        return self.price or 0
-
-class StockHolding(AssetHolding):
-    self_managed_account = models.ForeignKey(
-        SelfManagedAccount,
-        on_delete=models.CASCADE,
-        related_name='stock_holdings'
-    )
-    stock = models.ForeignKey(
-        Stock,
-        on_delete=models.CASCADE,
-        related_name='stock_holdings'
-    )
-
-    @property
-    def asset(self):
-        return self.stock
-    
-    class Meta:
-        indexes = [
-            models.Index(fields=['self_managed_account']),
-            models.Index(fields=['stock'])
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['self_managed_account', 'stock'],
-                name='unique_holding_per_account'
-            ),
-        ]
-    
-    def __str__(self):
-        return f"{self.stock} ({self.quantity} shares)"
-    
-    def get_profile_currency(self):
-        return self.self_managed_account.stock_portfolio.portfolio.profile.currency
-    
-    # Methods for calculated ASSET_SCHEMA_CONFIG
-    def get_column_value(self, source_field):
-        return super().get_column_value(
-            source_field,
-            asset_type='stock',
-            get_schema=lambda: self.self_managed_account.active_schema,
-            column_model=StockPortfolioSC,
-            column_value_model=StockPortfolioSCV,
-        )
