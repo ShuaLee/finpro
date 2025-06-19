@@ -1,0 +1,35 @@
+DEFAULT_STOCK_SCHEMA_COLUMNS = [
+    {
+        'title': 'Ticker',
+        'data_type': 'string',
+        'source': 'asset',
+        'source_field': 'ticker',
+        'editable': False,
+        'is_deletable': False,
+    },
+    {
+        'title': 'Quantity',
+        'data_type': 'decimal',
+        'source': 'holding',
+        'source_field': 'quantity',
+        'editable': True,
+        'is_deletable': False,
+    },
+    {
+        'title': 'Price',
+        'data_type': 'decimal',
+        'source': 'asset',
+        'source_field': 'price',
+        'editable': True,
+        'is_deletable': False,
+    },
+    {
+        'title': 'Current Value',
+        'data_type': 'decimal',
+        'source': 'calculated',
+        'source_field': 'current_value',
+        'editable': False,
+        'is_deletable': False,
+        'formula': 'quantity * price',
+    },
+]

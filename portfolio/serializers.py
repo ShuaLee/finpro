@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from stock_portfolio.models import StockPortfolio
-from .models import Portfolio
+from accounts.serializers import SelfManagedAccountSerializer
+from .models import Portfolio, StockPortfolio
 
 
 class PortfolioSerializer(serializers.ModelSerializer):
@@ -18,3 +18,13 @@ class PortfolioSerializer(serializers.ModelSerializer):
             }
         except StockPortfolio.DoesNotExist:
             return None
+
+
+class StockPortfolioSerializer(serializers.ModelSerializer):
+    self_managed_accounts = SelfManagedAccountSerializer(
+        many=True, read_only=True
+    )
+
+    class Meta:
+        model = StockPortfolio
+        fields = ['id', 'created_at', 'self_managed_account']

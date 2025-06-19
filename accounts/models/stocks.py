@@ -7,11 +7,6 @@ from decimal import Decimal
 
 
 class BaseStockAccount(models.Model):
-    stock_portfolio = models.ForeignKey(
-        StockPortfolio,
-        on_delete=models.CASCADE,
-        related_name='accounts'
-    )
     broker = models.CharField(max_length=100, blank=True, null=True,
                               help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)")
     tax_status = models.CharField(
@@ -37,7 +32,12 @@ class BaseStockAccount(models.Model):
         abstract = True
 
 
-class SelfManagedStockAccount(BaseStockAccount):
+class SelfManagedAccount(BaseStockAccount):
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio,
+        on_delete=models.CASCADE,
+        related_name='self_managed_accounts'
+    )
     active_schema = models.ForeignKey(
         'schemas.StockPortfolioSchema',
         on_delete=models.SET_NULL,
@@ -54,7 +54,7 @@ class SelfManagedStockAccount(BaseStockAccount):
             )
         ]
 
-    def get_total_current_value_in_profile_fx(self):
+    def get_current_value_in_profile_fx(self):
         total = Decimal(0.0)
         for holding in self.holdings.all():
             value = holding.get_current_value_profile_fx()
@@ -74,6 +74,11 @@ class SelfManagedStockAccount(BaseStockAccount):
 
 
 class ManagedAccount(BaseStockAccount):
+    stock_portfolio = models.ForeignKey(
+        StockPortfolio,
+        on_delete=models.CASCADE,
+        related_name='managed_accounts'
+    )
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
@@ -92,7 +97,7 @@ class ManagedAccount(BaseStockAccount):
             )
         ]
 
-    def get_total_current_value_in_profile_fx(self):
+    def get_current_value_in_profile_fx(self):
         to_currency = self.stock_portfolio.portfolio.profile.currency
         fx = get_fx_rate(self.currency, to_currency)
 
