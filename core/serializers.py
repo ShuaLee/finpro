@@ -4,7 +4,8 @@ from djoser.serializers import UserSerializer as BaseUserSerializer, UserCreateS
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Profile
+from portfolio.models import StockPortfolio
+from .models import Profile, Portfolio
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
@@ -107,3 +108,19 @@ class ProfileSerializer(serializers.ModelSerializer):
                 setattr(instance, field, validated_data[field])
         instance.save()
         return instance
+
+class PortfolioSerializer(serializers.ModelSerializer):
+    stock_portfolio = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Portfolio
+        fields = ['created_at', 'stock_portfolio']
+
+    def get_stock_portfolio(self, obj):
+        try:
+            stock_portfolio = StockPortfolio.objects.get(portfolio=obj)
+            return {
+                'created_at': stock_portfolio.created_at,
+            }
+        except StockPortfolio.DoesNotExist:
+            return None

@@ -111,3 +111,13 @@ class Profile(models.Model):
     def save(self, *args, **kwargs):
         self.currency = self.currency.upper()
         super().save(*args, **kwargs)
+        
+
+class Portfolio(models.Model):
+    profile = models.OneToOneField(
+        Profile, on_delete=models.CASCADE, related_name='portfolio'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.profile} - {self.created_at}"

@@ -3,20 +3,11 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
-from core.models import Profile
+from core.models import Portfolio
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-class Portfolio(models.Model):
-    profile = models.OneToOneField(
-        Profile, on_delete=models.CASCADE, related_name='portfolio'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.profile} - {self.created_at}"
 
 
 class InvestmentTheme(models.Model):

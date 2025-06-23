@@ -1,7 +1,7 @@
 from django.db import models
 from .base import Asset, AssetHolding
-from accounts.models.stocks import SelfManagedStockAccount
-from schemas.models import StockPortfolioSC, StockPortfolioSCV
+from accounts.models.stocks import SelfManagedAccount
+from schemas.models.stocks import StockPortfolioSC, StockPortfolioSCV
 
 
 class Stock(Asset):
@@ -49,7 +49,7 @@ class Stock(Asset):
 
 class StockHolding(AssetHolding):
     self_managed_account = models.ForeignKey(
-        SelfManagedStockAccount,
+        SelfManagedAccount,
         on_delete=models.CASCADE,
         related_name='stock_holdings'
     )
