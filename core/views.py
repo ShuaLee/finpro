@@ -1,9 +1,17 @@
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import ProfileSerializer, SignupCompleteSerializer
+from .serializers import PortfolioSerializer, ProfileSerializer, SignupCompleteSerializer
 
+class PortfolioDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        portfolio = request.user.profile.portfolio
+        serializer = PortfolioSerializer(portfolio)
+        return Response(serializer.data)
 
 class SignupCompleteView(generics.CreateAPIView):
     serializer_class = SignupCompleteSerializer

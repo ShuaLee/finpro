@@ -28,8 +28,10 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
 
-        # Create Profile (without birth_date, as it's now in User)
-        Profile.objects.get_or_create(user=user)
+        
+        profile, _ = Profile.objects.get_or_create(user=user)
+        Portfolio.objects.get_or_create(profile=profile)
+
         return user
 
     def create_superuser(self, email, password, first_name, last_name, birth_date=None, **extra_fields):

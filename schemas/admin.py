@@ -114,7 +114,7 @@ class StockPortfolioSchemaAdmin(admin.ModelAdmin):
     autocomplete_fields = ['stock_portfolio']
 
     def stock_portfolio_link(self, obj):
-        url = reverse('admin:stock_portfolio_stockportfolio_change', args=[obj.stock_portfolio.id])
+        url = reverse('admin:portfolios_stockportfolio_change', args=[obj.stock_portfolio.id])
         return format_html('<a href="{}">{}</a>', url, obj.stock_portfolio)
     stock_portfolio_link.short_description = 'Stock Portfolio'
 
@@ -134,7 +134,7 @@ class StockPortfolioSchemaAdmin(admin.ModelAdmin):
                 level=messages.ERROR
             )
             # Redirect to list view
-            return HttpResponseRedirect(reverse('admin:stock_portfolio_stockportfolioschema_changelist'))
+            return HttpResponseRedirect(reverse('admin:schemas_stockportfolioschema_changelist'))
         return super().delete_view(request, object_id, extra_context)
 
     def delete_queryset(self, request, queryset):
@@ -163,7 +163,7 @@ class StockPortfolioSchemaAdmin(admin.ModelAdmin):
                     f"Cannot delete schema(s) {', '.join(blocked_schemas)} as they are the last schemas for their StockPortfolio.",
                     level=messages.ERROR
                 )
-                return HttpResponseRedirect(reverse('admin:stock_portfolio_stockportfolioschema_changelist'))
+                return HttpResponseRedirect(reverse('admin:schemas_stockportfolioschema_changelist'))
             return super().delete_selected(request, queryset)
         # Render confirmation page for GET or initial POST
         return super().delete_selected(request, queryset)
@@ -190,7 +190,7 @@ class StockPortfolioSchemaColumnAdmin(admin.ModelAdmin):
                 f"Cannot delete '{obj.title}' as it is a mandatory column.",
                 level=messages.ERROR
             )
-            return HttpResponseRedirect(reverse('admin:stock_portfolio_stockportfolioschemacolumn_changelist'))
+            return HttpResponseRedirect(reverse('admin:schemas_stockportfolioschemacolumn_changelist'))
         return super().delete_view(request, object_id, extra_context)
 
     def delete_queryset(self, request, queryset):

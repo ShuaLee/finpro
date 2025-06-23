@@ -1,12 +1,13 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from portfolio.models import StockPortfolio
-from portfolio.utils import get_fx_rate
+from portfolios.models import StockPortfolio
+from portfolios.utils import get_fx_rate
+from .base import BaseAccount
 from decimal import Decimal
 
 
-class BaseStockAccount(models.Model):
+class BaseStockAccount(BaseAccount):
     broker = models.CharField(max_length=100, blank=True, null=True,
                               help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)")
     tax_status = models.CharField(

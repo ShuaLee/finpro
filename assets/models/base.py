@@ -1,8 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from portfolio.models import InvestmentTheme
-from portfolio.utils import get_fx_rate
+from portfolios.models import InvestmentTheme
+from portfolios.utils import get_fx_rate
 from ..constants import ASSET_SCHEMA_CONFIG
 from ..utils import get_default_for_type
 from decimal import Decimal, InvalidOperation

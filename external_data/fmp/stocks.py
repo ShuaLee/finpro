@@ -1,6 +1,6 @@
 from django.conf import settings
 from assets.constants import ASSET_SCHEMA_CONFIG
-from assets.models import Stock
+from assets.models.stocks import Stock
 from decimal import Decimal, InvalidOperation
 import logging
 import requests

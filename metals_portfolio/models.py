@@ -2,8 +2,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import models
 from django.utils import timezone
-from portfolio.models import Asset, Portfolio, BaseAssetPortfolio, AssetHolding
-from portfolio.utils import get_fx_rate
+from portfolios.models import Asset, Portfolio, BaseAssetPortfolio, AssetHolding
+from portfolios.utils import get_fx_rate
 from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from stock_portfolio.utils import resolve_field_path, get_default_for_type
 from .constants import METALS_SCHEMA_CONFIG

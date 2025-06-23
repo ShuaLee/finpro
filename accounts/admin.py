@@ -1,5 +1,5 @@
 from django.contrib import admin
-from models.stocks import SelfManagedAccount, ManagedAccount
+from .models.stocks import SelfManagedAccount, ManagedAccount
 
 
 @admin.register(SelfManagedAccount)

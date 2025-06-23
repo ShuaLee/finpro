@@ -3,16 +3,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.models.stocks import ManagedAccount
 from .models import StockPortfolio
-from .serializers import PortfolioSerializer
 
 # Create your views here.
-class PortfolioDetailView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        portfolio = request.user.profile.portfolio
-        serializer = PortfolioSerializer(portfolio)
-        return Response(serializer.data)
     
 class StockPortfolioDashboardView(APIView):
     permission_classes = [IsAuthenticated]

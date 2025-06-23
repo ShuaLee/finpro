@@ -5,7 +5,7 @@ from .base import Schema, SchemaColumn, SchemaColumnValue
 
 class StockPortfolioSchema(Schema):
     stock_portfolio = models.ForeignKey(
-        'portfolio.StockPortfolio',
+        'portfolios.StockPortfolio',
         on_delete=models.CASCADE,
         related_name='schemas'
     )

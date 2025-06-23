@@ -48,13 +48,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'djoser',
-    'assets',
+    'accounts.apps.AccountsConfig',
+    'assets.apps.AssetsConfig',
     'core.apps.CoreConfig',
-    'external_data',
-    'schemas',
-    'portfolio',
-    'stocks',
-    'stock_portfolio',
+    'portfolios.apps.PortfoliosConfig',
+    'schemas.apps.SchemasConfig',
 ]
 
 MIDDLEWARE = [
