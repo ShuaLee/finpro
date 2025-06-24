@@ -1,3 +1,4 @@
+"""
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import StockPortfolioDashboardView, SelfManagedAccountViewSet, ManagedAccountViewSet
@@ -13,3 +14,4 @@ urlpatterns = [
          name='stock-portfolio-dashboard'),
     path('', include(router.urls)),
 ]
+"""

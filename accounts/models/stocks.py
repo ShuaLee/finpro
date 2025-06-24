@@ -1,8 +1,8 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from external_data.fx import get_fx_rate
 from portfolios.models.stocks import StockPortfolio
-from portfolios.utils import get_fx_rate
 from .base import BaseAccount
 from decimal import Decimal
 

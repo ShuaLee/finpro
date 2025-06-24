@@ -2,6 +2,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
+from .models.base import InvestmentTheme
 from .models.stocks import Stock, StockHolding
 import logging
 
@@ -262,3 +263,17 @@ class StockHoldingAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('stock', 'self_managed_account', 'investment_theme')
+    
+@admin.register(InvestmentTheme)
+class InvestmentThemeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'portfolio', 'parent', 'full_path']
+    list_filter = ['portfolio']
+    search_fields = ['name']
+
+    def full_path(self, obj):
+        return str(obj)
+    full_path.short_description = "Full Path"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('portfolio', 'parent')

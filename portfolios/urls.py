@@ -1,8 +1,8 @@
-from django.urls import path, include
-from .views import PortfolioDetailView
+from django.urls import path
+from .views import StockPortfolioDashboardView
+
 
 
 urlpatterns = [
-    path('', PortfolioDetailView.as_view(), name='portfolio-detail'),
-    path('stock-portfolio/', include('stock_portfolio.urls')),
+    path('stock-portfolio/', StockPortfolioDashboardView.as_view(), name='stock-portfolio-dashboard'),
 ]

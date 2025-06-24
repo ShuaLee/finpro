@@ -124,6 +124,14 @@ class Portfolio(models.Model):
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
     
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+
+        if is_new:
+            from portfolios.models.stocks import StockPortfolio
+            StockPortfolio.objects.get_or_create(portfolio=self)
+    
 class FXRate(models.Model):
     from_currency = models.CharField(max_length=3)
     to_currency = models.CharField(max_length=3)

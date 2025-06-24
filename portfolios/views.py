@@ -2,7 +2,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.models.stocks import ManagedAccount
-from .models import StockPortfolio
+from .models.stocks import StockPortfolio
 
 # Create your views here.
 
