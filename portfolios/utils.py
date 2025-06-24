@@ -1,7 +1,7 @@
 from datetime import timedelta
 from django.conf import settings
 from django.utils.timezone import now
-from .models import FXRate
+from core.models import FXRate
 import requests
 
 

@@ -4,7 +4,7 @@ from djoser.serializers import UserSerializer as BaseUserSerializer, UserCreateS
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from portfolios.models import StockPortfolio
+from portfolios.models.stocks import StockPortfolio
 from .models import Profile, Portfolio
 
 

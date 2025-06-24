@@ -1,11 +1,7 @@
 from django.contrib import admin
-from .models import Portfolio, InvestmentTheme, FXRate, StockPortfolio
-
-
-@admin.register(Portfolio)
-class IndividualPortfolioAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'created_at',]
-    # inlines = [StockPortfolioInline]
+from .models.stocks import StockPortfolio
+from .models.base import InvestmentTheme
+from core.models import FXRate
 
 
 @admin.register(InvestmentTheme)

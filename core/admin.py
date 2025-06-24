@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Profile
+from .models import User, Profile, Portfolio
 
 # Register your models here.
 
@@ -29,3 +29,9 @@ class UserAdmin(BaseUserAdmin):
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ('user',)
     search_fields = ('user__email',)
+
+
+@admin.register(Portfolio)
+class IndividualPortfolioAdmin(admin.ModelAdmin):
+    list_display = ['profile', 'created_at',]
+    # inlines = [StockPortfolioInline]

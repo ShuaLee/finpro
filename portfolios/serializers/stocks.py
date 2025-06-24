@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from accounts.serializers import SelfManagedAccountSerializer
-from .models import StockPortfolio
+from accounts.serializers.stocks import SelfManagedAccountSerializer
+from models import StockPortfolio
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):

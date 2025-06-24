@@ -2,12 +2,12 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from accounts.serializers import SelfManagedAccountSerializer
-from assets.serializers import StockHoldingCreateSerializer
+from accounts.serializers.stocks import SelfManagedAccountSerializer
+from assets.serializers.stocks import StockHoldingCreateSerializer
 from schemas.models.stocks import StockPortfolioSCV
 from schemas.serializers import StockPortfolioSCVEditSerializer
 from .models.stocks import SelfManagedAccount, ManagedAccount
-from .serializers import SelfManagedAccountCreateSerializer, ManagedAccountSerializer
+from serializers.stocks import SelfManagedAccountCreateSerializer, ManagedAccountSerializer
 
 
 
