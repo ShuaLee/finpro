@@ -54,7 +54,7 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
                     ) if column_value else None
                 holdings_data.append(row)
 
-            value = float(account.get_current_value_in_profile_fx() or 0)
+            value = float(account.get_current_value_profile_fx() or 0)
             total_value += value
 
             accounts_data.append({
@@ -102,7 +102,7 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             'account_id': account.id,
             'account_name': account.name,
             'schema_name': schema.name,
-            'current_value_fx': float(account.get_total_current_value_in_profile_fx() or 0),
+            'current_value_fx': float(account.get_current_value_profile_fx() or 0),
             'columns': [col.title for col in schema_columns],
             'holdings': holdings_data,
         })

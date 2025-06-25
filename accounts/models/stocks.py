@@ -55,7 +55,7 @@ class SelfManagedAccount(BaseStockAccount):
             )
         ]
 
-    def get_current_value_in_profile_fx(self):
+    def get_current_value_profile_fx(self):
         total = Decimal(0.0)
         for holding in self.holdings.all():
             value = holding.get_current_value_profile_fx()

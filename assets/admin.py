@@ -14,7 +14,7 @@ class StockForm(forms.ModelForm):
         model = Stock
         fields = [
             'ticker', 'is_custom', 'price', 'name', 'currency', 'sector', 'industry',
-            'dividend_yield', 'pe_ratio', 'quote_type', 'average_volume', 'volume'
+            'dividend_yield', 'pe_ratio', 'is_etf', 'average_volume', 'volume'
         ]
 
     def clean(self):
@@ -38,12 +38,12 @@ class StockAdmin(admin.ModelAdmin):
     form = StockForm
     list_display = ['ticker', 'name', 'is_custom',
                     'price', 'sector', 'last_updated']
-    list_filter = ['is_custom', 'quote_type', 'sector', 'exchange']
+    list_filter = ['is_custom', 'is_etf', 'sector', 'exchange']
     search_fields = ['ticker', 'name']
     list_per_page = 50
     fields = [
         'ticker', 'exchange', 'is_adr', 'is_custom', 'price', 'name', 'currency', 'sector', 'industry',
-        'dividend_yield', 'pe_ratio', 'quote_type', 'average_volume', 'volume',
+        'dividend_yield', 'pe_ratio', 'is_etf', 'average_volume', 'volume',
         'last_updated', 'created_at'
     ]
     readonly_fields = ['last_updated', 'created_at']
@@ -206,7 +206,7 @@ class StockHoldingAdmin(admin.ModelAdmin):
     list_display_links = ['holding_link']
     list_filter = [
         'self_managed_account__stock_portfolio__portfolio__profile',
-        'stock__quote_type', 'stock__sector', 'stock__is_adr', 'investment_theme'
+        'stock__is_etf', 'stock__sector', 'stock__is_adr', 'investment_theme'
     ]
     search_fields = ['stock__ticker',
                      'stock__name', 'self_managed_account__name']

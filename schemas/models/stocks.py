@@ -56,6 +56,10 @@ class StockPortfolioSC(SchemaColumn):
                     holding=holding
                 )
 
+    def delete(self, *args, **kwargs):
+        self.values.all().delete()
+        super().delete(*args, **kwargs)
+
 
 class StockPortfolioSCV(SchemaColumnValue):
     column = models.ForeignKey(

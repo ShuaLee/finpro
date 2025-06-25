@@ -11,5 +11,5 @@ FMP_FIELD_MAPPINGS = [
     ('industry', 'industry', 'profile', 'string', False, None),
     ('currency', 'currency', 'profile', 'string', False, None),
     ('dividend_yield', None, 'profile', 'decimal', False, None),  # Calculated
-    ('quote_type', 'quoteType', 'profile', 'string', False, 'EQUITY'),
+    ('is_etf', 'isEtf', 'profile', 'boolean', False, None),
 ]
