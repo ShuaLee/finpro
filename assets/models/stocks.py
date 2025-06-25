@@ -51,7 +51,7 @@ class StockHolding(AssetHolding):
     self_managed_account = models.ForeignKey(
         SelfManagedAccount,
         on_delete=models.CASCADE,
-        related_name='stock_holdings'
+        related_name='holdings'
     )
     stock = models.ForeignKey(
         Stock,

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from accounts.models.stocks import SelfManagedAccount, ManagedAccount
-from assets.serializers import StockHoldingSerializer
+from assets.serializers.stocks import StockHoldingSerializer
 
 
 class SelfManagedAccountSerializer(serializers.ModelSerializer):
@@ -21,7 +21,7 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
             return obj.get_current_value_in_profile_fx()
 
 
-class SelfManagedAccountCreateSerializer(serializers.ModelField):
+class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SelfManagedAccount
         fields = ['name', 'broker', 'tax_status', 'account_type']

@@ -1,7 +1,7 @@
 from django.conf import settings
-from assets.constants import ASSET_SCHEMA_CONFIG
 from assets.models.stocks import Stock
-from decimal import Decimal, InvalidOperation
+from ..constants import FMP_FIELD_MAPPINGS
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 import requests
 
@@ -46,50 +46,42 @@ def fetch_stock_data(ticker: str):
 
 def apply_fmp_stock_data(stock: Stock, quote: dict, profile: dict) -> bool:
     """
-    Applies data from FMP `quote` and `profile` into a Stock instance
-    using the unified asset schema config.
+    Applies data from FMP `quote` and `profile` using static FMP_FIELD_MAPPINGS.
     """
-    config = ASSET_SCHEMA_CONFIG.get('stock', {}).get('asset', {})
 
-    if not config:
-        logger.warning("No stock asset config found in ASSET_SCHEMA_CONFIG.")
-        return False
-
-    for field_name, field_cfg in config.items():
-        # default to quote if not specified
-        source = field_cfg.get('source', 'quote')
-        api_field = field_cfg.get('api_field', field_name)
-        data_type = field_cfg.get('data_type')
-        decimal_places = field_cfg.get('decimal_spaces', None)
-
+    for model_field, api_field, source, data_type, required, default in FMP_FIELD_MAPPINGS:
         value = None
-        if source == 'quote':
-            value = quote.get(api_field)
-        elif source == 'profile':
-            value = profile.get(api_field)
+        if api_field:
+            if source == 'quote':
+                value = quote.get(api_field)
+            elif source == 'profile':
+                value = profile.get(api_field)
 
-        # Convert value based on data type
-        if value is not None:
-            try:
-                if data_type == 'decimal':
-                    value = Decimal(str(value))
-                    if decimal_places is not None:
-                        value = round(value, decimal_places)
-                elif data_type == 'integer':
-                    value = int(value)
-                elif data_type == 'string':
-                    value = str(value)
-            except (InvalidOperation, ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse {field_name}: {e}")
-                value = None
+        if value is None and required:
+            return False
 
-        setattr(stock, field_name, value)
+        try:
+            if data_type == 'decimal' and value is not None:
+                value = Decimal(str(value)).quantize(
+                    Decimal('0.0001'), rounding=ROUND_HALF_UP)
+            elif data_type == 'integer' and value is not None:
+                value = int(value)
+            elif data_type == 'boolean' and value is not None:
+                value = bool(value)
+            elif data_type == 'string' and value is not None:
+                value = str(value)
+        except (InvalidOperation, ValueError, TypeError):
+            value = default
 
-    # Handle derived field (will delete later once FMP membership changes)
+        setattr(stock, model_field, value if value is not None else default)
+
+    # Derived field: dividend_yield = lastDiv * 4 / price
     try:
         last_div = profile.get('lastDiv')
         if last_div and stock.price:
-            stock.dividend_yield = Decimal(str(last_div)) * 4 / stock.price
+            dividend = Decimal(str(last_div)) * 4 / stock.price
+            stock.dividend_yield = dividend.quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP)
     except Exception as e:
         logger.warning(f"Failed to calculate dividend_yield: {e}")
         stock.dividend_yield = None

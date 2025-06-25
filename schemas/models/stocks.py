@@ -30,7 +30,6 @@ class StockPortfolioSC(SchemaColumn):
     )
     source_field = models.CharField(
         max_length=100,
-        choices=SchemaColumn.get_source_field_choices(),
         blank=True
     )
 
@@ -42,7 +41,7 @@ class StockPortfolioSC(SchemaColumn):
 
     def save(self, *args, **kwargs):
         # this lazy import needs to be fixed
-        from assets.models import StockHolding
+        from assets.models.stocks import StockHolding
         is_new = self.pk is None
         super().save(*args, **kwargs)
 

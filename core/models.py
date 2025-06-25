@@ -28,7 +28,6 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
 
-        
         profile, _ = Profile.objects.get_or_create(user=user)
         Portfolio.objects.get_or_create(profile=profile)
 
@@ -113,7 +112,7 @@ class Profile(models.Model):
     def save(self, *args, **kwargs):
         self.currency = self.currency.upper()
         super().save(*args, **kwargs)
-        
+
 
 class Portfolio(models.Model):
     profile = models.OneToOneField(
@@ -123,15 +122,33 @@ class Portfolio(models.Model):
 
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
-    
+
+    def initialize_stock_portfolio(self):
+        from portfolios.models.stocks import StockPortfolio
+        from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
+        from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
+
+        if hasattr(self, 'stockportfolio'):
+            return  # Already exists
+
+        stock_portfolio = StockPortfolio.objects.create(portfolio=self)
+
+        schema = StockPortfolioSchema.objects.create(
+            stock_portfolio=stock_portfolio,
+            name=f"Default Schema for {stock_portfolio}"
+        )
+
+        for column_data in DEFAULT_STOCK_SCHEMA_COLUMNS:
+            StockPortfolioSC.objects.create(schema=schema, **column_data)
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
 
         if is_new:
-            from portfolios.models.stocks import StockPortfolio
-            StockPortfolio.objects.get_or_create(portfolio=self)
-    
+            self.initialize_stock_portfolio()
+
+
 class FXRate(models.Model):
     from_currency = models.CharField(max_length=3)
     to_currency = models.CharField(max_length=3)

@@ -6,9 +6,8 @@ from accounts.serializers.stocks import SelfManagedAccountSerializer
 from assets.serializers.stocks import StockHoldingCreateSerializer
 from schemas.models.stocks import StockPortfolioSCV
 from schemas.serializers.stocks import StockPortfolioSCVEditSerializer
-from models.stocks import SelfManagedAccount, ManagedAccount
-from serializers.stocks import SelfManagedAccountCreateSerializer, ManagedAccountSerializer
-
+from ..models.stocks import SelfManagedAccount, ManagedAccount
+from ..serializers.stocks import SelfManagedAccountCreateSerializer, ManagedAccountSerializer
 
 
 class SelfManagedAccountViewSet(viewsets.ModelViewSet):
@@ -18,14 +17,14 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
         return SelfManagedAccount.objects.filter(
             stock_portfolio__portfolio=self.request.user.profile.portfolio
         )
-    
+
     def get_serializer_class(self):
         if self.action == 'create':
             return SelfManagedAccountCreateSerializer
         if self.action == 'add_holding':
             return StockHoldingCreateSerializer
         return SelfManagedAccountSerializer
-    
+
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset().select_related('active_schema').prefetch_related(
             'holdings__stock',
@@ -48,10 +47,11 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
                 for column in schema_columns:
                     column_value = next(
                         (cv for cv in holding.column_values.all()
-                        if cv.column_id == column.id),
+                         if cv.column_id == column.id),
                         None
                     )
-                    row[column.title] = column_value.get_value() if column_value else None
+                    row[column.title] = column_value.get_value(
+                    ) if column_value else None
                 holdings_data.append(row)
 
             value = float(account.get_current_value_in_profile_fx() or 0)
@@ -70,7 +70,7 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             'total_current_value_in_profile_fx': round(total_value, 2),
             'accounts': accounts_data
         })
-    
+
     def retrieve(self, request, pk=None):
         account = self.get_object()
 
@@ -106,7 +106,7 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             'columns': [col.title for col in schema_columns],
             'holdings': holdings_data,
         })
-    
+
     @action(detail=True, methods=['post'], url_path='add-holding')
     def add_holding(self, request, pk=None):
         account = self.get_object()
@@ -160,4 +160,3 @@ class ManagedAccountViewSet(viewsets.ModelViewSet):
         return ManagedAccount.objects.filter(
             stock_portfolio__portfolio=self.request.user.profile.portfolio
         )
-

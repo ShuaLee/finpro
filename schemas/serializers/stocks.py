@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from models.stocks import StockPortfolioSCV
+from ..models.stocks import StockPortfolioSCV
+
 
 class StockPortfolioSCVEditSerializer(serializers.ModelSerializer):
     value = serializers.CharField(allow_null=True, required=False)
