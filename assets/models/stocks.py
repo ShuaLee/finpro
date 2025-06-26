@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from .base import Asset, AssetHolding
 from accounts.models.stocks import SelfManagedAccount
@@ -93,6 +94,10 @@ class StockHolding(AssetHolding):
                         holding=self
                     )
     
+    def clean(self):
+        if self.quantity is not None and self.quantity < 0:
+            raise ValidationError("Quantity cannot be negative.")
+
     def delete(self, *args, **kwargs):
         self.column_values.all().delete()
         super().delete(*args, **kwargs)

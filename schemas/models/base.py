@@ -119,6 +119,12 @@ class SchemaColumnValue(models.Model):
         abstract = True
 
     def clean(self):
+        # Prevent empty value from being saved if marked as edited
+        if self.is_edited and self.value in [None, '']:
+            raise ValidationError(
+                f"Cannot set '{self.column.title}' as edited with an empty value."
+            )
+        
         # Only validate type if this is an override
         if self.is_edited and self.value is not None:
             expected_type = self.column.data_type
@@ -136,9 +142,15 @@ class SchemaColumnValue(models.Model):
                 )
 
     def save(self, *args, **kwargs):
+        # Normalize blank strings to None when not edited
+        if not self.is_edited and self.value == '':
+            self.value = None
+
         self.full_clean()
 
-        if self.is_edited and self.value is not None:
+        val = None
+
+        if self.value is not None:
             try:
                 data_type = self.column.data_type
                 places = self.column.decimal_spaces or 2
@@ -152,25 +164,22 @@ class SchemaColumnValue(models.Model):
                 else:
                     val = self.value  # fallback raw
 
-                self.value = str(val)  # Store consistently as text
-
+                self.value = str(val)  # Always store as string
             except (TypeError, ValueError):
                 raise ValidationError(
                     f"Invalid value for '{self.column.title}'")
 
-        # Apply directly to holding if column targets holding field
+        # Only apply to holding if edited and valid value
         if self.column.source == 'holding' and self.value:
             if hasattr(self.holding, self.column.source_field):
                 try:
+                    # Use the already parsed val
                     setattr(self.holding, self.column.source_field, val)
                     self.holding.save()
-
-                    # Clear override, the value was applied directly to the model
                     self.value = None
                     self.is_edited = False
                 except (TypeError, ValueError):
-                    raise ValidationError(
-                        f"Invalid numeric value for '{self.column.title}'")
+                    raise ValidationError(f"Invalid numeric value for '{self.column.title}'")
 
         super().save(*args, **kwargs)
 
