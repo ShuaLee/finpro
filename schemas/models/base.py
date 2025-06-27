@@ -188,11 +188,24 @@ class SchemaColumnValue(models.Model):
         Return the user-edited value or the derived value.
         Properly formatted using column's data_type and decimal places.
         """
-        if self.is_edited:
-            return self.value
-
         # Logic to derive value based on column's source
         column = self.column
+
+        data_type = self.column.data_type
+        decimal_places = self.column.decimal_spaces or 2
+
+        if self.is_edited:
+            try:
+                if data_type == 'decimal':
+                    return round(float(self.value), decimal_places)
+                elif data_type == 'integer':
+                    return int(self.value)
+                elif data_type == 'string':
+                    return str(self.value)
+                return self.value
+            except (TypeError, ValueError):
+                return self.value  # Fallback as-is for safety
+
 
         if column.source == 'asset':
             # Fetch from asset (e.g., stock price)

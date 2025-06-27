@@ -193,7 +193,8 @@ class StockAdmin(admin.ModelAdmin):
         form = super().get_form(request, obj, **kwargs)
         if obj and obj.is_custom:
             for field in ['currency', 'dividend_yield', 'pe_ratio', 'quote_type', 'average_volume', 'volume']:
-                form.base_fields[field].required = False
+                if field in form.base_fields:
+                    form.base_fields[field].required = False
         return form
 
 

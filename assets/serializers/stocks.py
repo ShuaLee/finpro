@@ -31,11 +31,7 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
 
         if confirm_add:
             stock = Stock(ticker=ticker.upper(), is_custom=True)
-            success = fetch_asset_data(stock, 'stock', verify_custom=True)
-            if not success:
-                raise serializers.ValidationError({
-                    'ticker': f"Could not fetch or initialize data for '{ticker}"
-                })
+            fetch_asset_data(stock, 'stock', verify_custom=True)  # we allow failure here
             stock.save()
             return stock
 

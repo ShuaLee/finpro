@@ -43,7 +43,7 @@ class StockPortfolioDashboardView(APIView):
                     row[col.title] = val.get_value() if val else None
                 holdings_data.append(row)
 
-            value = float(account.get_current_value_in_profile_fx() or 0)
+            value = float(account.get_current_value_profile_fx() or 0)
             total_self_managed_value += value
 
             self_managed_accounts.append({
