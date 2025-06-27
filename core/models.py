@@ -119,6 +119,7 @@ class Portfolio(models.Model):
         Profile, on_delete=models.CASCADE, related_name='portfolio'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    profile_setup_complete = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
