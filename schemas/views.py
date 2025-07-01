@@ -7,6 +7,8 @@ from assets.constants import ASSET_SCHEMA_CONFIG
 from schemas.models.stocks import StockPortfolioSchema
 
 # Create your views here.
+
+
 class SchemaView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -24,17 +26,17 @@ class SchemaView(APIView):
             schema = StockPortfolioSchema.objects.get(id=schema_id)
         except StockPortfolioSchema.DoesNotExist:
             return Response({"detail": "Schema not found."}, status=status.HTTP_404_NOT_FOUND)
-        
+
         # Validate user owns the schema
         if schema.stock_portfolio.portfolio.profile != request.user.profile:
             return Response({"detail": "Unauthorized."}, status=status.HTTP_403_FORBIDDEN)
-        
+
         column_model = schema.columns.model
         asset_type = getattr(column_model, 'ASSET_TYPE', None)
 
         if not asset_type:
             return Response({"detail": "Asset type not defined for this schema."}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         config = ASSET_SCHEMA_CONFIG.get(asset_type, {})
 
         # Collect already existing column keys
@@ -54,7 +56,7 @@ class SchemaView(APIView):
                         "data_type": field_config["data_type"],
                         "editable": field_config.get("editable", True)
                     })
-        
+
         existing_columns = [{
             "id": col.id,
             "title": col.title,
@@ -71,11 +73,12 @@ class SchemaView(APIView):
             "existing_columns": existing_columns,
             "available_columns": available_fields,
         })
-    
+
     def post(self, request, schema_id):
         schema = self.get_schema(schema_id, request.user)
         source = request.data.get("source")
         source_field = request.data.get("source_field")
+        custom_title = request.data.get("title")
 
         if not source or not source_field:
             return Response(
@@ -91,12 +94,15 @@ class SchemaView(APIView):
         if not field_config:
             return Response({"detail": "Invalid source or source_field."}, status=400)
 
+        title = custom_title or source_field.replace(
+            "_", " ").title()  # fallback title
+
         column, created = column_model.objects.get_or_create(
             schema=schema,
             source=source,
             source_field=source_field,
             defaults={
-                "title": source_field.replace("_", " ").title(),
+                "title": title,
                 "data_type": field_config["data_type"],
                 "editable": field_config.get("editable", True),
                 "decimal_spaces": field_config.get("decimal_spaces"),

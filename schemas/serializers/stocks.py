@@ -7,7 +7,7 @@ class StockPortfolioSCVEditSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StockPortfolioSCV
-        fields = ['id', 'value']
+        fields = ['id', 'value', 'is_edited']
 
     def validate(self, data):
         value = data.get('value')

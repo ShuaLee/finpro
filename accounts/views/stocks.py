@@ -21,6 +21,8 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
         )
 
     def get_serializer_class(self):
+        if self.action == 'edit_column_value':
+            return StockPortfolioSCVEditSerializer
         if self.action == 'create':
             return SelfManagedAccountCreateSerializer
         if self.action == 'add_holding':
@@ -131,7 +133,7 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED
         )
 
-    @action(detail=True, methods=['get', 'patch'], url_path='edit-column-value/(?P<value_id>[^/.]+)')
+    @action(detail=True, methods=['get', 'patch'], url_path='edit-column-value/(?P<value_id>[^/.]+)', serializer_class=StockPortfolioSCVEditSerializer)
     def edit_column_value(self, request, pk=None, value_id=None):
         try:
             value_obj = StockPortfolioSCV.objects.get(
@@ -142,16 +144,57 @@ class SelfManagedAccountViewSet(viewsets.ModelViewSet):
         except StockPortfolioSCV.DoesNotExist:
             return Response({"detail": "Column value not found or unauthorized."}, status=404)
 
-        serializer = StockPortfolioSCVEditSerializer(
-            value_obj, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        if request.method == "GET":
+            stock = getattr(value_obj.holding, 'stock', None)
 
-        updated_instance = serializer.save()
-        return Response({
-            "id": updated_instance.id,
-            "value": updated_instance.get_value(),
-        }, status=status.HTTP_200_OK)
+            return Response({
+                "id": value_obj.id,
+                "value": value_obj.get_value(),
+                "column_title": value_obj.column.title,
+                "column_type": value_obj.column.data_type,
+                "editable": value_obj.column.editable,
+                "is_edited": value_obj.is_edited,
+                "ticker": getattr(stock, "ticker", None),
+                "stock_name": getattr(stock, "name", None),
+                "quantity": getattr(value_obj.holding, "quantity", None),
+                "purchase_price": getattr(value_obj.holding, "purchase_price", None),
+                "purchase_date": getattr(value_obj.holding, "purchase_date", None),
+            })
+
+        if request.method == "PATCH":
+            serializer = StockPortfolioSCVEditSerializer(
+                value_obj, data=request.data, partial=True
+            )
+            serializer.is_valid(raise_exception=True)
+
+            # If user explicitly wants to un-edit
+            if serializer.validated_data.get("is_edited") is False:
+                value_obj.value = None
+                value_obj.is_edited = False
+                value_obj.save()
+                return Response({
+                    "id": value_obj.id,
+                    "value": value_obj.get_value(),
+                    "is_edited": False
+                })
+
+            # User submitted a new value
+            value = serializer.validated_data.get("value", None)
+
+            if value in [None, ""]:
+                return Response({
+                    "detail": "You must provide a non-empty value to mark as edited. If you're trying to revert, set is_edited to false."
+                }, status=400)
+
+            # Auto-assume is_edited = True
+            value_obj.value = value
+            value_obj.is_edited = True
+            value_obj.save()
+            return Response({
+                "id": value_obj.id,
+                "value": value_obj.get_value(),
+                "is_edited": True
+            }, status=200)
 
 
 class ManagedAccountViewSet(viewsets.ModelViewSet):
