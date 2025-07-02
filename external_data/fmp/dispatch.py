@@ -1,3 +1,4 @@
+from .metals import fetch_precious_metal_data, apply_fmp_precious_metal_data
 from .stocks import fetch_stock_data, apply_fmp_stock_data
 import logging
 
@@ -20,6 +21,22 @@ def fetch_asset_data(asset_obj, asset_type: str, *, verify_custom=False) -> bool
             return False
         
         success = apply_fmp_stock_data(asset_obj, data['quote'], data['profile'])
+        if success:
+            asset_obj.is_custom = False
+        return success
+    
+    elif asset_type == 'precious_metal':
+        if asset_obj.is_custom and not verify_custom:
+            logger.info(f"Skipping fetch for custom metal: {asset_obj.symbol}")
+            return True
+
+        data = fetch_precious_metal_data(asset_obj.symbol)
+        if not data:
+            if verify_custom:
+                asset_obj.is_custom = True
+            return False
+
+        success = apply_fmp_precious_metal_data(asset_obj, data)
         if success:
             asset_obj.is_custom = False
         return success
