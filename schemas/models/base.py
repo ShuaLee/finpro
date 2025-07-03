@@ -14,6 +14,22 @@ class Schema(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def portfolio_relation_name(self):
+        """
+        Concrete subclasses must override this to return the name of the FK field to their portfolio.
+        Example: 'stock_portfolio' or 'precious_metal_portfolio'
+        """
+        raise NotImplementedError(
+            "Subclasses must define portfolio_relation_name")
+
+    def delete(self, *args, **kwargs):
+        portfolio = getattr(self, self.portfolio_relation_name)
+        if portfolio.schemas.count() <= 1:
+            raise PermissionDenied(
+                f"Cannot delete the last schema for this portfolio.")
+        super().delete(*args, **kwargs)
+
 
 class SchemaColumn(models.Model):
     DATA_TYPES = [
@@ -56,7 +72,22 @@ class SchemaColumn(models.Model):
         abstract = True
 
     def __str__(self):
-        return f"{self.title} ({self.source})"
+        return f"[{self.get_profile_display()}] {self.title} ({self.source})"
+
+    def get_profile_display(self):
+        try:
+            schema = getattr(self, 'schema')
+            portfolio = getattr(schema, schema.portfolio_relation_name)
+            return portfolio.portfolio.profile
+        except Exception:
+            return "Unknown"
+
+    def get_holdings_for_column(self):
+        """
+        Subclasses must override to return the relevant queryset for holdings.
+        """
+        raise NotImplementedError(
+            "Subclasses must implement get_holdings_for_column")
 
     def clean(self):
         if self.source in ['asset', 'holding'] and not self.source_field:
@@ -87,10 +118,12 @@ class SchemaColumn(models.Model):
         if not self.is_deletable:
             raise PermissionDenied(
                 "This column is mandatory and cannot be deleted.")
+        self.values.all().delete()
         super().delete(*args, **kwargs)
 
     def save(self, *args, **kwargs):
         asset_type = getattr(self.__class__, 'ASSET_TYPE', None)
+        is_new = self.pk is None
 
         if asset_type and self.source_field and self.source in ['asset', 'holding', 'calculated']:
             field_config = ASSET_SCHEMA_CONFIG.get(asset_type, {}).get(
@@ -110,6 +143,12 @@ class SchemaColumn(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+        # Create values for all holdings
+        if is_new:
+            for holding in self.get_holdings_for_column():
+                self.values.model.objects.get_or_create(
+                    column=self, holding=holding)
+
 
 class SchemaColumnValue(models.Model):
     value = models.TextField(blank=True, null=True)
@@ -118,13 +157,27 @@ class SchemaColumnValue(models.Model):
     class Meta:
         abstract = True
 
+    def get_portfolio_from_column(self):
+        raise NotImplementedError(
+            "Subclasses must define get_portfolio_from_column")
+
+    def get_portfolio_from_holding(self):
+        raise NotImplementedError(
+            "Subclasses must define get_portfolio_from_holding")
+
     def clean(self):
+        # Check that the column and holding point to the same portfolio
+        if self.column and self.holding:
+            if self.get_portfolio_from_column() != self.get_portfolio_from_holding():
+                raise ValidationError(
+                    "Mismatched portfolio between column and holding.")
+
         # Prevent empty value from being saved if marked as edited
         if self.is_edited and self.value in [None, '']:
             raise ValidationError(
                 f"Cannot set '{self.column.title}' as edited with an empty value."
             )
-        
+
         # Only validate type if this is an override
         if self.is_edited and self.value is not None:
             expected_type = self.column.data_type
@@ -179,7 +232,8 @@ class SchemaColumnValue(models.Model):
                     self.value = None
                     self.is_edited = False
                 except (TypeError, ValueError):
-                    raise ValidationError(f"Invalid numeric value for '{self.column.title}'")
+                    raise ValidationError(
+                        f"Invalid numeric value for '{self.column.title}'")
 
         super().save(*args, **kwargs)
 
@@ -205,7 +259,6 @@ class SchemaColumnValue(models.Model):
                 return self.value
             except (TypeError, ValueError):
                 return self.value  # Fallback as-is for safety
-
 
         if column.source == 'asset':
             # Fetch from asset (e.g., stock price)

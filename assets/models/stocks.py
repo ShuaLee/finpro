@@ -65,6 +65,26 @@ class StockHolding(AssetHolding):
     def asset(self):
         return self.stock
 
+    def __str__(self):
+        return f"{self.stock} ({self.quantity} shares)"
+
+    def get_asset_type(self):
+        return 'stock'
+
+    def get_active_schema(self):
+        return self.self_managed_account.active_schema
+
+    def get_column_model(self):
+        from schemas.models.stocks import StockPortfolioSC
+        return StockPortfolioSC
+
+    def get_column_value_model(self):
+        from schemas.models.stocks import StockPortfolioSCV
+        return StockPortfolioSCV
+
+    def get_profile_currency(self):
+        return self.self_managed_account.stock_portfolio.portfolio.profile.currency
+
     class Meta:
         indexes = [
             models.Index(fields=['self_managed_account']),
@@ -76,67 +96,3 @@ class StockHolding(AssetHolding):
                 name='unique_holding_per_account'
             ),
         ]
-
-    def __str__(self):
-        return f"{self.stock} ({self.quantity} shares)"
-    
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-
-        if is_new:
-            from schemas.models.stocks import StockPortfolioSCV
-            schema = self.self_managed_account.active_schema
-            if schema:
-                for column in schema.columns.all():
-                    StockPortfolioSCV.objects.get_or_create(
-                        column=column,
-                        holding=self
-                    )
-    
-    def clean(self):
-        if self.quantity is not None and self.quantity < 0:
-            raise ValidationError("Quantity cannot be negative.")
-
-    def delete(self, *args, **kwargs):
-        self.column_values.all().delete()
-        super().delete(*args, **kwargs)
-
-    def get_profile_currency(self):
-        return self.self_managed_account.stock_portfolio.portfolio.profile.currency
-
-    # Methods for calculated ASSET_SCHEMA_CONFIG
-    def get_column_value(self, source_field):
-        return super().get_column_value(
-            source_field,
-            asset_type='stock',
-            get_schema=lambda: self.self_managed_account.active_schema,
-            column_model=StockPortfolioSC,
-            column_value_model=StockPortfolioSCV,
-        )
-    
-    def get_current_value(self):
-        # Use edited values if available via SchemaColumnValue
-        quantity = self.get_column_value('quantity')
-        price = self.get_column_value('price')
-
-        try:
-            if quantity is not None and price is not None:
-                return round(float(quantity) * float(price), 2)
-        except (TypeError, ValueError):
-            pass
-        return None
-
-    def get_current_value_profile_fx(self):
-        price = self.get_column_value('price')
-        quantity = self.get_column_value('quantity')
-        from_currency = self.stock.currency
-        to_currency = self.self_managed_account.stock_portfolio.portfolio.profile.currency
-        fx_rate = get_fx_rate(from_currency, to_currency)
-
-        try:
-            if quantity is not None and price is not None and fx_rate is not None:
-                return round(float(quantity) * float(price) * float(fx_rate), 2)
-        except (TypeError, ValueError):
-            pass
-        return None
