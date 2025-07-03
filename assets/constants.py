@@ -72,7 +72,7 @@ ASSET_SCHEMA_CONFIG = {
     },
     'precious_metal': {
         'asset': {
-            'metal': {
+            'name': {
                 'data_type': 'string',
                 'editable': False,
                 'field_path': 'holding.preciousmetal.name'
@@ -87,13 +87,13 @@ ASSET_SCHEMA_CONFIG = {
             'quantity': {
                 'data_type': 'decimal',
                 'editable': True,
-                'field_path': 'holding.weight_oz',
+                'field_path': 'holding.quantity',
                 'decimal_spaces': 4,
             },
             'purchase_price': {
                 'data_type': 'decimal',
                 'editable': True,
-                'field_path': 'holding.purchase_price_per_oz',
+                'field_path': 'holding.purchase_price',
                 'decimal_spaces': 2,
             },
         },
