@@ -7,7 +7,7 @@ from .base import Asset, AssetHolding
 
 
 class PreciousMetal(Asset):
-    symbol = models.CharField(max_length=10, unqiue=True)
+    symbol = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=50)
     price = models.DecimalField(
         max_digits=20, decimal_places=4, null=True, blank=True)

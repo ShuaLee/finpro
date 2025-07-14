@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from assets.models.metals import PreciousMetalHolding
 from .base import Schema, SchemaColumn, SchemaColumnValue
 
 
@@ -51,7 +52,7 @@ class MetalPortfolioSCV(SchemaColumnValue):
         related_name='values'
     )
     holding = models.ForeignKey(
-        'assets.MetalHolding',
+        PreciousMetalHolding,
         on_delete=models.CASCADE,
         related_name='column_values'
     )

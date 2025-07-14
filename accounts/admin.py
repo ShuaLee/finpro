@@ -21,6 +21,7 @@ class SelfManagedAccountAdmin(admin.ModelAdmin):
     get_user_email.short_description = "User Email"
     get_user_email.admin_order_field = "stock_portfolio__portfolio__profile__user__email"
 
+
 @admin.register(ManagedAccount)
 class ManagedAccountAdmin(admin.ModelAdmin):
     list_display = ('name', 'stock_portfolio', 'current_value',
@@ -29,14 +30,16 @@ class ManagedAccountAdmin(admin.ModelAdmin):
         'name', 'stock_portfolio__portfolio__profile__user__email')
     list_filter = ('stock_portfolio', 'currency')
 
+
 """
 METALS
 """
 
+
 @admin.register(StorageFacility)
 class StorageFacilityAdmin(admin.ModelAdmin):
     list_display = ('name', 'get_user_email',
-                    'metal_portfolio', 'created_at', 'last_synced')
+                    'created_at', 'last_synced')  # add 'metal_portfolio',
     list_filter = ('created_at',)
     search_fields = ('name', 'metal_portfolio__name',
                      'metal_portfolio__portfolio__profile__user__email')

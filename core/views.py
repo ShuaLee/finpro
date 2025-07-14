@@ -1,9 +1,14 @@
+from django.contrib.auth import authenticate
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import InvalidToken
 from .serializers import PortfolioSerializer, ProfileSerializer, SignupCompleteSerializer
+
 
 class PortfolioDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -12,6 +17,7 @@ class PortfolioDetailView(APIView):
         portfolio = request.user.profile.portfolio
         serializer = PortfolioSerializer(portfolio)
         return Response(serializer.data)
+
 
 class SignupCompleteView(generics.CreateAPIView):
     serializer_class = SignupCompleteSerializer
@@ -59,3 +65,70 @@ class ProfileView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CookieLoginView(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            return Response({"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        refresh = RefreshToken.for_user(user)
+
+        response = Response({"detail": "Login successful"},
+                            status=status.HTTP_200_OK)
+        response.set_cookie(
+            key="access",
+            value=str(refresh.access_token),
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 5  # 5 minutes
+        )
+        response.set_cookie(
+            key="refresh",
+            value=str(refresh),
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 7  # 7 days
+        )
+        return response
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CookieLogoutView(APIView):
+    def post(self, request):
+        response = Response({"detail": "Logged out"},
+                            status=status.HTTP_200_OK)
+        response.delete_cookie("access")
+        response.delete_cookie("refresh")
+        return response
+
+
+class CookieRefreshView(APIView):
+    def post(self, request):
+        refresh_token = request.COOKIES.get("refresh")
+        if not refresh_token:
+            return Response({"detail": "No refresh token"}, status=401)
+
+        try:
+            refresh = RefreshToken(refresh_token)
+            access_token = str(refresh.access_token)
+        except InvalidToken:
+            return Response({"detail": "Invalid refresh"}, status=401)
+
+        res = Response({"detail": "Token refreshed"})
+        res.set_cookie(
+            "access",
+            access_token,
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 5,
+        )
+        return res
