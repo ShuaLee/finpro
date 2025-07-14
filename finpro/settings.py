@@ -14,6 +14,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import pycountry
+import sys
+
 
 CURRENCY_CHOICES = [
     (currency.alpha_3, currency.name)
@@ -22,7 +24,7 @@ CURRENCY_CHOICES = [
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+sys.path.insert(0, str(BASE_DIR / "apps"))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -40,6 +42,10 @@ ALLOWED_HOSTS = []
 
 # Application definition
 
+"""
+ONCE DONE APP MOVEMENT COME BACK HERE.
+"""
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -51,7 +57,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'accounts.apps.AccountsConfig',
     'assets.apps.AssetsConfig',
-    'core.apps.CoreConfig',
+    'users',
+    'finances',
     'portfolios.apps.PortfoliosConfig',
     'schemas.apps.SchemasConfig',
 ]
@@ -143,7 +150,7 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-AUTH_USER_MODEL = 'core.User'
+AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
