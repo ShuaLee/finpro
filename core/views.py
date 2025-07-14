@@ -2,12 +2,16 @@ from django.contrib.auth import authenticate
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics, status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken
 from .serializers import PortfolioSerializer, ProfileSerializer, SignupCompleteSerializer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PortfolioDetailView(APIView):
@@ -132,3 +136,10 @@ class CookieRefreshView(APIView):
             max_age=60 * 5,
         )
         return res
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auth_status(request):
+    logger.debug(f"Cookies: {request.COOKIES}")
+    return Response({"isAuthenticated": True})
