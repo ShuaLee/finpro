@@ -52,13 +52,3 @@ def get_portfolio(profile: Profile) -> Portfolio:
     """
     return Portfolio.objects.get(profile=profile)
 
-
-def mark_setup_complete(portfolio: Portfolio) -> None:
-    """
-    Marks the portfolio as fully initialized.
-
-    Args:
-        portfolio (Portfolio): The portfolio to update.
-    """
-    portfolio.profile_setup_complete = True
-    portfolio.save(update_fields=["profile_setup_complete"])

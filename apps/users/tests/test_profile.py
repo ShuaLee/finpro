@@ -1,39 +1,34 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework.test import APIClient
+from django.urls import reverse
 
 User = get_user_model()
 
 class ProfileUpdateTests(TestCase):
     def setUp(self):
-        self.client = APIClient()
+        self.user = User.objects.create_user(email="profileuser@example.com", password="password123")
+        self.client.force_authenticate(user=self.user)
 
-    def test_profile_update(self):
-        user = User.objects.create_user(
-            email="jane@example.com", password="Helpome123",
-            first_name="Jane", last_name="Doe", birth_date="2000-01-01"
-        )
-
-        login_response = self.client.post(
-            '/auth/jwt/create/',
-            {
-                "email": "jane@example.com",
-                "password": "Helpome123"
-            },
-            content_type='application/json'
-        )
-
-        self.assertEqual(login_response.status_code, 200)
-
-        access_token = login_response.json()['access']
-        self.client.credentials(HTTP_AUTHORIZATION='JWT ' + access_token)
-
-        response = self.client.patch('/api/profile/', {
-            "language": "fr",
-            "currency": "EUR"
-        }, content_type='application/json')
+    def test_get_profile(self):
+        url = reverse('profile-detail')
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertIn('country', response.data)
+        self.assertIn('preferred_currency', response.data)
 
-        user.profile.refresh_from_db()
-        self.assertEqual(user.profile.language, "fr")
-        self.assertEqual(user.profile.currency, "EUR")
+    def test_update_profile(self):
+        url = reverse('profile-detail')
+        data = {"country": "GB", "preferred_currency": "GBP", "plan": "premium"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["country"], "GB")
+        self.assertEqual(response.data["preferred_currency"], "GBP")
+        self.assertEqual(response.data["plan"], "premium")
+
+    def test_update_profile_account_type_and_plan(self):
+        url = reverse('profile-detail')
+        data = {"account_type": "manager", "plan": "premium"}
+        response = self.client.patch(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["account_type"], "manager")
+        self.assertEqual(response.data["plan"], "premium")

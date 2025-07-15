@@ -27,7 +27,6 @@ class PortfolioSerializer(serializers.ModelSerializer):
             "id",
             "profile",
             "created_at",
-            "profile_setup_complete",
             "stock_portfolio",
             "metal_portfolio",
         ]

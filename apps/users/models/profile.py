@@ -6,6 +6,18 @@ Defines the Profile model, which extends user functionality with additional fiel
 
 from django.conf import settings
 from django.db import models
+import pycountry
+
+CURRENCY_CHOICES = [
+    (currency.alpha_3, currency.name)
+    for currency in pycountry.currencies
+]
+
+COUNTRY_CHOICES = [
+    (country.alpha_2, country.name)  # alpha_2 for compact storage
+    for country in pycountry.countries
+]
+
 
 
 class Profile(models.Model):
@@ -16,7 +28,8 @@ class Profile(models.Model):
         account_type (str): Individual or manager.
         plan (str): Subscription tier (Free, Premium).
         language (str): Preferred language.
-        currency (str): Preferred currency code.
+        country (str): User's country.
+        preferred_currency (str): Preferred currency code.
         theme (str): UI theme preference.
         is_asset_manager (bool): Indicates if user manages assets for others.
         receive_email_updates (bool): Email subscription preference.
@@ -42,12 +55,8 @@ class Profile(models.Model):
         max_length=20, choices=ACCOUNT_TYPES, default='individual')
     plan = models.CharField(max_length=20, choices=PLAN_TIERS, default='free')
     language = models.CharField(max_length=30, blank=False, default="en")
-    currency = models.CharField(
-        max_length=3,
-        choices=settings.CURRENCY_CHOICES,
-        blank=False,
-        default="USD"
-    )
+    country = models.CharField(max_length=100, choices=COUNTRY_CHOICES, default="US")
+    preferred_currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES, default="USD")
     theme = models.CharField(
         max_length=10, choices=THEME_CHOICES, default='system')
     is_asset_manager = models.BooleanField(default=False)

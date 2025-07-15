@@ -31,7 +31,8 @@ class PortfolioEndpointTests(APITestCase):
         url = reverse('portfolio-detail')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('profile_setup_complete', response.data)
+        self.assertIn('id', response.data) 
+        self.assertIn('created_at', response.data)
 
     def test_get_portfolio_when_none_exists(self):
         url = reverse('portfolio-detail')

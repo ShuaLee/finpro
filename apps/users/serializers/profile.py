@@ -21,11 +21,10 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            'email', 'currency', 'language',
-            'created_at', 'receive_email_updates',
-            'theme'
+            'id', 'account_type', 'plan', 'language', 'country', 'preferred_currency',
+            'theme', 'is_asset_manager', 'receive_email_updates', 'created_at'
         ]
-        read_only_fields = ['created_at', 'email']
+        read_only_fields = ['id', 'created_at']
 
     def get_email(self, obj):
         """
