@@ -26,31 +26,22 @@ class ProfileView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """
-        Retrieve the authenticated user's profile.
-        """
         profile = request.user.profile
         serializer = self.get_serializer(profile)
         return Response(serializer.data)
 
     def put(self, request):
-        """
-        Replace the entire profile with provided data.
-        """
         profile = request.user.profile
-        serializer = self.get_serializer(
-            profile, data=request.data, partial=False)
+        serializer = self.get_serializer(profile, data=request.data, partial=False)
         serializer.is_valid(raise_exception=True)
+        validate_required_profile_fields(serializer.validated_data, partial=False)
         serializer.save()
         return Response(serializer.data)
 
     def patch(self, request):
-        """
-        Partially update the user's profile.
-        """
         profile = request.user.profile
-        serializer = self.get_serializer(
-            profile, data=request.data, partial=True)
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        validate_required_profile_fields(serializer.validated_data, partial=True)
         serializer.save()
         return Response(serializer.data)

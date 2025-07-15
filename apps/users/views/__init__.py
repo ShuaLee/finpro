@@ -1,4 +1,4 @@
-from .auth import SignupCompleteView, CookieLoginView, CookieLogoutView, CookieRefreshView
+from .auth import SignupView, CookieLoginView, CookieLogoutView, CookieRefreshView
 from .profile import ProfileView
 from .status import auth_status
 

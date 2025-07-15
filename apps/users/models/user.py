@@ -4,7 +4,6 @@ users.models.user
 Defines the custom User model and its manager for authentication.
 """
 
-from datetime import date
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -14,7 +13,7 @@ class UserManager(BaseUserManager):
     Custom manager for User model with helper methods to create users and superusers.
     """
 
-    def create_user(self, email, password, first_name, last_name, birth_date, **extra_fields):
+    def create_user(self, email, password, first_name, last_name=None, is_over_13=False, **extra_fields):
         """
         Create and return a regular user.
 
@@ -22,57 +21,52 @@ class UserManager(BaseUserManager):
             email (str): User's email (required, unique).
             password (str): Password (hashed before saving).
             first_name (str): First name.
-            last_name (str): Last name.
-            birth_date (date): Date of birth.
+            last_name (str): Last name (optional).
+            is_over_13 (bool): Age confirmation.
             extra_fields (dict): Additional model fields.
 
         Raises:
-            ValueError: If any required field is missing.
-
-        Returns:
-            User: The created user instance.
+            ValueError: If required fields are missing.
         """
+
         if not email:
             raise ValueError("The Email field must be set.")
         if not first_name:
             raise ValueError("The First Name field must be set.")
-        if not last_name:
-            raise ValueError("The Last Name field must be set.")
-        if not birth_date:
-            raise ValueError("Birth date is required.")
+        if not is_over_13:
+            raise ValueError("User must confirm they are over 13 years old.")
 
         email = self.normalize_email(email)
         user = self.model(
             email=email,
             first_name=first_name,
-            last_name=last_name,
-            birth_date=birth_date,
+            last_name=last_name or '',
+            is_over_13=is_over_13,
             **extra_fields
         )
         user.set_password(password)
         user.save(using=self._db)
-
         return user
 
-    def create_superuser(self, email, password, first_name, last_name, birth_date=None, **extra_fields):
+    def create_superuser(self, email, password, first_name, last_name=None, **extra_fields):
         """
         Create and return a superuser with admin privileges.
         """
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+
         if extra_fields.get('is_staff') is not True:
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get('is_superuser') is not True:
             raise ValueError("Superuser must have is_superuser=True.")
 
-        # Use a default birth_date for superusers to avoid terminal issues
-        birth_date = birth_date or date(1970, 1, 1)
+        # Superusers bypass age confirmation
         return self.create_user(
             email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name,
-            birth_date=birth_date,
+            last_name=last_name or '',
+            is_over_13=True,  # Always true for superusers
             **extra_fields
         )
 
@@ -84,14 +78,13 @@ class User(AbstractUser):
     Fields:
         email (unique): Primary identifier.
         first_name, last_name: User's personal details.
-        birth_date: Required date of birth.
-        is_active, is_staff, is_superuser: Standard Django flags.
+        is_over_13: Boolean for legal compliance (COPPA/GDPR-lite).
     """
     username = None
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30, blank=False)
-    last_name = models.CharField(max_length=30, blank=False)
-    birth_date = models.DateField(blank=False)
+    last_name = models.CharField(max_length=30, blank=True, null=True)
+    is_over_13 = models.BooleanField(default=False)  # ✅ New field
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
@@ -99,8 +92,9 @@ class User(AbstractUser):
     last_login = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
+
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['first_name', 'last_name', 'birth_date']
+    REQUIRED_FIELDS = ['first_name']  # ✅ Only first name required now
 
     def __str__(self):
-        return f'{self.email} - {self.first_name} {self.last_name}'
+        return f'{self.email} - {self.first_name} {self.last_name or ""}'

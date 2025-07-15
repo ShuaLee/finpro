@@ -36,15 +36,11 @@ class SignupView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
-        # Validate input and create user
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        user = serializer.save()  # Creates user + initializes profile
 
-        # Initialize Profile and Portfolio after user creation
-        bootstrap_user_profile_and_portfolio(user)
-
-        # Generate JWT tokens for the user
+        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': str(refresh),

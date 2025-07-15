@@ -14,17 +14,18 @@ class ProfileSerializer(serializers.ModelSerializer):
     Serializer for reading and updating Profile data.
 
     Fields:
-        email (from related user), currency, language, created_at, theme, receive_email_updates
+        email (from related user), account_type, plan, language, country,
+        preferred_currency, birth_date, is_asset_manager, receive_email_updates
     """
     email = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
         fields = [
-            'id', 'account_type', 'plan', 'language', 'country', 'preferred_currency',
-            'theme', 'is_asset_manager', 'receive_email_updates', 'created_at'
+            'id', 'email', 'account_type', 'plan', 'language', 'country', 'preferred_currency',
+            'birth_date', 'is_asset_manager', 'receive_email_updates', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'email', 'created_at']
 
     def get_email(self, obj):
         """
@@ -32,21 +33,26 @@ class ProfileSerializer(serializers.ModelSerializer):
         """
         return obj.user.email
 
-    def validate_currency(self, value):
+    def validate_preferred_currency(self, value):
         """
         Ensure currency is valid ISO code based on system settings.
         """
         valid_codes = [code for code, name in settings.CURRENCY_CHOICES]
         if value not in valid_codes:
             raise serializers.ValidationError(
-                f"Invalid currency code. Must be a valid ISO 4217 code (e.g., USD, EUR, AUD).")
+                "Invalid currency code. Must be a valid ISO 4217 code (e.g., USD, EUR, AUD)."
+            )
         return value
 
     def update(self, instance, validated_data):
         """
-        Update only allowed fields in the Profile model.
+        Update allowed fields in the Profile model.
         """
-        for field in ['currency', 'language', 'theme', 'receive_email_updates']:
+        allowed_fields = [
+            'account_type', 'plan', 'language', 'country',
+            'preferred_currency', 'birth_date', 'is_asset_manager', 'receive_email_updates'
+        ]
+        for field in allowed_fields:
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         instance.save()

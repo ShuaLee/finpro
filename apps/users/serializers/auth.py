@@ -20,8 +20,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
     """
     class Meta(BaseUserCreateSerializer.Meta):
         model = get_user_model()
-        fields = ('id', 'email', 'first_name',
-                  'last_name', 'birth_date', 'password')
+        fields = ('id', 'email', 'first_name', 'last_name', 'password')
 
 
 class SignupSerializer(serializers.Serializer):
@@ -31,28 +30,27 @@ class SignupSerializer(serializers.Serializer):
     Responsibilities:
     - Validate email uniqueness
     - Validate password against Django's password policies
-    - Ensure user is at least 13 years old
+    - Confirm user is over 13 years old (checkbox)
     - Create user and default Profile
 
     Fields:
-        email, first_name, last_name, password, birth_date, country, preferred_currency
+        email, first_name, last_name (optional), password, is_over_13,
+        country (optional), preferred_currency (optional)
     """
 
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=30)
-    last_name = serializers.CharField(max_length=30)
+    last_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
-    birth_date = serializers.DateField(required=True)
+    is_over_13 = serializers.BooleanField()
 
-    # Only allow country and preferred_currency at signup
+    # Optional profile fields
     country = serializers.CharField(required=False)
     preferred_currency = serializers.CharField(required=False)
 
-    def validate_birth_date(self, value):
-        today = date.today()
-        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
-        if age < 13:
-            raise serializers.ValidationError("User must be at least 13 years old.")
+    def validate_is_over_13(self, value):
+        if value is not True:
+            raise serializers.ValidationError("You must confirm you are at least 13 years old.")
         return value
 
     def validate_email(self, value):
@@ -74,7 +72,6 @@ class SignupSerializer(serializers.Serializer):
         preferred_currency = validated_data.pop('preferred_currency', 'USD')
 
         user = User.objects.create_user(**validated_data)
-
         profile = bootstrap_user_profile_and_portfolio(user, country, preferred_currency)
 
         # Set language from Accept-Language header

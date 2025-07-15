@@ -19,7 +19,6 @@ COUNTRY_CHOICES = [
 ]
 
 
-
 class Profile(models.Model):
     """
     Stores additional details about a user that are not part of authentication.
@@ -30,7 +29,7 @@ class Profile(models.Model):
         language (str): Preferred language.
         country (str): User's country.
         preferred_currency (str): Preferred currency code.
-        theme (str): UI theme preference.
+        birth_date (date): Optional user-provided birth date.
         is_asset_manager (bool): Indicates if user manages assets for others.
         receive_email_updates (bool): Email subscription preference.
     """
@@ -43,23 +42,15 @@ class Profile(models.Model):
         ('free', 'Free'),
         ('premium', 'Premium'),
     ]
-    THEME_CHOICES = [
-        ('light', 'Light'),
-        ('dark', 'Dark'),
-        ('system', 'System Default'),
-    ]
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    account_type = models.CharField(
-        max_length=20, choices=ACCOUNT_TYPES, default='individual')
     plan = models.CharField(max_length=20, choices=PLAN_TIERS, default='free')
     language = models.CharField(max_length=30, blank=False, default="en")
     country = models.CharField(max_length=100, choices=COUNTRY_CHOICES, default="US")
     preferred_currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES, default="USD")
-    theme = models.CharField(
-        max_length=10, choices=THEME_CHOICES, default='system')
-    is_asset_manager = models.BooleanField(default=False)
+    birth_date = models.DateField(blank=True, null=True)
+    account_type = models.CharField(max_length=50, null=True, blank=True) # Null / Blank for now to compensate for future expansion. - account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='individual')
     receive_email_updates = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -70,5 +61,6 @@ class Profile(models.Model):
         """
         Override save to enforce uppercase currency codes.
         """
-        self.currency = self.currency.upper()
+        if self.preferred_currency:
+            self.preferred_currency = self.preferred_currency.upper()
         super().save(*args, **kwargs)
