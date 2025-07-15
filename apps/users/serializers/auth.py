@@ -1,3 +1,9 @@
+"""
+users.serializers.auth
+~~~~~~~~~~~~~~~~~~~~~~
+Contains serializers for authentication and signup logic.
+"""
+
 from datetime import date
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from django.contrib.auth import get_user_model
@@ -7,13 +13,29 @@ from ..models import Profile
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
+    """
+    Serializer for creating a user via Django's ORM.
+    Typically used internally for user creation.
+    """
     class Meta(BaseUserCreateSerializer.Meta):
         model = get_user_model()
         fields = ('id', 'email', 'first_name',
                   'last_name', 'birth_date', 'password')
 
 
-class SignupCompleteSerializer(serializers.Serializer):
+class SignupSerializer(serializers.Serializer):
+    """
+    Handles user signup validation and creation.
+
+    Responsibilities:
+    - Validate email uniqueness
+    - Validate password against Django's password policies
+    - Ensure user is at least 13 years old
+    - Create user and default Profile
+
+    Fields:
+        email, first_name, last_name, password, birth_date
+    """
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=30)
     last_name = serializers.CharField(max_length=30)
@@ -22,6 +44,9 @@ class SignupCompleteSerializer(serializers.Serializer):
     birth_date = serializers.DateField(required=True)
 
     def validate_birth_date(self, value):
+        """
+        Ensure user is at least 13 years old.
+        """
         today = date.today()
         age = today.year - value.year - \
             ((today.month, today.day) < (value.month, value.day))
@@ -31,13 +56,18 @@ class SignupCompleteSerializer(serializers.Serializer):
         return value
 
     def validate_email(self, value):
+        """
+        Ensure email is unique.
+        """
         if get_user_model().objects.filter(email=value).exists():
             raise serializers.ValidationError(
                 "A user with this email already exists.")
         return value
 
     def validate_password(self, value):
-        # Use Django's password validation
+        """
+        Validate password using Django's built-in validators.
+        """
         user = get_user_model()(
             email=self.initial_data.get('email', ''),
             first_name=self.initial_data.get('first_name', ''),
@@ -51,6 +81,9 @@ class SignupCompleteSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
+        """
+        Create user and initialize related Profile.
+        """
         user_data = {
             'email': validated_data['email'],
             'first_name': validated_data['first_name'],

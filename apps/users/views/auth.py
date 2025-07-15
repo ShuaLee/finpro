@@ -1,3 +1,12 @@
+"""
+users.views.auth
+~~~~~~~~~~~~~~~~
+Handles authentication-related API endpoints:
+- User signup completion
+- Cookie-based login, logout
+- Token refresh
+"""
+
 from django.contrib.auth import authenticate
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -8,25 +17,34 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken
 from users.services import bootstrap_user_profile_and_portfolio
-from ..serializers import SignupCompleteSerializer
+from ..serializers import SignupSerializer
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class SignupCompleteView(generics.CreateAPIView):
-    serializer_class = SignupCompleteSerializer
+class SignupView(generics.CreateAPIView):
+    """
+    Completes the signup process by creating a user and returning JWT tokens.
+
+    Workflow:
+    - Validates user data via serializer
+    - Creates the user and initializes Profile + Portfolio
+    - Returns JWT tokens (access & refresh)
+    """
+    serializer_class = SignupSerializer
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
+        # Validate input and create user
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Initializing Profile and Portfolio
+        # Initialize Profile and Portfolio after user creation
         bootstrap_user_profile_and_portfolio(user)
 
-        # Generate tokens
+        # Generate JWT tokens for the user
         refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': str(refresh),
@@ -39,16 +57,26 @@ class SignupCompleteView(generics.CreateAPIView):
             }
         }, status=status.HTTP_201_CREATED)
 
+
 @method_decorator(csrf_exempt, name="dispatch")
 class CookieLoginView(APIView):
+    """
+    Handles user login and sets JWT tokens in HttpOnly cookies.
+
+    - Validates credentials using Django's authenticate()
+    - Returns response with JWT tokens stored in cookies
+    """
+
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
 
+        # Authenticate user
         user = authenticate(request, email=email, password=password)
         if user is None:
             return Response({"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
+        # Generate tokens and set as cookies
         refresh = RefreshToken.for_user(user)
 
         response = Response({"detail": "Login successful"},
@@ -74,6 +102,10 @@ class CookieLoginView(APIView):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class CookieLogoutView(APIView):
+    """
+    Logs out the user by clearing JWT cookies.
+    """
+
     def post(self, request):
         response = Response({"detail": "Logged out"},
                             status=status.HTTP_200_OK)
@@ -83,6 +115,10 @@ class CookieLogoutView(APIView):
 
 
 class CookieRefreshView(APIView):
+    """
+    Refreshes the access token using the refresh token from cookies.
+    """
+
     def post(self, request):
         refresh_token = request.COOKIES.get("refresh")
         if not refresh_token:

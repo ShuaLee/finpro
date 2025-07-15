@@ -1,10 +1,37 @@
+"""
+users.models.user
+~~~~~~~~~~~~~~~~~
+Defines the custom User model and its manager for authentication.
+"""
+
 from datetime import date
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
 
 class UserManager(BaseUserManager):
+    """
+    Custom manager for User model with helper methods to create users and superusers.
+    """
+
     def create_user(self, email, password, first_name, last_name, birth_date, **extra_fields):
+        """
+        Create and return a regular user.
+
+        Args:
+            email (str): User's email (required, unique).
+            password (str): Password (hashed before saving).
+            first_name (str): First name.
+            last_name (str): Last name.
+            birth_date (date): Date of birth.
+            extra_fields (dict): Additional model fields.
+
+        Raises:
+            ValueError: If any required field is missing.
+
+        Returns:
+            User: The created user instance.
+        """
         if not email:
             raise ValueError("The Email field must be set.")
         if not first_name:
@@ -28,6 +55,9 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password, first_name, last_name, birth_date=None, **extra_fields):
+        """
+        Create and return a superuser with admin privileges.
+        """
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         if extra_fields.get('is_staff') is not True:
@@ -48,6 +78,15 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
+    """
+    Custom User model using email instead of username for authentication.
+
+    Fields:
+        email (unique): Primary identifier.
+        first_name, last_name: User's personal details.
+        birth_date: Required date of birth.
+        is_active, is_staff, is_superuser: Standard Django flags.
+    """
     username = None
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30, blank=False)

@@ -1,8 +1,27 @@
+"""
+users.models.profile
+~~~~~~~~~~~~~~~~~~~~
+Defines the Profile model, which extends user functionality with additional fields.
+"""
+
 from django.conf import settings
 from django.db import models
 
 
 class Profile(models.Model):
+    """
+    Stores additional details about a user that are not part of authentication.
+
+    Fields:
+        account_type (str): Individual or manager.
+        plan (str): Subscription tier (Free, Premium).
+        language (str): Preferred language.
+        currency (str): Preferred currency code.
+        theme (str): UI theme preference.
+        is_asset_manager (bool): Indicates if user manages assets for others.
+        receive_email_updates (bool): Email subscription preference.
+    """
+
     ACCOUNT_TYPES = [
         ('individual', 'Individual'),
         ('manager', 'Manager'),
@@ -39,5 +58,8 @@ class Profile(models.Model):
         return self.user.email
 
     def save(self, *args, **kwargs):
+        """
+        Override save to enforce uppercase currency codes.
+        """
         self.currency = self.currency.upper()
         super().save(*args, **kwargs)

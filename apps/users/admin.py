@@ -1,16 +1,29 @@
+"""
+users.admin
+~~~~~~~~~~~
+Registers custom User and Profile models with the Django admin interface,
+including useful list displays and filters for better manageability.
+"""
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from portfolios.models import Portfolio
 from .models import User, Profile, FXRate
 
-# Register your models here.
-
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    """
+    Custom admin configuration for the User model.
+
+    Features:
+    - Displays key identity fields (email, name, active status).
+    - Enables quick search by email and name.
+    """
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
-        ('Personal info', {'fields': ('first_name', 'last_name', 'birth_date')}),
+        ('Personal info', {
+         'fields': ('first_name', 'last_name', 'birth_date')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser')}),
     )
     add_fieldsets = (
@@ -35,5 +48,12 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
+    """
+    Custom admin configuration for the Profile model.
+
+    Features:
+    - Displays user and account type.
+    - Allows filtering by plan and account type.
+    """
     list_display = ('user',)
     search_fields = ('user__email',)

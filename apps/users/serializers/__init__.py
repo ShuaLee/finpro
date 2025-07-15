@@ -1,9 +1,9 @@
-from .auth import SignupCompleteSerializer
+from .auth import SignupSerializer
 from .profile import ProfileSerializer
 from .user import UserSerializer
 
 __all__ = [
-    "SignupCompleteSerializer",
+    "SignupSerializer",
     "ProfileSerializer",
     "UserSerializer",
 ]
