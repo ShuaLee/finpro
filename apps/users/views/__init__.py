@@ -3,7 +3,7 @@ from .profile import ProfileView
 from .status import auth_status
 
 __all__ = [
-    "SignupCompleteView",
+    "SignupView",
     "CookieLoginView",
     "CookieLogoutView",
     "CookieRefreshView",

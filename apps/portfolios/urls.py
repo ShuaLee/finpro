@@ -6,9 +6,9 @@ Defines API routes for the main Portfolio and asset-specific portfolios.
 """
 
 from django.urls import path
-from apps.portfolios.views.portfolio import PortfolioCreateView, PortfolioDetailView
-from apps.portfolios.views.stock import StockPortfolioCreateView, StockPortfolioDashboardView
-from apps.portfolios.views.metal import MetalPortfolioCreateView
+from portfolios.views.portfolio import PortfolioCreateView, PortfolioDetailView
+from portfolios.views.stock import StockPortfolioCreateView, StockPortfolioDashboardView
+from portfolios.views.metal import MetalPortfolioCreateView
 
 urlpatterns = [
     # Main Portfolio

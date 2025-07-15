@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from portfolios.models import StockPortfolio
+from portfolios.models.stock import StockPortfolio
 from portfolios.permissions import IsPortfolioOwner
 from portfolios.services.stock_dashboard_service import get_stock_dashboard
 from apps.portfolios.serializers.stock import StockPortfolioSerializer

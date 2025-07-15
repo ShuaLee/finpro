@@ -6,7 +6,8 @@ Includes tests for stock dashboard aggregation logic.
 
 from django.test import TestCase
 from users.models import User, Profile
-from portfolios.models import Portfolio, StockPortfolio
+from portfolios.models.portfolio import Portfolio
+from portfolios.models.stock import StockPortfolio
 from portfolios.services.stock_dashboard_service import get_stock_dashboard
 
 

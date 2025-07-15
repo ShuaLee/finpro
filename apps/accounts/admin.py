@@ -1,5 +1,7 @@
+"""
+
 from django.contrib import admin
-from .models.metals import StorageFacility
+from accounts.models.metals import StorageFacility
 from .models.stocks import SelfManagedAccount, ManagedAccount
 
 
@@ -32,7 +34,7 @@ class ManagedAccountAdmin(admin.ModelAdmin):
 
 
 """
-METALS
+#METALS
 """
 
 
@@ -53,3 +55,5 @@ class StorageFacilityAdmin(admin.ModelAdmin):
             return "-"
     get_user_email.short_description = "User Email"
     get_user_email.admin_order_field = "metal_portfolio__portfolio__profile__user__email"
+
+    """

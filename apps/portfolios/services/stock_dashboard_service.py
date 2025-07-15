@@ -5,7 +5,7 @@ Stock Dashboard Service
 Handles business logic for generating a stock portfolio dashboard summary.
 """
 
-from portfolios.models import StockPortfolio
+from portfolios.models.stock import StockPortfolio
 from accounts.models.stocks import ManagedAccount
 
 

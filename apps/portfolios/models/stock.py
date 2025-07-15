@@ -17,7 +17,7 @@ Business Rules:
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from portfolios.models import Portfolio
+from portfolios.models.portfolio import Portfolio
 from .base import BaseAssetPortfolio
 
 
@@ -33,6 +33,9 @@ class StockPortfolio(BaseAssetPortfolio):
         on_delete=models.CASCADE,
         related_name='stockportfolio'
     )
+
+    class Meta:
+        app_label = 'portfolios'
 
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"

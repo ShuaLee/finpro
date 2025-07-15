@@ -16,8 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken
-from users.services import bootstrap_user_profile_and_portfolio
-from ..serializers import SignupSerializer
+from users.serializers import SignupSerializer
 import logging
 
 logger = logging.getLogger(__name__)

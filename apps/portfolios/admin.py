@@ -13,8 +13,9 @@ Features:
 """
 
 from django.contrib import admin
-from portfolios.models import Portfolio, StockPortfolio, MetalPortfolio
-
+from portfolios.models.portfolio import Portfolio
+from portfolios.models.stock import StockPortfolio
+from portfolios.models.metal import MetalPortfolio
 
 @admin.register(Portfolio)
 class PortfolioAdmin(admin.ModelAdmin):

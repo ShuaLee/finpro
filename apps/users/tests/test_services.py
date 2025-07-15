@@ -7,7 +7,7 @@ Validates domain logic in users.services module.
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from users.models import Profile
-from portfolios.models import Portfolio
+from portfolios.models.portfolio import Portfolio
 from users.services import bootstrap_user_profile_and_portfolio
 
 User = get_user_model()

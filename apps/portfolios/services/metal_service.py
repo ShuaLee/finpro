@@ -11,7 +11,8 @@ Responsibilities:
 """
 
 from django.core.exceptions import ValidationError
-from portfolios.models import Portfolio, MetalPortfolio
+from portfolios.models.portfolio import Portfolio
+from portfolios.models.metal import MetalPortfolio
 
 
 def create_metal_portfolio(portfolio: Portfolio) -> MetalPortfolio:

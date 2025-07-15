@@ -2,7 +2,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
 from users.models import User, Profile
-from portfolios.models import Portfolio
+from portfolios.models.portfolio import Portfolio
 
 class PortfolioEndpointTests(APITestCase):
 

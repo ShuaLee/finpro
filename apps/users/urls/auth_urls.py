@@ -10,7 +10,7 @@ Defines URL patterns for authentication-related endpoints:
 
 
 from django.urls import path
-from ..views import (
+from users.views import (
     SignupView, CookieLoginView, CookieLogoutView,
     CookieRefreshView, auth_status
 )

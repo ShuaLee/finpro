@@ -7,7 +7,7 @@ These functions help keep views thin by handling business processes separately.
 
 from rest_framework.exceptions import ValidationError
 from users.models import Profile
-from portfolios.models import Portfolio
+from portfolios.models.portfolio import Portfolio
 
 
 def bootstrap_user_profile_and_portfolio(user, country="US", preferred_currency="USD"):

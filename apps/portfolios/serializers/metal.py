@@ -6,7 +6,7 @@ Serializers for MetalPortfolio model.
 """
 
 from rest_framework import serializers
-from portfolios.models import MetalPortfolio
+from portfolios.models.metal import MetalPortfolio
 
 
 class MetalPortfolioSerializer(serializers.ModelSerializer):

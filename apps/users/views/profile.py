@@ -7,7 +7,7 @@ Handles profile management endpoints for authenticated users.
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from ..serializers import ProfileSerializer
+from users.serializers import ProfileSerializer
 import logging
 
 logger = logging.getLogger(__name__)

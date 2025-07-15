@@ -4,7 +4,6 @@ users.serializers.auth
 Contains serializers for authentication and signup logic.
 """
 
-from datetime import date
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password

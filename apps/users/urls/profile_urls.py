@@ -7,7 +7,7 @@ Defines URL patterns for user profile-related endpoints:
 """
 
 from django.urls import path
-from ..views import ProfileView
+from users.views import ProfileView
 
 urlpatterns = [
     # Profile management for authenticated users

@@ -6,7 +6,7 @@ Contains serializers for managing user profiles.
 
 from django.conf import settings
 from rest_framework import serializers
-from ..models import Profile
+from users.models import Profile
 
 
 class ProfileSerializer(serializers.ModelSerializer):

@@ -13,7 +13,7 @@ Responsibilities:
 
 from django.db import transaction
 from users.models import Profile
-from portfolios.models import Portfolio
+from portfolios.models.portfolio import Portfolio
 
 
 def create_portfolio(profile: Profile) -> Portfolio:

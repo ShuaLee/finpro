@@ -8,7 +8,8 @@ It also handles schema setup (if required by business rules).
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from portfolios.models import Portfolio, StockPortfolio
+from portfolios.models.portfolio import Portfolio
+from portfolios.models.stock import StockPortfolio
 from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
 from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
 
