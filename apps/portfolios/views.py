@@ -3,9 +3,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.models.stocks import ManagedAccount
 from .models.stocks import StockPortfolio
-from .serializers.portfolio import PortfolioSerializer
+from .serializers.portfolio_serializers import PortfolioSerializer
 
 # Create your views here.
+
+
 class PortfolioDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -13,7 +15,8 @@ class PortfolioDetailView(APIView):
         portfolio = request.user.profile.portfolio
         serializer = PortfolioSerializer(portfolio)
         return Response(serializer.data)
-    
+
+
 class StockPortfolioDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -24,7 +27,7 @@ class StockPortfolioDashboardView(APIView):
             )
         except StockPortfolio.DoesNotExist:
             return Response({"detail": "Stock portfolio not found."}, status=404)
-        
+
         # Serialize self-managed accounts (with schema data)
         self_managed_accounts = []
         total_self_managed_value = 0
@@ -44,7 +47,8 @@ class StockPortfolioDashboardView(APIView):
                 row = {}
                 for col in columns:
                     val = next(
-                        (cv for cv in holding.column_values.all() if cv.column_id == col.id),
+                        (cv for cv in holding.column_values.all()
+                         if cv.column_id == col.id),
                         None
                     )
                     row[col.title] = val.get_value() if val else None

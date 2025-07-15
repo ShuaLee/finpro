@@ -1,0 +1,39 @@
+"""
+Portfolio Serializers
+----------------------
+
+This module defines serializers for the main Portfolio model.
+"""
+
+from rest_framework import serializers
+from portfolios.models import Portfolio
+from portfolios.serializers.stock_serializers import StockPortfolioSerializer
+from portfolios.serializers.metal_serializers import MetalPortfolioSerializer
+
+
+class PortfolioSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Portfolio model.
+
+    Related sub-portfolios (stock, metal, etc.) are included as read-only.
+    They are created separately through dedicated endpoints.
+    """
+    stock_portfolio = StockPortfolioSerializer(read_only=True)
+    metal_portfolio = MetalPortfolioSerializer(read_only=True)
+
+    class Meta:
+        model = Portfolio
+        fields = [
+            "id",
+            "profile",
+            "created_at",
+            "profile_setup_complete",
+            "stock_portfolio",
+            "metal_portfolio",
+        ]
+        read_only_fields = ["id", "created_at", "profile_setup_complete"]
+
+    def create(self, validated_data):
+        raise NotImplementedError(
+            "Portfolio creation should be handled by portfolio_service.create_portfolio()."
+        )

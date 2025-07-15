@@ -1,8 +1,33 @@
+"""
+Main Portfolio Model
+--------------------
+
+This module defines the `Portfolio` model, which represents a user's primary portfolio. 
+It acts as the parent entity for multiple asset-specific portfolios (e.g., stocks, metals, crypto).
+
+Responsibilities:
+- Links to the user's `Profile` (one-to-one).
+- Stores global settings like `profile_setup_complete`.
+- Serves as the central entry point for managing all asset types.
+
+Business Rules:
+- One `Portfolio` per user profile.
+"""
+
 from django.db import models
 from users.models import Profile
 
 
 class Portfolio(models.Model):
+    """
+    Represents the main portfolio linked to a user's profile.
+
+    Attributes:
+        profile (OneToOneField): Each profile has one portfolio.
+        created_at (DateTime): Timestamp when the portfolio is created.
+        profile_setup_complete (bool): Indicates whether the portfolio is fully initialized.
+    """
+
     profile = models.OneToOneField(
         Profile, on_delete=models.CASCADE, related_name='portfolio'
     )
