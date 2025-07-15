@@ -1,5 +1,5 @@
 from django.db import models
-from portfolios.models.metals import MetalPortfolio
+from apps.portfolios.models.metal import MetalPortfolio
 from .base import BaseAccount
 
 class StorageFacility(BaseAccount):

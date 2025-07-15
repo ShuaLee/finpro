@@ -7,8 +7,8 @@ This module defines serializers for the main Portfolio model.
 
 from rest_framework import serializers
 from portfolios.models import Portfolio
-from portfolios.serializers.stock_serializers import StockPortfolioSerializer
-from portfolios.serializers.metal_serializers import MetalPortfolioSerializer
+from apps.portfolios.serializers.stock import StockPortfolioSerializer
+from apps.portfolios.serializers.metal import MetalPortfolioSerializer
 
 
 class PortfolioSerializer(serializers.ModelSerializer):

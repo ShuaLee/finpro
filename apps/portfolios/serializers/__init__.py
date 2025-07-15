@@ -1,6 +1,6 @@
-from .portfolio_serializers import PortfolioSerializer
-from .stock_serializers import StockPortfolioSerializer
-from .metal_serializers import MetalPortfolioSerializer
+from .portfolio import PortfolioSerializer
+from .stock import StockPortfolioSerializer
+from .metal import MetalPortfolioSerializer
 
 __all__ = [
     "PortfolioSerializer",

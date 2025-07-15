@@ -16,5 +16,5 @@ Purpose:
 """
 
 from .portfolio import Portfolio
-from .stocks import StockPortfolio
-from .metals import MetalPortfolio
+from .stock import StockPortfolio
+from .metal import MetalPortfolio

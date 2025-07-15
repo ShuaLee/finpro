@@ -38,7 +38,7 @@ class Portfolio(models.Model):
         return f"{self.profile} - {self.created_at}"
 
     def initialize_stock_portfolio(self):
-        from portfolios.models.stocks import StockPortfolio
+        from apps.portfolios.models.stock import StockPortfolio
         from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
         from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
 

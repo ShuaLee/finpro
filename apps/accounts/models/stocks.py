@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from external_data.fx import get_fx_rate
-from portfolios.models.stocks import StockPortfolio
+from apps.portfolios.models.stock import StockPortfolio
 from .base import BaseAccount
 from decimal import Decimal
 

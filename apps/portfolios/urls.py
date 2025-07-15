@@ -1,11 +1,24 @@
-from django.urls import path, include
-from .views import StockPortfolioDashboardView, PortfolioDetailView
+"""
+Portfolio App URLs
+-------------------
 
+Defines API routes for the main Portfolio and asset-specific portfolios.
+"""
+
+from django.urls import path
+from apps.portfolios.views.portfolio import PortfolioCreateView, PortfolioDetailView
+from apps.portfolios.views.stock import StockPortfolioCreateView, StockPortfolioDashboardView
+from apps.portfolios.views.metal import MetalPortfolioCreateView
 
 urlpatterns = [
-    path('stock-portfolio/', StockPortfolioDashboardView.as_view(),
-         name='stock-portfolio-dashboard'),
-    path('stock-portfolio/', include('accounts.urls.stocks')),
-    path('stock-portfolio/schemas/', include('schemas.urls')),
-    path('portfolio/', PortfolioDetailView.as_view(), name='profile'),
+    # Main Portfolio
+    path('', PortfolioCreateView.as_view(), name='create-portfolio'),       # POST
+    path('me/', PortfolioDetailView.as_view(), name='portfolio-detail'),    # GET
+
+    # Stock Portfolio
+    path('stocks/', StockPortfolioCreateView.as_view(), name='create-stock-portfolio'),
+    path('stocks/dashboard/', StockPortfolioDashboardView.as_view(), name='stock-portfolio-dashboard'),
+
+    # Metal Portfolio
+    path('metals/', MetalPortfolioCreateView.as_view(), name='create-metal-portfolio'),
 ]
