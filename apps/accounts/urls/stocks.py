@@ -1,11 +1,16 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
-from ..views.stocks import SelfManagedAccountViewSet, ManagedAccountViewSet
+from accounts.views.stocks import (
+    SelfManagedAccountListCreateView,
+    ManagedAccountListCreateView,
+    StockAccountsDashboardView,
+    AddHoldingView,
+    EditColumnValueView
+)
 
-router = DefaultRouter()
-router.register(r'self-managed-accounts',
-                SelfManagedAccountViewSet, basename='self-managed-accounts')
-router.register(r'managed-accounts', ManagedAccountViewSet,
-                basename='managed-accounts')
-
-urlpatterns = router.urls
+urlpatterns = [
+    path('self-managed/', SelfManagedAccountListCreateView.as_view(), name='self-managed-accounts'),
+    path('managed/', ManagedAccountListCreateView.as_view(), name='managed-accounts'),
+    path('dashboard/', StockAccountsDashboardView.as_view(), name='stock-accounts-dashboard'),
+    path('self-managed/<int:account_id>/holdings/', AddHoldingView.as_view(), name='add-holding'),
+    path('self-managed/column-value/<int:value_id>/', EditColumnValueView.as_view(), name='edit-column-value'),
+]
