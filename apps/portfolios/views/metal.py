@@ -11,7 +11,6 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from apps.portfolios.serializers.metal import MetalPortfolioSerializer
 from portfolios.services import metal_service, portfolio_service
-from portfolios.permissions import IsPortfolioOwner
 from users.models import Profile
 
 
@@ -19,7 +18,7 @@ class MetalPortfolioCreateView(APIView):
     """
     API endpoint for creating a MetalPortfolio under the user's main Portfolio.
     """
-    permission_classes = [IsAuthenticated, IsPortfolioOwner]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         profile = Profile.objects.get(user=request.user)

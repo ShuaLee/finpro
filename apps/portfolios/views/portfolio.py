@@ -8,7 +8,6 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from portfolios.permissions import IsPortfolioOwner
 from portfolios.serializers import PortfolioSerializer
 from portfolios.services import portfolio_service
 from users.models import Profile
@@ -18,7 +17,7 @@ class PortfolioCreateView(APIView):
     """
     API endpoint for creating a main Portfolio for a user.
     """
-    permission_classes = [IsAuthenticated, IsPortfolioOwner]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         profile = Profile.objects.get(user=request.user)
@@ -33,7 +32,7 @@ class PortfolioDetailView(APIView):
     """
     API endpoint for retrieving the user's Portfolio.
     """
-    permission_classes = [IsAuthenticated, IsPortfolioOwner]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         profile = Profile.objects.get(user=request.user)
