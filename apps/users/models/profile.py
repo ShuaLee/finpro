@@ -38,19 +38,25 @@ class Profile(models.Model):
         ('individual', 'Individual'),
         ('manager', 'Manager'),
     ]
-    PLAN_TIERS = [
-        ('free', 'Free'),
-        ('premium', 'Premium'),
-    ]
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    plan = models.CharField(max_length=20, choices=PLAN_TIERS, default='free')
+    plan = models.ForeignKey(
+        'subscriptions.Plan',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='profiles',
+        help_text="The subscription plan associated with this profile."
+    )
     language = models.CharField(max_length=30, blank=False, default="en")
-    country = models.CharField(max_length=100, choices=COUNTRY_CHOICES, default="US")
-    preferred_currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES, default="USD")
+    country = models.CharField(
+        max_length=100, choices=COUNTRY_CHOICES, default="US")
+    preferred_currency = models.CharField(
+        max_length=10, choices=CURRENCY_CHOICES, default="USD")
     birth_date = models.DateField(blank=True, null=True)
-    account_type = models.CharField(max_length=50, null=True, blank=True) # Null / Blank for now to compensate for future expansion. - account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='individual')
+    # Null / Blank for now to compensate for future expansion. - account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='individual')
+    account_type = models.CharField(max_length=50, null=True, blank=True)
     receive_email_updates = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
