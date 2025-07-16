@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from users.models import User
-from users.services import bootstrap_user_profile_and_portfolio
+from users.services import bootstrap_user_profile
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
@@ -75,7 +75,7 @@ class SignupSerializer(serializers.Serializer):
         user = User.objects.create_user(**validated_data)
 
         # Create profile with optional data
-        profile = bootstrap_user_profile_and_portfolio(user)
+        profile = bootstrap_user_profile(user)
         if first_name:
             profile.first_name = first_name
         if last_name:

@@ -11,14 +11,13 @@ from portfolios.models.portfolio import Portfolio
 from subscriptions.models import Plan, AccountType
 
 
-def bootstrap_user_profile_and_portfolio(user):
+def bootstrap_user_profile(user):
     """
     Initializes essential related objects for a new user.
 
     Initialize Profile for a new user with:
         Default Free plan
         Default AccountType: Individual Investor
-        Create associated Portfolio
 
     Args:
         user (User): The newly created user.
@@ -50,8 +49,6 @@ def bootstrap_user_profile_and_portfolio(user):
 
     profile.save(update_fields=["plan", "account_type"])
 
-    # Create a portfolio for this profile if not present
-    Portfolio.objects.get_or_create(profile=profile)
     return profile
 
 
