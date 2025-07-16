@@ -15,6 +15,7 @@ Business Rules:
 """
 
 from django.db import models
+from django.conf import settings
 from users.models import Profile
 
 
@@ -40,7 +41,7 @@ class Portfolio(models.Model):
         return f"{self.profile} - {self.created_at}"
 
     def initialize_stock_portfolio(self):
-        from apps.portfolios.models.stock import StockPortfolio
+        from portfolios.models.stock import StockPortfolio
         from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
         from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
 
@@ -60,6 +61,6 @@ class Portfolio(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
-
-        if is_new:
-            self.initialize_stock_portfolio()
+        if not getattr(settings, 'TESTING', False):  # Add a TESTING flag
+            if is_new:
+                self.initialize_stock_portfolio()

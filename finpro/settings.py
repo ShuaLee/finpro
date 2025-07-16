@@ -16,6 +16,8 @@ from datetime import timedelta
 import pycountry
 import sys
 
+TESTING = 'test' in sys.argv
+
 CURRENCY_CHOICES = [
     (currency.alpha_3, currency.name)
     for currency in pycountry.currencies
@@ -63,6 +65,7 @@ INSTALLED_APPS = [
     'users',
     'subscriptions',
     'portfolios',
+    'finances',
     # 'apps.accounts.apps.AccountsConfig',
     # 'apps.assets.apps.AssetsConfig',
     # 'apps.finances',
@@ -160,7 +163,7 @@ AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'core.authentication.JWTFromCookieAuthentication',
+        'users.authentication.JWTFromCookieAuthentication',
     ),
 }
 

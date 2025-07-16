@@ -1,6 +1,7 @@
 from django.db import models
-from apps.portfolios.models.metal import MetalPortfolio
+from portfolios.models.metal import MetalPortfolio
 from .base import BaseAccount
+
 
 class StorageFacility(BaseAccount):
     metals_portfolio = models.ForeignKey(

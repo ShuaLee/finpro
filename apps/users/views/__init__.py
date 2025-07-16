@@ -1,5 +1,5 @@
 from .auth import SignupView, CookieLoginView, CookieLogoutView, CookieRefreshView
-from .profile import ProfileView
+from .profile import ProfileView, ProfilePlanUpdateView
 from .status import auth_status
 
 __all__ = [
@@ -8,5 +8,6 @@ __all__ = [
     "CookieLogoutView",
     "CookieRefreshView",
     "ProfileView",
+    "ProfilePlanUpdateView",
     "auth_status",
 ]

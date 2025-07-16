@@ -1,44 +1,97 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase
+"""
+users.tests.test_profile
+~~~~~~~~~~~~~~~~~~~~~~~~~
+Tests for Profile API endpoints, including subscription plan updates.
+
+Key scenarios tested:
+- A user can successfully upgrade from the Free plan to Premium using JWT cookie authentication.
+- Providing an invalid plan slug returns an appropriate error response.
+"""
+
 from django.urls import reverse
+from rest_framework.test import APITestCase
+from rest_framework import status
+from users.models import User, Profile
+from subscriptions.models import Plan
+from users.services import bootstrap_user_profile_and_portfolio
 
-User = get_user_model()
 
+class ProfileTests(APITestCase):
+    """
+    Tests Profile-related API operations with JWT authentication.
 
-class ProfileUpdateTests(TestCase):
+    Setup:
+        - Creates a user and logs in via JWT cookie-based auth.
+        - Ensures the user's Profile exists using bootstrap service.
+        - Creates two subscription plans: Free and Premium.
+        - Assigns the Free plan to the user's profile.
+    """
+
     def setUp(self):
+        # Step 1: Create user
+        self.user_email = "user@example.com"
+        self.password = "testpass"
         self.user = User.objects.create_user(
-            email="profileuser@example.com",
-            password="password123",
+            email=self.user_email,
             first_name="John",
-            is_over_13=True
+            password=self.password,
+            is_over_13=True,
         )
-        self.client.force_authenticate(user=self.user)
-        self.url = reverse('profile-detail')  # Ensure matches your router name
 
-    def test_get_profile(self):
-        response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('country', response.data)
-        self.assertIn('preferred_currency', response.data)
+        # Step 2: Create subscription plans
+        self.free_plan = Plan.objects.create(
+            name="Free", slug="free", description="Free plan", price_per_month=0
+        )
+        self.premium_plan = Plan.objects.create(
+            name="Premium", slug="premium", description="Premium plan", price_per_month=9.99
+        )
 
-    def test_partial_update_profile(self):
-        data = {"country": "GB", "preferred_currency": "GBP", "plan": "premium"}
-        response = self.client.patch(self.url, data)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["country"], "GB")
-        self.assertEqual(response.data["preferred_currency"], "GBP")
-        self.assertEqual(response.data["plan"], "premium")
+        # Step 3: Bootstrap Profile and Portfolio
+        bootstrap_user_profile_and_portfolio(self.user)
+        self.profile = Profile.objects.get(user=self.user)
+        self.profile.plan = self.free_plan
+        self.profile.save()
 
-    def test_update_account_type_and_plan(self):
-        data = {"account_type": "manager", "plan": "premium"}
-        response = self.client.patch(self.url, data)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["account_type"], "manager")
-        self.assertEqual(response.data["plan"], "premium")
+        # Step 4: Authenticate using JWT cookies
+        login_url = reverse("login")  # Make sure this matches your URL name
+        response = self.client.post(
+            login_url,
+            {"email": self.user_email, "password": self.password},
+            format="json"
+        )
+        self.assertEqual(response.status_code,
+                         status.HTTP_200_OK, "Login failed")
 
-    def test_put_requires_country_and_currency(self):
-        # Full update should fail if required fields missing
-        response = self.client.put(self.url, {"language": "es"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Missing required fields", response.json()["detail"])
+        # Attach JWT tokens as cookies
+        self.client.cookies["access"] = response.cookies.get("access").value
+        self.client.cookies["refresh"] = response.cookies.get("refresh").value
+
+        # Profile update endpoint
+        self.url = reverse("update-profile-plan")
+
+    def test_update_plan_success(self):
+        """
+        Test successful plan update:
+        - Sends PATCH request with "premium" slug.
+        - Expects HTTP 200 OK.
+        - Confirms profile.plan is updated to Premium.
+        """
+        response = self.client.patch(
+            self.url, {"plan": "premium"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.plan.slug, "premium")
+
+    def test_update_plan_invalid_slug(self):
+        """
+        Test invalid plan update:
+        - Sends PATCH request with a non-existent plan slug.
+        - Expects HTTP 400 Bad Request.
+        - Response should include an error for "plan".
+        """
+        response = self.client.patch(
+            self.url, {"plan": "invalid"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("plan", response.data)

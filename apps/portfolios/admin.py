@@ -17,14 +17,15 @@ from portfolios.models.portfolio import Portfolio
 from portfolios.models.stock import StockPortfolio
 from portfolios.models.metal import MetalPortfolio
 
+
 @admin.register(Portfolio)
 class PortfolioAdmin(admin.ModelAdmin):
     """
     Admin configuration for the main Portfolio model.
     """
-    list_display = ['profile', 'created_at', 'profile_setup_complete']
+    list_display = ['profile', 'created_at']
     search_fields = ['profile__user__email']
-    list_filter = ['created_at', 'profile_setup_complete']
+    list_filter = ['created_at']
 
 
 @admin.register(StockPortfolio)
