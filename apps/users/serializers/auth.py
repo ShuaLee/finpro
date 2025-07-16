@@ -19,7 +19,7 @@ class UserCreateSerializer(BaseUserCreateSerializer):
     """
     class Meta(BaseUserCreateSerializer.Meta):
         model = get_user_model()
-        fields = ('id', 'email', 'first_name', 'last_name', 'password')
+        fields = ('id', 'email', 'password')
 
 
 class SignupSerializer(serializers.Serializer):
@@ -38,12 +38,12 @@ class SignupSerializer(serializers.Serializer):
     """
 
     email = serializers.EmailField()
-    first_name = serializers.CharField(max_length=30)
-    last_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
     is_over_13 = serializers.BooleanField()
 
     # Optional profile fields
+    first_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
     country = serializers.CharField(required=False)
     preferred_currency = serializers.CharField(required=False)
 
@@ -60,20 +60,32 @@ class SignupSerializer(serializers.Serializer):
     def validate_password(self, value):
         user = User(
             email=self.initial_data.get('email', ''),
-            first_name=self.initial_data.get('first_name', ''),
-            last_name=self.initial_data.get('last_name', '')
         )
         validate_password(value, user=user)
         return value
 
     def create(self, validated_data):
+        # Extract profile-related fields (if provided)
+        first_name = validated_data.pop('first_name', '')
+        last_name = validated_data.pop('last_name', '')
         country = validated_data.pop('country', 'US')
         preferred_currency = validated_data.pop('preferred_currency', 'USD')
 
+        # Create user
         user = User.objects.create_user(**validated_data)
-        profile = bootstrap_user_profile_and_portfolio(user, country, preferred_currency)
 
-        # Set language from Accept-Language header
+        # Create profile with optional data
+        profile = bootstrap_user_profile_and_portfolio(user)
+        if first_name:
+            profile.first_name = first_name
+        if last_name:
+            profile.last_name = last_name
+        if country:
+            profile.country = country
+        if preferred_currency:
+            profile.preferred_currency = preferred_currency
+
+        # Set language from Accept-Language header (fallback: 'en')
         profile.language = self.context.get('request').META.get(
             'HTTP_ACCEPT_LANGUAGE', 'en'
         ).split(',')[0].split('-')[0].lower() or 'en'

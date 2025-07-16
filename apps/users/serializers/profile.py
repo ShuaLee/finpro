@@ -7,7 +7,7 @@ Serializer for reading and updating Profile data, including subscription plans.
 from rest_framework import serializers
 from django.conf import settings
 from users.models import Profile
-from subscriptions.models import Plan
+from subscriptions.models import AccountType, Plan
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -33,18 +33,22 @@ class ProfileSerializer(serializers.ModelSerializer):
     """
 
     email = serializers.SerializerMethodField()
-    # ✅ Allow updating plan by slug (was read-only before)
     plan = serializers.SlugRelatedField(
         slug_field='slug',
         queryset=Plan.objects.filter(is_active=True),
+        required=False
+    )
+    account_type = serializers.SlugRelatedField(
+        slug_field='slug',
+        queryset=AccountType.objects.all(),
         required=False
     )
 
     class Meta:
         model = Profile
         fields = [
-            'id', 'email', 'account_type', 'plan', 'language', 'country',
-            'preferred_currency', 'birth_date', 'is_asset_manager',
+            'id', 'email', 'first_name', 'last_name', 'account_type', 'plan',
+            'language', 'country', 'preferred_currency', 'birth_date',
             'receive_email_updates', 'created_at'
         ]
         read_only_fields = ['id', 'email', 'created_at']
@@ -56,25 +60,21 @@ class ProfileSerializer(serializers.ModelSerializer):
     def validate_preferred_currency(self, value):
         """
         Ensure currency is a valid ISO code based on system settings.
+        Normalize to uppercase.
         """
-        valid_codes = [code for code, name in settings.CURRENCY_CHOICES]
+        value = value.upper()
+        valid_codes = [code for code, _ in settings.CURRENCY_CHOICES]
         if value not in valid_codes:
             raise serializers.ValidationError(
-                "Invalid currency code. Must be a valid ISO 4217 code (e.g., USD, EUR, AUD)."
+                f"Invalid currency code '{value}'. Must be ISO 4217 (e.g., USD, EUR, AUD)."
             )
         return value
 
     def update(self, instance, validated_data):
         """
-        Update allowed fields in the Profile model, including plan changes.
+        Update allowed fields in the Profile model.
         """
-        allowed_fields = [
-            'account_type', 'plan', 'language', 'country',
-            'preferred_currency', 'birth_date', 'is_asset_manager',
-            'receive_email_updates'
-        ]
-        for field in allowed_fields:
-            if field in validated_data:
-                setattr(instance, field, validated_data[field])
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
         instance.save()
         return instance

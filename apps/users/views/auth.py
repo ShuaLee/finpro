@@ -8,10 +8,11 @@ Handles authentication-related API endpoints:
 """
 
 from django.contrib.auth import authenticate
+from django.http import JsonResponse
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -41,26 +42,40 @@ class SignupView(generics.CreateAPIView):
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name
-            }
+        
+        response = Response({
+            "detail": "Signup successful",
+            "user": {"id": user.id, "email": user.email}
         }, status=status.HTTP_201_CREATED)
 
+        response.set_cookie("access", str(refresh.access_token),
+                            httponly=True, secure=True, samesite="Lax", max_age=60 * 5)
+        response.set_cookie("refresh", str(refresh),
+                            httponly=True, secure=True, samesite="Lax", max_age=60 * 60 * 24 * 7)
+        return response
+    
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class CSRFTokenView(APIView):
+    """
+    Provides a CSRF token cookie for secure POST requests.
+    Frontend should call this before any login/signup action.
+    """
+    permission_classes = [AllowAny]
 
-@method_decorator(csrf_exempt, name="dispatch")
+    def get(self, request):
+        return JsonResponse({"detail": "CSRF cookie set"})
+
+
 class CookieLoginView(APIView):
     """
     Handles user login and sets JWT tokens in HttpOnly cookies.
 
     - Validates credentials using Django's authenticate()
     - Returns response with JWT tokens stored in cookies
+
+    Requires CSRF protection.
     """
+    permission_classes = [AllowAny]
 
     def post(self, request):
         email = request.data.get("email")
@@ -76,30 +91,23 @@ class CookieLoginView(APIView):
 
         response = Response({"detail": "Login successful"},
                             status=status.HTTP_200_OK)
-        response.set_cookie(
-            key="access",
-            value=str(refresh.access_token),
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=60 * 5  # 5 minutes
-        )
-        response.set_cookie(
-            key="refresh",
-            value=str(refresh),
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=60 * 60 * 24 * 7  # 7 days
-        )
+        response = Response({"detail": "Login successful"}, status=status.HTTP_200_OK)
+
+        response.set_cookie("access", str(refresh.access_token),
+                            httponly=True, secure=True, samesite="Lax", max_age=60 * 5)
+        response.set_cookie("refresh", str(refresh),
+                            httponly=True, secure=True, samesite="Lax", max_age=60 * 60 * 24 * 7)
         return response
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+
 class CookieLogoutView(APIView):
     """
     Logs out the user by clearing JWT cookies.
+    Requires CSRF protection.
     """
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         response = Response({"detail": "Logged out"},
@@ -111,27 +119,24 @@ class CookieLogoutView(APIView):
 
 class CookieRefreshView(APIView):
     """
-    Refreshes the access token using the refresh token from cookies.
+    Issues a new access token using the refresh token.
+    Does NOT require access token (AllowAny).
     """
+    permission_classes = [AllowAny]
 
     def post(self, request):
         refresh_token = request.COOKIES.get("refresh")
         if not refresh_token:
-            return Response({"detail": "No refresh token"}, status=401)
+            return Response({"detail": "No refresh token provided"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
             refresh = RefreshToken(refresh_token)
             access_token = str(refresh.access_token)
         except InvalidToken:
-            return Response({"detail": "Invalid refresh"}, status=401)
+            return Response({"detail": "Invalid refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        res = Response({"detail": "Token refreshed"})
-        res.set_cookie(
-            "access",
-            access_token,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=60 * 5,
-        )
-        return res
+        response = Response({"detail": "Token refreshed"}, status=status.HTTP_200_OK)
+        response.set_cookie("access", access_token,
+                            httponly=True, secure=True, samesite="Lax", max_age=60 * 5)
+        return response
+

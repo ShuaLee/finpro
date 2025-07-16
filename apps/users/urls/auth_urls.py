@@ -11,7 +11,7 @@ Defines URL patterns for authentication-related endpoints:
 
 from django.urls import path
 from users.views import (
-    SignupView, CookieLoginView, CookieLogoutView,
+    SignupView, CSRFTokenView, CookieLoginView, CookieLogoutView,
     CookieRefreshView, auth_status
 )
 
@@ -26,4 +26,7 @@ urlpatterns = [
 
     # Check authentication status
     path('status/', auth_status, name="auth-status"),
+
+    # CSRF
+    path("csrf/", CSRFTokenView.as_view(), name="csrf-token"),
 ]

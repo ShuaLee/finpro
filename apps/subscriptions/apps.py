@@ -31,9 +31,9 @@ class SubscriptionsConfig(AppConfig):
             - Idempotent: Will not create duplicates.
         """
         try:
-            from subscriptions.models import Plan
+            from subscriptions.models import Plan, AccountType
 
-            defaults = [
+            default_plans = [
                 {
                     "slug": "free",
                     "name": "Free",
@@ -54,7 +54,12 @@ class SubscriptionsConfig(AppConfig):
                 },
             ]
 
-            for plan_data in defaults:
+            default_account_types = [
+                {"slug": "individual", "name": "Individual Investor", "description": "For personal investment tracking."},
+                {"slug": "manager", "name": "Manager", "description": "For managing investments on behalf of clients."},
+]
+
+            for plan_data in default_plans:
                 obj, created = Plan.objects.get_or_create(
                     slug=plan_data["slug"], defaults=plan_data
                 )
@@ -62,6 +67,13 @@ class SubscriptionsConfig(AppConfig):
                     logger.info(f"Created default plan: {obj.name}")
                 else:
                     logger.debug(f"Default plan already exists: {obj.name}")
+
+            for data in default_account_types:
+                obj, created = AccountType.objects.get_or_create(slug=data["slug"], defaults=data)
+                if created:
+                    logger.info(f"Created default account type: {obj.name}")
+                else:
+                    logger.debug(f"Account type already exists: {obj.name}")
 
         except (OperationalError, ProgrammingError):
             # Happens when DB tables don't exist (e.g., during migrate)

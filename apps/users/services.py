@@ -8,16 +8,17 @@ These functions help keep views thin by handling business processes separately.
 from rest_framework.exceptions import ValidationError
 from users.models import Profile
 from portfolios.models.portfolio import Portfolio
-from subscriptions.models import Plan
+from subscriptions.models import Plan, AccountType
 
 
-def bootstrap_user_profile_and_portfolio(user, country="US", preferred_currency="USD"):
+def bootstrap_user_profile_and_portfolio(user):
     """
     Initializes essential related objects for a new user.
 
-    Creates:
-        - A Profile linked to the user, with default country, currency, and Free plan.
-        - A default Portfolio linked to that Profile.
+    Initialize Profile for a new user with:
+        Default Free plan
+        Default AccountType: Individual Investor
+        Create associated Portfolio
 
     Args:
         user (User): The newly created user.
@@ -32,11 +33,7 @@ def bootstrap_user_profile_and_portfolio(user, country="US", preferred_currency=
     """
     profile, created = Profile.objects.get_or_create(user=user)
 
-    # Assign defaults
-    profile.country = country
-    profile.preferred_currency = preferred_currency
-
-    # ✅ Assign Free plan if none exists
+    # Assign Free plan if none exists
     if not profile.plan:
         free_plan = Plan.objects.filter(slug="free").first()
         if not free_plan:
@@ -44,7 +41,14 @@ def bootstrap_user_profile_and_portfolio(user, country="US", preferred_currency=
                 {"detail": "Default Free plan not found. Please initialize plans."})
         profile.plan = free_plan
 
-    profile.save(update_fields=["country", "preferred_currency", "plan"])
+    # Assign Individual Investor account type
+    if not profile.account_type:
+        individual_type = AccountType.objects.filter(slug="individual").first()
+        if not individual_type:
+            raise ValidationError({"detail": "Default AccountType 'individual' not found."})
+        profile.account_type = individual_type
+
+    profile.save(update_fields=["plan", "account_type"])
 
     # Create a portfolio for this profile if not present
     Portfolio.objects.get_or_create(profile=profile)

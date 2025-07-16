@@ -21,26 +21,29 @@ COUNTRY_CHOICES = [
 
 class Profile(models.Model):
     """
-    Stores additional details about a user that are not part of authentication.
+    Extended user details for personalization and subscription management.
 
-    Fields:
-        account_type (str): Individual or manager.
-        plan (str): Subscription tier (Free, Premium).
-        language (str): Preferred language.
-        country (str): User's country.
-        preferred_currency (str): Preferred currency code.
-        birth_date (date): Optional user-provided birth date.
-        is_asset_manager (bool): Indicates if user manages assets for others.
-        receive_email_updates (bool): Email subscription preference.
+    - Basic identity (optional): first_name, last_name, birth_date
+    - Preferences: language, preferred_currency, country
+    - Business logic: plan, account_type, email preferences
     """
-
-    ACCOUNT_TYPES = [
-        ('individual', 'Individual'),
-        ('manager', 'Manager'),
-    ]
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    
+    # Basic identity info
+    first_name = models.CharField(max_length=30, blank=True, null=True)
+    last_name = models.CharField(max_length=30, blank=True, null=True)
+    birth_date = models.DateField(blank=True, null=True)
+
+    # Preferences
+    language = models.CharField(max_length=30, blank=False, default="en")
+    country = models.CharField(
+        max_length=100, choices=COUNTRY_CHOICES, default="US")
+    preferred_currency = models.CharField(
+        max_length=10, choices=CURRENCY_CHOICES, default="USD")
+
+    # Subscriptions
     plan = models.ForeignKey(
         'subscriptions.Plan',
         on_delete=models.SET_NULL,
@@ -49,15 +52,19 @@ class Profile(models.Model):
         related_name='profiles',
         help_text="The subscription plan associated with this profile."
     )
-    language = models.CharField(max_length=30, blank=False, default="en")
-    country = models.CharField(
-        max_length=100, choices=COUNTRY_CHOICES, default="US")
-    preferred_currency = models.CharField(
-        max_length=10, choices=CURRENCY_CHOICES, default="USD")
-    birth_date = models.DateField(blank=True, null=True)
-    # Null / Blank for now to compensate for future expansion. - account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='individual')
-    account_type = models.CharField(max_length=50, null=True, blank=True)
+    account_type = models.ForeignKey(
+        'subscriptions.AccountType',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="profiles",
+        help_text="The account type for this user (e.g., Individual, Manager)."
+    )
+
+    # Notifications
     receive_email_updates = models.BooleanField(default=True)
+
+    # Meta
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

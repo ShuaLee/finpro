@@ -10,8 +10,8 @@ from djoser.serializers import UserSerializer as BaseUserSerializer
 class UserSerializer(BaseUserSerializer):
     """
     Basic serializer for User model.
-    Used for responses that need minimal user info (id, email, first_name, last_name).
+    Used for responses that need minimal user info (id, email).
     """
     class Meta(BaseUserSerializer.Meta):
-        fields = ['id', 'email', 'first_name', 'last_name']
+        fields = ['id', 'email']
         read_only_fields = ['id', 'email']
