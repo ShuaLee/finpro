@@ -1,60 +1,54 @@
-"""
-users.admin
-~~~~~~~~~~~
-Registers custom User and Profile models with the Django admin interface,
-including useful list displays and filters for better manageability.
-"""
-
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from portfolios.models.portfolio import Portfolio
-from .models import User, Profile
+from django.utils.translation import gettext_lazy as _
+from users.models import User, Profile
+from users.services import bootstrap_user_profile
 
+
+class ProfileInline(admin.StackedInline):
+    """Inline Profile editor inside User admin."""
+    model = Profile
+    can_delete = False
+    verbose_name_plural = "Profile"
+    fk_name = "user"
+    extra = 0
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    """
-    Custom admin configuration for the User model.
+    """Custom User admin using email instead of username."""
+    ordering = ["id"]
+    list_display = ["email", "is_active", "is_staff", "last_login"]
+    list_filter = ["is_active", "is_staff", "is_superuser"]
+    search_fields = ["email"]
+    readonly_fields = ["last_login", "date_joined"]
 
-    Features:
-    - Displays key identity fields (email, name, active status).
-    - Enables quick search by email and name.
-    """
+    # Fields for detail view
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
-        ('Personal info', {
-         'fields': ('first_name', 'last_name', 'birth_date')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser')}),
+        (None, {"fields": ("email", "password")}),
+        (_("Permissions"), {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
+
+    # Fields for add user form
     add_fieldsets = (
         (None, {
-            'classes': ('wide',),
-            'fields': ('email', 'password1', 'password2', 'first_name', 'last_name', 'birth_date'),
+            "classes": ("wide",),
+            "fields": ("email", "password1", "password2", "is_active", "is_staff", "is_superuser"),
         }),
     )
-    list_display = ('email', 'first_name', 'last_name', 'is_staff')
-    search_fields = ('email', 'first_name', 'last_name')
-
-    # Update ordering to use 'email' instead of 'username'
-    ordering = ('email',)
 
     def save_model(self, request, obj, form, change):
-        is_new = obj.pk is None
         super().save_model(request, obj, form, change)
-        if is_new:
-            profile, _ = Profile.objects.get_or_create(user=obj)
-            Portfolio.objects.get_or_create(profile=profile)
+        bootstrap_user_profile(obj)  # ✅ Ensure profile exists after saving
+
+    inlines = [ProfileInline]
 
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    """
-    Custom admin configuration for the Profile model.
-
-    Features:
-    - Displays user and account type.
-    - Allows filtering by plan and account type.
-    """
-    list_display = ('user',)
-    search_fields = ('user__email',)
+    """Standalone Profile admin for advanced editing."""
+    list_display = ["user", "full_name", "country", "preferred_currency", "plan", "account_type"]
+    list_filter = ["country", "plan", "account_type"]
+    search_fields = ["user__email", "full_name"]
+    ordering = ["user__email"]

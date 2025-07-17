@@ -22,7 +22,6 @@ Usage:
 """
 
 from django.db import transaction
-import logging
 from subscriptions.models import Plan, AccountType
 
 

@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
 
+
 class UserManager(BaseUserManager):
     """
     Custom manager for User model with helper methods to create users and superusers.
@@ -38,6 +39,10 @@ class UserManager(BaseUserManager):
         )
         user.set_password(password)
         user.save(using=self._db)
+
+        from users.services import bootstrap_user_profile
+        bootstrap_user_profile(user)
+
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):

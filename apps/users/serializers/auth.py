@@ -9,7 +9,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from users.models import User
-from users.services import bootstrap_user_profile
 
 
 class UserCreateSerializer(BaseUserCreateSerializer):
@@ -64,15 +63,13 @@ class SignupSerializer(serializers.Serializer):
         # Create user
         user = User.objects.create_user(**validated_data)
 
-        # Bootstrap user profile with defaults
-        profile = bootstrap_user_profile(user)
 
         # Set language from request headers
         request = self.context.get('request')
         if request:
             lang = request.META.get('HTTP_ACCEPT_LANGUAGE', 'en')
-            profile.language = lang.split(',')[0].split('-')[0].lower() or 'en'
-            profile.save(update_fields=['language'])
+            user.profile.language = lang.split(',')[0].split('-')[0].lower() or 'en'
+            user.profile.save(update_fields=['language'])
 
         return user
 
