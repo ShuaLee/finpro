@@ -13,21 +13,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
-import pycountry
 import sys
 
 TESTING = 'test' in sys.argv
-
-CURRENCY_CHOICES = [
-    (currency.alpha_3, currency.name)
-    for currency in pycountry.currencies
-]
-
-COUNTRY_CHOICES = [
-    (country.alpha_2, country.name)  # alpha_2 for compact storage
-    for country in pycountry.countries
-]
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -64,8 +52,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'users',
     'subscriptions',
-    'portfolios',
-    'finances',
+    # 'portfolios',
+    # 'finances',
     # 'apps.accounts.apps.AccountsConfig',
     # 'apps.assets.apps.AssetsConfig',
     # 'apps.finances',

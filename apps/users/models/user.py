@@ -13,14 +13,13 @@ class UserManager(BaseUserManager):
     Custom manager for User model with helper methods to create users and superusers.
     """
 
-    def create_user(self, email, password, is_over_13=False, **extra_fields):
+    def create_user(self, email, password, **extra_fields):
         """
         Create and return a regular user.
 
         Args:
             email (str): User's email (required, unique).
             password (str): Password (hashed before saving).
-            is_over_13 (bool): Age confirmation.
             extra_fields (dict): Additional model fields.
 
         Raises:
@@ -31,20 +30,17 @@ class UserManager(BaseUserManager):
             raise ValueError("The Email field must be set.")
         if not password:
             raise ValueError("Password must be set.")
-        if not is_over_13:
-            raise ValueError("User must confirm they are over 13 years old.")
 
         email = self.normalize_email(email)
         user = self.model(
             email=email,
-            is_over_13=is_over_13,
             **extra_fields
         )
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password, **extra_fields):
+    def create_superuser(self, email, password=None, **extra_fields):
         """
         Create and return a superuser with admin privileges.
         """
@@ -56,13 +52,7 @@ class UserManager(BaseUserManager):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError("Superuser must have is_superuser=True.")
 
-        # Superusers bypass age confirmation
-        return self.create_user(
-            email=email,
-            password=password,
-            is_over_13=True,  # Always true for superusers
-            **extra_fields
-        )
+        return self.create_user(email, password, **extra_fields)
 
 
 class User(AbstractUser):
@@ -72,12 +62,10 @@ class User(AbstractUser):
     Fields:
         email (unique): Primary identifier.
         first_name, last_name: User's personal details.
-        is_over_13: Boolean for legal compliance (COPPA/GDPR-lite).
     """
     username = None
 
     email = models.EmailField(unique=True)
-    is_over_13 = models.BooleanField(default=False)
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
