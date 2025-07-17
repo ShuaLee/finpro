@@ -9,8 +9,9 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from users.serializers import ProfileSerializer
 from users.models import Profile
+from users.serializers import ProfileSerializer
+from users.services import validate_required_profile_fields
 import logging
 
 logger = logging.getLogger(__name__)

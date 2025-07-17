@@ -75,3 +75,7 @@ class SignupSerializer(serializers.Serializer):
             profile.save(update_fields=['language'])
 
         return user
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True)

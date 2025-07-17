@@ -6,8 +6,8 @@ Handles authentication-related API endpoints:
 - Cookie-based login, logout
 - Token refresh
 """
-
-from django.contrib.auth import authenticate
+from django.conf import settings
+from django.contrib.auth import authenticate, get_user_model
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -16,11 +16,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import InvalidToken
-from users.serializers import SignupSerializer
-import logging
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework_simplejwt.exceptions import TokenError
+from users.serializers import SignupSerializer, LoginSerializer
 
-logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class SignupView(generics.CreateAPIView):
@@ -78,8 +78,10 @@ class CookieLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # ✅ This handles missing fields with 400
+        email = serializer.validated_data["email"]
+        password = serializer.validated_data["password"]
 
         # Authenticate user
         user = authenticate(request, email=email, password=password)
@@ -118,25 +120,59 @@ class CookieLogoutView(APIView):
 
 
 class CookieRefreshView(APIView):
-    """
-    Issues a new access token using the refresh token.
-    Does NOT require access token (AllowAny).
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
         refresh_token = request.COOKIES.get("refresh")
         if not refresh_token:
-            return Response({"detail": "No refresh token provided"}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"detail": "Refresh token missing"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            refresh = RefreshToken(refresh_token)
-            access_token = str(refresh.access_token)
-        except InvalidToken:
-            return Response({"detail": "Invalid refresh token"}, status=status.HTTP_401_UNAUTHORIZED)
+            token = RefreshToken(refresh_token)
 
-        response = Response({"detail": "Token refreshed"}, status=status.HTTP_200_OK)
-        response.set_cookie("access", access_token,
-                            httponly=True, secure=True, samesite="Lax", max_age=60 * 5)
-        return response
+            # ✅ Check if token already blacklisted
+            if BlacklistedToken.objects.filter(token__jti=token["jti"]).exists():
+                return Response({"detail": "Token already blacklisted"}, status=status.HTTP_401_UNAUTHORIZED)
 
+            # ✅ Blacklist old token if enabled
+            if getattr(settings, "SIMPLE_JWT", {}).get("BLACKLIST_AFTER_ROTATION", False):
+                token.blacklist()
+
+            # ✅ Get user from token payload
+            user_id = token.get("user_id")
+            if not user_id:
+                return Response({"detail": "Invalid token payload"}, status=status.HTTP_401_UNAUTHORIZED)
+
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                return Response({"detail": "User not found"}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # ✅ Issue new tokens
+            new_refresh = RefreshToken.for_user(user)
+            new_access = new_refresh.access_token
+
+            response = Response({"detail": "Token refreshed"}, status=status.HTTP_200_OK)
+            secure_flag = not settings.DEBUG
+
+            # ✅ Set cookies
+            response.set_cookie(
+                "access",
+                str(new_access),
+                httponly=True,
+                samesite="Lax",
+                secure=secure_flag,
+                max_age=60 * 5  # 5 minutes
+            )
+            response.set_cookie(
+                "refresh",
+                str(new_refresh),
+                httponly=True,
+                samesite="Lax",
+                secure=secure_flag,
+                max_age=60 * 60 * 24 * 7  # 7 days
+            )
+
+            return response
+
+        except TokenError:
+            return Response({"detail": "Invalid or blacklisted token"}, status=status.HTTP_401_UNAUTHORIZED)

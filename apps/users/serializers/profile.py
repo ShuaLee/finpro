@@ -3,9 +3,9 @@ users.serializers.profile
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 Serializer for reading and updating Profile data, including subscription plans.
 """
-
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from django.conf import settings
+from common.utils.country_data import validate_currency_code
 from users.models import Profile
 from subscriptions.models import AccountType, Plan
 
@@ -59,15 +59,14 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def validate_preferred_currency(self, value):
         """
-        Ensure currency is a valid ISO code based on system settings.
+        Validate currency code against ISO 4217 codes from pycountry.
         Normalize to uppercase.
         """
         value = value.upper()
-        valid_codes = [code for code, _ in settings.CURRENCY_CHOICES]
-        if value not in valid_codes:
-            raise serializers.ValidationError(
-                f"Invalid currency code '{value}'. Must be ISO 4217 (e.g., USD, EUR, AUD)."
-            )
+        try:
+            validate_currency_code(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(str(e))
         return value
 
     def update(self, instance, validated_data):
