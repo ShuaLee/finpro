@@ -38,23 +38,26 @@ class SignupSerializer(serializers.Serializer):
     """
 
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    password = serializers.CharField(
+        write_only=True, style={'input_type': 'password'})
     is_over_13 = serializers.BooleanField()
 
     # Optional profile fields
-    first_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
-    last_name = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    full_name = serializers.CharField(
+        max_length=150, required=False, allow_blank=True)
     country = serializers.CharField(required=False)
     preferred_currency = serializers.CharField(required=False)
 
     def validate_is_over_13(self, value):
         if value is not True:
-            raise serializers.ValidationError("You must confirm you are at least 13 years old.")
+            raise serializers.ValidationError(
+                "You must confirm you are at least 13 years old.")
         return value
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
+            raise serializers.ValidationError(
+                "A user with this email already exists.")
         return value
 
     def validate_password(self, value):

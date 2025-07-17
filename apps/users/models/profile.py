@@ -30,10 +30,9 @@ class Profile(models.Model):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    
+
     # Basic identity info
-    first_name = models.CharField(max_length=30, blank=True, null=True)
-    last_name = models.CharField(max_length=30, blank=True, null=True)
+    full_name = models.CharField(max_length=150, blank=True, null=True)
     birth_date = models.DateField(blank=True, null=True)
 
     # Preferences
@@ -69,6 +68,16 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.user.email
+
+    @property
+    def first_name(self):
+        """
+        Extract the first word of full_name for personalization.
+        Returns 'there' if full_name is missing or blank.
+        """
+        if self.full_name and self.full_name.strip():
+            return self.full_name.strip().split()[0]
+        return "there"
 
     def save(self, *args, **kwargs):
         """

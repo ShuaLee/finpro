@@ -7,7 +7,6 @@ These functions help keep views thin by handling business processes separately.
 
 from rest_framework.exceptions import ValidationError
 from users.models import Profile
-from portfolios.models.portfolio import Portfolio
 from subscriptions.models import Plan, AccountType
 
 
@@ -44,7 +43,8 @@ def bootstrap_user_profile(user):
     if not profile.account_type:
         individual_type = AccountType.objects.filter(slug="individual").first()
         if not individual_type:
-            raise ValidationError({"detail": "Default AccountType 'individual' not found."})
+            raise ValidationError(
+                {"detail": "Default AccountType 'individual' not found."})
         profile.account_type = individual_type
 
     profile.save(update_fields=["plan", "account_type"])
