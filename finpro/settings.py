@@ -15,6 +15,21 @@ from pathlib import Path
 from datetime import timedelta
 import sys
 
+# Temporarily silence pycountry's stderr output
+import io
+
+
+class SuppressPycountryErrors(io.StringIO):
+    def write(self, text):
+        if "Currency" in text and "already taken" in text:
+            return  # Ignore duplicate currency warning
+        super().write(text)
+
+
+sys.stderr = SuppressPycountryErrors()
+##########
+
+
 TESTING = 'test' in sys.argv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
