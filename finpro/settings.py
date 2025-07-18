@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from corsheaders.defaults import default_headers
 import sys
 
 # Temporarily silence pycountry's stderr output
@@ -174,7 +175,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("JWT",),
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=10),  # ✅ 10 minutes
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_COOKIE": "access",  # cookie key for access token
@@ -202,12 +203,58 @@ LOGGING = {
 
 # CORS
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "content-type",
+    "x-csrftoken",
+    "authorization",
+    "accept",
+    "accept-language",
+    "origin",
+    "x-requested-with",
+]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # your React frontend
 ]
 
-# CSRF
+# ===============================
+# CSRF & Cookie Settings
+# ===============================
+
+# CSRF cookie should always be HttpOnly for security
 CSRF_COOKIE_HTTPONLY = True
+
+# ---- Development (React on http://localhost:5173, Django on http://127.0.0.1:8000) ----
+# Allow cross-origin cookies for local dev
 CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SAMESITE = "Lax"
+SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "None"
+
+# No HTTPS in dev
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+COOKIE_SECURE = False
+
+# CSRF trusted origin (React dev server)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+]
+
+# ---- Production (Same origin, HTTPS) ----
+"""
+# CSRF_COOKIE_HTTPONLY = True  # Keep this for security
+
+# CSRF & session cookies for production (same origin)
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SAMESITE = "Lax"
+SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "Lax"
+
+# Require HTTPS in production
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+COOKIE_SECURE = True
+
+# Add your production domain for CSRF
+CSRF_TRUSTED_ORIGINS = [
+    "https://yourdomain.com",
+]
+"""
