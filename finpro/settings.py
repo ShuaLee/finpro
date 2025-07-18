@@ -174,8 +174,8 @@ REST_FRAMEWORK = {
 
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("JWT",),
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=10),  # ✅ 10 minutes
+    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(seconds=30),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_COOKIE": "access",  # cookie key for access token
@@ -227,7 +227,7 @@ CSRF_COOKIE_HTTPONLY = True
 # Allow cross-origin cookies for local dev
 CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SAMESITE = "Lax"
-SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "None"
+SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "Lax" # -- lax works on laptop?? 
 
 # No HTTPS in dev
 CSRF_COOKIE_SECURE = False
