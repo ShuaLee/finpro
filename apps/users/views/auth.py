@@ -27,7 +27,11 @@ class SignupView(generics.CreateAPIView):
         refresh = RefreshToken.for_user(user)
         response = Response({
             "detail": "Signup successful",
-            "user": {"id": user.id, "email": user.email}
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "is_profile_complete": user.profile.is_profile_complete  # ✅ Include this
+            }
         }, status=status.HTTP_201_CREATED)
         return set_auth_cookies(response, refresh.access_token, refresh)
 
@@ -54,8 +58,14 @@ class CookieLoginView(APIView):
             return Response({"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
         refresh = RefreshToken.for_user(user)
-        response = Response({"detail": "Login successful"},
-                            status=status.HTTP_200_OK)
+        response = Response({
+            "detail": "Login successful",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "is_profile_complete": user.profile.is_profile_complete  # ✅ Include this
+            }
+        }, status=status.HTTP_200_OK)
         return set_auth_cookies(response, refresh.access_token, refresh)
 
 

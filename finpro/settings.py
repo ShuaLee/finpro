@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'users',
     'subscriptions',
+    'common',
     # 'portfolios',
     # 'finances',
     # 'apps.accounts.apps.AccountsConfig',
@@ -174,8 +175,8 @@ REST_FRAMEWORK = {
 
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("JWT",),
-    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=5),
-    "REFRESH_TOKEN_LIFETIME": timedelta(seconds=30),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=2),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_COOKIE": "access",  # cookie key for access token

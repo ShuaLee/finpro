@@ -6,7 +6,7 @@ Defines the Profile model, which extends user functionality with additional fiel
 
 from django.conf import settings
 from django.db import models
-from common.utils.country_data import (
+from apps.common.utils.country_data import (
     get_country_choices, get_currency_choices,
     validate_country_code, validate_currency_code
 )
@@ -23,6 +23,9 @@ class Profile(models.Model):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    
+    # Profile check
+    is_profile_complete = models.BooleanField(default=False)
 
     # Basic identity info
     full_name = models.CharField(max_length=150, blank=True, null=True)

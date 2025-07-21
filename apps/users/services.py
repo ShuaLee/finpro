@@ -47,7 +47,9 @@ def bootstrap_user_profile(user):
                 {"detail": "Default AccountType 'individual' not found."})
         profile.account_type = individual_type
 
-    profile.save(update_fields=["plan", "account_type"])
+    # ✅ Set completion status
+    profile.is_profile_complete = check_profile_completion(profile)
+    profile.save(update_fields=["plan", "account_type", "is_profile_complete"])
 
     return profile
 
@@ -73,3 +75,31 @@ def validate_required_profile_fields(data, partial=False):
             raise ValidationError(
                 {"detail": f"Missing required fields: {', '.join(missing)}"}
             )
+
+def check_profile_completion(profile):
+    """
+    Determine if a user's profile has all required fields filled in.
+
+    Required fields:
+        - full_name
+        - country
+        - preferred_currency
+
+    Args:
+        profile (Profile): The profile instance to check.
+
+    Returns:
+        bool: True if profile is complete, False otherwise.
+    """
+    required_fields = ['full_name', 'country', 'preferred_currency']
+    return all(getattr(profile, field) for field in required_fields)
+
+def update_profile_completion(profile):
+    """
+    Update the is_profile_complete flag based on current profile data.
+
+    Args:
+        profile (Profile): The user's profile.
+    """
+    profile.is_profile_complete = check_profile_completion(profile)
+    profile.save(update_fields=['is_profile_complete'])
