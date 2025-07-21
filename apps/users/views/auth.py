@@ -63,10 +63,24 @@ class CookieLogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Get refresh token from cookies
+        refresh_token = request.COOKIES.get("refresh")
+
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                # Blacklist the token
+                token.blacklist()
+            except TokenError:
+                pass  # Token already invalid or expired
+
+        # Clear all cookies
         response = Response({"detail": "Logged out"},
                             status=status.HTTP_200_OK)
         response.delete_cookie("access")
         response.delete_cookie("refresh")
+        response.delete_cookie("csrftoken")
+
         return response
 
 

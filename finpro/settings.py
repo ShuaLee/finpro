@@ -227,7 +227,7 @@ CSRF_COOKIE_HTTPONLY = True
 # Allow cross-origin cookies for local dev
 CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SAMESITE = "Lax"
-SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "Lax" # -- lax works on laptop?? 
+SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "Lax"  # -- lax works on laptop??
 
 # No HTTPS in dev
 CSRF_COOKIE_SECURE = False
