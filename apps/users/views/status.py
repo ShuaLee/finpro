@@ -22,4 +22,7 @@ def auth_status(request):
         JSON response with {"isAuthenticated": True} if valid token is provided.
     """
     logger.debug(f"Cookies: {request.COOKIES}")
-    return Response({"isAuthenticated": True})
+    return Response({
+        "is_authenticated": True,
+        "is_profile_complete": request.user.profile.is_profile_complete
+    })
