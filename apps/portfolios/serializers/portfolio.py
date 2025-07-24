@@ -11,7 +11,7 @@ Notes:
 """
 
 from rest_framework import serializers
-from portfolios.models.metal import Portfolio
+from portfolios.models import Portfolio
 from portfolios.serializers.stock import StockPortfolioSerializer
 from portfolios.serializers.metal import MetalPortfolioSerializer
 

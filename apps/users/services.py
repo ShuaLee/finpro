@@ -6,7 +6,6 @@ These functions help keep views thin by handling business processes separately.
 """
 
 from rest_framework.exceptions import ValidationError
-from portfolios.services.portfolio_service import ensure_portfolio_for_profile
 from users.models import Profile
 from subscriptions.models import Plan, AccountType
 
@@ -30,6 +29,8 @@ def bootstrap_user_profile(user):
     Raises:
         ValidationError: If the default Free plan does not exist.
     """
+    from portfolios.services.portfolio_service import ensure_portfolio_for_profile
+
     profile, created = Profile.objects.get_or_create(user=user)
 
     # Assign Free plan if none exists
