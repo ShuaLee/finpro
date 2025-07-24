@@ -27,7 +27,7 @@ class SuppressPycountryErrors(io.StringIO):
         super().write(text)
 
 
-sys.stderr = SuppressPycountryErrors()
+# sys.stderr = SuppressPycountryErrors()
 ##########
 
 

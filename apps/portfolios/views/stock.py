@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from portfolios.models.stock import StockPortfolio
 from portfolios.permissions import IsPortfolioOwner
-from portfolios.services.stock_dashboard_service import get_stock_dashboard
+# from portfolios.services.stock_dashboard_service import get_stock_dashboard
 from portfolios.serializers.stock import StockPortfolioSerializer
 from portfolios.services import stock_service, portfolio_service
 from users.models import Profile
@@ -35,6 +35,7 @@ class StockPortfolioCreateView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+"""
 class StockPortfolioDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsPortfolioOwner]
 
@@ -50,3 +51,4 @@ class StockPortfolioDashboardView(APIView):
 
         dashboard_data = get_stock_dashboard(stock_portfolio)
         return Response(dashboard_data, status=status.HTTP_200_OK)
+"""
