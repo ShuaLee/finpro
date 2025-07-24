@@ -6,6 +6,7 @@ These functions help keep views thin by handling business processes separately.
 """
 
 from rest_framework.exceptions import ValidationError
+from portfolios.services.portfolio_service import ensure_portfolio_for_profile
 from users.models import Profile
 from subscriptions.models import Plan, AccountType
 
@@ -47,6 +48,9 @@ def bootstrap_user_profile(user):
                 {"detail": "Default AccountType 'individual' not found."})
         profile.account_type = individual_type
 
+    # Ensure Portfolio exists for this Profile
+    ensure_portfolio_for_profile(profile)
+
     # ✅ Set completion status
     profile.is_profile_complete = check_profile_completion(profile)
     profile.save(update_fields=["plan", "account_type", "is_profile_complete"])
@@ -76,6 +80,7 @@ def validate_required_profile_fields(data, partial=False):
                 {"detail": f"Missing required fields: {', '.join(missing)}"}
             )
 
+
 def check_profile_completion(profile):
     """
     Determine if a user's profile has all required fields filled in.
@@ -93,6 +98,7 @@ def check_profile_completion(profile):
     """
     required_fields = ['full_name', 'country', 'preferred_currency']
     return all(getattr(profile, field) for field in required_fields)
+
 
 def update_profile_completion(profile):
     """

@@ -59,3 +59,24 @@ class StockPortfolio(BaseAssetPortfolio):
         """
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+"""
+    def initialize_stock_portfolio(self):
+        from portfolios.models.stock import StockPortfolio
+        from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
+        from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
+
+        if hasattr(self, 'stockportfolio'):
+            return  # Already exists
+
+        stock_portfolio = StockPortfolio.objects.create(portfolio=self)
+
+        schema = StockPortfolioSchema.objects.create(
+            stock_portfolio=stock_portfolio,
+            name=f"Default Schema for {stock_portfolio}"
+        )
+
+        for column_data in DEFAULT_STOCK_SCHEMA_COLUMNS:
+            StockPortfolioSC.objects.create(schema=schema, **column_data)
+"""

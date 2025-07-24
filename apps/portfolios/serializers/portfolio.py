@@ -1,8 +1,13 @@
 """
-Portfolio Serializers
-----------------------
+Portfolio Serializer
+--------------------
 
-This module defines serializers for the main Portfolio model.
+Serializes the main Portfolio object, including nested asset-specific sub-portfolios
+(e.g., stocks, metals) for display purposes.
+
+Notes:
+- `profile` is read-only because it's determined by the authenticated user.
+- Sub-portfolios are nested as read-only fields since they are created via separate endpoints.
 """
 
 from rest_framework import serializers
@@ -13,10 +18,14 @@ from portfolios.serializers.metal import MetalPortfolioSerializer
 
 class PortfolioSerializer(serializers.ModelSerializer):
     """
-    Serializer for the Portfolio model.
+    Serializer for the main Portfolio model.
 
-    Related sub-portfolios (stock, metal, etc.) are included as read-only.
-    They are created separately through dedicated endpoints.
+    Fields:
+    - id: Primary key
+    - profile: Read-only reference to the user's profile
+    - created_at: Timestamp when the portfolio was created
+    - stock_portfolio: Nested representation if exists
+    - metal_portfolio: Nested representation if exists
     """
     stock_portfolio = StockPortfolioSerializer(read_only=True)
     metal_portfolio = MetalPortfolioSerializer(read_only=True)
@@ -30,9 +39,13 @@ class PortfolioSerializer(serializers.ModelSerializer):
             "stock_portfolio",
             "metal_portfolio",
         ]
-        read_only_fields = ["id", "created_at", "profile_setup_complete"]
+        read_only_fields = ["id", "created_at", "profile"]
 
     def create(self, validated_data):
+        """
+        Prevent direct creation via serializer.
+        Use the service layer (portfolio_service.create_portfolio).
+        """
         raise NotImplementedError(
-            "Portfolio creation should be handled by portfolio_service.create_portfolio()."
+            "Use portfolio_service.create_portfolio() to create a Portfolio."
         )

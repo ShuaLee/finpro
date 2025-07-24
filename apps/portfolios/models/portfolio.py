@@ -2,12 +2,11 @@
 Main Portfolio Model
 --------------------
 
-This module defines the `Portfolio` model, which represents a user's primary portfolio. 
-It acts as the parent entity for multiple asset-specific portfolios (e.g., stocks, metals, crypto).
+Represents the `Portfolio` model, which is the primary container for all of a user's investments.
+Acts as the parent entity for multiple asset-specific portfolios (e.g., stocks, metals, crypto).
 
 Responsibilities:
 - Links to the user's `Profile` (one-to-one).
-- Stores global settings like `profile_setup_complete`.
 - Serves as the central entry point for managing all asset types.
 
 Business Rules:
@@ -15,7 +14,6 @@ Business Rules:
 """
 
 from django.db import models
-from django.conf import settings
 from users.models import Profile
 
 
@@ -26,7 +24,6 @@ class Portfolio(models.Model):
     Attributes:
         profile (OneToOneField): Each profile has one portfolio.
         created_at (DateTime): Timestamp when the portfolio is created.
-        profile_setup_complete (bool): Indicates whether the portfolio is fully initialized.
     """
 
     profile = models.OneToOneField(
@@ -39,28 +36,3 @@ class Portfolio(models.Model):
 
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
-
-    def initialize_stock_portfolio(self):
-        from portfolios.models.stock import StockPortfolio
-        from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
-        from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
-
-        if hasattr(self, 'stockportfolio'):
-            return  # Already exists
-
-        stock_portfolio = StockPortfolio.objects.create(portfolio=self)
-
-        schema = StockPortfolioSchema.objects.create(
-            stock_portfolio=stock_portfolio,
-            name=f"Default Schema for {stock_portfolio}"
-        )
-
-        for column_data in DEFAULT_STOCK_SCHEMA_COLUMNS:
-            StockPortfolioSC.objects.create(schema=schema, **column_data)
-
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        if not getattr(settings, 'TESTING', False):  # Add a TESTING flag
-            if is_new:
-                self.initialize_stock_portfolio()

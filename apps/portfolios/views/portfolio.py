@@ -2,8 +2,12 @@
 Portfolio Views
 ---------------
 
-This module defines views for creating and retrieving the main Portfolio object.
+Provides endpoints for:
+- Creating a main Portfolio for the authenticated user.
+- Retrieving the user's existing Portfolio.
 """
+
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,30 +19,43 @@ from users.models import Profile
 
 class PortfolioCreateView(APIView):
     """
-    API endpoint for creating a main Portfolio for a user.
+    Creates a main Portfolio for the authenticated user.
+
+    Business rules:
+    - Each profile can only have one portfolio.
+    - Returns 400 if a portfolio already exists.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         profile = Profile.objects.get(user=request.user)
-        try:
-            portfolio = portfolio_service.create_portfolio(profile)
-            serializer = PortfolioSerializer(portfolio)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if hasattr(profile, "portfolio"):
+            return Response(
+                {"error": "Portfolio already exists for this user."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        portfolio = portfolio_service.create_portfolio(profile)
+        serializer = PortfolioSerializer(portfolio)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
 class PortfolioDetailView(APIView):
     """
-    API endpoint for retrieving the user's Portfolio.
+    Retrieves the authenticated user's Portfolio.
+    Returns 404 if no portfolio exists.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         profile = Profile.objects.get(user=request.user)
         try:
-            portfolio = portfolio_service.get_portfolio(profile)
-            serializer = PortfolioSerializer(portfolio)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except portfolio_service.Portfolio.DoesNotExist:
-            return Response({"error": "Portfolio not found."}, status=status.HTTP_404_NOT_FOUND)
+            portfolio = profile.portfolio
+        except ObjectDoesNotExist:
+            return Response(
+                {"error": "Portfolio not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = PortfolioSerializer(portfolio)
+        return Response(serializer.data, status=status.HTTP_200_OK)

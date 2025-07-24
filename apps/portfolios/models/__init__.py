@@ -15,8 +15,7 @@ Purpose:
 - Provides modular and scalable architecture for managing multiple asset classes under a single Portfolio.
 """
 
-"""
+
 from .portfolio import Portfolio
 from .stock import StockPortfolio
 from .metal import MetalPortfolio
-"""

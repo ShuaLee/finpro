@@ -70,7 +70,7 @@ INSTALLED_APPS = [
     'users',
     'subscriptions',
     'common',
-    # 'portfolios',
+    'portfolios',
     # 'finances',
     # 'apps.accounts.apps.AccountsConfig',
     # 'apps.assets.apps.AssetsConfig',
