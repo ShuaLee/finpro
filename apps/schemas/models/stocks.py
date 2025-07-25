@@ -1,4 +1,3 @@
-from django.core.exceptions import ValidationError
 from django.db import models
 from .base import Schema, SchemaColumn, SchemaColumnValue
 
@@ -11,7 +10,7 @@ class StockPortfolioSchema(Schema):
     )
 
     class Meta:
-        unique_together = (('stock_portfolio', 'name'))
+        unique_together = (('stock_portfolio', 'name'),)
 
     @property
     def portfolio_relation_name(self):
@@ -20,28 +19,14 @@ class StockPortfolioSchema(Schema):
 
 class StockPortfolioSC(SchemaColumn):
     ASSET_TYPE = 'stock'
-
     schema = models.ForeignKey(
         StockPortfolioSchema,
         on_delete=models.CASCADE,
         related_name='columns'
     )
-    source_field = models.CharField(
-        max_length=100,
-        blank=True
-    )
 
     class Meta:
         unique_together = (('schema', 'title'),)
-
-    def get_holdings_for_column(self):
-        from assets.models.stocks import StockHolding
-        return StockHolding.objects.filter(
-            self_managed_account__stock_portfolio=self.schema.stock_portfolio
-        )
-
-    def __str__(self):
-        return f"[{self.schema.stock_portfolio.portfolio.profile}] {self.title} ({self.source})"
 
 
 class StockPortfolioSCV(SchemaColumnValue):

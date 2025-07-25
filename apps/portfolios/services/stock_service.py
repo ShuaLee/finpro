@@ -4,17 +4,16 @@ from portfolios.models.stock import StockPortfolio
 
 
 def create_stock_portfolio(portfolio: Portfolio) -> StockPortfolio:
-    """
-    Creates a StockPortfolio for the given Portfolio.
-
-    Raises:
-        ValidationError if StockPortfolio already exists.
-    """
     if hasattr(portfolio, "stockportfolio"):
         raise ValidationError(
             "StockPortfolio already exists for this portfolio.")
 
-    return StockPortfolio.objects.create(portfolio=portfolio)
+    stock_portfolio = StockPortfolio.objects.create(portfolio=portfolio)
+
+    # Initialize schema with default columns
+    initialize_stock_schema(stock_portfolio)
+
+    return stock_portfolio
 
 
 def initialize_stock_schema(stock_portfolio: StockPortfolio):
