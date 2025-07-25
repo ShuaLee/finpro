@@ -28,3 +28,12 @@ def ensure_portfolio_for_profile(profile: Profile) -> Portfolio:
     """
     portfolio, _ = Portfolio.objects.get_or_create(profile=profile)
     return portfolio
+
+
+def get_portfolio(profile: Profile) -> Portfolio:
+    """
+    Fetch the main Portfolio for a profile. Raises ValueError if not found.
+    """
+    if not hasattr(profile, "portfolio"):
+        raise ValueError("No portfolio exists for this profile.")
+    return profile.portfolio

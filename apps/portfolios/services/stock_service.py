@@ -1,3 +1,29 @@
+from django.core.exceptions import ValidationError
+from portfolios.models.portfolio import Portfolio
+from portfolios.models.stock import StockPortfolio
+
+
+def create_stock_portfolio(portfolio: Portfolio) -> StockPortfolio:
+    """
+    Creates a StockPortfolio for the given Portfolio.
+
+    Raises:
+        ValidationError if StockPortfolio already exists.
+    """
+    if hasattr(portfolio, "stockportfolio"):
+        raise ValidationError(
+            "StockPortfolio already exists for this portfolio.")
+
+    return StockPortfolio.objects.create(portfolio=portfolio)
+
+
+def initialize_stock_schema(stock_portfolio: StockPortfolio):
+    """
+    Stub for schema initialization (future feature).
+    """
+    # Currently not implemented. Leave empty or log.
+    pass
+
 # """
 # Stock Portfolio Service
 # -----------------------

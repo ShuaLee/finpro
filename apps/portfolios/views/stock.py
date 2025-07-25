@@ -5,6 +5,7 @@ Stock Portfolio Views
 Endpoints for managing stock-specific portfolios.
 """
 
+from django.core.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,18 +22,27 @@ class StockPortfolioCreateView(APIView):
     """
     API endpoint for creating a StockPortfolio under the user's main Portfolio.
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         profile = Profile.objects.get(user=request.user)
         try:
             portfolio = portfolio_service.get_portfolio(profile)
             stock_portfolio = stock_service.create_stock_portfolio(portfolio)
+            serializer = StockPortfolioSerializer(stock_portfolio)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        """
             # Optionally initialize schema
             stock_service.initialize_stock_schema(stock_portfolio)
             serializer = StockPortfolioSerializer(stock_portfolio)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        """
 
 
 """

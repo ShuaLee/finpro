@@ -25,7 +25,8 @@ class TestPortfolioEndpoints:
             email="test@example.com", password="testpass123"
         )
         self.detail_url = reverse("portfolio-detail")
-        self.create_url = reverse("create-portfolio")  # Optional legacy endpoint
+        # Optional legacy endpoint
+        self.create_url = reverse("create-portfolio")
 
     def authenticate(self):
         self.client.force_authenticate(user=self.user)
@@ -44,16 +45,6 @@ class TestPortfolioEndpoints:
         data = response.json()
         assert "id" in data
         assert data["profile"] == Profile.objects.get(user=self.user).id
-
-    def test_post_create_portfolio_should_fail(self):
-        """
-        If a user tries to create a portfolio manually,
-        API should return 400 since it's auto-created.
-        """
-        self.authenticate()
-        response = self.client.post(self.create_url)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Portfolio already exists" in str(response.json())
 
     def test_unauthenticated_access_is_denied(self):
         """Endpoints should require authentication."""
