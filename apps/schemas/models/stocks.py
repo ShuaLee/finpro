@@ -3,6 +3,7 @@ from .base import Schema, SchemaColumn, SchemaColumnValue
 
 
 class StockPortfolioSchema(Schema):
+    relation_name = 'stock_portfolio'
     stock_portfolio = models.ForeignKey(
         'portfolios.StockPortfolio',
         on_delete=models.CASCADE,

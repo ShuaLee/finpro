@@ -5,6 +5,7 @@ from .base import Schema, SchemaColumn, SchemaColumnValue
 
 
 class MetalPortfolioSchema(Schema):
+    relation_name = 'metal_schema'
     metal_portfolio = models.ForeignKey(
         'portfolios.MetalPortfolio',
         on_delete=models.CASCADE,
