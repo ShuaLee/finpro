@@ -1,12 +1,13 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
-from ..constants import ASSET_SCHEMA_CONFIG
-from ..utils import get_default_for_type
+from assets.services.config import get_asset_schema_config
+from assets.utils import get_default_for_type
 from decimal import Decimal, InvalidOperation
 import logging
+from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class InvestmentTheme(models.Model):
     portfolio = models.ForeignKey(
         Portfolio, on_delete=models.CASCADE, related_name='asset_tags')
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     parent = models.ForeignKey(
         'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtags')
 
@@ -22,26 +23,30 @@ class InvestmentTheme(models.Model):
         unique_together = ('portfolio', 'name')
 
     def __str__(self):
+        # Full hierarchy display
         full_path = [self.name]
         parent = self.parent
-        while parent is not None:
+        while parent:
             full_path.append(parent.name)
             parent = parent.parent
         return " > ".join(reversed(full_path))
 
 
 class Asset(models.Model):
+    """Abstract base model for all assets (e.g., Stock, Metal)."""
     class Meta:
         abstract = True
 
     def get_type(self):
         return self.__class__.__name__
 
+    @abstractmethod
     def get_price(self):
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement get_price().")
 
 
-class AssetHolding(models.Model):
+class AssetHolding(models.Model, ABC):
+    """Abstract base for all asset holdings (e.g., StockHolding)."""
     quantity = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
         max_digits=20, decimal_places=2, null=True, blank=True)
@@ -58,46 +63,50 @@ class AssetHolding(models.Model):
         abstract = True
 
     @property
+    @abstractmethod
     def asset(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement the `asset` property.")
+        """Return the related asset object (e.g., Stock instance)."""
+        pass
 
+    @abstractmethod
     def get_profile_currency(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement get_profile_currency().")
+        pass
 
+    @abstractmethod
     def get_asset_type(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement get_asset_type().")
+        pass
 
+    @abstractmethod
     def get_active_schema(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement get_active_schema().")
+        pass
 
+    @abstractmethod
     def get_column_model(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement get_column_model().")
+        pass
 
+    @abstractmethod
     def get_column_value_model(self):
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement get_column_value_model().")
+        pass
 
     def get_column_value(self, source_field):
         """
-        Retrieve or create the SchemaColumnValue for this holding.
+        Get or create SchemaColumnValue for a given source field.
+        Falls back to instance attribute if schema/column not found.
         """
-        column_model = self.get_column_model()
-        value_model = self.get_column_value_model()
         schema = self.get_active_schema()
-        asset_type = self.get_asset_type()
+        if not schema:
+            return getattr(self, source_field, None)
 
         val = self.column_values.select_related('column').filter(
-            column__source_field=source_field).first()
+            column__source_field=source_field
+        ).first()
 
-        if not val and schema:
-            config = ASSET_SCHEMA_CONFIG.get(asset_type, {}).get(
+        if val is None:
+            config = get_asset_schema_config(self.get_asset_type()).get(
                 'holding', {}).get(source_field)
             if config:
+                column_model = self.get_column_model()
+                value_model = self.get_column_value_model()
                 column, _ = column_model.objects.get_or_create(
                     schema=schema,
                     source='holding',
@@ -116,63 +125,51 @@ class AssetHolding(models.Model):
                     }
                 )
 
-        if val:
-            return val.get_value()
-        elif hasattr(self, source_field):
-            return getattr(self, source_field)
-        return None
+        return val.get_value() if val else getattr(self, source_field, None)
 
+    # --- Financial calculations ---
     def get_current_value(self):
         try:
-            quantity = self.get_column_value('quantity')
-            price = self.get_column_value('price')
-            if quantity is not None and price is not None:
-                return round(float(quantity) * float(price), 2)
-        except (TypeError, ValueError):
-            pass
-        return None
-
-    def get_current_value_in_profile_fx(self):
-        current_value = self.get_current_value()
-        from_currency = getattr(self.asset, 'currency', None)
-        to_currency = self.get_profile_currency()
-
-        if current_value is None or not from_currency or not to_currency:
+            quantity = Decimal(str(self.get_column_value('quantity') or 0))
+            price = Decimal(str(self.get_column_value('price') or 0))
+            return (quantity * price).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError):
             return None
 
-        fx_rate = get_fx_rate(from_currency, to_currency)
+    def get_current_value_in_profile_fx(self):
+        value = self.get_current_value()
+        if not value:
+            return None
+
+        fx_rate = get_fx_rate(
+            getattr(self.asset, 'currency', None), self.get_profile_currency())
         try:
-            return round(float(current_value) * float(fx_rate), 2)
-        except (TypeError, ValueError):
+            return (value * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError):
             return None
 
     def get_unrealized_gain(self):
         try:
-            quantity = self.get_column_value('quantity')
-            price = self.get_column_value('price')
-            purchase_price = self.get_column_value('purchase_price')
-
-            if None in (quantity, price, purchase_price):
-                return None
-
-            return round((Decimal(str(price)) - Decimal(str(purchase_price))) * Decimal(str(quantity)), 2)
-        except (InvalidOperation, TypeError, ValueError):
+            quantity = Decimal(str(self.get_column_value('quantity') or 0))
+            price = Decimal(str(self.get_column_value('price') or 0))
+            purchase_price = Decimal(
+                str(self.get_column_value('purchase_price') or 0))
+            return ((price - purchase_price) * quantity).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError):
             return None
 
     def get_unrealized_gain_profile_fx(self):
         base_gain = self.get_unrealized_gain()
-        from_currency = getattr(self.asset, 'currency', None)
-        to_currency = self.get_profile_currency()
-
-        if base_gain is None or not from_currency or not to_currency:
+        if not base_gain:
             return None
-
         try:
-            fx_rate = get_fx_rate(from_currency, to_currency)
-            return round(float(base_gain) * float(fx_rate), 2)
-        except (TypeError, ValueError):
+            fx_rate = get_fx_rate(
+                getattr(self.asset, 'currency', None), self.get_profile_currency())
+            return (base_gain * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError):
             return None
 
+    # --- Validation ---
     def clean(self):
         if self.quantity < 0:
             raise ValidationError("Quantity cannot be negative.")
@@ -182,22 +179,23 @@ class AssetHolding(models.Model):
             raise ValidationError("Purchase date cannot be in the future.")
         super().clean()
 
+    # --- Save/Delete with related updates ---
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         self.full_clean()
-        logger.debug(
-            f"Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
+        logger.debug("Saving %s for asset %s",
+                     self.__class__.__name__, getattr(self, 'asset', None))
+
         super().save(*args, **kwargs)
 
         if is_new:
             schema = self.get_active_schema()
-            value_model = self.get_column_value_model()
             if schema:
-                for column in schema.columns.all():
-                    value_model.objects.get_or_create(
-                        column=column,
-                        holding=self
-                    )
+                value_model = self.get_column_value_model()
+                with transaction.atomic():
+                    for column in schema.columns.all():
+                        value_model.objects.get_or_create(
+                            column=column, holding=self)
 
     def delete(self, *args, **kwargs):
         self.column_values.all().delete()

@@ -5,11 +5,9 @@ from django.db import transaction
 def create_schema(model_class, portfolio, name="Default Schema"):
     """
     Generic schema creation for any portfolio type.
-    Relies on `relation_name` class attribute for FK field.
+    Dynamically determines the correct FK relation.
     """
-    if not hasattr(model_class, "relation_name"):
-        raise ValueError(
-            f"{model_class.__name__} must define 'relation_name' class attribute.")
-
-    relation_name = model_class.relation_name
+    relation_name = getattr(model_class, 'portfolio_relation_name', None)
+    if not relation_name:
+        raise ValueError("Schema model must define 'portfolio_relation_name'.")
     return model_class.objects.create(**{relation_name: portfolio}, name=name)

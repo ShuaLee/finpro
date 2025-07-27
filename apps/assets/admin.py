@@ -2,13 +2,17 @@ from django import forms
 from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
-from .models.base import InvestmentTheme
-from .models.stocks import Stock, StockHolding
+from assets.models.assets.base import InvestmentTheme
+from assets.models.assets.stocks import Stock, StockHolding
+from assets.models.schemas.config import AssetSchemaConfig
 import logging
+
 
 logger = logging.getLogger(__name__)
 
 # ------------------------------ Forms ---------------------------- #
+
+
 class StockForm(forms.ModelForm):
     class Meta:
         model = Stock
@@ -136,7 +140,7 @@ class StockAdmin(admin.ModelAdmin):
     refresh_fmp_data.short_description = "Refresh FMP data for selected stocks"
 
     def verify_custom_status(self, request, queryset):
-        from external_data.fmp.dispatch import fetch_asset_data 
+        from external_data.fmp.dispatch import fetch_asset_data
         verified_custom = 0
         converted_to_fmp = 0
         failed = 0
@@ -210,7 +214,8 @@ class StockHoldingAdmin(admin.ModelAdmin):
         'self_managed_account__stock_portfolio__portfolio__profile',
         'stock__is_custom', 'stock__sector', 'stock__is_adr', 'investment_theme'
     ]
-    search_fields = ['stock__ticker', 'stock__name', 'self_managed_account__name']
+    search_fields = ['stock__ticker',
+                     'stock__name', 'self_managed_account__name']
     list_editable = ['quantity', 'purchase_price', 'purchase_date']
     list_per_page = 50
     fields = [
@@ -256,7 +261,8 @@ class StockHoldingAdmin(admin.ModelAdmin):
                     holding.stock.save()
                     updated += 1
             except Exception as e:
-                logger.error(f"Failed to refresh {holding.stock.ticker}: {str(e)}")
+                logger.error(
+                    f"Failed to refresh {holding.stock.ticker}: {str(e)}")
         self.message_user(
             request,
             f"Refreshed {updated} holdings' stock values.",
@@ -267,8 +273,10 @@ class StockHoldingAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'stock', 'self_managed_account', 'investment_theme'
-        ).prefetch_related('column_values__column')  # optional if using schema data
-    
+            # optional if using schema data
+        ).prefetch_related('column_values__column')
+
+
 @admin.register(InvestmentTheme)
 class InvestmentThemeAdmin(admin.ModelAdmin):
     list_display = ['name', 'portfolio', 'parent', 'full_path']
@@ -282,3 +290,9 @@ class InvestmentThemeAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('portfolio', 'parent')
+
+
+@admin.register(AssetSchemaConfig)
+class AssetSchemaConfigAdmin(admin.ModelAdmin):
+    list_display = ['asset_type', 'created_at', 'updated_at']
+    search_fields = ['asset_type']
