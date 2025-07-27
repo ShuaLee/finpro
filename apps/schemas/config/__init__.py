@@ -1,0 +1,9 @@
+from .stock import DEFAULT_COLUMNS as STOCK_DEFAULT_COLUMNS
+# from .metal import DEFAULT_COLUMNS as METAL_DEFAULT_COLUMNS
+# from .custom import DEFAULT_COLUMNS as CUSTOM_DEFAULT_COLUMNS
+
+CONFIG_MAP = {
+    "stock": STOCK_DEFAULT_COLUMNS,
+    # "metal": METAL_DEFAULT_COLUMNS,
+    # "custom": CUSTOM_DEFAULT_COLUMNS,
+}

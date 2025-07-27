@@ -1,2 +1,1 @@
-from .stock_admin import *
-from .metal_admin import *
+from .schema import *

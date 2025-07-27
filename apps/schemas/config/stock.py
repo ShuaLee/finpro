@@ -1,0 +1,37 @@
+DEFAULT_COLUMNS = [
+    {
+        "title": "Ticker",
+        "data_type": "string",
+        "source": "asset",
+        "source_field": "ticker",
+        "editable": False,
+        "is_deletable": False,
+    },
+    {
+        "title": "Quantity",
+        "data_type": "decimal",
+        "source": "holding",
+        "source_field": "quantity",
+        "editable": True,
+        "is_deletable": False,
+        "decimal_places": 4,
+    },
+    {
+        "title": "Price",
+        "data_type": "decimal",
+        "source": "asset",
+        "source_field": "price",
+        "editable": False,
+        "is_deletable": False,
+        "decimal_places": 2,
+    },
+    {
+        "title": "Current Value",
+        "data_type": "decimal",
+        "source": "calculated",
+        "formula": "quantity * price",
+        "editable": False,
+        "is_deletable": False,
+        "decimal_places": 2,
+    },
+]
