@@ -71,11 +71,11 @@ INSTALLED_APPS = [
     'subscriptions',
     'common',
     'portfolios',
+    'schemas',
     # 'finances',
     # 'apps.accounts.apps.AccountsConfig',
     # 'apps.assets.apps.AssetsConfig',
     # 'apps.finances',
-    # 'apps.schemas.apps.SchemasConfig',
 ]
 
 MIDDLEWARE = [

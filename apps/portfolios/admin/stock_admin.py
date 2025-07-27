@@ -1,12 +1,13 @@
 from django.contrib import admin
-from portfolios.models import StockPortfolio
+from portfolios.models.stock import StockPortfolio
+from schemas.services.schema import initialize_stock_schema
 
 
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
-    """
-    Admin for the StockPortfolio model.
-    """
-    list_display = ['portfolio', 'created_at']
-    search_fields = ['portfolio__profile__user__email']
-    list_filter = ['created_at']
+    list_display = ("id", "portfolio")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not change:  # Only on create
+            initialize_stock_schema(obj)
