@@ -3,7 +3,7 @@ from django.db import models, transaction
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
-from assets.services.config import get_asset_schema_config
+from assets.services import HoldingSchemaEngine, get_asset_schema_config
 from assets.utils import get_default_for_type
 from decimal import Decimal, InvalidOperation
 import logging
@@ -191,11 +191,8 @@ class AssetHolding(models.Model, ABC):
         if is_new:
             schema = self.get_active_schema()
             if schema:
-                value_model = self.get_column_value_model()
-                with transaction.atomic():
-                    for column in schema.columns.all():
-                        value_model.objects.get_or_create(
-                            column=column, holding=self)
+                engine = HoldingSchemaEngine(self, self.get_asset_type())
+                engine.sync_all_columns()
 
     def delete(self, *args, **kwargs):
         self.column_values.all().delete()
