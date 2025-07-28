@@ -3,20 +3,27 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from external_data.fx import get_fx_rate
 from portfolios.models.stock import StockPortfolio
+from schemas.models import Schema
 from .base import BaseAccount
 from decimal import Decimal
 
 
 class BaseStockAccount(BaseAccount):
-    broker = models.CharField(max_length=100, blank=True, null=True,
-                              help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)")
+    broker = models.CharField(
+        max_length=100, blank=True, null=True,
+        help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)"
+    )
+
     tax_status = models.CharField(
         max_length=50,
-        choices=[('taxable', 'Taxable'),
-                 ('tax_deferred', 'Tax-Deferred'),
-                 ('tax_exempt', 'Tax-Exempt'),],
+        choices=[
+            ('taxable', 'Taxable'),
+            ('tax_deferred', 'Tax-Deferred'),
+            ('tax_exempt', 'Tax-Exempt'),
+        ],
         default='taxable'
     )
+
     account_type = models.CharField(
         max_length=50,
         choices=[
@@ -39,8 +46,9 @@ class SelfManagedAccount(BaseStockAccount):
         on_delete=models.CASCADE,
         related_name='self_managed_accounts'
     )
+
     active_schema = models.ForeignKey(
-        'schemas.StockPortfolioSchema',
+        Schema,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -64,14 +72,18 @@ class SelfManagedAccount(BaseStockAccount):
         return round(total, 2)
 
     def save(self, *args, **kwargs):
-        # On creation, set active_schema
-        if not self.pk and not self.active_schema:
+        is_new = self.pk is None
+        if is_new and not self.active_schema:
             if self.stock_portfolio and self.stock_portfolio.schemas.exists():
                 self.active_schema = self.stock_portfolio.schemas.first()
             else:
-                raise ValidationError(
-                    "StockPortfolio must have at least one schema.")
+                raise ValidationError("StockPortfolio must have at least one schema.")
+
         super().save(*args, **kwargs)
+
+        # Initialize visibility if new
+        if is_new and self.active_schema:
+            self.initialize_visibility_settings(self.active_schema)
 
 
 class ManagedAccount(BaseStockAccount):
@@ -80,9 +92,19 @@ class ManagedAccount(BaseStockAccount):
         on_delete=models.CASCADE,
         related_name='managed_accounts'
     )
+
+    active_schema = models.ForeignKey(
+        Schema,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="managed_accounts"
+    )
+
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
+
     currency = models.CharField(
         max_length=3,
         choices=settings.CURRENCY_CHOICES,

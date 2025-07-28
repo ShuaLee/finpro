@@ -50,6 +50,13 @@ class SchemaColumn(models.Model):
     is_deletable = models.BooleanField(default=True)
     decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    is_system = models.BooleanField(default=False, help_text="Whether this is a system default column")
+    scope = models.CharField(max_length=20, choices=[
+        ('portfolio', 'Portfolio-wide'),
+        ('subportfolio', 'Subportfolio-wide'),
+        ('account', 'Account-specific')
+    ], default='subportfolio')
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -77,3 +84,24 @@ class SchemaColumnValue(models.Model):
 
     def __str__(self):
         return f"{self.account} - {self.column.title}: {self.value}"
+
+
+class SchemaColumnVisibility(models.Model):
+    column = models.ForeignKey(
+        SchemaColumn,
+        on_delete=models.CASCADE,
+        related_name="visibility_settings"
+    )
+
+    # Generic relation to any account model
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    account = GenericForeignKey()
+
+    is_visible = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ("column", "content_type", "object_id")
+
+    def __str__(self):
+        return f"{self.account} | {self.column.title}: {'Visible' if self.is_visible else 'Hidden'}"
