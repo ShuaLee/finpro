@@ -1,13 +1,16 @@
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import models
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
 from assets.services import HoldingSchemaEngine, get_asset_schema_config
 from assets.utils import get_default_for_type
+from schemas.models import SchemaColumnValue
 from decimal import Decimal, InvalidOperation
 import logging
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ class Asset(models.Model):
         raise NotImplementedError("Subclasses must implement get_price().")
 
 
-class AssetHolding(models.Model, ABC):
+class AssetHolding(models.Model):
     """Abstract base for all asset holdings (e.g., StockHolding)."""
     quantity = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
@@ -58,6 +61,11 @@ class AssetHolding(models.Model, ABC):
         blank=True,
         related_name='%(class)s_investments'
     )
+    column_values = GenericRelation(SchemaColumnValue,
+                                    content_type_field='account_ct',
+                                    object_id_field='account_id',
+                                    related_query_name='holding'
+                                    )
 
     class Meta:
         abstract = True
@@ -118,7 +126,9 @@ class AssetHolding(models.Model, ABC):
                 )
                 val, _ = value_model.objects.get_or_create(
                     column=column,
-                    holding=self,
+                    account_id=self.id,
+                    account_ct=ContentType.objects.get_for_model(
+                        self.__class__),
                     defaults={
                         'value': get_default_for_type(config.get('data_type')),
                         'is_edited': False,

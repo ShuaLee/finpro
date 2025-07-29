@@ -3,7 +3,7 @@ from django.db import models
 from .base import Asset, AssetHolding
 from accounts.models.stocks import SelfManagedAccount
 from external_data.fx import get_fx_rate
-from schemas.models.stocks import StockPortfolioSC, StockPortfolioSCV
+from schemas.models import SchemaColumn, SchemaColumnValue
 
 
 class Stock(Asset):
@@ -62,6 +62,10 @@ class StockHolding(AssetHolding):
     )
 
     @property
+    def account(self):
+        return self.self_managed_account
+
+    @property
     def asset(self):
         return self.stock
 
@@ -75,12 +79,10 @@ class StockHolding(AssetHolding):
         return self.self_managed_account.active_schema
 
     def get_column_model(self):
-        from schemas.models.stocks import StockPortfolioSC
-        return StockPortfolioSC
+        return SchemaColumn
 
     def get_column_value_model(self):
-        from schemas.models.stocks import StockPortfolioSCV
-        return StockPortfolioSCV
+        return SchemaColumnValue
 
     def get_profile_currency(self):
         return self.self_managed_account.stock_portfolio.portfolio.profile.currency

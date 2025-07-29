@@ -1,6 +1,7 @@
 from django.apps import apps
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from assets.config import get_asset_schema_config
+from assets.services.config import get_asset_schema_config
 from schemas.models import SchemaColumn, SchemaColumnValue
 
 
@@ -32,9 +33,16 @@ class HoldingSchemaEngine:
                 return None
         return value
 
+    def get_column_config_by_title(self, title: str) -> dict:
+        for section in ['asset', 'holding', 'calculated']:
+            if section in self.config:
+                if title in self.config[section]:
+                    return self.config[section][title]
+        return None
+
     def get_configured_value(self, column: SchemaColumn):
         column_title = column.title
-        column_config = self.config.get(column_title)
+        column_config = self.get_column_config_by_title(column_title)
         if not column_config:
             return None
 
@@ -52,13 +60,17 @@ class HoldingSchemaEngine:
         if not self.schema:
             return
 
+        content_type = ContentType.objects.get_for_model(
+            self.holding.__class__)
+
         for column in self.schema.columns.all():
             value = self.get_configured_value(column)
             if value is None:
                 continue
 
-            scv, created = SchemaColumnValue.objects.update_or_create(
-                holding=self.holding,
+            SchemaColumnValue.objects.update_or_create(
                 column=column,
+                account_ct=content_type,
+                account_id=self.holding.id,
                 defaults={"value": value}
             )

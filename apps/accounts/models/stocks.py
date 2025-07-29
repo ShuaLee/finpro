@@ -70,6 +70,10 @@ class SelfManagedAccount(BaseStockAccount):
             )
         ]
 
+    @property
+    def sub_portfolio(self):
+        return self.stock_portfolio
+
     def get_current_value_profile_fx(self):
         total = Decimal(0.0)
         for holding in self.holdings.all():

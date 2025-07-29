@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 from external_data.fmp.dispatch import fetch_asset_data
-from ..models.stocks import Stock, StockHolding
+from assets.models.assets.stocks import Stock, StockHolding
 
 
 class StockHoldingCreateSerializer(serializers.ModelSerializer):
@@ -31,7 +31,8 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
 
         if confirm_add:
             stock = Stock(ticker=ticker.upper(), is_custom=True)
-            fetch_asset_data(stock, 'stock', verify_custom=True)  # we allow failure here
+            # we allow failure here
+            fetch_asset_data(stock, 'stock', verify_custom=True)
             stock.save()
             return stock
 

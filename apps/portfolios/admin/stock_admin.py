@@ -6,6 +6,7 @@ from schemas.services.schema import initialize_stock_schema
 @admin.register(StockPortfolio)
 class StockPortfolioAdmin(admin.ModelAdmin):
     list_display = ("id", "portfolio")
+    search_fields = ["portfolio__user__email"]
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)

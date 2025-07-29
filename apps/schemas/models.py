@@ -50,7 +50,8 @@ class SchemaColumn(models.Model):
     is_deletable = models.BooleanField(default=True)
     decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
 
-    is_system = models.BooleanField(default=False, help_text="Whether this is a system default column")
+    is_system = models.BooleanField(
+        default=False, help_text="Whether this is a system default column")
     scope = models.CharField(max_length=20, choices=[
         ('portfolio', 'Portfolio-wide'),
         ('subportfolio', 'Subportfolio-wide'),
@@ -84,6 +85,9 @@ class SchemaColumnValue(models.Model):
 
     def __str__(self):
         return f"{self.account} - {self.column.title}: {self.value}"
+
+    def get_value(self):
+        return self.value
 
 
 class SchemaColumnVisibility(models.Model):

@@ -1,9 +1,9 @@
-from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
 from decimal import Decimal
 from accounts.models.metals import StorageFacility
-from .base import Asset, AssetHolding
+from assets.models.assets.base import Asset, AssetHolding
+from common.utils.country_data import get_currency_choices
+from schemas.models import SchemaColumn, SchemaColumnValue
 
 
 class PreciousMetal(Asset):
@@ -13,7 +13,7 @@ class PreciousMetal(Asset):
         max_digits=20, decimal_places=4, null=True, blank=True)
     currency = models.CharField(
         max_length=3,
-        choices=settings.CURRENCY_CHOICES,
+        choices=get_currency_choices(),
         blank=True,
         null=True
     )
@@ -66,12 +66,10 @@ class PreciousMetalHolding(AssetHolding):
         return self.storage_facility.metal_portfolio.active_schema
 
     def get_column_model(self):
-        from schemas.models.metals import MetalPortfolioSC
-        return MetalPortfolioSC
+        return SchemaColumn
 
     def get_column_value_model(self):
-        from schemas.models.metals import MetalPortfolioSCV
-        return MetalPortfolioSCV
+        return SchemaColumnValue
 
     def get_profile_currency(self):
         return self.storage_facility.metal_portfolio.portfolio.profile.currency

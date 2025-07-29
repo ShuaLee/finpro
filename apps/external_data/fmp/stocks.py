@@ -1,6 +1,6 @@
 from django.conf import settings
-from assets.models.stocks import Stock
-from ..constants import FMP_FIELD_MAPPINGS
+from assets.models.assets.stocks import Stock
+from external_data.constants import FMP_FIELD_MAPPINGS
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 import requests
