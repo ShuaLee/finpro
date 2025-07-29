@@ -14,11 +14,6 @@ from .stock_dashboard_service import (
     get_stock_accounts_dashboard,
 )
 
-from .metal_account_service import (
-    create_storage_facility,
-    get_storage_facilities,
-)
-
 __all__ = [
     # Stock Account Services
     "create_self_managed_account",
@@ -32,8 +27,4 @@ __all__ = [
 
     # Dashboard
     "get_stock_accounts_dashboard",
-
-    # Metal Account Services
-    "create_storage_facility",
-    "get_storage_facilities",
 ]

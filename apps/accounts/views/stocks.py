@@ -16,7 +16,7 @@ from accounts.serializers.stocks import (
     ManagedAccountCreateSerializer,
 )
 
-from assets.serializers.stocks import StockHoldingSerializer
+# from assets.serializers.stocks import StockHoldingSerializer
 
 
 class SelfManagedAccountListCreateView(APIView):
@@ -27,7 +27,8 @@ class SelfManagedAccountListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        accounts = stock_account_service.get_self_managed_accounts(request.user)
+        accounts = stock_account_service.get_self_managed_accounts(
+            request.user)
         serializer = SelfManagedAccountSerializer(accounts, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -74,37 +75,38 @@ class StockAccountsDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        dashboard_data = stock_dashboard_service.get_stock_accounts_dashboard(request.user)
+        dashboard_data = stock_dashboard_service.get_stock_accounts_dashboard(
+            request.user)
         return Response(dashboard_data, status=status.HTTP_200_OK)
 
 
-class AddHoldingView(APIView):
-    """
-    POST: Add a new holding to a self-managed account.
-    """
-    permission_classes = [IsAuthenticated]
+# class AddHoldingView(APIView):
+#     """
+#     POST: Add a new holding to a self-managed account.
+#     """
+#     permission_classes = [IsAuthenticated]
 
-    def post(self, request, account_id):
-        context = {'self_managed_account': account_id}
-        holding = holdings_service.add_holding(account_id, request.data, context)
+#     def post(self, request, account_id):
+#         context = {'self_managed_account': account_id}
+#         holding = holdings_service.add_holding(account_id, request.data, context)
 
-        return Response({
-            "detail": "Holding added successfully",
-            "holding": StockHoldingSerializer(holding).data
-        }, status=status.HTTP_201_CREATED)
+#         return Response({
+#             "detail": "Holding added successfully",
+#             "holding": StockHoldingSerializer(holding).data
+#         }, status=status.HTTP_201_CREATED)
 
 
-class EditColumnValueView(APIView):
-    """
-    PATCH: Edit a column value for a specific stock holding.
-    """
-    permission_classes = [IsAuthenticated]
+# class EditColumnValueView(APIView):
+#     """
+#     PATCH: Edit a column value for a specific stock holding.
+#     """
+#     permission_classes = [IsAuthenticated]
 
-    def patch(self, request, value_id):
-        value_obj = holdings_service.edit_column_value(value_id, request.data, request.user)
+#     def patch(self, request, value_id):
+#         value_obj = holdings_service.edit_column_value(value_id, request.data, request.user)
 
-        return Response({
-            "id": value_obj.id,
-            "value": value_obj.value,
-            "is_edited": value_obj.is_edited
-        }, status=status.HTTP_200_OK)
+#         return Response({
+#             "id": value_obj.id,
+#             "value": value_obj.value,
+#             "is_edited": value_obj.is_edited
+#         }, status=status.HTTP_200_OK)

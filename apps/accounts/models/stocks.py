@@ -1,6 +1,6 @@
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from common.utils.country_data import get_currency_choices
 from external_data.fx import get_fx_rate
 from portfolios.models.stock import StockPortfolio
 from schemas.models import Schema
@@ -34,6 +34,13 @@ class BaseStockAccount(BaseAccount):
         ],
         default='individual',
         help_text="Purpose or strategy of the account."
+    )
+
+    currency = models.CharField(
+        max_length=3,
+        choices=get_currency_choices(),
+        blank=True,
+        null=True
     )
 
     class Meta:
@@ -77,7 +84,8 @@ class SelfManagedAccount(BaseStockAccount):
             if self.stock_portfolio and self.stock_portfolio.schemas.exists():
                 self.active_schema = self.stock_portfolio.schemas.first()
             else:
-                raise ValidationError("StockPortfolio must have at least one schema.")
+                raise ValidationError(
+                    "StockPortfolio must have at least one schema.")
 
         super().save(*args, **kwargs)
 
@@ -104,13 +112,6 @@ class ManagedAccount(BaseStockAccount):
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
-
-    currency = models.CharField(
-        max_length=3,
-        choices=settings.CURRENCY_CHOICES,
-        blank=True,
-        null=True
-    )
 
     class Meta:
         constraints = [

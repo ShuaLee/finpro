@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from schemas.models.core import Schema, SchemaColumn
+from schemas.models import Schema, SchemaColumn
 from schemas.config import STOCK_DEFAULT_COLUMNS
 import re
 

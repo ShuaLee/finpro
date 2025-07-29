@@ -1,3 +1,4 @@
+"""
 from rest_framework import serializers
 from accounts.models import StorageFacility
 
@@ -12,3 +13,4 @@ class StorageFacilityCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = StorageFacility
         fields = ['name', 'is_lending_account', 'is_insured', 'interest_rate']
+"""

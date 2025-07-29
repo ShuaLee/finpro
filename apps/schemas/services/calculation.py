@@ -1,5 +1,5 @@
 from simpleeval import simple_eval
-from schemas.models.core import Schema, SchemaColumnValue
+from schemas.models import Schema, SchemaColumnValue
 
 
 def build_context(schema: Schema, account):

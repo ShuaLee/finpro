@@ -68,13 +68,13 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'accounts',
+    # 'assets',
     'users',
     'subscriptions',
     'common',
     'portfolios',
     'schemas',
-    # 'finances',
-    # 'apps.assets.apps.AssetsConfig',
+    'finances',
     # 'apps.finances',
 ]
 

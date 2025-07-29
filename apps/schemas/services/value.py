@@ -1,5 +1,5 @@
 from django.db import transaction
-from schemas.models.core import SchemaColumnValue
+from schemas.models import SchemaColumnValue
 from schemas.services.calculation import recalculate_calculated_columns
 
 
