@@ -19,6 +19,7 @@ numexpr = "*"
 djangorestframework-simplejwt = "*"
 django-cors-headers = "*"
 simpleeval = "*"
+asteval = "*"
 
 [dev-packages]
 pytest = "*"

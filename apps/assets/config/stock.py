@@ -33,7 +33,7 @@ STOCK_SCHEMA_CONFIG = {
         "purchase_price": {
             "data_type": "decimal",
             "editable": True,
-            "field_path": "holding.purchase_price",
+            "field_path": "purchase_price",
             "decimal_spaces": 2,
         },
     },

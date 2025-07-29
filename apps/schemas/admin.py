@@ -1,12 +1,12 @@
 from django.contrib import admin
+from django.contrib.contenttypes.admin import GenericTabularInline
 from schemas.models import (
     Schema,
     SchemaColumn,
     SchemaColumnValue,
     SchemaColumnVisibility
 )
-from django.contrib.contenttypes.admin import GenericTabularInline
-
+from schemas.services.schema_sync_service import sync_schema_column_to_holdings
 
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
@@ -18,13 +18,27 @@ class SchemaAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumn)
 class SchemaColumnAdmin(admin.ModelAdmin):
-    list_display = (
-        "title", "schema", "data_type", "source",
-        "source_field", "editable", "is_deletable", "created_at"
-    )
-    list_filter = ("schema", "source", "data_type", "editable")
+    list_display = ("title", "schema", "source", "source_field", "editable", "is_deletable")
+    list_filter = ("source", "editable", "is_deletable")
     search_fields = ("title", "source_field", "schema__name")
-    readonly_fields = ("created_at",)
+    readonly_fields = ("schema",)
+
+    fieldsets = (
+        (None, {
+            "fields": (
+                "schema", "title", "data_type", "source", "source_field",
+                "formula", "formula_expression",
+                "editable", "is_deletable", "decimal_places", "is_system", "scope"
+            )
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        is_new = obj.pk is None
+        super().save_model(request, obj, form, change)
+
+        if is_new:
+            sync_schema_column_to_holdings(obj)
 
 
 class SchemaColumnValueInline(GenericTabularInline):

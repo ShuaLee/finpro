@@ -58,6 +58,12 @@ class SchemaColumn(models.Model):
         ('account', 'Account-specific')
     ], default='subportfolio')
 
+    formula_expression = models.TextField(
+        null=True,
+        blank=True,
+        help_text="User-defined formula like '(quantity * price) / pe_ratio' -> something that wont be in the backend."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
