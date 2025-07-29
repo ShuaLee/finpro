@@ -193,16 +193,20 @@ class AssetHolding(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         self.full_clean()
-        logger.debug("Saving %s for asset %s",
-                     self.__class__.__name__, getattr(self, 'asset', None))
+        print(f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
 
         super().save(*args, **kwargs)
 
         if is_new:
+            print("🛠 New holding detected. Attempting schema sync...")
             schema = self.get_active_schema()
             if schema:
+                print(f"📐 Schema found: {schema}")
                 engine = HoldingSchemaEngine(self, self.get_asset_type())
                 engine.sync_all_columns()
+            else:
+                print("⚠️ No schema found. Skipping sync.")
+
 
     def delete(self, *args, **kwargs):
         self.column_values.all().delete()

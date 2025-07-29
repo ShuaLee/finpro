@@ -10,8 +10,10 @@ class HoldingSchemaEngine:
         self.holding = holding
         self.asset_type = asset_type
         self.portfolio = self._get_portfolio()
+        print(f"🧪 Engine Init: holding={holding.id}, portfolio={self.portfolio}")
         self.schema = self._get_active_schema()
         self.config = get_asset_schema_config(asset_type)
+        print(f"🧪 Schema found: {self.schema}")
 
     def _get_portfolio(self):
         # assumes account > subportfolio > portfolio
@@ -20,29 +22,30 @@ class HoldingSchemaEngine:
     def _get_active_schema(self):
         SchemaModel = apps.get_model("schemas", "Schema")
         return SchemaModel.objects.filter(
-            content_type__model=self.asset_type,
+            content_type=ContentType.objects.get_for_model(self.portfolio),
             object_id=self.portfolio.pk
         ).first()
 
     def resolve_value(self, field_path: str):
+        print(f"🔍 Resolving path: {field_path}")
         parts = field_path.split('.')
         value = self.holding
         for part in parts:
+            print(f"  👉 getattr({value}, '{part}')")
             value = getattr(value, part, None)
             if value is None:
+                print(f"  ❌ Failed at: {part}")
                 return None
+        print(f"✅ Resolved value: {value}")
         return value
-
-    def get_column_config_by_title(self, title: str) -> dict:
-        for section in ['asset', 'holding', 'calculated']:
-            if section in self.config:
-                if title in self.config[section]:
-                    return self.config[section][title]
-        return None
+    
+    def get_column_config_by_field(self, source: str, field: str):
+        return self.config.get(source, {}).get(field)
 
     def get_configured_value(self, column: SchemaColumn):
-        column_title = column.title
-        column_config = self.get_column_config_by_title(column_title)
+        column_config = self.get_column_config_by_field(column.source, column.source_field)
+        print(f"🔍 COLUMN={column.title} | source={column.source} | field={column.source_field} | config={column_config}")
+
         if not column_config:
             return None
 
@@ -58,14 +61,19 @@ class HoldingSchemaEngine:
     @transaction.atomic
     def sync_all_columns(self):
         if not self.schema:
+            print("🚫 No schema set on engine. Exiting sync.")
             return
 
-        content_type = ContentType.objects.get_for_model(
-            self.holding.__class__)
+        content_type = ContentType.objects.get_for_model(self.holding.__class__)
+        print(f"🔁 Syncing columns for holding {self.holding} with schema {self.schema}")
 
         for column in self.schema.columns.all():
+            print(f"🔍 Processing column: {column.title} ({column.source}.{column.source_field})")
             value = self.get_configured_value(column)
+            print(f"➡️ Value resolved: {value}")
+
             if value is None:
+                print(f"⚠️ Skipping column {column.title}, value could not be resolved.")
                 continue
 
             SchemaColumnValue.objects.update_or_create(
@@ -74,3 +82,4 @@ class HoldingSchemaEngine:
                 account_id=self.holding.id,
                 defaults={"value": value}
             )
+            print(f"✅ Column synced: {column.title} = {value}")

@@ -3,14 +3,14 @@ STOCK_SCHEMA_CONFIG = {
         "ticker": {
             "data_type": "string",
             "editable": False,
-            "field_path": "holding.stock.ticker",
+            "field_path": "stock.ticker",
             "api_field": "symbol",
             "source": "quote",
         },
         "price": {
             "data_type": "decimal",
             "editable": True,
-            "field_path": "holding.stock.price",
+            "field_path": "stock.price",
             "decimal_spaces": 2,
             "api_field": "price",
             "source": "quote",
@@ -18,7 +18,7 @@ STOCK_SCHEMA_CONFIG = {
         "name": {
             "data_type": "string",
             "editable": True,
-            "field_path": "holding.stock.name",
+            "field_path": "stock.name",
             "api_field": "name",
             "source": "profile",
         },
@@ -27,7 +27,7 @@ STOCK_SCHEMA_CONFIG = {
         "quantity": {
             "data_type": "decimal",
             "editable": True,
-            "field_path": "holding.quantity",
+            "field_path": "quantity",
             "decimal_spaces": 4,
         },
         "purchase_price": {
