@@ -1,10 +1,10 @@
-from apps.schemas.services.schema_engine import HoldingSchemaEngine
+from schemas.services.schema_engine import HoldingSchemaEngine
 
 
 def get_asset_holding_model_map():
     # Lazy load to avoid circular imports
-    from assets.models import StockHolding
     # from metals.models import MetalHolding
+    from assets.models import StockHolding
 
     return {
         "stockportfolio": StockHolding,

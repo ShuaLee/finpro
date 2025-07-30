@@ -74,8 +74,6 @@ INSTALLED_APPS = [
     'common',
     'portfolios',
     'schemas',
-    'finances',
-    # 'apps.finances',
 ]
 
 MIDDLEWARE = [

@@ -3,9 +3,12 @@ users.serializers.profile
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 Serializer for reading and updating Profile data, including subscription plans.
 """
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from apps.common.utils.country_data import validate_currency_code, validate_country_code
+from common.utils.country_currency_catalog import (
+    validate_country_code,
+    validate_currency_code,
+)
 from users.models import Profile
 from subscriptions.models import AccountType, Plan
 
@@ -46,21 +49,19 @@ class ProfileSerializer(serializers.ModelSerializer):
         """Return user's email for profile representation."""
         return obj.user.email
 
-    def validate_preferred_currency(self, value):
-        """Validate currency code and normalize to uppercase."""
-        value = value.upper()
-        try:
-            validate_currency_code(value)
-        except ValidationError as e:
-            raise serializers.ValidationError(str(e))
-        return value
-
     def validate_country(self, value):
-        """Validate country code and normalize to uppercase."""
         value = value.upper()
         try:
             validate_country_code(value)
-        except ValidationError as e:
+        except (DjangoValidationError, ValueError) as e:
+            raise serializers.ValidationError(str(e))
+        return value
+    
+    def validate_preferred_currency(self, value):
+        value = value.upper()
+        try:
+            validate_currency_code(value)
+        except (DjangoValidationError, ValueError) as e:
             raise serializers.ValidationError(str(e))
         return value
 

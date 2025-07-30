@@ -6,10 +6,16 @@ import re
 
 
 @transaction.atomic
-def initialize_stock_schema(stock_portfolio, name="Default Stock Schema"):
+def initialize_stock_schema(stock_portfolio, name=None):
     """
     Creates a schema for a StockPortfolio and populates it with default columns from config.
+    The schema name will default to: "<email>'s <SubPortfolioType> Schema"
     """
+    if name is None:
+        email = stock_portfolio.portfolio.profile.user.email
+        portfolio_type = stock_portfolio.__class__.__name__
+        name = f"{email}'s {portfolio_type} Schema"
+        
     schema = Schema.objects.create(
         name=name,
         schema_type="stock",

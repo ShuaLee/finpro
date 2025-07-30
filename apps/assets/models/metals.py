@@ -2,7 +2,7 @@ from django.db import models
 from decimal import Decimal
 from accounts.models.metals import StorageFacility
 from assets.models.base import Asset, AssetHolding
-from common.utils.country_data import get_currency_choices
+from common.utils.country_currency_catalog import get_common_currency_choices
 from schemas.models import SchemaColumn, SchemaColumnValue
 
 
@@ -13,7 +13,7 @@ class PreciousMetal(Asset):
         max_digits=20, decimal_places=4, null=True, blank=True)
     currency = models.CharField(
         max_length=3,
-        choices=get_currency_choices(),
+        choices=get_common_currency_choices(),
         blank=True,
         null=True
     )

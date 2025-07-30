@@ -5,7 +5,7 @@ from schemas.models import (
     SchemaColumnValue,
     SchemaColumnVisibility
 )
-from schemas.services import recalculate_calculated_columns
+from schemas.services.calculated_column_engine import recalculate_calculated_columns
 
 
 class SchemaColumnSerializer(serializers.ModelSerializer):

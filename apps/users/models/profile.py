@@ -6,10 +6,7 @@ Defines the Profile model, which extends user functionality with additional fiel
 
 from django.conf import settings
 from django.db import models
-from apps.common.utils.country_data import (
-    get_country_choices, get_currency_choices,
-    validate_country_code, validate_currency_code
-)
+from common.utils.country_currency_catalog import get_common_currency_choices, get_common_country_choices
 
 
 class Profile(models.Model):
@@ -35,14 +32,12 @@ class Profile(models.Model):
     language = models.CharField(max_length=30, blank=False, default="en")
     country = models.CharField(
         max_length=2,
-        choices=get_country_choices(),
-        validators=[validate_country_code],
+        choices=get_common_country_choices(),
         default="US"
     )
     preferred_currency = models.CharField(
-        max_length=3,
-        choices=get_currency_choices(),
-        validators=[validate_currency_code],
+        max_length=5,
+        choices=get_common_currency_choices(),
         default="USD"
     )
 

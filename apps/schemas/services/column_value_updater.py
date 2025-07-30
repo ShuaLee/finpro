@@ -1,5 +1,6 @@
 from django.db import transaction
 from schemas.models import SchemaColumnValue
+from schemas.services.calculated_column_engine import recalculate_calculated_columns
 
 
 @transaction.atomic
@@ -7,7 +8,6 @@ def update_column_value(column_value: SchemaColumnValue, new_value: str):
     """
     Updates the value of a column and recalculates dependent calculated columns.
     """
-    from schemas.services.calculated_column_engine import recalculate_calculated_columns
     column = column_value.column
 
     if column.source == "calculated":

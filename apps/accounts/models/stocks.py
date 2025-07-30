@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from common.utils.country_data import get_currency_choices
+from common.utils.country_currency_catalog import get_common_currency_choices
 from external_data.fx import get_fx_rate
 from portfolios.models.stock import StockPortfolio
 from schemas.models import Schema
@@ -38,13 +38,23 @@ class BaseStockAccount(BaseAccount):
 
     currency = models.CharField(
         max_length=3,
-        choices=get_currency_choices(),
+        choices=get_common_currency_choices(),
         blank=True,
         null=True
     )
 
     class Meta:
         abstract = True
+
+    def save(self, *args, **kwargs):
+        # 🧠 Inherit currency from profile if not explicitly set
+        if not self.currency and hasattr(self, "portfolio"):
+            try:
+                self.currency = self.portfolio.profile.preferred_currency
+            except Exception:
+                # Graceful fallback in case portfolio or profile chain isn't populated yet
+                pass
+        super().save(*args, **kwargs)
 
 
 class SelfManagedAccount(BaseStockAccount):
