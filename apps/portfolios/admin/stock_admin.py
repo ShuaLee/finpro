@@ -1,6 +1,6 @@
 from django.contrib import admin
 from portfolios.models.stock import StockPortfolio
-from schemas.services.schema import initialize_stock_schema
+from apps.schemas.services.schema_initialization import initialize_stock_schema
 
 
 @admin.register(StockPortfolio)

@@ -4,13 +4,16 @@ from schemas.models import (
     Schema,
     SchemaColumn,
     SchemaColumnValue,
-    SchemaColumnVisibility
+    SchemaColumnVisibility,
+    CustomAssetSchemaConfig
 )
-from schemas.services.schema_sync_service import sync_schema_column_to_holdings
+from apps.schemas.services.holding_sync_service import sync_schema_column_to_holdings
+
 
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
-    list_display = ("name", "schema_type", "content_type", "object_id", "created_at")
+    list_display = ("name", "schema_type", "content_type",
+                    "object_id", "created_at")
     search_fields = ("name", "schema_type")
     list_filter = ("schema_type", "content_type")
     readonly_fields = ("created_at",)
@@ -18,7 +21,8 @@ class SchemaAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumn)
 class SchemaColumnAdmin(admin.ModelAdmin):
-    list_display = ("title", "schema", "source", "source_field", "editable", "is_deletable")
+    list_display = ("title", "schema", "source",
+                    "source_field", "editable", "is_deletable")
     list_filter = ("source", "editable", "is_deletable")
     search_fields = ("title", "source_field", "schema__name")
     readonly_fields = ("schema",)
@@ -63,3 +67,9 @@ class SchemaColumnVisibilityAdmin(admin.ModelAdmin):
     list_filter = ("is_visible", "column__schema")
     search_fields = ("column__title",)
     autocomplete_fields = ("column",)
+
+
+@admin.register(CustomAssetSchemaConfig)
+class AssetSchemaConfigAdmin(admin.ModelAdmin):
+    list_display = ['asset_type', 'created_at', 'updated_at']
+    search_fields = ['asset_type']

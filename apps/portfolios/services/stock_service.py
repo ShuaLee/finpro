@@ -2,7 +2,7 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from portfolios.models.portfolio import Portfolio
 from portfolios.models.stock import StockPortfolio
-from schemas.services.schema import initialize_stock_schema
+from apps.schemas.services.schema_initialization import initialize_stock_schema
 
 
 @transaction.atomic

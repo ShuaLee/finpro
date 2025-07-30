@@ -2,9 +2,8 @@ from django import forms
 from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
-from assets.models.assets.base import InvestmentTheme
-from assets.models.assets.stocks import Stock, StockHolding
-from assets.models.schemas.config import AssetSchemaConfig
+from assets.models.base import InvestmentTheme
+from assets.models.stocks import Stock, StockHolding
 import logging
 
 
@@ -290,9 +289,3 @@ class InvestmentThemeAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('portfolio', 'parent')
-
-
-@admin.register(AssetSchemaConfig)
-class AssetSchemaConfigAdmin(admin.ModelAdmin):
-    list_display = ['asset_type', 'created_at', 'updated_at']
-    search_fields = ['asset_type']

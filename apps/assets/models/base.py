@@ -5,10 +5,10 @@ from django.db import models
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
-from assets.services import get_asset_schema_config
 from assets.utils import get_default_for_type
+from schemas.config.utils import get_asset_schema_config
 from schemas.models import SchemaColumnValue
-from schemas.services.schema_sync_service import HoldingSchemaEngine
+from apps.schemas.services.holding_sync_service import HoldingSchemaEngine
 from decimal import Decimal, InvalidOperation
 import logging
 from abc import abstractmethod
@@ -194,7 +194,8 @@ class AssetHolding(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         self.full_clean()
-        print(f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
+        print(
+            f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
 
         super().save(*args, **kwargs)
 
@@ -207,7 +208,6 @@ class AssetHolding(models.Model):
                 engine.sync_all_columns()
             else:
                 print("⚠️ No schema found. Skipping sync.")
-
 
     def delete(self, *args, **kwargs):
         self.column_values.all().delete()

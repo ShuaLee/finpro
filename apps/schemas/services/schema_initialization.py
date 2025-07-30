@@ -1,14 +1,14 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
 from schemas.models import Schema, SchemaColumn
-from schemas.config import STOCK_DEFAULT_COLUMNS
+from schemas.config.utils import get_schema_column_defaults
 import re
 
 
 @transaction.atomic
 def initialize_stock_schema(stock_portfolio, name="Default Stock Schema"):
     """
-    Creates a schema for a StockPortfolio and populates it with default columns.
+    Creates a schema for a StockPortfolio and populates it with default columns from config.
     """
     schema = Schema.objects.create(
         name=name,
@@ -17,7 +17,9 @@ def initialize_stock_schema(stock_portfolio, name="Default Stock Schema"):
         object_id=stock_portfolio.id,
     )
 
-    for col_data in STOCK_DEFAULT_COLUMNS:
+    default_columns = get_schema_column_defaults("stock")
+
+    for col_data in default_columns:
         SchemaColumn.objects.create(schema=schema, **col_data)
 
     return schema
@@ -26,7 +28,7 @@ def initialize_stock_schema(stock_portfolio, name="Default Stock Schema"):
 @transaction.atomic
 def add_custom_column(schema: Schema, title: str, data_type: str, editable=True, is_deletable=True):
     """
-    Adds a new custom column to the schema.
+    Adds a new custom (user-defined) column to the schema.
     """
     return SchemaColumn.objects.create(
         schema=schema,
@@ -39,25 +41,33 @@ def add_custom_column(schema: Schema, title: str, data_type: str, editable=True,
 
 
 def extract_variables_from_formula(formula: str):
+    """
+    Extracts all variable names from a formula expression.
+    e.g., "(quantity * price) / pe_ratio" -> ['quantity', 'price', 'pe_ratio']
+    """
     return re.findall(r'[a-zA-Z_]\w*', formula)
 
 
 @transaction.atomic
 def add_calculated_column(schema: Schema, title: str, formula: str):
     """
-    Adds a calculated column to the schema and ensures referenced variables exist.
+    Adds a calculated column to the schema.
+    Also creates any missing referenced variables as editable custom fields.
     """
     variables = extract_variables_from_formula(formula)
-    existing_titles = [col.title.lower().replace(" ", "_")
-                       for col in schema.columns.all()]
+    existing_fields = [
+        col.source_field.lower() if col.source_field else col.title.lower().replace(" ", "_")
+        for col in schema.columns.all()
+    ]
 
     for var in variables:
-        if var.lower() not in existing_titles:
+        if var.lower() not in existing_fields:
             SchemaColumn.objects.create(
                 schema=schema,
                 title=var.replace("_", " ").title(),
                 data_type="decimal",
                 source="custom",
+                source_field=var,
                 editable=True,
                 is_deletable=True
             )
@@ -67,7 +77,7 @@ def add_calculated_column(schema: Schema, title: str, formula: str):
         title=title,
         data_type="decimal",
         source="calculated",
-        formula=formula,
+        formula_expression=formula,
         editable=False,
-        is_deletable=True
+        is_deletable=True,
     )

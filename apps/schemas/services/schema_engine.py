@@ -1,10 +1,13 @@
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from assets.services.config import get_asset_schema_config
+from schemas.config.utils import get_asset_schema_config
 from schemas.models import SchemaColumn, SchemaColumnValue
-from asteval import Interpreter
+from schemas.services.expression_evaluator import evaluate_expression
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class HoldingSchemaEngine:
@@ -12,30 +15,48 @@ class HoldingSchemaEngine:
         self.holding = holding
         self.asset_type = asset_type
         self.portfolio = self._get_portfolio()
-        print(f"🧪 Engine Init: holding={holding.id}, portfolio={self.portfolio}")
+
+        logger.debug(
+            f"🧪 Engine Init: holding={getattr(holding, 'id', holding)}, portfolio={self.portfolio}"
+        )
+
         self.schema = self._get_active_schema()
         self.config = get_asset_schema_config(asset_type)
-        print(f"🧪 Schema found: {self.schema}")
+
+        logger.debug(f"🧪 Schema found: {self.schema}")
 
     def _get_portfolio(self):
-        # assumes account > subportfolio > portfolio
         return self.holding.account.sub_portfolio
 
     def _get_active_schema(self):
-        SchemaModel = apps.get_model("schemas", "Schema")
-        return SchemaModel.objects.filter(
-            content_type=ContentType.objects.get_for_model(self.portfolio),
-            object_id=self.portfolio.pk
-        ).first()
+        try:
+            SchemaModel = apps.get_model("schemas", "Schema")
+        except LookupError:
+            logger.exception(
+                "❌ Unable to locate 'schemas.Schema' via apps registry")
+            return None
+
+        try:
+            return SchemaModel.objects.filter(
+                content_type=ContentType.objects.get_for_model(self.portfolio),
+                object_id=self.portfolio.pk
+            ).first()
+        except Exception as e:
+            logger.exception(f"❌ Failed to retrieve schema for portfolio: {e}")
+            return None
 
     def sync_column(self, column):
         if not column.source_field and not column.formula and not column.formula_expression:
-            print(f"⚠️ Column {column.title} has no valid source or formula. Skipping.")
+            logger.debug(
+                f"⚠️ Column {column.title} has no valid source or formula. Skipping.")
             return
 
         value = self.get_configured_value(column)
+
         if value is None:
-            print(f"⚠️ Skipping column {column.title}, could not resolve value.")
+            logger.warning(
+                f"⚠️ Skipping column '{column.title}' for holding {self.holding}. Could not resolve value."
+            )
             return
 
         content_type = ContentType.objects.get_for_model(self.holding)
@@ -51,19 +72,19 @@ class HoldingSchemaEngine:
             value_obj.value = value
             value_obj.save()
 
-        print(f"✅ Column synced: {column.title} = {value}")
+        logger.debug(f"✅ Column synced: {column.title} = {value}")
 
     def resolve_value(self, field_path: str):
-        print(f"🔍 Resolving path: {field_path}")
+        logger.debug(f"🔍 Resolving path: {field_path}")
         parts = field_path.split('.')
         value = self.holding
         for part in parts:
-            print(f"  👉 getattr({value}, '{part}')")
+            logger.debug(f"  👉 getattr({value}, '{part}')")
             value = getattr(value, part, None)
             if value is None:
-                print(f"  ❌ Failed at: {part}")
+                logger.debug(f"  ❌ Failed at: {part}")
                 return None
-        print(f"✅ Resolved value: {value}")
+        logger.debug(f"✅ Resolved value: {value}")
         return value
 
     def get_column_config_by_field(self, source: str, field: str):
@@ -79,59 +100,47 @@ class HoldingSchemaEngine:
             config_group = self.config.get(source, {})
             for field, meta in config_group.items():
                 val = self.resolve_value(meta.get("field_path"))
-                try:
-                    values[field] = Decimal(str(val)) if val is not None else None
-                except:
+
+                if isinstance(val, (int, float, str, Decimal)):
+                    try:
+                        values[field] = Decimal(
+                            str(val)) if val is not None else None
+                    except Exception:
+                        logger.warning(
+                            f"⚠️ Could not parse decimal for {field}: {val}")
+                        values[field] = val
+                else:
                     values[field] = val
 
         return values
 
-    def evaluate_expression(self, expression: str):
-        """
-        Evaluates a safe math expression using resolved variables.
-        """
-        variables = self.get_all_available_values()
-        aeval = Interpreter()
-
-        for key, val in variables.items():
-            aeval.symtable[key] = val
-
-        try:
-            result = aeval(expression)
-            print(f"🧮 Evaluated '{expression}' -> {result}")
-            return result
-        except Exception as e:
-            print(f"❌ Formula eval failed: {expression} -> {e}")
-            return None
-
     def get_configured_value(self, column: SchemaColumn):
         if column.source != "calculated":
-            config = self.get_column_config_by_field(column.source, column.source_field)
-
-            # Fallback if config not found, try direct path from source + source_field
+            config = self.get_column_config_by_field(
+                column.source, column.source_field)
             if not config:
                 if column.source_field:
                     return self.resolve_value(f"{column.source}.{column.source_field}")
                 return None
-
             return self.resolve_value(config.get("field_path"))
 
-        # Priority 1: User-defined formula
-        if column.formula_expression:
-            return self.evaluate_expression(column.formula_expression)
+        context = self.get_all_available_values()
 
-        # Priority 2: Backend formula
-        if column.formula:
-            return self.evaluate_expression(column.formula)
+        if column.formula_expression and column.formula_expression.strip():
+            return evaluate_expression(column.formula_expression, context)
+
+        if column.formula and column.formula.strip():
+            return evaluate_expression(column.formula, context)
 
         return None
 
     @transaction.atomic
     def sync_all_columns(self):
         if not self.schema:
-            print("🚫 No schema set on engine. Exiting sync.")
+            logger.debug("🚫 No schema set on engine. Exiting sync.")
             return
 
-        print(f"🔁 Syncing columns for holding {self.holding} with schema {self.schema}")
+        logger.debug(
+            f"🔁 Syncing columns for holding {self.holding} with schema {self.schema}")
         for column in self.schema.columns.all():
             self.sync_column(column)

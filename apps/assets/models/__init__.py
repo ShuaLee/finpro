@@ -1,12 +1,6 @@
-from assets.models.schemas.config import AssetSchemaConfig
-from assets.models.assets.base import AssetHolding, Asset
-from assets.models.assets.stocks import StockHolding
-from assets.models.assets.metals import PreciousMetalHolding
+from assets.models.stocks import Stock
+from assets.models.metals import PreciousMetal
 
 __all__ = [
-    "AssetSchemaConfig",
-    "AssetHolding",
-    "Asset",
-    "StockHolding",
-    "PreciousMetalHolding",
+    "Stock", "PreciousMetal",
 ]

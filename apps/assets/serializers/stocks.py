@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 from external_data.fmp.dispatch import fetch_asset_data
-from assets.models.assets.stocks import Stock, StockHolding
+from assets.models.stocks import Stock, StockHolding
 
 
 class StockHoldingCreateSerializer(serializers.ModelSerializer):

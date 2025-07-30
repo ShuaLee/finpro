@@ -1,7 +1,7 @@
 from django.db import models
 from decimal import Decimal
 from accounts.models.metals import StorageFacility
-from assets.models.assets.base import Asset, AssetHolding
+from assets.models.base import Asset, AssetHolding
 from common.utils.country_data import get_currency_choices
 from schemas.models import SchemaColumn, SchemaColumnValue
 
