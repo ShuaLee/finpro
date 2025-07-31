@@ -24,7 +24,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     """
 
     email = serializers.SerializerMethodField()
-    is_profile_complete = serializers.BooleanField(read_only=True)  # ✅ Add this
+    is_profile_complete = serializers.BooleanField(
+        read_only=True)  # ✅ Add this
     plan = serializers.SlugRelatedField(
         slug_field='slug',
         queryset=Plan.objects.filter(is_active=True),
@@ -56,7 +57,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         except (DjangoValidationError, ValueError) as e:
             raise serializers.ValidationError(str(e))
         return value
-    
+
     def validate_preferred_currency(self, value):
         value = value.upper()
         try:
@@ -86,7 +87,8 @@ class ProfileSerializer(serializers.ModelSerializer):
         if 'country' in validated_data and validated_data['country']:
             validated_data['country'] = validated_data['country'].upper()
         if 'preferred_currency' in validated_data and validated_data['preferred_currency']:
-            validated_data['preferred_currency'] = validated_data['preferred_currency'].upper()
+            validated_data['preferred_currency'] = validated_data['preferred_currency'].upper(
+            )
 
         # Apply updates
         for field, value in validated_data.items():

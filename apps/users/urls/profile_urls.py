@@ -7,11 +7,11 @@ Defines URL patterns for user profile-related endpoints:
 """
 
 from django.urls import path
-from users.views import ProfileView, ProfilePlanUpdateView
+from users.views import ProfileView, CompleteProfileView
 
 urlpatterns = [
     # Profile management for authenticated users
     path('profile/', ProfileView.as_view(), name='user-profile'),
-    path('profile/plan/', ProfilePlanUpdateView.as_view(),
-         name='update-profile-plan'),
+    path('profile/complete/', CompleteProfileView.as_view(),
+         name='complete-profile'),
 ]

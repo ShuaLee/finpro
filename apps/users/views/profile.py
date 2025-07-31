@@ -6,8 +6,6 @@ Handles profile management endpoints for authenticated users.
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from users.models import Profile
 from users.serializers import ProfileSerializer
 import logging
 
@@ -33,32 +31,35 @@ class ProfileView(generics.GenericAPIView):
 
     def put(self, request):
         profile = request.user.profile
-        serializer = self.get_serializer(profile, data=request.data, partial=False)
+        serializer = self.get_serializer(
+            profile, data=request.data, partial=False)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
 
     def patch(self, request):
         profile = request.user.profile
-        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer = self.get_serializer(
+            profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
 
 
-class ProfilePlanUpdateView(APIView):
+class CompleteProfileView(generics.UpdateAPIView):
     """
-    API endpoint for updating the user's subscription plan.
+    API endpoint to complete user profile after signup.
+    Requires: full_name, country, preferred_currency.
     """
+    serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
 
-    def patch(self, request):
-        try:
-            profile = Profile.objects.get(user=request.user)
-        except Profile.DoesNotExist:
-            return Response({"error": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+    def get_object(self):
+        return self.request.user.profile
 
-        serializer = ProfileSerializer(profile, data=request.data, partial=True)
+    def patch(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            self.get_object(), data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
