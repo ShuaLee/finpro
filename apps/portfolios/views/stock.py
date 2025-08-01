@@ -10,12 +10,47 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from portfolios.models.stock import StockPortfolio
-from portfolios.permissions import IsPortfolioOwner
-# from portfolios.services.stock_dashboard_service import get_stock_dashboard
+from accounts.models import SelfManagedAccount, ManagedAccount
+from accounts.serializers import SelfManagedAccountSerializer, ManagedAccountSerializer
 from portfolios.serializers.stock import StockPortfolioSerializer
 from portfolios.services import stock_service, portfolio_service
 from users.models import Profile
+from decimal import Decimal
+
+
+class StockPortfolioDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        portfolio = getattr(request.user.profile, 'portfolio', None)
+        if not portfolio:
+            return Response({"detail": "Portfolio not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        stock_portfolio = getattr(portfolio, 'stockportfolio', None)
+        if not stock_portfolio:
+            return Response({"detail": "You haven't created a Stock Portfolio yet."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Fetch accounts
+        self_accounts = SelfManagedAccount.objects.filter(
+            stock_portfolio=stock_portfolio)
+        managed_accounts = ManagedAccount.objects.filter(
+            stock_portfolio=stock_portfolio)
+
+        # Use StockPortfolio methods
+        self_total = stock_portfolio.get_self_managed_total_pfx()
+        managed_total = stock_portfolio.get_managed_total_pfx()
+        grand_total = stock_portfolio.get_total_value_pfx()
+
+        return Response({
+            "summary": {
+                "self_managed_total": self_total,
+                "managed_total": managed_total,
+                "grand_total": grand_total,
+                "account_count": self_accounts.count() + managed_accounts.count()
+            },
+            "self_managed_accounts": SelfManagedAccountSerializer(self_accounts, many=True).data,
+            "managed_accounts": ManagedAccountSerializer(managed_accounts, many=True).data
+        }, status=status.HTTP_200_OK)
 
 
 class StockPortfolioCreateView(APIView):
@@ -43,22 +78,3 @@ class StockPortfolioCreateView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         """
-
-
-"""
-class StockPortfolioDashboardView(APIView):
-    permission_classes = [IsAuthenticated, IsPortfolioOwner]
-
-    def get(self, request):
-        try:
-            profile = Profile.objects.get(user=request.user)
-            stock_portfolio = StockPortfolio.objects.get(
-                portfolio=profile.portfolio)
-        except StockPortfolio.DoesNotExist:
-            return Response({"detail": "Stock portfolio not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        self.check_object_permissions(request, stock_portfolio)
-
-        dashboard_data = get_stock_dashboard(stock_portfolio)
-        return Response(dashboard_data, status=status.HTTP_200_OK)
-"""

@@ -84,7 +84,7 @@ class SelfManagedAccount(BaseStockAccount):
     def sub_portfolio(self):
         return self.stock_portfolio
 
-    def get_current_value_profile_fx(self):
+    def get_current_value_pfx(self):
         total = Decimal(0.0)
         for holding in self.holdings.all():
             value = holding.get_current_value_profile_fx()
@@ -135,7 +135,7 @@ class ManagedAccount(BaseStockAccount):
             )
         ]
 
-    def get_current_value_in_profile_fx(self):
+    def get_current_value_in_pfx(self):
         to_currency = self.stock_portfolio.portfolio.profile.currency
         fx = get_fx_rate(self.currency, to_currency)
 

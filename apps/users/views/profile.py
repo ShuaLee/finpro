@@ -6,7 +6,7 @@ Handles profile management endpoints for authenticated users.
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from users.serializers import ProfileSerializer
+from users.serializers import ProfileSerializer, CompleteProfileSerializer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,15 +51,14 @@ class CompleteProfileView(generics.UpdateAPIView):
     API endpoint to complete user profile after signup.
     Requires: full_name, country, preferred_currency.
     """
-    serializer_class = ProfileSerializer
+    serializer_class = CompleteProfileSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user.profile
 
-    def patch(self, request, *args, **kwargs):
-        serializer = self.get_serializer(
-            self.get_object(), data=request.data, partial=True)
+    def put(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_object(), data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)

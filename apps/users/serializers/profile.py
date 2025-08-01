@@ -102,3 +102,43 @@ class ProfileSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+
+class CompleteProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializer used exclusively for completing a user profile after signup.
+    Requires: full_name, country, preferred_currency.
+    """
+
+    class Meta:
+        model = Profile
+        fields = ['full_name', 'country', 'preferred_currency']
+
+    def validate_country(self, value):
+        value = value.upper()
+        try:
+            validate_country_code(value)
+        except (DjangoValidationError, ValueError) as e:
+            raise serializers.ValidationError(str(e))
+        return value
+
+    def validate_preferred_currency(self, value):
+        value = value.upper()
+        try:
+            validate_currency_code(value)
+        except (DjangoValidationError, ValueError) as e:
+            raise serializers.ValidationError(str(e))
+        return value
+
+    def update(self, instance, validated_data):
+        instance.full_name = validated_data.get(
+            "full_name", instance.full_name)
+        instance.country = validated_data.get(
+            "country", instance.country).upper()
+        instance.preferred_currency = validated_data.get(
+            "preferred_currency", instance.preferred_currency).upper()
+
+        # Set as complete
+        instance.is_profile_complete = True
+        instance.save()
+        return instance

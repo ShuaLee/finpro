@@ -36,3 +36,10 @@ class Portfolio(models.Model):
 
     def __str__(self):
         return f"{self.profile} - {self.created_at}"
+
+    def get_total_value_pfx(self):
+        """
+        Should be implemented by subclass (e.g. StockPortfolio, MetalPortfolio)
+        """
+        raise NotImplementedError(
+            "Subclasses must implement get_total_value()")

@@ -18,7 +18,8 @@ Business Rules:
 from django.core.exceptions import ValidationError
 from django.db import models
 from portfolios.models.portfolio import Portfolio
-from .base import BaseAssetPortfolio
+from portfolios.models.base import BaseAssetPortfolio
+from decimal import Decimal
 
 
 class StockPortfolio(BaseAssetPortfolio):
@@ -60,23 +61,56 @@ class StockPortfolio(BaseAssetPortfolio):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    def get_self_managed_total_pfx(self):
+        from accounts.models import SelfManagedAccount
 
-"""
-    def initialize_stock_portfolio(self):
-        from portfolios.models.stock import StockPortfolio
-        from schemas.constants import DEFAULT_STOCK_SCHEMA_COLUMNS
-        from schemas.models.stocks import StockPortfolioSchema, StockPortfolioSC
+        total = Decimal(0)
+        warnings = []
 
-        if hasattr(self, 'stockportfolio'):
-            return  # Already exists
+        for acc in SelfManagedAccount.objects.filter(stock_portfolio=self):
+            try:
+                value = acc.get_current_value_pfx()
+                if value is None:
+                    raise ValueError("Returned None")
+                total += Decimal(value)
+            except Exception as e:
+                warnings.append({
+                    "account_id": acc.id,
+                    "account_name": acc.name,
+                    "type": "self_managed",
+                    "error": str(e)
+                })
 
-        stock_portfolio = StockPortfolio.objects.create(portfolio=self)
+        return total, warnings
 
-        schema = StockPortfolioSchema.objects.create(
-            stock_portfolio=stock_portfolio,
-            name=f"Default Schema for {stock_portfolio}"
-        )
+    def get_managed_total_pfx(self):
+        from accounts.models import ManagedAccount
 
-        for column_data in DEFAULT_STOCK_SCHEMA_COLUMNS:
-            StockPortfolioSC.objects.create(schema=schema, **column_data)
-"""
+        total = Decimal(0)
+        warnings = []
+
+        for acc in ManagedAccount.objects.filter(stock_portfolio=self):
+            try:
+                value = acc.get_current_value_in_profile_fx()
+                if value is None:
+                    raise ValueError("Returned None")
+                total += Decimal(value)
+            except Exception as e:
+                warnings.append({
+                    "account_id": acc.id,
+                    "account_name": acc.name,
+                    "type": "managed",
+                    "error": str(e)
+                })
+
+        return total, warnings
+
+    def get_total_value_pfx(self):
+        sm_total, sm_warnings = self.get_self_managed_total_pfx()
+        m_total, m_warnings = self.get_managed_total_pfx()
+        return {
+            "total": round(sm_total + m_total, 2),
+            "self_total": sm_total,
+            "managed_total": m_total,
+            "warnings": sm_warnings + m_warnings
+        }
