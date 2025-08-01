@@ -25,10 +25,20 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
         ]
 
     def get_current_value_in_profile_fx(self, obj):
-        return obj.get_current_value_profile_fx()
+        return obj.get_current_value_pfx()
 
 
 class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
+    name = serializers.CharField()
+    broker = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    tax_status = serializers.ChoiceField(
+        choices=SelfManagedAccount._meta.get_field('tax_status').choices
+    )
+    account_type = serializers.ChoiceField(
+        choices=SelfManagedAccount._meta.get_field('account_type').choices
+    )
+
     class Meta:
         model = SelfManagedAccount
         fields = ['name', 'broker', 'tax_status', 'account_type']
@@ -55,7 +65,7 @@ class ManagedAccountSerializer(serializers.ModelSerializer):
         ]
 
     def get_current_value_in_profile_fx(self, obj):
-        return obj.get_current_value_in_profile_fx()
+        return obj.get_current_value_in_pfx()
 
 
 class ManagedAccountCreateSerializer(serializers.ModelSerializer):

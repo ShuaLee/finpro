@@ -1,11 +1,12 @@
 from rest_framework import status
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-
+from accounts.models import SelfManagedAccount, ManagedAccount
+from accounts.permissions import IsAccountOwner
 from accounts.services import (
     stock_account_service,
-    holdings_service,
     stock_dashboard_service,
 )
 
@@ -16,32 +17,30 @@ from accounts.serializers.stocks import (
     ManagedAccountCreateSerializer,
 )
 
-# from assets.serializers.stocks import StockHoldingSerializer
 
-
-class SelfManagedAccountListCreateView(APIView):
-    """
-    GET: List all self-managed stock accounts for the user.
-    POST: Create a new self-managed stock account.
-    """
+class SelfManagedAccountListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = SelfManagedAccountCreateSerializer
 
-    def get(self, request):
-        accounts = stock_account_service.get_self_managed_accounts(
-            request.user)
-        serializer = SelfManagedAccountSerializer(accounts, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    def get_queryset(self):
+        return stock_account_service.get_self_managed_accounts(self.request.user)
 
-    def post(self, request):
-        serializer = SelfManagedAccountCreateSerializer(data=request.data)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         account = stock_account_service.create_self_managed_account(
             request.user, serializer.validated_data
         )
-        return Response(
-            SelfManagedAccountSerializer(account).data,
-            status=status.HTTP_201_CREATED
-        )
+
+        response_serializer = SelfManagedAccountSerializer(account)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class SelfManagedAccountDetailView(RetrieveAPIView):
+    queryset = SelfManagedAccount.objects.all()
+    serializer_class = SelfManagedAccountSerializer
+    permission_classes = [IsAuthenticated, IsAccountOwner]
 
 
 class ManagedAccountListCreateView(APIView):
@@ -66,6 +65,11 @@ class ManagedAccountListCreateView(APIView):
             ManagedAccountSerializer(account).data,
             status=status.HTTP_201_CREATED
         )
+    
+class ManagedAccountDetailView(RetrieveAPIView):
+    queryset = ManagedAccount.objects.all()
+    serializer_class = ManagedAccountSerializer
+    permission_classes = [IsAuthenticated, IsAccountOwner]
 
 
 class StockAccountsDashboardView(APIView):
@@ -78,6 +82,8 @@ class StockAccountsDashboardView(APIView):
         dashboard_data = stock_dashboard_service.get_stock_accounts_dashboard(
             request.user)
         return Response(dashboard_data, status=status.HTTP_200_OK)
+
+
 
 
 # class AddHoldingView(APIView):

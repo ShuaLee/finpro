@@ -1,10 +1,11 @@
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from common.utils.country_currency_catalog import get_common_currency_choices
 from external_data.fx import get_fx_rate
 from portfolios.models.stock import StockPortfolio
 from schemas.models import Schema
-from .base import BaseAccount
+from accounts.models.base import BaseAccount
 from decimal import Decimal
 
 
@@ -94,16 +95,24 @@ class SelfManagedAccount(BaseStockAccount):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+
         if is_new and not self.active_schema:
-            if self.stock_portfolio and self.stock_portfolio.schemas.exists():
-                self.active_schema = self.stock_portfolio.schemas.first()
+            if self.stock_portfolio:
+                stock_ct = ContentType.objects.get_for_model(self.stock_portfolio)
+                schema_qs = Schema.objects.filter(
+                    content_type=stock_ct,
+                    object_id=self.stock_portfolio.id
+                )
+
+                if schema_qs.exists():
+                    self.active_schema = schema_qs.first()
+                else:
+                    raise ValidationError("StockPortfolio must have at least one schema.")
             else:
-                raise ValidationError(
-                    "StockPortfolio must have at least one schema.")
+                raise ValidationError("StockPortfolio is required.")
 
         super().save(*args, **kwargs)
 
-        # Initialize visibility if new
         if is_new and self.active_schema:
             self.initialize_visibility_settings(self.active_schema)
 
