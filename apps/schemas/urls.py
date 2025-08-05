@@ -4,11 +4,13 @@ from schemas.views import (
     SchemaViewSet,
     SchemaColumnValueViewSet,
     SchemaColumnVisibilityToggleViewSet,
+    SchemaHoldingsView,
 )
 
 router = DefaultRouter()
 router.register(r'schemas', SchemaViewSet, basename='schema')
-router.register(r'schema-values', SchemaColumnValueViewSet, basename='schema-value')
+router.register(r'schema-values', SchemaColumnValueViewSet,
+                basename='schema-value')
 
 # Custom action not supported via DefaultRouter
 schema_visibility = SchemaColumnVisibilityToggleViewSet.as_view({
@@ -17,5 +19,8 @@ schema_visibility = SchemaColumnVisibilityToggleViewSet.as_view({
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('columns/visibility/toggle/', schema_visibility, name='schema-column-visibility-toggle'),
+    path('stocks/accounts/<int:account_id>/view/',
+         SchemaHoldingsView.as_view(), name='stock-schema-holdings'),
+    path('columns/visibility/toggle/', schema_visibility,
+         name='schema-column-visibility-toggle'),
 ]

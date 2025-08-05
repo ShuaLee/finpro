@@ -14,9 +14,13 @@ class StockHoldingCreateSerializer(serializers.ModelSerializer):
         model = StockHolding
         fields = ['ticker', 'stock', 'quantity', 'purchase_price',
                   'purchase_date', 'investment_theme', 'confirm_add']
+        extra_kwargs = {
+            'ticker': {'write_only': True},
+            'confirm_add': {'write_only': True}
+        }
 
     def validate_ticker(self, value):
-        return value.upper()
+        return value.strip().upper()
 
     def validate_purchase_date(self, value):
         if value and value > timezone.now():

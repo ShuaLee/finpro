@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView, CreateAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -9,13 +9,13 @@ from accounts.services import (
     stock_account_service,
     stock_dashboard_service,
 )
-
 from accounts.serializers.stocks import (
     SelfManagedAccountSerializer,
     SelfManagedAccountCreateSerializer,
     ManagedAccountSerializer,
     ManagedAccountCreateSerializer,
 )
+from assets.serializers.stocks import StockHoldingCreateSerializer
 
 
 class SelfManagedAccountListCreateView(ListCreateAPIView):
@@ -65,7 +65,8 @@ class ManagedAccountListCreateView(APIView):
             ManagedAccountSerializer(account).data,
             status=status.HTTP_201_CREATED
         )
-    
+
+
 class ManagedAccountDetailView(RetrieveAPIView):
     queryset = ManagedAccount.objects.all()
     serializer_class = ManagedAccountSerializer
@@ -84,22 +85,23 @@ class StockAccountsDashboardView(APIView):
         return Response(dashboard_data, status=status.HTTP_200_OK)
 
 
+class AddHoldingView(CreateAPIView):
+    serializer_class = StockHoldingCreateSerializer
+    permission_classes = [IsAuthenticated, IsAccountOwner]
 
+    def get_queryset(self):
+        return SelfManagedAccount.objects.all()  # Required for permission checking
 
-# class AddHoldingView(APIView):
-#     """
-#     POST: Add a new holding to a self-managed account.
-#     """
-#     permission_classes = [IsAuthenticated]
+    def get_object(self):
+        return SelfManagedAccount.objects.get(pk=self.kwargs['account_id'])
 
-#     def post(self, request, account_id):
-#         context = {'self_managed_account': account_id}
-#         holding = holdings_service.add_holding(account_id, request.data, context)
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['self_managed_account'] = self.get_object()
+        return context
 
-#         return Response({
-#             "detail": "Holding added successfully",
-#             "holding": StockHoldingSerializer(holding).data
-#         }, status=status.HTTP_201_CREATED)
+    def perform_create(self, serializer):
+        serializer.save()
 
 
 # class EditColumnValueView(APIView):

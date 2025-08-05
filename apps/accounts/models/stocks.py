@@ -88,7 +88,7 @@ class SelfManagedAccount(BaseStockAccount):
     def get_current_value_pfx(self):
         total = Decimal(0.0)
         for holding in self.holdings.all():
-            value = holding.get_current_value_profile_fx()
+            value = holding.get_current_value()
             if value is not None:
                 total += Decimal(str(value))
         return round(total, 2)
@@ -98,7 +98,8 @@ class SelfManagedAccount(BaseStockAccount):
 
         if is_new and not self.active_schema:
             if self.stock_portfolio:
-                stock_ct = ContentType.objects.get_for_model(self.stock_portfolio)
+                stock_ct = ContentType.objects.get_for_model(
+                    self.stock_portfolio)
                 schema_qs = Schema.objects.filter(
                     content_type=stock_ct,
                     object_id=self.stock_portfolio.id
@@ -107,7 +108,8 @@ class SelfManagedAccount(BaseStockAccount):
                 if schema_qs.exists():
                     self.active_schema = schema_qs.first()
                 else:
-                    raise ValidationError("StockPortfolio must have at least one schema.")
+                    raise ValidationError(
+                        "StockPortfolio must have at least one schema.")
             else:
                 raise ValidationError("StockPortfolio is required.")
 
