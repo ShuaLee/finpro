@@ -1,51 +1,8 @@
 from rest_framework import serializers
 from schemas.models import (
-    Schema,
-    SchemaColumn,
     SchemaColumnValue,
-    SchemaColumnVisibility
 )
 from schemas.services.calculated_column_engine import recalculate_calculated_columns
-
-
-class SchemaColumnSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SchemaColumn
-        fields = [
-            "id",
-            "title",
-            "data_type",
-            "source",
-            "source_field",
-            "editable",
-            "is_deletable",
-            "formula",
-            "decimal_places"
-        ]
-
-
-class SchemaDetailSerializer(serializers.ModelSerializer):
-    columns = SchemaColumnSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Schema
-        fields = ["id", "name", "schema_type", "columns"]
-
-
-class AddCustomColumnSerializer(serializers.Serializer):
-    title = serializers.CharField()
-    data_type = serializers.ChoiceField(choices=[
-        ('decimal', 'Decimal'),
-        ('integer', 'Integer'),
-        ('string', 'Text'),
-        ('date', 'Date'),
-        ('url', 'URL'),
-    ])
-
-
-class AddCalculatedColumnSerializer(serializers.Serializer):
-    title = serializers.CharField()
-    formula = serializers.CharField()
 
 
 class SchemaColumnValueSerializer(serializers.ModelSerializer):
@@ -101,12 +58,3 @@ class SchemaColumnValueSerializer(serializers.ModelSerializer):
         )
 
         return instance
-
-
-class SchemaColumnVisibilitySerializer(serializers.ModelSerializer):
-    column_title = serializers.CharField(source="column.title", read_only=True)
-
-    class Meta:
-        model = SchemaColumnVisibility
-        fields = ["id", "column", "column_title", "is_visible"]
-        read_only_fields = ["id", "column", "column_title"]
