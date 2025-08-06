@@ -3,8 +3,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
 from accounts.models import SelfManagedAccount
-from schemas.models import SchemaColumnValue
+from schemas.models import SchemaColumnVisibility
+from schemas.services.column_value_resolver import resolve_column_value
 
 
 class SchemaHoldingsView(APIView):
@@ -16,20 +18,32 @@ class SchemaHoldingsView(APIView):
     def get(self, request, account_id):
         account = get_object_or_404(SelfManagedAccount, pk=account_id)
 
-        # Permission check
+        # 🔐 Permission check
         if account.stock_portfolio.portfolio.profile.user != request.user:
             return Response({"error": "Unauthorized"}, status=403)
 
-        # Step 1: Get active schema & holdings
         schema = account.active_schema
-        holdings = account.holdings.select_related('stock').all()
-        columns = schema.columns.all()
+        if not schema:
+            return Response({"error": "No active schema found."}, status=404)
 
-        # 🧠 Get content type for StockHolding model
-        from assets.models import StockHolding
-        ct = ContentType.objects.get_for_model(StockHolding)
+        holdings = account.holdings.select_related("stock").all()
+        all_columns = list(schema.columns.all())
 
-        # Step 2: Loop holdings and fetch column values
+        # 🚫 Apply per-account visibility filter
+        account_ct = ContentType.objects.get_for_model(account)
+        hidden_column_ids = SchemaColumnVisibility.objects.filter(
+            content_type=account_ct,
+            object_id=account.id,
+            is_visible=False
+        ).values_list("column_id", flat=True)
+
+        # ✅ Apply visibility filter and sort by display_order
+        visible_columns = [
+            col for col in all_columns if col.id not in hidden_column_ids
+        ]
+        visible_columns.sort(key=lambda col: col.display_order)
+
+        # 🧱 Build data response
         rows = []
         for holding in holdings:
             row = {
@@ -41,18 +55,28 @@ class SchemaHoldingsView(APIView):
                 "values": {}
             }
 
-            for column in columns:
-                value_qs = SchemaColumnValue.objects.filter(
-                    column=column,
-                    account_ct=ct,            # ✅ your custom field
-                    account_id=holding.id     # ✅ your custom field
-                ).first()
-                row["values"][column.title] = value_qs.value if value_qs else None
+            for column in visible_columns:
+                value = resolve_column_value(
+                    holding, column, fallback_to_default=True)
+                row["values"][column.title] = value
 
             rows.append(row)
 
         return Response({
             "schema_id": schema.id,
-            "columns": [col.title for col in columns],
+            "columns": [
+                {
+                    "id": col.id,
+                    "title": col.title,
+                    "data_type": col.data_type,
+                    "editable": col.editable,
+                    "source": col.source,
+                    "decimal_places": col.decimal_places,
+                    "is_system": col.is_system,
+                    "scope": col.scope,
+                    "display_order": col.display_order,
+                }
+                for col in visible_columns
+            ],
             "data": rows
         })

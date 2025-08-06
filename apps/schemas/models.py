@@ -45,11 +45,9 @@ class SchemaColumn(models.Model):
         ('custom', 'Custom'),
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
-    formula = models.TextField(blank=True, null=True)
     editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
-
     is_system = models.BooleanField(
         default=False, help_text="Whether this is a system default column")
     scope = models.CharField(max_length=20, choices=[
@@ -57,17 +55,29 @@ class SchemaColumn(models.Model):
         ('subportfolio', 'Subportfolio-wide'),
         ('account', 'Account-specific')
     ], default='subportfolio')
-
+    formula = models.TextField(blank=True, null=True)
+    formula_method = models.CharField(
+        max_length=100, blank=True, null=True, help_text="Backend Python method to evaluate this column")
     formula_expression = models.TextField(
         null=True,
         blank=True,
         help_text="User-defined formula like '(quantity * price) / pe_ratio' -> something that wont be in the backend."
     )
+    display_order = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.title} ({self.source})"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.display_order == 0:
+            max_order = (
+                SchemaColumn.objects.filter(schema=self.schema).aggregate(
+                    models.Max("display_order"))["display_order__max"]
+            )
+            self.display_order = (max_order or 0) + 1
+        super().save(*args, **kwargs)
 
 
 class SchemaColumnValue(models.Model):

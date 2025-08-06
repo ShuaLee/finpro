@@ -3,11 +3,9 @@ from schemas.models import CustomAssetSchemaConfig
 
 
 def get_schema_column_defaults(asset_type):
-    """
-    Returns a list of default SchemaColumn dicts for a given asset type.
-    """
     config = SCHEMA_CONFIG_REGISTRY.get(asset_type, {})
     columns = []
+    display_counter = 0
 
     for source, fields in config.items():
         for field_key, meta in fields.items():
@@ -22,8 +20,10 @@ def get_schema_column_defaults(asset_type):
                     "decimal_places": meta.get("decimal_places"),
                     "formula": meta.get("formula"),
                     "formula_expression": meta.get("formula_expression"),
+                    "formula_method": meta.get("formula_method"),
+                    "display_order": display_counter,
                 })
-
+                display_counter += 1
     return columns
 
 

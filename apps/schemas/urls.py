@@ -1,18 +1,19 @@
+# urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from schemas.views import (
     SchemaViewSet,
+    SchemaColumnViewSet,
     SchemaColumnValueViewSet,
     SchemaColumnVisibilityToggleViewSet,
     SchemaHoldingsView,
 )
 
 router = DefaultRouter()
-router.register(r'schemas', SchemaViewSet, basename='schema')
-router.register(r'schema-values', SchemaColumnValueViewSet,
-                basename='schema-value')
+router.register(r'schemas', SchemaViewSet)
+router.register(r'columns', SchemaColumnViewSet)
+router.register(r'column-values', SchemaColumnValueViewSet)
 
-# Custom action not supported via DefaultRouter
 schema_visibility = SchemaColumnVisibilityToggleViewSet.as_view({
     'post': 'toggle'
 })

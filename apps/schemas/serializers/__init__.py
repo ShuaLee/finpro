@@ -1,4 +1,4 @@
-from .schema import SchemaDetailSerializer, SchemaColumnSerializer
+from .schema import SchemaDetailSerializer, SchemaColumnSerializer, SchemaColumnReorderSerializer
 from .custom import AddCustomColumnSerializer
 from .calculated import AddCalculatedColumnSerializer
 from .column_value import SchemaColumnValueSerializer
@@ -9,6 +9,7 @@ __all__ = [
     "SchemaColumnSerializer",
     "AddCustomColumnSerializer",
     "AddCalculatedColumnSerializer",
+    "SchemaColumnReorderSerializer",
     "SchemaColumnValueSerializer",
     "SchemaColumnVisibilitySerializer",
 ]

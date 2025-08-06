@@ -1,5 +1,6 @@
 from .core import (
     SchemaViewSet,
+    SchemaColumnViewSet,
     SchemaColumnValueViewSet,
 )
 
@@ -13,6 +14,7 @@ from .stocks import (
 
 __all__ = [
     "SchemaViewSet",
+    "SchemaColumnViewset",
     "SchemaColumnValueViewSet",
     "SchemaColumnVisibilityToggleViewSet",
     "SchemaHoldingsView",
