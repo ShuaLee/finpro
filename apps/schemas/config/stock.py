@@ -48,7 +48,6 @@ STOCK_SCHEMA_CONFIG = {
         "current_value": {
             "title": "Current Value",
             "data_type": "decimal",
-            "formula": "quantity * price",
             "editable": False,
             "decimal_places": 2,
             "is_deletable": False,

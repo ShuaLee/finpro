@@ -15,10 +15,10 @@ def get_schema_column_defaults(asset_type):
                     "source": source,
                     "source_field": field_key,
                     "data_type": meta["data_type"],
+                    "field_path": meta.get("field_path"),
                     "editable": meta.get("editable", True),
-                    "is_deletable": meta.get("is_deletable", True),
                     "decimal_places": meta.get("decimal_places"),
-                    "formula": meta.get("formula"),
+                    "is_deletable": meta.get("is_deletable", True),
                     "formula_expression": meta.get("formula_expression"),
                     "formula_method": meta.get("formula_method"),
                     "display_order": display_counter,
@@ -38,3 +38,36 @@ def get_asset_schema_config(schema_type):
         return db_config.config
 
     return SCHEMA_CONFIG_REGISTRY.get(schema_type, {})
+
+def get_available_config_columns(schema):
+    """
+    Returns a list of config-based columns that have not been added to the schema yet.
+    Each item in the list is a (source, source_field, meta) tuple.
+    """
+    config = get_asset_schema_config(schema.schema_type)
+    existing = {(col.source, col.source_field) for col in schema.columns.all()}
+
+    available = []
+    for source, fields in config.items():
+        for field_key, meta in fields.items():
+            if (source, field_key) not in existing:
+                available.append((source, field_key, meta))
+    return available
+
+def get_serialized_available_columns(schema):
+    """
+    Returns config columns not yet added, formatted for API response.
+    """
+    return [
+        {
+            "title": meta.get("title", field.replace("_", " ").title()),
+            "source": source,
+            "source_field": field,
+            "data_type": meta.get("data_type"),
+            "decimal_places": meta.get("decimal_places"),
+            "description": f"{source}.{field}",
+            "is_deletable": meta.get("is_deletable", True),
+            "editable": meta.get("editable", True),
+        }
+        for source, field, meta in get_available_config_columns(schema)
+    ]

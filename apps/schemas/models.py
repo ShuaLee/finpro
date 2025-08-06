@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 
 
 class Schema(models.Model):
@@ -45,6 +46,7 @@ class SchemaColumn(models.Model):
         ('custom', 'Custom'),
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
+    field_path = models.CharField(blank=True, null=True, max_length=255)
     editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -55,7 +57,6 @@ class SchemaColumn(models.Model):
         ('subportfolio', 'Subportfolio-wide'),
         ('account', 'Account-specific')
     ], default='subportfolio')
-    formula = models.TextField(blank=True, null=True)
     formula_method = models.CharField(
         max_length=100, blank=True, null=True, help_text="Backend Python method to evaluate this column")
     formula_expression = models.TextField(
@@ -69,8 +70,27 @@ class SchemaColumn(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.source})"
+    
+    def clean(self):
+    # 🧠 Ensure only one of the formula types is set
+        formula_fields = [
+            bool(self.formula and self.formula.strip()),
+            bool(self.formula_method and self.formula_method.strip()),
+            bool(self.formula_expression and self.formula_expression.strip()),
+        ]
+        if sum(formula_fields) > 1:
+            raise ValidationError("Only one of formula, formula_method, or formula_expression can be set.")
+
+        # 🔔 Ensure title is not blank
+        if not self.title:
+            raise ValidationError("Column title cannot be blank.")
+
+        # 🔍 Warn if field_path is missing for asset/holding sources
+        if self.source in ["asset", "holding"] and not self.source_field:
+            raise ValidationError(f"source_field is required for source='{self.source}'.")
 
     def save(self, *args, **kwargs):
+        self.full_clean()
         if self._state.adding and self.display_order == 0:
             max_order = (
                 SchemaColumn.objects.filter(schema=self.schema).aggregate(

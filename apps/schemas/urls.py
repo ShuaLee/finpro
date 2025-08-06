@@ -7,6 +7,8 @@ from schemas.views import (
     SchemaColumnValueViewSet,
     SchemaColumnVisibilityToggleViewSet,
     SchemaHoldingsView,
+    SchemaAvailableColumnsView,
+    SchemaFormulaVariableListView
 )
 
 router = DefaultRouter()
@@ -24,4 +26,6 @@ urlpatterns = [
          SchemaHoldingsView.as_view(), name='stock-schema-holdings'),
     path('columns/visibility/toggle/', schema_visibility,
          name='schema-column-visibility-toggle'),
+    path('schemas/<int:schema_id>/available-columns/', SchemaAvailableColumnsView.as_view(), name='schema-available-columns'),
+    path('schemas/<int:schema_id>/formula-variables/', SchemaFormulaVariableListView.as_view(), name='schema-formula-variables'),
 ]

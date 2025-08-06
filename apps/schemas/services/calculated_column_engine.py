@@ -25,8 +25,11 @@ def recalculate_calculated_columns(schema: Schema, account):
     context = build_context(schema, account)
 
     for column in schema.columns.filter(source="calculated"):
-        if column.formula:
-            result = evaluate_expression(column.formula, context)
+        if column.formula_expression:
+            result = evaluate_expression(column.formula_expression, context)
+        elif column.formula_method:
+            method = getattr(account, column.formula_method, None)
+            result = method() if callable(method) else None
 
             SchemaColumnValue.objects.update_or_create(
                 column=column,

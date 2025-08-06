@@ -46,9 +46,9 @@ class HoldingSchemaEngine:
             return None
 
     def sync_column(self, column):
-        if not column.source_field and not column.formula and not column.formula_expression:
+        if not column.field_path and not column.formula_expression and not column.formula_method:
             logger.debug(
-                f"⚠️ Column {column.title} has no valid source or formula. Skipping.")
+                f"⚠️ Column {column.title} has no valid field_path or formula. Skipping.")
             return
 
         value = self.get_configured_value(column)
@@ -82,7 +82,7 @@ class HoldingSchemaEngine:
             logger.debug(f"  👉 getattr({value}, '{part}')")
             value = getattr(value, part, None)
             if value is None:
-                logger.debug(f"  ❌ Failed at: {part}")
+                logger.warning(f"❌ Could not resolve value from field_path: {field_path}")
                 return None
         logger.debug(f"✅ Resolved value: {value}")
         return value
@@ -116,21 +116,21 @@ class HoldingSchemaEngine:
 
     def get_configured_value(self, column: SchemaColumn):
         if column.source != "calculated":
-            config = self.get_column_config_by_field(
-                column.source, column.source_field)
-            if not config:
-                if column.source_field:
-                    return self.resolve_value(f"{column.source}.{column.source_field}")
-                return None
-            return self.resolve_value(config.get("field_path"))
+            if column.field_path:
+                return self.resolve_value(column.field_path)
+            elif column.source_field:
+                return self.resolve_value(f"{column.source}.{column.source_field}")
+            return None
 
         context = self.get_all_available_values()
 
         if column.formula_expression and column.formula_expression.strip():
             return evaluate_expression(column.formula_expression, context)
 
-        if column.formula and column.formula.strip():
-            return evaluate_expression(column.formula, context)
+        if column.formula_method:
+            method = getattr(self.holding, column.formula_method, None)
+            if method and callable(method):
+                return method()
 
         return None
 

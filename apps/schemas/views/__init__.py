@@ -2,6 +2,8 @@ from .core import (
     SchemaViewSet,
     SchemaColumnViewSet,
     SchemaColumnValueViewSet,
+    SchemaAvailableColumnsView,
+    SchemaFormulaVariableListView
 )
 
 from .visibility import (
@@ -18,4 +20,7 @@ __all__ = [
     "SchemaColumnValueViewSet",
     "SchemaColumnVisibilityToggleViewSet",
     "SchemaHoldingsView",
+    "SchemaColumnViewSet",
+    "SchemaAvailableColumnsView",
+    "SchemaFormulaVariableListView"
 ]

@@ -14,17 +14,12 @@ class SchemaColumnSerializer(serializers.ModelSerializer):
             "data_type",
             "source",
             "source_field",
-            "formula",
-            "formula_expression",
             "editable",
             "is_deletable",
             "decimal_places",
-            "is_system",
-            "scope",
-            "display_order",
-            "created_at"
         ]
-        read_only_fields = ["id", "is_system", "created_at"]
+        read_only_fields = ["id", "data_type", "source", "source_field", "is_deletable"]
+
 
 
 class SchemaDetailSerializer(serializers.ModelSerializer):
@@ -46,3 +41,8 @@ class SchemaDetailSerializer(serializers.ModelSerializer):
 class SchemaColumnReorderSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     display_order = serializers.IntegerField()
+
+
+class AddFromConfigSerializer(serializers.Serializer):
+    source = serializers.ChoiceField(choices=["asset", "holding", "calculated"])
+    source_field = serializers.CharField
