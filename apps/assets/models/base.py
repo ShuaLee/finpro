@@ -1,5 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericRelation
+from django.contrib.contenttypes.fields import GenericRelation, GenericForeignKey
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -36,6 +36,34 @@ class InvestmentTheme(models.Model):
         return " > ".join(reversed(full_path))
 
 
+class HoldingThemeValue(models.Model):
+    holding_ct = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    holding_id = models.PositiveIntegerField()
+    holding = GenericForeignKey("holding_ct", "holding_id")
+
+    theme = models.ForeignKey(InvestmentTheme, on_delete=models.CASCADE)
+
+    # Support various value types (same as SchemaColumnValue)
+    value_string = models.CharField(max_length=255, null=True, blank=True)
+    value_decimal = models.DecimalField(
+        max_digits=20, decimal_places=6, null=True, blank=True)
+    value_integer = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("holding_ct", "holding_id", "theme")
+
+    def get_value(self):
+        return self.value_string or self.value_decimal or self.value_integer
+
+    def set_value(self, raw_value, data_type):
+        if data_type == "decimal":
+            self.value_decimal = raw_value
+        elif data_type == "integer":
+            self.value_integer = raw_value
+        elif data_type == "string":
+            self.value_string = raw_value
+
+
 class Asset(models.Model):
     """Abstract base model for all assets (e.g., Stock, Metal)."""
     class Meta:
@@ -55,10 +83,8 @@ class AssetHolding(models.Model):
     purchase_price = models.DecimalField(
         max_digits=20, decimal_places=2, null=True, blank=True)
     purchase_date = models.DateTimeField(null=True, blank=True)
-    investment_theme = models.ForeignKey(
+    investment_theme = models.ManyToManyField(
         InvestmentTheme,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name='%(class)s_investments'
     )
@@ -106,8 +132,25 @@ class AssetHolding(models.Model):
         if not schema:
             return getattr(self, source_field, None)
 
+        column = schema.columns.filter(source_field=source_field).first()
+        if not column:
+            return getattr(self, source_field, None)
+
+        # 🧠 NEW: If this column represents a theme, fetch from HoldingThemeValue
+        if column.theme:
+            from assets.models.base import HoldingThemeValue  # avoid circular imports
+
+            htv = HoldingThemeValue.objects.filter(
+                holding_ct=ContentType.objects.get_for_model(self.__class__),
+                holding_id=self.id,
+                theme=column.theme
+            ).first()
+
+            return htv.get_value() if htv else None
+
+        # 🧠 Otherwise, check if a SchemaColumnValue exists
         val = self.column_values.select_related('column').filter(
-            column__source_field=source_field
+            column=column
         ).first()
 
         if val is None:
@@ -116,15 +159,6 @@ class AssetHolding(models.Model):
             if config:
                 column_model = self.get_column_model()
                 value_model = self.get_column_value_model()
-                column, _ = column_model.objects.get_or_create(
-                    schema=schema,
-                    source='holding',
-                    source_field=source_field,
-                    defaults={
-                        'title': source_field.replace('_', ' ').title(),
-                        'editable': config.get('editable', True),
-                    }
-                )
                 val, _ = value_model.objects.get_or_create(
                     column=column,
                     account_id=self.id,

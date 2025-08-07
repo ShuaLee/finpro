@@ -1,7 +1,9 @@
-from decimal import Decimal, ROUND_HALF_UP
 from django.contrib.contenttypes.models import ContentType
 from django.utils.dateparse import parse_date, parse_datetime, parse_time
+from assets.models.base import HoldingThemeValue
 from schemas.models import SchemaColumnValue
+from datetime import date, datetime, time
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from simpleeval import simple_eval
 import re
 
@@ -12,33 +14,54 @@ def resolve_column_value(holding, column, fallback_to_default):
 
     Resolution order:
     1. SchemaColumnValue (if edited)
-    2. Holding.<source_field>
-    3. Holding.asset.<source_field>
-    4. holding.<formula_method>() if present
-    5. Evaluate formula_expression (future)
+    2. HoldingThemeValue (if linked to investment_theme)
+    3. Holding.<source_field>
+    4. Holding.asset.<source_field>
+    5. holding.<formula_method>() if present
+    6. Evaluate formula_expression
     """
     content_type = ContentType.objects.get_for_model(holding)
+
+    # 1️⃣ Edited SchemaColumnValue
     scv = SchemaColumnValue.objects.filter(
         column=column,
         account_ct=content_type,
         account_id=holding.id,
     ).first()
-
     if scv and scv.is_edited:
         return format_value(cast_value(scv.value, column), column)
 
-    field = column.source_field
+    # 2️⃣ InvestmentTheme-based resolution
+    if column.investment_theme:
+        htv = HoldingThemeValue.objects.filter(
+            holding_ct=content_type,
+            holding_id=holding.id,
+            theme=column.investment_theme
+        ).first()
+        if htv:
+            raw = htv.get_value()
+            return format_value(cast_value(raw, column), column)
+
+    # 3️⃣ Holding source
     if column.source == "holding":
-        return format_value(getattr(holding, field, None), column)
+        raw = getattr(holding, column.source_field, None)
+        return format_value(raw, column)
+
+    # 4️⃣ Asset source
     elif column.source == "asset":
         asset = getattr(holding, holding.asset_field_name, None)
-        return format_value(getattr(asset, field, None), column) if asset else None
+        if asset:
+            raw = getattr(asset, column.source_field, None)
+            return format_value(raw, column)
 
+    # 5️⃣ Formula method
     if column.source == "calculated":
         if column.formula_method:
             method = getattr(holding, column.formula_method, None)
             if method and callable(method):
                 return format_value(method(), column)
+
+        # 6️⃣ Formula expression
         elif column.formula_expression:
             return format_value(
                 evaluate_symbolic_formula(holding, column.formula_expression),
@@ -52,31 +75,61 @@ def resolve_column_value(holding, column, fallback_to_default):
 
 
 def cast_value(value, column):
+    """
+    Converts a raw value into the expected Python type based on the column's data_type.
+    """
+    if value is None:
+        return None
+
     try:
-        if value is None:
-            return None
-        if column.data_type == "decimal":
+        dt = column.data_type
+
+        if dt == "decimal":
             return Decimal(value)
-        elif column.data_type == "integer":
+
+        elif dt == "integer":
             return int(value)
-        elif column.data_type == "date":
+
+        elif dt == "date":
             return parse_date(value)
-        elif column.data_type == "datetime":
+
+        elif dt == "datetime":
             return parse_datetime(value)
-        elif column.data_type == "time":
+
+        elif dt == "time":
             return parse_time(value)
-        return value
-    except Exception:
+
+        elif dt in ["string", "url"]:
+            return str(value)
+
+        else:
+            # Unknown type — fallback to raw
+            return value
+
+    except (ValueError, TypeError, InvalidOperation):
         return value
 
 
 def format_value(value, column):
     if value is None:
         return None
-    if column.data_type == "decimal" and isinstance(value, Decimal):
+
+    dt = column.data_type
+
+    if dt == "decimal" and isinstance(value, Decimal):
         places = column.decimal_places or 2
         quant = Decimal(f"1.{'0'*places}")
         return value.quantize(quant, rounding=ROUND_HALF_UP)
+
+    elif dt == "date" and isinstance(value, date):
+        return value.isoformat()
+
+    elif dt == "datetime" and isinstance(value, datetime):
+        return value.isoformat()
+
+    elif dt == "time" and isinstance(value, time):
+        return value.strftime("%H:%M:%S")
+
     return value
 
 

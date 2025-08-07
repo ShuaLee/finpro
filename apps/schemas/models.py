@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from assets.models.base import InvestmentTheme
 
 
 class Schema(models.Model):
@@ -38,6 +39,8 @@ class SchemaColumn(models.Model):
         ('integer', 'Integer'),
         ('string', 'Text'),
         ('date', 'Date'),
+        ('datetime', 'Datetime'),
+        ('time', 'Time'),
         ('url', 'URL'),
     ])
     source = models.CharField(max_length=20, choices=[
@@ -67,6 +70,15 @@ class SchemaColumn(models.Model):
     )
     display_order = models.PositiveIntegerField(default=0)
 
+    # This field does not mean that each SchemaColumn maps to one theme across all holdings. Instead, it's a soft link
+    investment_theme = models.ForeignKey(
+        InvestmentTheme,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="If this column represents a custom theme, link it here."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -79,7 +91,6 @@ class SchemaColumn(models.Model):
     def clean(self):
         # 🧠 Ensure only one of the formula types is set
         formula_fields = [
-            bool(self.formula and self.formula.strip()),
             bool(self.formula_method and self.formula_method.strip()),
             bool(self.formula_expression and self.formula_expression.strip()),
         ]

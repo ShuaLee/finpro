@@ -33,19 +33,23 @@ class SchemaViewSet(mixins.RetrieveModelMixin,
     @action(detail=True, methods=["post"])
     def add_custom_column(self, request, pk=None):
         schema = self.get_object()
-        serializer = AddCustomColumnSerializer(data=request.data)
+        serializer = AddCustomColumnSerializer(
+            data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         column = SchemaColumn.objects.create(
             schema=schema,
-            title=data['title'],
-            source='custom',
-            data_type=data['data_type'],
+            title=data["title"],
+            source="custom",
+            data_type=data["data_type"],
+            decimal_places=data.get("decimal_places"),
             editable=True,
-            is_deletable=True
+            is_deletable=True,
+            investment_theme=data.get("investment_theme_id"),
         )
-        return Response(SchemaColumnSerializer(column).data, status=status.HTTP_201_CREATED)
+
+        return Response(SchemaColumnSerializer(column).data, status=201)
 
     @action(detail=True, methods=["post"])
     def add_calculated_column(self, request, pk=None):
@@ -187,21 +191,37 @@ class SchemaColumnViewSet(mixins.UpdateModelMixin,
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        if not instance.is_deletable and not instance.editable:
-            return Response({"error": "This column is not editable."}, status=403)
+        user = request.user
+        holding = instance.account  # GenericForeignKey resolves here
+        column = instance.column
 
-        if instance.source == "custom":
-            # Allow full updates
-            return super().update(request, *args, **kwargs)
+        # 🔐 Permission check
+        if hasattr(holding, 'account') and holding.account.stock_portfolio.portfolio.profile.user != user:
+            return Response({"error": "Unauthorized"}, status=403)
 
-        if instance.source == "calculated" and instance.formula_method:
-            return Response({"error": "Backend-calculated column can't be edited."}, status=403)
+        value = request.data.get("value")
 
-        # ✅ For config columns: allow only custom_title
-        if "custom_title" not in request.data:
-            return Response({"error": "Only 'custom_title' can be updated for this column."}, status=400)
+        # ✅ NEW: If this column is theme-based
+        if column.theme:
+            htv, _ = HoldingThemeValue.objects.get_or_create(
+                holding_ct=ContentType.objects.get_for_model(holding),
+                holding_id=holding.id,
+                theme=column.theme
+            )
+            htv.set_value(value, column.data_type)
+            htv.save()
+            return Response({"success": True})
 
-        return super().update(request, *args, **kwargs)
+        # ✅ OLD logic: update SchemaColumnValue
+        if column.source == "holding":
+            setattr(holding, column.source_field, cast_value(value, column))
+            holding.save()
+        else:
+            instance.value = value
+            instance.is_edited = True
+            instance.save()
+
+        return Response({"success": True})
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
