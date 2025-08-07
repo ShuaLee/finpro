@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
-from assets.models.base import InvestmentTheme
+from assets.models.base import InvestmentTheme, HoldingThemeValue
 from assets.models.stocks import Stock, StockHolding
 import logging
 
@@ -203,18 +203,21 @@ class StockAdmin(admin.ModelAdmin):
 
 @admin.register(StockHolding)
 class StockHoldingAdmin(admin.ModelAdmin):
-    list_display = [
-        'holding_link', 'stock_link', 'self_managed_account_link', 'quantity',
-        'purchase_price', 'purchase_date', 'current_value',
-        'investment_theme'
-    ]
-    list_display_links = ['holding_link']
-    list_filter = [
-        'self_managed_account__stock_portfolio__portfolio__profile',
-        'stock__is_custom', 'stock__sector', 'stock__is_adr', 'investment_theme'
-    ]
-    search_fields = ['stock__ticker',
-                     'stock__name', 'self_managed_account__name']
+    list_display = (
+        'id', 'asset', 'quantity', 'purchase_price', 'purchase_date',
+        'themes_display',  # ← replace the M2M field with a method
+    )
+    # You can still filter by M2M using RelatedOnlyFieldListFilter
+    list_filter = (
+        ('investment_theme', admin.RelatedOnlyFieldListFilter),
+    )
+    search_fields = ('asset__symbol', 'asset__name')
+
+    @admin.display(description="Themes")
+    def themes_display(self, obj):
+        names = obj.investment_theme.values_list('name', flat=True)
+        return ", ".join(names)
+    
     list_editable = ['quantity', 'purchase_price', 'purchase_date']
     list_per_page = 50
     fields = [
@@ -278,14 +281,15 @@ class StockHoldingAdmin(admin.ModelAdmin):
 
 @admin.register(InvestmentTheme)
 class InvestmentThemeAdmin(admin.ModelAdmin):
-    list_display = ['name', 'portfolio', 'parent', 'full_path']
-    list_filter = ['portfolio']
-    search_fields = ['name']
+    list_display = ("id", "name", "portfolio", "parent")
+    list_filter = ("portfolio",)
+    search_fields = ("name",)
+    raw_id_fields = ("portfolio", "parent")
 
-    def full_path(self, obj):
-        return str(obj)
-    full_path.short_description = "Full Path"
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.select_related('portfolio', 'parent')
+@admin.register(HoldingThemeValue)
+class HoldingThemeValueAdmin(admin.ModelAdmin):
+    list_display = ("id", "holding", "theme", "value_string", "value_decimal", "value_integer")
+    list_filter = ("theme",)
+    search_fields = ("theme__name",)
+    raw_id_fields = ("theme", "holding_ct")

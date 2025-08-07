@@ -1,6 +1,9 @@
 from . import SCHEMA_CONFIG_REGISTRY
-from schemas.models import CustomAssetSchemaConfig
+from django.apps import apps
 
+def _CustomAssetSchemaConfig():
+    # Lazy model import to avoid circulars
+    return apps.get_model('schemas', 'CustomAssetSchemaConfig')
 
 def get_schema_column_defaults(asset_type):
     config = SCHEMA_CONFIG_REGISTRY.get(asset_type, {})
@@ -32,6 +35,7 @@ def get_asset_schema_config(schema_type):
     Returns schema config for a given schema type.
     Checks DB override first, then falls back to static registry.
     """
+    CustomAssetSchemaConfig = _CustomAssetSchemaConfig()
     db_config = CustomAssetSchemaConfig.objects.filter(
         asset_type=schema_type).first()
     if db_config:

@@ -6,9 +6,6 @@ from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
 from assets.utils import get_default_for_type
-from schemas.config.utils import get_asset_schema_config
-from schemas.models import SchemaColumnValue
-from apps.schemas.services.holding_sync_service import HoldingSchemaEngine
 from decimal import Decimal, InvalidOperation
 import logging
 from abc import abstractmethod
@@ -18,10 +15,12 @@ logger = logging.getLogger(__name__)
 
 class InvestmentTheme(models.Model):
     portfolio = models.ForeignKey(
-        Portfolio, on_delete=models.CASCADE, related_name='asset_tags')
+        Portfolio, on_delete=models.CASCADE, related_name='asset_tags'
+    )
     name = models.CharField(max_length=100)
     parent = models.ForeignKey(
-        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtags')
+        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtags'
+    )
 
     class Meta:
         unique_together = ('portfolio', 'name')
@@ -46,7 +45,8 @@ class HoldingThemeValue(models.Model):
     # Support various value types (same as SchemaColumnValue)
     value_string = models.CharField(max_length=255, null=True, blank=True)
     value_decimal = models.DecimalField(
-        max_digits=20, decimal_places=6, null=True, blank=True)
+        max_digits=20, decimal_places=6, null=True, blank=True
+    )
     value_integer = models.IntegerField(null=True, blank=True)
 
     class Meta:
@@ -81,18 +81,23 @@ class AssetHolding(models.Model):
     """Abstract base for all asset holdings (e.g., StockHolding)."""
     quantity = models.DecimalField(max_digits=15, decimal_places=4)
     purchase_price = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True)
+        max_digits=20, decimal_places=2, null=True, blank=True
+    )
     purchase_date = models.DateTimeField(null=True, blank=True)
+
     investment_theme = models.ManyToManyField(
         InvestmentTheme,
         blank=True,
         related_name='%(class)s_investments'
     )
-    column_values = GenericRelation(SchemaColumnValue,
-                                    content_type_field='account_ct',
-                                    object_id_field='account_id',
-                                    related_query_name='holding'
-                                    )
+
+    # Use string ref to avoid importing schemas.models at import time
+    column_values = GenericRelation(
+        'schemas.SchemaColumnValue',
+        content_type_field='account_ct',
+        object_id_field='account_id',
+        related_query_name='holding'
+    )
 
     class Meta:
         abstract = True
@@ -127,6 +132,7 @@ class AssetHolding(models.Model):
         """
         Get or create SchemaColumnValue for a given source field.
         Falls back to instance attribute if schema/column not found.
+        Handles theme-backed columns via HoldingThemeValue.
         """
         schema = self.get_active_schema()
         if not schema:
@@ -136,34 +142,33 @@ class AssetHolding(models.Model):
         if not column:
             return getattr(self, source_field, None)
 
-        # 🧠 NEW: If this column represents a theme, fetch from HoldingThemeValue
-        if column.theme:
-            from assets.models.base import HoldingThemeValue  # avoid circular imports
-
+        # If this column is linked to a theme, fetch from HoldingThemeValue
+        if getattr(column, 'investment_theme_id', None):
             htv = HoldingThemeValue.objects.filter(
                 holding_ct=ContentType.objects.get_for_model(self.__class__),
                 holding_id=self.id,
-                theme=column.theme
-            ).first()
-
+                theme=column.investment_theme_id
+            ).select_related('theme').first()
             return htv.get_value() if htv else None
 
-        # 🧠 Otherwise, check if a SchemaColumnValue exists
+        # Otherwise, check if a SchemaColumnValue exists
         val = self.column_values.select_related('column').filter(
             column=column
         ).first()
 
         if val is None:
-            config = get_asset_schema_config(self.get_asset_type()).get(
-                'holding', {}).get(source_field)
+            # Lazy import here to avoid circular import at module load
+            from schemas.config.utils import get_asset_schema_config
+
+            config = (get_asset_schema_config(self.get_asset_type())
+                      .get('holding', {})
+                      .get(source_field))
             if config:
-                column_model = self.get_column_model()
                 value_model = self.get_column_value_model()
                 val, _ = value_model.objects.get_or_create(
                     column=column,
                     account_id=self.id,
-                    account_ct=ContentType.objects.get_for_model(
-                        self.__class__),
+                    account_ct=ContentType.objects.get_for_model(self.__class__),
                     defaults={
                         'value': get_default_for_type(config.get('data_type')),
                         'is_edited': False,
@@ -187,7 +192,8 @@ class AssetHolding(models.Model):
             return None
 
         fx_rate = get_fx_rate(
-            getattr(self.asset, 'currency', None), self.get_profile_currency())
+            getattr(self.asset, 'currency', None), self.get_profile_currency()
+        )
         try:
             return (value * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
@@ -197,8 +203,7 @@ class AssetHolding(models.Model):
         try:
             quantity = Decimal(str(self.get_column_value('quantity') or 0))
             price = Decimal(str(self.get_column_value('price') or 0))
-            purchase_price = Decimal(
-                str(self.get_column_value('purchase_price') or 0))
+            purchase_price = Decimal(str(self.get_column_value('purchase_price') or 0))
             return ((price - purchase_price) * quantity).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
             return None
@@ -209,7 +214,8 @@ class AssetHolding(models.Model):
             return None
         try:
             fx_rate = get_fx_rate(
-                getattr(self.asset, 'currency', None), self.get_profile_currency())
+                getattr(self.asset, 'currency', None), self.get_profile_currency()
+            )
             return (base_gain * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
             return None
@@ -228,8 +234,7 @@ class AssetHolding(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         self.full_clean()
-        print(
-            f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
+        print(f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
 
         super().save(*args, **kwargs)
 
@@ -238,6 +243,8 @@ class AssetHolding(models.Model):
             schema = self.get_active_schema()
             if schema:
                 print(f"📐 Schema found: {schema}")
+                # Lazy import to avoid circular dependency
+                from schemas.services.holding_sync_service import HoldingSchemaEngine
                 engine = HoldingSchemaEngine(self, self.get_asset_type())
                 engine.sync_all_columns()
             else:

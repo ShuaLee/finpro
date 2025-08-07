@@ -2,7 +2,6 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from assets.models.base import InvestmentTheme
 
 
 class Schema(models.Model):
@@ -72,7 +71,7 @@ class SchemaColumn(models.Model):
 
     # This field does not mean that each SchemaColumn maps to one theme across all holdings. Instead, it's a soft link
     investment_theme = models.ForeignKey(
-        InvestmentTheme,
+        'assets.InvestmentTheme',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
