@@ -205,27 +205,32 @@ class StockAdmin(admin.ModelAdmin):
 class StockHoldingAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'asset', 'quantity', 'purchase_price', 'purchase_date',
-        'themes_display',  # ← replace the M2M field with a method
+        'themes_display',
     )
-    # You can still filter by M2M using RelatedOnlyFieldListFilter
-    list_filter = (
-        ('investment_theme', admin.RelatedOnlyFieldListFilter),
-    )
-    search_fields = ('asset__symbol', 'asset__name')
+    # FK/OneToOne only here:
+    list_select_related = ('stock', 'self_managed_account')
 
-    @admin.display(description="Themes")
-    def themes_display(self, obj):
-        names = obj.investment_theme.values_list('name', flat=True)
-        return ", ".join(names)
-    
+    list_filter = (('investment_theme', admin.RelatedOnlyFieldListFilter),)
+    search_fields = ('stock__ticker', 'stock__name')  # asset__symbol likely wrong; use real FKs
     list_editable = ['quantity', 'purchase_price', 'purchase_date']
     list_per_page = 50
+
     fields = [
         'self_managed_account', 'stock', 'quantity', 'purchase_price',
         'purchase_date', 'investment_theme'
     ]
     autocomplete_fields = ['stock', 'self_managed_account']
     actions = ['refresh_holding_values']
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # IMPORTANT: prefetch M2M; select_related for FKs
+        return qs.select_related('stock', 'self_managed_account') \
+                 .prefetch_related('investment_theme', 'column_values__column')
+
+    @admin.display(description="Themes")
+    def themes_display(self, obj):
+        return ", ".join(obj.investment_theme.values_list('name', flat=True))
 
     def get_admin_url(self, obj, model):
         return reverse(
@@ -263,20 +268,13 @@ class StockHoldingAdmin(admin.ModelAdmin):
                     holding.stock.save()
                     updated += 1
             except Exception as e:
-                logger.error(
-                    f"Failed to refresh {holding.stock.ticker}: {str(e)}")
+                logger.error(f"Failed to refresh {holding.stock.ticker}: {str(e)}")
         self.message_user(
             request,
             f"Refreshed {updated} holdings' stock values.",
             level=messages.SUCCESS if updated else messages.WARNING
         )
     refresh_holding_values.short_description = "Refresh stock values from FMP"
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            'stock', 'self_managed_account', 'investment_theme'
-            # optional if using schema data
-        ).prefetch_related('column_values__column')
 
 
 @admin.register(InvestmentTheme)
