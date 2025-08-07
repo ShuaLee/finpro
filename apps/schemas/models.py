@@ -31,6 +31,7 @@ class SchemaColumn(models.Model):
     schema = models.ForeignKey(
         Schema, on_delete=models.CASCADE, related_name="columns")
     title = models.CharField(max_length=100)
+    custom_title = models.CharField(max_length=100, blank=True, null=True)
 
     data_type = models.CharField(max_length=20, choices=[
         ('decimal', 'Decimal'),
@@ -70,16 +71,21 @@ class SchemaColumn(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.source})"
-    
+
+    @property
+    def display_title(self):
+        return self.custom_title or self.title
+
     def clean(self):
-    # 🧠 Ensure only one of the formula types is set
+        # 🧠 Ensure only one of the formula types is set
         formula_fields = [
             bool(self.formula and self.formula.strip()),
             bool(self.formula_method and self.formula_method.strip()),
             bool(self.formula_expression and self.formula_expression.strip()),
         ]
         if sum(formula_fields) > 1:
-            raise ValidationError("Only one of formula, formula_method, or formula_expression can be set.")
+            raise ValidationError(
+                "Only one of formula, formula_method, or formula_expression can be set.")
 
         # 🔔 Ensure title is not blank
         if not self.title:
@@ -87,7 +93,8 @@ class SchemaColumn(models.Model):
 
         # 🔍 Warn if field_path is missing for asset/holding sources
         if self.source in ["asset", "holding"] and not self.source_field:
-            raise ValidationError(f"source_field is required for source='{self.source}'.")
+            raise ValidationError(
+                f"source_field is required for source='{self.source}'.")
 
     def save(self, *args, **kwargs):
         self.full_clean()

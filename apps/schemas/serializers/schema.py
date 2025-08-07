@@ -6,20 +6,28 @@ from schemas.models import (
 
 
 class SchemaColumnSerializer(serializers.ModelSerializer):
+    display_title = serializers.SerializerMethodField()
+
     class Meta:
         model = SchemaColumn
-        fields = [
-            "id",
-            "title",
-            "data_type",
-            "source",
-            "source_field",
-            "editable",
-            "is_deletable",
-            "decimal_places",
-        ]
-        read_only_fields = ["id", "data_type", "source", "source_field", "is_deletable"]
+        fields = '__all__'
+        read_only_fields = (
+            'title', 'source', 'source_field', 'data_type',
+            'field_path', 'decimal_places', 'formula_method',
+            'formula_expression', 'editable', 'is_deletable', 'is_default'
+        )
 
+    def get_display_title(self, obj):
+        return obj.custom_title or obj.title
+
+
+class CustomSchemaColumnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SchemaColumn
+        fields = (
+            'id', 'title', 'data_type', 'decimal_places', 'field_path',
+            'editable', 'is_deletable', 'display_order'
+        )
 
 
 class SchemaDetailSerializer(serializers.ModelSerializer):
@@ -44,5 +52,6 @@ class SchemaColumnReorderSerializer(serializers.Serializer):
 
 
 class AddFromConfigSerializer(serializers.Serializer):
-    source = serializers.ChoiceField(choices=["asset", "holding", "calculated"])
+    source = serializers.ChoiceField(
+        choices=["asset", "holding", "calculated"])
     source_field = serializers.CharField

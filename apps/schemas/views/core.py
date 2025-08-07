@@ -50,7 +50,8 @@ class SchemaViewSet(mixins.RetrieveModelMixin,
     @action(detail=True, methods=["post"])
     def add_calculated_column(self, request, pk=None):
         schema = self.get_object()
-        serializer = AddCalculatedColumnSerializer(data=request.data, context={"schema": schema})
+        serializer = AddCalculatedColumnSerializer(
+            data=request.data, context={"schema": schema})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
@@ -116,7 +117,7 @@ class SchemaViewSet(mixins.RetrieveModelMixin,
                 col.save()
 
         return Response({"success": True, "reordered": len(column_data)}, status=status.HTTP_200_OK)
-    
+
     @action(detail=True, methods=["post"])
     def add_from_config(self, request, pk=None):
         """
@@ -159,7 +160,8 @@ class SchemaViewSet(mixins.RetrieveModelMixin,
                 title=meta.get("title", field.replace("_", " ").title()),
                 source=source,
                 source_field=field,
-                field_path=meta.get("field_path"),  # Now that you're storing it!
+                # Now that you're storing it!
+                field_path=meta.get("field_path"),
                 data_type=meta["data_type"],
                 editable=meta.get("editable", True),
                 is_deletable=meta.get("is_deletable", True),
@@ -175,7 +177,6 @@ class SchemaViewSet(mixins.RetrieveModelMixin,
         }, status=201)
 
 
-
 class SchemaColumnViewSet(mixins.UpdateModelMixin,
                           mixins.RetrieveModelMixin,
                           viewsets.GenericViewSet):
@@ -185,15 +186,23 @@ class SchemaColumnViewSet(mixins.UpdateModelMixin,
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
+
         if not instance.is_deletable and not instance.editable:
             return Response({"error": "This column is not editable."}, status=403)
-        
-        # Extra protection: prevent updating formula if it's backend-defined
+
+        if instance.source == "custom":
+            # Allow full updates
+            return super().update(request, *args, **kwargs)
+
         if instance.source == "calculated" and instance.formula_method:
             return Response({"error": "Backend-calculated column can't be edited."}, status=403)
-        
+
+        # ✅ For config columns: allow only custom_title
+        if "custom_title" not in request.data:
+            return Response({"error": "Only 'custom_title' can be updated for this column."}, status=400)
+
         return super().update(request, *args, **kwargs)
-    
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         if not instance.is_deletable:
@@ -232,13 +241,14 @@ class SchemaColumnValueViewSet(mixins.UpdateModelMixin,
 
         return Response({"success": True})
 
+
 class SchemaAvailableColumnsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, schema_id):
         schema = get_object_or_404(Schema, pk=schema_id)
         return Response(get_serialized_available_columns(schema))
-    
+
 
 class SchemaFormulaVariableListView(APIView):
     permission_classes = [IsAuthenticated]
