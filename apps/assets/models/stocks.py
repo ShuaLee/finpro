@@ -1,26 +1,20 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from .base import Asset, AssetHolding
-from accounts.models.stocks import SelfManagedAccount
-from external_data.fx import get_fx_rate
 from schemas.models import SchemaColumn, SchemaColumnValue
 
 
 class Stock(Asset):
     ticker = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=200, blank=True, null=True)
-    exchange = models.CharField(
-        max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
+    exchange = models.CharField(max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
     is_adr = models.BooleanField(default=False)
-    price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
+    price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
     currency = models.CharField(max_length=3, blank=True, null=True)
     average_volume = models.BigIntegerField(null=True, blank=True)
     volume = models.BigIntegerField(null=True, blank=True)
-    dividend_yield = models.DecimalField(
-        max_digits=6, decimal_places=4, blank=True, null=True)
-    pe_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
+    dividend_yield = models.DecimalField(max_digits=6, decimal_places=4, blank=True, null=True)
+    pe_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     is_etf = models.BooleanField(default=False)
     sector = models.CharField(max_length=100, null=True, blank=True)
     industry = models.CharField(max_length=100, null=True, blank=True)
@@ -34,7 +28,7 @@ class Stock(Asset):
         indexes = [
             models.Index(fields=['ticker']),
             models.Index(fields=['is_custom']),
-            models.Index(fields=['exchange'])
+            models.Index(fields=['exchange']),
         ]
 
     def __str__(self):
@@ -72,7 +66,8 @@ class StockHolding(AssetHolding):
         return 'stock'
 
     def get_active_schema(self):
-        return self.self_managed_account.active_schema
+        # 🔧 use the unified account
+        return self.account.active_schema
 
     def get_column_model(self):
         return SchemaColumn
@@ -86,7 +81,7 @@ class StockHolding(AssetHolding):
     class Meta:
         indexes = [
             models.Index(fields=['account']),
-            models.Index(fields=['stock'])
+            models.Index(fields=['stock']),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -96,6 +91,8 @@ class StockHolding(AssetHolding):
         ]
 
     def clean(self):
-        if self.account.account_mode != "self_managed":
-            raise ValidationError(
-                "Holdings can only be added to self-managed accounts.")
+        # Only self-managed accounts can have holdings
+        if self.account and self.account.account_mode != "self_managed":
+            raise ValidationError("Holdings can only be added to self-managed accounts.")
+        # keep base validations (quantity, purchase_price, purchase_date)
+        super().clean()

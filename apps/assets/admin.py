@@ -208,7 +208,7 @@ class StockHoldingAdmin(admin.ModelAdmin):
         'themes_display',
     )
     # FK/OneToOne only here:
-    list_select_related = ('stock', 'self_managed_account')
+    list_select_related = ('stock', 'account')
 
     list_filter = (('investment_theme', admin.RelatedOnlyFieldListFilter),)
     search_fields = ('stock__ticker', 'stock__name')  # asset__symbol likely wrong; use real FKs
@@ -219,7 +219,7 @@ class StockHoldingAdmin(admin.ModelAdmin):
         'self_managed_account', 'stock', 'quantity', 'purchase_price',
         'purchase_date', 'investment_theme'
     ]
-    autocomplete_fields = ['stock', 'self_managed_account']
+    autocomplete_fields = ['stock', 'account']
     actions = ['refresh_holding_values']
 
     def get_queryset(self, request):
