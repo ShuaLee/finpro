@@ -50,8 +50,8 @@ class Stock(Asset):
 
 
 class StockHolding(AssetHolding):
-    self_managed_account = models.ForeignKey(
-        SelfManagedAccount,
+    account = models.ForeignKey(
+        "accounts.StockAccount",
         on_delete=models.CASCADE,
         related_name='holdings'
     )
@@ -60,10 +60,6 @@ class StockHolding(AssetHolding):
         on_delete=models.CASCADE,
         related_name='stock_holdings'
     )
-
-    @property
-    def account(self):
-        return self.self_managed_account
 
     @property
     def asset(self):
@@ -85,16 +81,21 @@ class StockHolding(AssetHolding):
         return SchemaColumnValue
 
     def get_profile_currency(self):
-        return self.self_managed_account.stock_portfolio.portfolio.profile.currency
+        return self.account.stock_portfolio.portfolio.profile.currency
 
     class Meta:
         indexes = [
-            models.Index(fields=['self_managed_account']),
+            models.Index(fields=['account']),
             models.Index(fields=['stock'])
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=['self_managed_account', 'stock'],
+                fields=['account', 'stock'],
                 name='unique_holding_per_account'
             ),
         ]
+
+    def clean(self):
+        if self.account.account_mode != "self_managed":
+            raise ValidationError(
+                "Holdings can only be added to self-managed accounts.")

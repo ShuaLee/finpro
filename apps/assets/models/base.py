@@ -168,7 +168,8 @@ class AssetHolding(models.Model):
                 val, _ = value_model.objects.get_or_create(
                     column=column,
                     account_id=self.id,
-                    account_ct=ContentType.objects.get_for_model(self.__class__),
+                    account_ct=ContentType.objects.get_for_model(
+                        self.__class__),
                     defaults={
                         'value': get_default_for_type(config.get('data_type')),
                         'is_edited': False,
@@ -178,7 +179,7 @@ class AssetHolding(models.Model):
         return val.get_value() if val else getattr(self, source_field, None)
 
     # --- Financial calculations ---
-    def get_current_value(self):
+    def get_value_in_asset_currency(self):
         try:
             quantity = Decimal(str(self.get_column_value('quantity') or 0))
             price = Decimal(str(self.get_column_value('price') or 0))
@@ -186,24 +187,23 @@ class AssetHolding(models.Model):
         except (InvalidOperation, TypeError):
             return None
 
-    def get_current_value_in_profile_fx(self):
-        value = self.get_current_value()
-        if not value:
+    def get_value_in_profile_currency(self):
+        base_value = self.get_value_in_asset_currency()
+        if base_value is None:
             return None
 
-        fx_rate = get_fx_rate(
-            getattr(self.asset, 'currency', None), self.get_profile_currency()
-        )
-        try:
-            return (value * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            return None
+        from_currency = getattr(self.asset, 'currency', 'USD') or 'USD'
+        to_currency = self.get_profile_currency()
+
+        fx = get_fx_rate(from_currency, to_currency)
+        return (base_value * Decimal(str(fx or 1))).quantize(Decimal("0.01"))
 
     def get_unrealized_gain(self):
         try:
             quantity = Decimal(str(self.get_column_value('quantity') or 0))
             price = Decimal(str(self.get_column_value('price') or 0))
-            purchase_price = Decimal(str(self.get_column_value('purchase_price') or 0))
+            purchase_price = Decimal(
+                str(self.get_column_value('purchase_price') or 0))
             return ((price - purchase_price) * quantity).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
             return None
@@ -214,7 +214,8 @@ class AssetHolding(models.Model):
             return None
         try:
             fx_rate = get_fx_rate(
-                getattr(self.asset, 'currency', None), self.get_profile_currency()
+                getattr(self.asset, 'currency',
+                        None), self.get_profile_currency()
             )
             return (base_gain * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
@@ -234,7 +235,8 @@ class AssetHolding(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         self.full_clean()
-        print(f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
+        print(
+            f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
 
         super().save(*args, **kwargs)
 

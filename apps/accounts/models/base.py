@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.core.validators import MinLengthValidator
 from schemas.models import SchemaColumnVisibility
 
 
@@ -8,12 +9,18 @@ class BaseAccount(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_synced = models.DateTimeField(null=True, blank=True)
 
+    currency = models.CharField(
+        max_length=3,
+        validators=[MinLengthValidator(3)],
+        help_text="Currency in which this account is denominated (e.g., USD, CAD, EUR)"
+    )
+
     class Meta:
         abstract = True
 
     def __str__(self):
         return self.name
-    
+
     def initialize_visibility_settings(self, schema):
         """
         Sets up SchemaColumnVisibility rows for this account based on the given schema.
@@ -27,7 +34,7 @@ class BaseAccount(models.Model):
                 column=column,
                 defaults={'is_visible': True}
             )
-    
+
     def get_visible_columns(self):
         """
         Returns visible SchemaColumns for this account.
@@ -38,3 +45,9 @@ class BaseAccount(models.Model):
             object_id=self.id,
             is_visible=True
         ).select_related("column")
+
+    def save(self, *args, **kwargs):
+        if not self.currency:
+            # Default to portfolio profile currency
+            self.currency = self.stock_portfolio.portfolio.profile.currency
+        super().save(*args, **kwargs)
