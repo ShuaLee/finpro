@@ -62,3 +62,26 @@ STOCK_SCHEMA_CONFIG = {
         },
     },
 }
+
+MANAGED_STOCK_SCHEMA_CONFIG = {
+    "custom": {
+        "currency": {
+            "title": "Currency",
+            "data_type": "string",
+            "editable": True,
+            "is_deletable": False,
+            "is_default": True,
+        },
+        "current_value": {
+            "title": "Current Value",
+            "data_type": "decimal",
+            "editable": True,
+            "decimal_places": 2,
+            "is_deletable": False,
+            "is_default": True,
+        },
+        # Optional defaults you can turn on later:
+        # "invested_amount": {...},
+        # "provider": {...},
+    }
+}

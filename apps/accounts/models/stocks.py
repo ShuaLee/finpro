@@ -1,8 +1,9 @@
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from external_data.fx import get_fx_rate
 from portfolios.models.stock import StockPortfolio
-from schemas.models import Schema
+from schemas.models import SchemaColumnValue, SchemaColumn
 from accounts.models.base import BaseAccount
 from decimal import Decimal
 
@@ -77,9 +78,30 @@ class StockAccount(BaseAccount):
             else self.stock_portfolio.managed_schema
         )
 
+    def _get_account_scoped_decimal(self, source_field, default=None):
+        schema = self.active_schema
+        if not schema:
+            return default
+        try:
+            col = SchemaColumn.objects.get(
+                schema=schema, source="custom", source_field=source_field
+            )
+        except SchemaColumn.DoesNotExist:
+            return default
+        ct = ContentType.objects.get_for_model(self.__class__)
+        scv = SchemaColumnValue.objects.filter(
+            column=col, account_ct=ct, account_id=self.pk
+        ).first()
+        from decimal import Decimal, InvalidOperation
+        try:
+            return Decimal(scv.value) if scv and scv.value not in (None, "") else default
+        except (InvalidOperation, TypeError):
+            return default
+
     def get_current_value(self):
         if self.is_managed():
-            return self.current_value  # Already stored in profile currency
+            # Read from SCV (profile currency)
+            return self._get_account_scoped_decimal("current_value", default=None)
 
         total = Decimal(0)
         for holding in self.holdings.all():
@@ -93,10 +115,12 @@ class StockAccount(BaseAccount):
         base_value = self.get_current_value()
         if base_value is None:
             return None
+        if self.is_managed():
+            # Already profile currency from SCV
+            return base_value.quantize(Decimal("0.01"))
 
         from_currency = self.currency
         to_currency = self.stock_portfolio.portfolio.profile.currency
-
         fx = get_fx_rate(from_currency, to_currency)
         return (base_value * Decimal(str(fx or 1))).quantize(Decimal("0.01"))
 
@@ -109,6 +133,9 @@ class StockAccount(BaseAccount):
 
         super().save(*args, **kwargs)
 
-        # On creation or mode change, make sure schema visibility is synced
         if self.active_schema:
             self.initialize_visibility_settings(self.active_schema)
+
+        # Lazy import to avoid circulars at module import time
+        from accounts.services.managed_scv_defaults import ensure_managed_account_scv_defaults
+        ensure_managed_account_scv_defaults(self)

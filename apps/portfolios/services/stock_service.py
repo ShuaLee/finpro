@@ -2,23 +2,27 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from portfolios.models.portfolio import Portfolio
 from portfolios.models.stock import StockPortfolio
-from apps.schemas.services.schema_initialization import initialize_stock_schema
+from schemas.services.schema_initialization import initialize_stock_schemas_for_portfolio
 
 
 @transaction.atomic
 def create_stock_portfolio(portfolio: Portfolio) -> StockPortfolio:
-    """
-    Creates a StockPortfolio for the given Portfolio and initializes its default schema.
-    """
-    # Check if the stock portfolio already exists
     if hasattr(portfolio, "stockportfolio"):
         raise ValidationError(
             "StockPortfolio already exists for this portfolio.")
 
-    # Create the stock portfolio
+    # Insert allowed now because FKs are nullable
     stock_portfolio = StockPortfolio.objects.create(portfolio=portfolio)
 
-    # ✅ Create the default schema and columns for this stock portfolio
-    initialize_stock_schema(stock_portfolio)
+    # Create both schemas and attach
+    sm_schema, m_schema = initialize_stock_schemas_for_portfolio(
+        stock_portfolio)
 
+    StockPortfolio.objects.filter(pk=stock_portfolio.pk).update(
+        self_managed_schema=sm_schema,
+        managed_schema=m_schema,
+    )
+
+    stock_portfolio.refresh_from_db(
+        fields=["self_managed_schema", "managed_schema"])
     return stock_portfolio

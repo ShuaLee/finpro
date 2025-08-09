@@ -10,20 +10,9 @@ from portfolios.models.stock import StockPortfolio
 
 
 class StockPortfolioSerializer(serializers.ModelSerializer):
-    """
-    Serializer for StockPortfolio.
+    self_managed_schema = serializers.PrimaryKeyRelatedField(read_only=True)
+    managed_schema = serializers.PrimaryKeyRelatedField(read_only=True)
 
-    Only provides basic representation; creation should be done via service layer.
-    """
     class Meta:
         model = StockPortfolio
-        fields = ["id", "portfolio", "created_at"]
-        read_only_fields = ["id", "created_at"]
-
-    def create(self, validated_data):
-        """
-        Prevent direct creation through serializer.
-        """
-        raise NotImplementedError(
-            "Use stock_service.create_stock_portfolio() to create StockPortfolio."
-        )
+        fields = ["id", "portfolio", "self_managed_schema", "managed_schema"]

@@ -36,9 +36,13 @@ class StockPortfolio(BaseAssetPortfolio):
     )
 
     self_managed_schema = models.ForeignKey(
-        Schema, on_delete=models.PROTECT, related_name='stock_self_schema')
+        Schema, on_delete=models.PROTECT, related_name='stock_self_schema',
+        null=True, blank=True
+    )
     managed_schema = models.ForeignKey(
-        Schema, on_delete=models.PROTECT, related_name='stock_managed_schema')
+        Schema, on_delete=models.PROTECT, related_name='stock_managed_schema',
+        null=True, blank=True
+    )
 
     class Meta:
         app_label = 'portfolios'
@@ -47,22 +51,16 @@ class StockPortfolio(BaseAssetPortfolio):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
 
     def clean(self):
-        """
-        Validates uniqueness and ensures both schemas are present.
-        """
-        if self.pk is None and StockPortfolio.objects.filter(portfolio=self.portfolio).exists():
-            raise ValidationError(
-                "Only one StockPortfolio is allowed per Portfolio.")
-
-        if not self.self_managed_schema or not self.managed_schema:
+        # only enforce AFTER the row exists
+        if self.pk and (not self.self_managed_schema_id or not self.managed_schema_id):
             raise ValidationError(
                 "Both self-managed and managed schemas must be assigned.")
 
     def save(self, *args, **kwargs):
-        """
-        Override save to ensure model validation before saving.
-        """
-        self.full_clean()
+        # Allow the first insert without tripping the "schemas required" rule
+        is_create = self.pk is None
+        if not is_create:
+            self.full_clean()
         super().save(*args, **kwargs)
 
     def get_total_value_pfx(self):
