@@ -7,15 +7,52 @@ from schemas.models import (
     SchemaColumnVisibility,
     CustomAssetSchemaConfig,
 )
-from apps.schemas.services.holding_sync_service import sync_schema_column_to_holdings
+from schemas.services.holding_sync_service import sync_schema_column_to_holdings
+
+
+class SchemaColumnInline(admin.TabularInline):
+    model = SchemaColumn
+    extra = 0
+    fields = (
+        "title", "custom_title",
+        "data_type", "decimal_places",
+        "source", "source_field", "field_path",
+        "editable", "is_deletable",
+        "is_system", "scope",
+        "display_order", "investment_theme",
+        "structure_edit_mode",
+    )
+    ordering = ("display_order",)
+    show_change_link = True
+
+    def get_readonly_fields(self, request, obj=None):
+        # obj here is the Schema; rows are instances of SchemaColumn in formset
+        ro = []
+        # Make all existing rows honor their mode
+        if hasattr(self, 'formset') and hasattr(self.formset, 'queryset'):
+            pass  # admin inlines don't give row objects here; we rely on model.clean() as the hard stop
+        # UI-level comfort: we can still lock by default for system columns
+        return ro
 
 
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "schema_type", "content_type", "object_id", "created_at")
+    list_display = ("id", "name", "schema_type",
+                    "content_type", "object_id", "created_at")
     search_fields = ("name", "schema_type")
     list_filter = ("schema_type", "content_type")
     readonly_fields = ("created_at",)
+    inlines = [SchemaColumnInline]
+
+    # Ensure existing "sync new columns to holdings" also runs when
+    # columns are created via the inline (since SchemaColumnValue.save_model wont fire).
+
+    def save_format(self, request, form, formset, change):
+        instances = formset.save()
+        if formset.model is SchemaColumn:
+            for obj in getattr(formset, "new_objects", []):
+                sync_schema_column_to_holdings(obj)
+        return instances
 
 
 @admin.register(SchemaColumn)
@@ -25,7 +62,8 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         'data_type', 'decimal_places', 'editable', 'is_deletable',
         'is_system', 'scope', 'display_order', 'investment_theme',
     )
-    list_filter = ('source', 'data_type', 'editable', 'is_deletable', 'is_system', 'scope')
+    list_filter = ('source', 'data_type', 'editable',
+                   'is_deletable', 'is_system', 'scope')
     search_fields = ('title', 'custom_title', 'source_field')
     # Was ('schema', 'theme') before — fix to the actual FK name
     raw_id_fields = ('schema', 'investment_theme',)
@@ -41,9 +79,20 @@ class SchemaColumnAdmin(admin.ModelAdmin):
                 ("editable", "is_deletable"),
                 ("is_system", "scope", "display_order"),
                 "theme",  # link to InvestmentTheme if this column represents a theme
+                "structure_edit_mode",
             )
         }),
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if obj:
+            mode = 'locked' if obj.is_system else obj.structure_edit_mode
+            if mode in ('locked', 'decimal_only'):
+                ro += ['data_type', 'source', 'source_field', 'field_path']
+            if mode == 'locked':
+                ro += ['decimal_places']
+        return ro
 
     def save_model(self, request, obj, form, change):
         is_new = obj.pk is None

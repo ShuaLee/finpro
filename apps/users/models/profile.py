@@ -20,7 +20,7 @@ class Profile(models.Model):
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    
+
     # Profile check
     is_profile_complete = models.BooleanField(default=False)
 
@@ -35,8 +35,8 @@ class Profile(models.Model):
         choices=get_common_country_choices(),
         default="US"
     )
-    preferred_currency = models.CharField(
-        max_length=5,
+    currency = models.CharField(
+        max_length=3,
         choices=get_common_currency_choices(),
         default="USD"
     )
@@ -82,6 +82,10 @@ class Profile(models.Model):
         """
         Override save to enforce uppercase currency codes.
         """
-        if self.preferred_currency:
-            self.preferred_currency = self.preferred_currency.upper()
+        if self.currency:
+            self.currency = self.currency.upper()
         super().save(*args, **kwargs)
+        from accounts.models.stocks import SelfManagedAccount
+        SelfManagedAccount.objects.filter(
+            stock_portfolio__portfolio__profile=self
+        ).update(currency=self.currency)

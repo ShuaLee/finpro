@@ -17,34 +17,19 @@ class SelfManagedAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = SelfManagedAccount
         fields = [
-            'id', 'name', 'broker', 'tax_status', 'account_type',
-            'active_schema_id', 'active_schema_name',
+            'id', 'name', 'active_schema_id', 'active_schema_name',
             'current_value_in_pfx', 'created_at', 'holdings'
         ]
-        read_only_fields = [
-            'id', 'active_schema_id', 'active_schema_name',
-            'created_at', 'holdings', 'current_value_in_pfx'
-        ]
+        read_only_fields = fields
 
     def get_current_value_in_pfx(self, obj):
         return obj.get_current_value_pfx()
 
 
 class SelfManagedAccountCreateSerializer(serializers.ModelSerializer):
-    name = serializers.CharField()
-    broker = serializers.CharField(
-        required=False, allow_null=True, allow_blank=True)
-
-    tax_status = serializers.ChoiceField(
-        choices=SelfManagedAccount._meta.get_field('tax_status').choices
-    )
-    account_type = serializers.ChoiceField(
-        choices=SelfManagedAccount._meta.get_field('account_type').choices
-    )
-
     class Meta:
         model = SelfManagedAccount
-        fields = ['name', 'broker', 'tax_status', 'account_type']
+        fields = ['name']
 
 
 # -----------------------------

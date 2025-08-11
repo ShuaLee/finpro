@@ -62,3 +62,23 @@ STOCK_SCHEMA_CONFIG = {
         },
     },
 }
+
+STOCK_MANAGED_SCHEMA_CONFIG = {
+    "custom": {
+        "current_value": {
+            "title": "Current Value",
+            "data_type": "decimal",
+            "editable": False,
+            "decimal_places": 2,
+            "is_deletable": False,
+            "is_default": True,
+        },
+        "currency": {
+            "title": "Currency",
+            "data_type": "string",
+            "editable": False,
+            "is_deletable": False,
+            "is_default": True,
+        },
+    },
+}

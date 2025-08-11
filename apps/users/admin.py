@@ -12,7 +12,8 @@ class ProfileInline(admin.StackedInline):
     verbose_name_plural = "Profile"
     fk_name = "user"
     extra = 0
-    fields = ("full_name", "country", "preferred_currency", "is_profile_complete")  # ✅ Added
+    fields = ("full_name", "country", "currency",
+              "is_profile_complete")  # ✅ Added
 
 
 @admin.register(User)
@@ -27,7 +28,8 @@ class UserAdmin(BaseUserAdmin):
     # Fields for detail view
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        (_("Permissions"), {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        (_("Permissions"), {
+         "fields": ("is_active", "is_staff", "is_superuser")}),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
 
@@ -49,8 +51,10 @@ class UserAdmin(BaseUserAdmin):
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     """Standalone Profile admin for advanced editing."""
-    list_display = ["user", "full_name", "country", "preferred_currency", "plan", "account_type", "is_profile_complete"]  # ✅ Added
-    list_filter = ["country", "plan", "account_type", "is_profile_complete"]  # ✅ Added filter
+    list_display = ["user", "full_name", "country", "currency",
+                    "plan", "account_type", "is_profile_complete"]  # ✅ Added
+    list_filter = ["country", "plan", "account_type",
+                   "is_profile_complete"]  # ✅ Added filter
     search_fields = ["user__email", "full_name"]
     ordering = ["user__email"]
     readonly_fields = ["is_profile_complete"]  # ✅ Prevent manual change

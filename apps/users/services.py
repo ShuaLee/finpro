@@ -74,8 +74,8 @@ def validate_required_profile_fields(data, partial=False):
         missing = []
         if not data.get('country'):
             missing.append('country')
-        if not data.get('preferred_currency'):
-            missing.append('preferred_currency')
+        if not data.get('currency'):
+            missing.append('currency')
         if missing:
             raise ValidationError(
                 {"detail": f"Missing required fields: {', '.join(missing)}"}
@@ -89,7 +89,7 @@ def check_profile_completion(profile):
     Required fields:
         - full_name
         - country
-        - preferred_currency
+        - currency
 
     Args:
         profile (Profile): The profile instance to check.
@@ -97,7 +97,7 @@ def check_profile_completion(profile):
     Returns:
         bool: True if profile is complete, False otherwise.
     """
-    required_fields = ['full_name', 'country', 'preferred_currency']
+    required_fields = ['full_name', 'country', 'currency']
     return all(getattr(profile, field) for field in required_fields)
 
 

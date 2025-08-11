@@ -32,7 +32,6 @@ class SchemaColumn(models.Model):
         Schema, on_delete=models.CASCADE, related_name="columns")
     title = models.CharField(max_length=100)
     custom_title = models.CharField(max_length=100, blank=True, null=True)
-
     data_type = models.CharField(max_length=20, choices=[
         ('decimal', 'Decimal'),
         ('integer', 'Integer'),
@@ -55,6 +54,15 @@ class SchemaColumn(models.Model):
     decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
     is_system = models.BooleanField(
         default=False, help_text="Whether this is a system default column")
+    structure_edit_mode = models.CharField(
+        max_length=20,
+        choices=[
+            ('full', 'Full'),
+            ('decimal_only', 'Decimal only'),
+            ('locked', 'Locked')
+        ],
+        default='locked'
+    )
     scope = models.CharField(max_length=20, choices=[
         ('portfolio', 'Portfolio-wide'),
         ('subportfolio', 'Subportfolio-wide'),
@@ -88,7 +96,9 @@ class SchemaColumn(models.Model):
         return self.custom_title or self.title
 
     def clean(self):
-        # 🧠 Ensure only one of the formula types is set
+        super().clean()
+
+        # --- your existing rules (kept as-is) ---
         formula_fields = [
             bool(self.formula_method and self.formula_method.strip()),
             bool(self.formula_expression and self.formula_expression.strip()),
@@ -97,14 +107,40 @@ class SchemaColumn(models.Model):
             raise ValidationError(
                 "Only one of formula, formula_method, or formula_expression can be set.")
 
-        # 🔔 Ensure title is not blank
         if not self.title:
             raise ValidationError("Column title cannot be blank.")
 
-        # 🔍 Warn if field_path is missing for asset/holding sources
         if self.source in ["asset", "holding"] and not self.source_field:
             raise ValidationError(
                 f"source_field is required for source='{self.source}'.")
+
+        # --- new: structure edit locking on UPDATEs only ---
+        if self.pk:
+            # fetch original to compare
+            original = type(self).objects.only(
+                "data_type", "decimal_places", "source", "source_field", "field_path",
+                "is_system", "structure_edit_mode"
+            ).get(pk=self.pk)
+
+            # Effective mode: system columns are always locked
+            mode = "locked" if (self.is_system or original.is_system) else (
+                self.structure_edit_mode or original.structure_edit_mode)
+
+            if mode == "locked":
+                locked_fields = ["data_type", "decimal_places",
+                                 "source", "source_field", "field_path"]
+            elif mode == "decimal_only":
+                locked_fields = ["data_type", "source",
+                                 "source_field", "field_path"]
+            else:
+                locked_fields = []
+
+            errors = {}
+            for f in locked_fields:
+                if getattr(self, f) != getattr(original, f):
+                    errors[f] = f"'{f}' is locked by structure_edit_mode='{mode}'."
+            if errors:
+                raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.full_clean()

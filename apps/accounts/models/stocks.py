@@ -48,13 +48,10 @@ class BaseStockAccount(BaseAccount):
         abstract = True
 
     def save(self, *args, **kwargs):
-        # 🧠 Inherit currency from profile if not explicitly set
-        if not self.currency and hasattr(self, "portfolio"):
-            try:
-                self.currency = self.portfolio.profile.preferred_currency
-            except Exception:
-                # Graceful fallback in case portfolio or profile chain isn't populated yet
-                pass
+        if not self.currency:
+            derived = self.derive_profile_currency()
+            if derived:
+                self.currency = derived
         super().save(*args, **kwargs)
 
 

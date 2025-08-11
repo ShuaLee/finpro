@@ -20,21 +20,24 @@ from assets.serializers.stocks import StockHoldingCreateSerializer
 
 class SelfManagedAccountListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = SelfManagedAccountCreateSerializer
+
+    def get_serializer_class(self):
+        return (
+            SelfManagedAccountSerializer if self.request.method == 'GET' else SelfManagedAccountCreateSerializer
+        )
 
     def get_queryset(self):
         return stock_account_service.get_self_managed_accounts(self.request.user)
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        serializer = SelfManagedAccountCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         account = stock_account_service.create_self_managed_account(
             request.user, serializer.validated_data
         )
 
-        response_serializer = SelfManagedAccountSerializer(account)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(SelfManagedAccountSerializer(account).data, status=status.HTTP_201_CREATED)
 
 
 class SelfManagedAccountDetailView(RetrieveAPIView):
