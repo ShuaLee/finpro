@@ -5,6 +5,7 @@ from django.db import models
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+
 from schemas.config import SCHEMA_CONFIG_REGISTRY
 from schemas.models import (
     Schema,
@@ -16,145 +17,77 @@ from schemas.models import (
 from schemas.services.holding_sync_service import sync_schema_column_to_holdings
 
 
+# ----------------------
+# Helpers / Widgets
+# ----------------------
 class DisabledOptionSelect(forms.Select):
-    """Select that allows disabling some options."""
+    """Select that allows disabling some options (used for built-in catalog)."""
 
     def __init__(self, *args, disabled_values=None, **kwargs):
         self.disabled_values = set(disabled_values or [])
         super().__init__(*args, **kwargs)
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
-        option = super().create_option(name, value, label, selected,
-                                       index, subindex=subindex, attrs=attrs)
-        # Support optgroups: value may be None for group labels.
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
         if value in self.disabled_values:
             option['attrs']['disabled'] = True
         return option
 
 
-class AddBuiltInColumnGlobalForm(forms.Form):
-    schema = forms.ModelChoiceField(
-        queryset=Schema.objects.all(), required=True, label="Schema")
-    catalog_item = forms.ChoiceField(label="Built-in column", required=True)
+def build_builtin_choices_for_schema(schema):
+    """
+    Returns (choices, disabled_set, config) for a given Schema.
+    choices -> [("Asset", [(key,label), ...]), ("Holding", ...), ("Calculated", ...)]
+    disabled_set -> keys already present in this schema ("source:source_field")
+    """
+    if not schema:
+        return [], set(), None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    config = (SCHEMA_CONFIG_REGISTRY.get(schema.schema_type)
+              or SCHEMA_CONFIG_REGISTRY.get(f"{schema.schema_type}_self_managed"))
+    if not config:
+        return [], set(), None
 
-        schema_obj = None
-        # support initial(schema=obj) or posted schema id
-        sid = self.data.get("schema") or getattr(
-            self.initial.get("schema", None), "pk", None)
-        if sid:
-            schema_obj = Schema.objects.filter(pk=sid).first()
-            if schema_obj:
-                self.fields["schema"].initial = schema_obj
+    existing = {
+        f"{c.source}:{c.source_field}"
+        for c in schema.columns.exclude(source__isnull=True).exclude(source_field__isnull=True)
+    }
 
-        choices, disabled = [], set()
-        if schema_obj:
-            config = (SCHEMA_CONFIG_REGISTRY.get(schema_obj.schema_type)
-                      or SCHEMA_CONFIG_REGISTRY.get(f"{schema_obj.schema_type}_self_managed"))
+    choices, disabled = [], set()
+    for group_label, fields in config.items():
+        group = []
+        for source_field, spec in fields.items():
+            key = f"{group_label}:{source_field}"
+            label = spec.get("title", source_field.replace("_", " ").title())
+            group.append((key, label))
+            if key in existing:
+                disabled.add(key)
+        if group:
+            choices.append((group_label.title(), group))
 
-            if config:
-                existing = {
-                    f"{c.source}:{c.source_field}"
-                    for c in schema_obj.columns.exclude(source__isnull=True).exclude(source_field__isnull=True)
-                }
-                for group_label, fields in config.items():
-                    group = []
-                    for source_field, spec in fields.items():
-                        key = f"{group_label}:{source_field}"
-                        label = spec.get(
-                            "title", source_field.replace("_", " ").title())
-                        group.append((key, label))
-                        if key in existing:
-                            disabled.add(key)
-                    if group:
-                        choices.append((group_label.title(), group))
-
-        self.fields["catalog_item"].widget = DisabledOptionSelect(
-            disabled_values=disabled)
-        self.fields["catalog_item"].choices = choices
-
-    def create_column(self):
-        schema = self.cleaned_data["schema"]
-        key = self.cleaned_data["catalog_item"]
-        source, source_field = key.split(":", 1)
-
-        config = (SCHEMA_CONFIG_REGISTRY.get(schema.schema_type)
-                  or SCHEMA_CONFIG_REGISTRY.get(f"{schema.schema_type}_self_managed"))
-        spec = config[source][source_field]
-
-        max_order = SchemaColumn.objects.filter(schema=schema).aggregate(
-            models.Max("display_order"))["display_order__max"] or 0
-
-        col, created = SchemaColumn.objects.get_or_create(
-            schema=schema,
-            source=source,
-            source_field=source_field,
-            defaults={
-                "title": spec["title"],
-                "data_type": spec["data_type"],
-                "field_path": spec.get("field_path"),
-                "decimal_places": spec.get("decimal_places"),
-                "editable": spec.get("editable", False),
-                "is_deletable": spec.get("is_deletable", False),
-                "is_system": spec.get("is_system", True),
-                "display_order": max_order + 1,
-                "formula_method": spec.get("formula_method"),
-                "formula_expression": spec.get("formula"),
-            }
-        )
-        return col, created
+    return choices, disabled, config
 
 
+# ----------------------
+# Schema Admin: Add built-ins (button)
+# ----------------------
 class AddBuiltInColumnForm(forms.Form):
     catalog_item = forms.ChoiceField(label="Built-in column")
 
     def __init__(self, *args, schema: Schema, **kwargs):
         super().__init__(*args, **kwargs)
         self.schema = schema
-
-        # Pick the right config based on schema_type
-        schema_type = schema.schema_type
-        config = SCHEMA_CONFIG_REGISTRY.get(
-            schema_type) or SCHEMA_CONFIG_REGISTRY.get(f"{schema_type}_self_managed")
-
-        # Build a set of keys already present in this schema: "source:source_field"
-        existing = set()
-        for c in schema.columns.all():
-            if c.source and c.source_field:
-                existing.add(f"{c.source}:{c.source_field}")
-
-        # Build grouped choices
-        choices = []
-        disabled = set()
-        if config:
-            for group_label, fields in config.items():
-                group_options = []
-                for source_field, spec in fields.items():
-                    key = f"{group_label}:{source_field}"
-                    label = spec.get(
-                        "title", source_field.replace("_", " ").title())
-                    group_options.append((key, label))
-                    if key in existing:
-                        disabled.add(key)
-                if group_options:
-                    choices.append((group_label.title(), group_options))
-
-        widget = DisabledOptionSelect(disabled_values=disabled)
-        self.fields['catalog_item'].widget = widget
+        choices, disabled, _ = build_builtin_choices_for_schema(schema)
+        self.fields['catalog_item'].widget = DisabledOptionSelect(disabled_values=disabled)
         self.fields['catalog_item'].choices = choices
 
     def create_column(self):
         """Create the selected SchemaColumn from config."""
         key = self.cleaned_data['catalog_item']
         source, source_field = key.split(":", 1)
-
-        config = SCHEMA_CONFIG_REGISTRY.get(self.schema.schema_type) or SCHEMA_CONFIG_REGISTRY.get(
-            f"{self.schema.schema_type}_self_managed")
+        _, _, config = build_builtin_choices_for_schema(self.schema)
         spec = config[source][source_field]
 
-        # Create with safe defaults; mark as system
         obj, created = SchemaColumn.objects.get_or_create(
             schema=self.schema,
             source=source,
@@ -164,8 +97,7 @@ class AddBuiltInColumnForm(forms.Form):
                 "data_type": spec["data_type"],
                 "field_path": spec.get("field_path"),
                 "decimal_places": spec.get("decimal_places"),
-                # value editability
-                "editable": spec.get("editable", False),
+                "editable": spec.get("editable", False),     # value editability
                 "is_deletable": spec.get("is_deletable", False),
                 "is_system": spec.get("is_system", True),
                 "display_order": (self.schema.columns.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1,
@@ -176,15 +108,17 @@ class AddBuiltInColumnForm(forms.Form):
         return obj, created
 
 
+# ----------------------
+# Schema Inline (Columns): built-in dropdown on NEW rows, lock system rows
+# ----------------------
 class SchemaColumnInlineForm(forms.ModelForm):
-    # Extra (non-model) field to pick from config
     built_in = forms.ChoiceField(label="Built-in column", required=False)
 
     class Meta:
         model = SchemaColumn
-        # Do NOT include 'built_in' here; it's extra (non-model) form field
+        # Note: 'built_in' is extra and not listed here
         fields = (
-            "custom_title",                # we want this editable
+            "custom_title",
             "title", "data_type", "decimal_places",
             "source", "source_field", "field_path",
             "editable", "is_deletable",
@@ -192,7 +126,6 @@ class SchemaColumnInlineForm(forms.ModelForm):
             "display_order", "investment_theme",
         )
 
-    # These are set by the inline at runtime (see get_formset)
     _builtin_choices = []
     _builtin_disabled = set()
     _config = None
@@ -208,28 +141,23 @@ class SchemaColumnInlineForm(forms.ModelForm):
 
         inst = self.instance
 
-        # EXISTING row behavior
         if inst and inst.pk:
-            # System rows: lock structure; only allow custom_title
+            # Existing row
             if inst.is_system:
+                # lock structure; only custom_title editable
                 keep = {"custom_title"}
                 for name, field in self.fields.items():
                     if name not in keep:
                         field.disabled = True
-                # hide the selector on existing rows
                 self.fields['built_in'].widget = forms.HiddenInput()
             else:
-                # Non-system existing rows: show everything as normal, but hide selector
                 self.fields['built_in'].widget = forms.HiddenInput()
         else:
-            # NEW row behavior
-            # Let the user either pick a built-in OR enter a custom column manually.
-            # To encourage built-ins for MVP, we disable structure inputs until a choice is made.
+            # New row: encourage picking built-in; disable structure inputs for now
             for name in ("title", "data_type", "decimal_places", "source", "source_field", "field_path",
                          "editable", "is_deletable", "is_system"):
                 if name in self.fields:
-                    self.fields[name].disabled = True
-            # custom_title stays enabled so they can label the column display
+                    self.fields[name].disabled = True  # filled from config in clean()
 
     def clean(self):
         cleaned = super().clean()
@@ -237,38 +165,31 @@ class SchemaColumnInlineForm(forms.ModelForm):
         is_new = not self.instance.pk
 
         if is_new and bi:
-            # prevent adding duplicates even if the option was somehow enabled
             if bi in getattr(self, "_builtin_disabled", set()):
-                raise forms.ValidationError(
-                    "This built-in column already exists in this schema.")
+                raise forms.ValidationError("This built-in column already exists in this schema.")
 
             source, source_field = bi.split(":", 1)
             spec = self._config[source][source_field]
 
-            # Populate structure from config (and mark as system)
+            # Fill from config (mark as system)
             cleaned["source"] = source
             cleaned["source_field"] = source_field
             cleaned["title"] = spec["title"]
             cleaned["data_type"] = spec["data_type"]
             cleaned["field_path"] = spec.get("field_path")
             cleaned["decimal_places"] = spec.get("decimal_places")
-            cleaned["editable"] = spec.get(
-                "editable", False)          # value editability
+            cleaned["editable"] = spec.get("editable", False)
             cleaned["is_deletable"] = spec.get("is_deletable", False)
             cleaned["is_system"] = spec.get("is_system", True)
         return cleaned
 
     def save(self, commit=True):
         obj = super().save(commit=False)
-
-        # If new and built-in selected, ensure display_order is appended
         if not self.instance.pk:
-            # parent schema fk is assigned by the inline formset
             if obj.display_order in (None, 0):
                 max_order = SchemaColumn.objects.filter(schema=obj.schema).aggregate(
                     models.Max("display_order"))["display_order__max"] or 0
                 obj.display_order = max_order + 1
-
         if commit:
             obj.save()
         return obj
@@ -278,21 +199,43 @@ class SchemaColumnInline(admin.TabularInline):
     model = SchemaColumn
     form = SchemaColumnInlineForm
     extra = 0
-    fields = SchemaColumnInlineForm.Meta.fields
+    fields = (
+        "built_in",  # show catalog selector on new rows
+        "custom_title",
+        "title", "data_type", "decimal_places",
+        "source", "source_field", "field_path",
+        "editable", "is_deletable",
+        "is_system", "scope",
+        "display_order", "investment_theme",
+    )
     ordering = ("display_order",)
     show_change_link = True
 
+    def get_formset(self, request, obj=None, **kwargs):
+        # obj is the parent Schema
+        FormClass = self.form
+        choices, disabled, config = build_builtin_choices_for_schema(obj)
 
+        class DynamicForm(FormClass):
+            _builtin_choices = choices
+            _builtin_disabled = disabled
+            _config = config
+
+        kwargs["form"] = DynamicForm
+        return super().get_formset(request, obj, **kwargs)
+
+
+# ----------------------
+# Schema Admin (button to add built-ins)
+# ----------------------
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "schema_type",
-                    "content_type", "object_id", "created_at")
+    list_display = ("id", "name", "schema_type", "content_type", "object_id", "created_at")
     search_fields = ("name", "schema_type")
     list_filter = ("schema_type", "content_type")
     readonly_fields = ("created_at",)
     inlines = [SchemaColumnInline]
-    # custom template with button
-    change_form_template = "admin/schemas/schema/change_form.html"
+    change_form_template = "admin/schemas/schema/change_form.html"  # shows "Add built-in column" button
 
     def save_formset(self, request, form, formset, change):
         instances = formset.save()
@@ -301,7 +244,6 @@ class SchemaAdmin(admin.ModelAdmin):
                 sync_schema_column_to_holdings(obj)
         return instances
 
-    # Custom URL to add built-in column
     def get_urls(self):
         urls = super().get_urls()
         custom = [
@@ -316,8 +258,7 @@ class SchemaAdmin(admin.ModelAdmin):
     def add_builtin_view(self, request, object_id):
         schema = self.get_object(request, object_id)
         if not schema:
-            self.message_user(request, "Schema not found.",
-                              level=messages.ERROR)
+            self.message_user(request, "Schema not found.", level=messages.ERROR)
             return redirect("admin:schemas_schema_changelist")
 
         if request.method == "POST":
@@ -326,11 +267,9 @@ class SchemaAdmin(admin.ModelAdmin):
                 col, created = form.create_column()
                 if created:
                     sync_schema_column_to_holdings(col)
-                    self.message_user(
-                        request, f"Added built-in column “{col.title}”.")
+                    self.message_user(request, f"Added built-in column “{col.title}”.")
                 else:
-                    self.message_user(
-                        request, "That column already exists.", level=messages.WARNING)
+                    self.message_user(request, "That column already exists.", level=messages.WARNING)
                 return redirect(reverse("admin:schemas_schema_change", args=[schema.pk]))
         else:
             form = AddBuiltInColumnForm(schema=schema)
@@ -350,6 +289,37 @@ class SchemaAdmin(admin.ModelAdmin):
         return TemplateResponse(request, "admin/schemas/schema/add_builtin.html", context)
 
 
+# ----------------------
+# SchemaColumn Admin (custom-only on Add; system rows locked on Change)
+# ----------------------
+class SchemaColumnCustomAddForm(forms.ModelForm):
+    class Meta:
+        model = SchemaColumn
+        # fields for custom creation
+        fields = (
+            "schema",
+            "title", "custom_title",
+            "data_type", "decimal_places",
+            "editable", "is_deletable",
+            "scope", "display_order",
+            "investment_theme",
+        )
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.source = "custom"
+        obj.is_system = False
+        if not obj.source_field:
+            # derive a reasonable source_field from the title
+            from django.utils.text import slugify
+            obj.source_field = slugify(self.cleaned_data.get("title") or "") or None
+        obj.field_path = None
+        obj.formula_method = None
+        if commit:
+            obj.save()
+        return obj
+
+
 @admin.register(SchemaColumn)
 class SchemaColumnAdmin(admin.ModelAdmin):
     list_display = (
@@ -357,12 +327,9 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         'data_type', 'decimal_places', 'editable', 'is_deletable',
         'is_system', 'scope', 'display_order', 'investment_theme',
     )
-    list_filter = ('schema', 'source', 'data_type', 'editable',
-                   'is_deletable', 'is_system', 'scope')  # added 'schema'
+    list_filter = ('schema', 'source', 'data_type', 'editable', 'is_deletable', 'is_system', 'scope')
     search_fields = ('title', 'custom_title', 'source_field')
     raw_id_fields = ('schema', 'investment_theme',)
-    # <- add button on list page
-    change_list_template = "admin/schemas/schemacolumn/change_list.html"
 
     fieldsets = (
         (None, {
@@ -379,64 +346,36 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         }),
     )
 
+    def get_form(self, request, obj=None, **kwargs):
+        # On Add, force custom-creation form (no built-in button here)
+        if obj is None:
+            kwargs["form"] = SchemaColumnCustomAddForm
+        return super().get_form(request, obj, **kwargs)
+
     def get_readonly_fields(self, request, obj=None):
         ro = list(super().get_readonly_fields(request, obj))
         if obj and obj.is_system:
-            ro += ['data_type', 'decimal_places',
-                   'source', 'source_field', 'field_path']
+            ro += ['data_type', 'decimal_places', 'source', 'source_field', 'field_path']
         return ro
 
     def save_model(self, request, obj, form, change):
         is_new = obj.pk is None
+        if is_new:
+            # double-enforce custom on Add
+            obj.source = "custom"
+            obj.is_system = False
+            if not obj.source_field:
+                from django.utils.text import slugify
+                obj.source_field = slugify(obj.title or "") or None
+            obj.field_path = None
         super().save_model(request, obj, form, change)
         if is_new:
             sync_schema_column_to_holdings(obj)
 
-    # --- custom URL + view for "Add built-in column" ---
-    def get_urls(self):
-        urls = super().get_urls()
-        custom = [
-            path("add_builtin/", self.admin_site.admin_view(self.add_builtin_view),
-                 name="schemas_schemacolumn_add_builtin"),
-        ]
-        return custom + urls
 
-    def add_builtin_view(self, request):
-        initial = {}
-        sid = request.GET.get("schema") or request.GET.get("schema__id__exact")
-        if sid:
-            schema = Schema.objects.filter(pk=sid).first()
-            if schema:
-                initial["schema"] = schema
-
-        if request.method == "POST":
-            form = AddBuiltInColumnGlobalForm(
-                request.POST, initial=initial)  # ← swap here
-            if form.is_valid():
-                col, created = form.create_column()
-                if created:
-                    sync_schema_column_to_holdings(col)
-                    messages.success(
-                        request, f'Added built-in column “{col.title}”.')
-                else:
-                    messages.warning(
-                        request, "That column already exists in this schema.")
-                url = reverse("admin:schemas_schemacolumn_changelist") + \
-                    f"?schema__id__exact={col.schema_id}"
-                return redirect(url)
-        else:
-            form = AddBuiltInColumnGlobalForm(initial=initial)  # ← and here
-
-        context = {
-            **self.admin_site.each_context(request),
-            "opts": self.model._meta,
-            "title": "Add built-in column",
-            "form": form,
-            "media": self.media + form.media,
-        }
-        return TemplateResponse(request, "admin/schemas/schemacolumn/add_builtin.html", context)
-
-
+# ----------------------
+# SchemaColumnValue / Visibility / CustomAssetSchemaConfig
+# ----------------------
 class SchemaColumnValueInline(GenericTabularInline):
     model = SchemaColumnValue
     extra = 0
