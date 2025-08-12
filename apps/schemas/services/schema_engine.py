@@ -26,7 +26,16 @@ class HoldingSchemaEngine:
         logger.debug(f"🧪 Schema found: {self.schema}")
 
     def _get_portfolio(self):
-        return self.holding.account.sub_portfolio
+        # Self-managed holdings
+        if hasattr(self.holding, "self_managed_account") and self.holding.self_managed_account:
+            return self.holding.self_managed_account.stock_portfolio
+
+        # Managed holdings (if/when you add them)
+        if hasattr(self.holding, "managed_account") and self.holding.managed_account:
+            return self.holding.managed_account.stock_portfolio
+
+        raise AttributeError(
+            "Holding does not link to a known account → sub-portfolio.")
 
     def _get_active_schema(self):
         try:
@@ -82,7 +91,8 @@ class HoldingSchemaEngine:
             logger.debug(f"  👉 getattr({value}, '{part}')")
             value = getattr(value, part, None)
             if value is None:
-                logger.warning(f"❌ Could not resolve value from field_path: {field_path}")
+                logger.warning(
+                    f"❌ Could not resolve value from field_path: {field_path}")
                 return None
         logger.debug(f"✅ Resolved value: {value}")
         return value

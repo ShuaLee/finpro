@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %} {% load i18n %} {% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a> ›
+  <a href="{% url 'admin:app_list' app_label=opts.app_label %}"
+    >{{ opts.app_config.verbose_name }}</a
+  >
+  ›
+  <a href="{% url 'admin:schemas_schemacolumn_changelist' %}"
+    >{{ opts.verbose_name_plural|capfirst }}</a
+  >
+  › {% trans "Add built-in column" %}
+</div>
+{% endblock %} {% block content %}
+<h1>{% trans "Add built-in column" %}</h1>
+<form method="post">
+  {% csrf_token %}
+  <div class="form-row">{{ form.schema.label_tag }} {{ form.schema }}</div>
+  <div class="form-row">
+    {{ form.catalog_item.label_tag }} {{ form.catalog_item }}
+  </div>
+  <div class="submit-row">
+    <a
+      class="button cancel-link"
+      href="{% url 'admin:schemas_schemacolumn_changelist' %}"
+      >{% trans "Cancel" %}</a
+    >
+    <input type="submit" value="{% trans 'Add' %}" class="default" />
+  </div>
+</form>
+{% endblock %}
