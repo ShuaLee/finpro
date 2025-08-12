@@ -18,7 +18,12 @@ def get_holdings_for_schema_object(content_type, object_id):
     if not model:
         return []
 
-    return model.objects.filter(account__sub_portfolio=object_id)
+    if content_type.model == "stockportfolio":
+        return model.objects.filter(
+            self_managed_account__stock_portfolio_id=object_id
+        )
+
+    return []
 
 
 def sync_schema_column_to_holdings(column):

@@ -7,6 +7,7 @@ STOCK_SCHEMA_CONFIG = {
             "editable": False,
             "is_deletable": False,
             "is_default": True,
+            "is_system": True,
         },
         "price": {
             "title": "Price",
@@ -16,6 +17,7 @@ STOCK_SCHEMA_CONFIG = {
             "decimal_places": 2,
             "is_deletable": False,
             "is_default": True,
+            "is_system": True,
         },
         "name": {
             "title": "Name",
@@ -23,6 +25,7 @@ STOCK_SCHEMA_CONFIG = {
             "field_path": "stock.name",
             "editable": True,
             "is_deletable": True,
+            "is_system": True,
         },
     },
     "holding": {
@@ -34,6 +37,7 @@ STOCK_SCHEMA_CONFIG = {
             "decimal_places": 4,
             "is_deletable": False,
             "is_default": True,
+            "is_system": True,
         },
         "purchase_price": {
             "title": "Purchase Price",
@@ -42,6 +46,7 @@ STOCK_SCHEMA_CONFIG = {
             "editable": True,
             "decimal_places": 2,
             "is_deletable": True,
+            "is_system": True,
         },
     },
     "calculated": {
@@ -52,6 +57,7 @@ STOCK_SCHEMA_CONFIG = {
             "decimal_places": 2,
             "is_deletable": False,
             "is_default": True,
+            "is_system": True,
         },
         "unrealized_gain": {
             "title": "Unrealized Gain",
@@ -59,6 +65,7 @@ STOCK_SCHEMA_CONFIG = {
             "formula_method": "get_unrealized_gain",
             "editable": False,
             "decimal_places": 2,
+            "is_system": True,
         },
     },
 }
@@ -72,6 +79,7 @@ STOCK_MANAGED_SCHEMA_CONFIG = {
             "decimal_places": 2,
             "is_deletable": False,
             "is_default": True,
+            "is_system": True,
         },
         "currency": {
             "title": "Currency",
@@ -79,6 +87,7 @@ STOCK_MANAGED_SCHEMA_CONFIG = {
             "editable": False,
             "is_deletable": False,
             "is_default": True,
+            "is_system": True,
         },
     },
 }

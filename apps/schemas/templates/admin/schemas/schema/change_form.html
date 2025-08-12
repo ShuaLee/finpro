@@ -1,0 +1,13 @@
+{% extends "admin/change_form.html" %} {% load i18n %} {% block object-tools %}
+{{ block.super }} {% if change and not is_popup %}
+<ul class="object-tools">
+  <li>
+    <a
+      class="addlink"
+      href="{% url 'admin:schemas_schema_add_builtin' original.pk %}"
+    >
+      {% trans "Add built-in column" %}
+    </a>
+  </li>
+</ul>
+{% endif %} {% endblock %}
