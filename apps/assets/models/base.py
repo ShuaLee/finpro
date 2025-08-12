@@ -6,7 +6,7 @@ from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
 from assets.utils import get_default_for_type
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 from abc import abstractmethod
 
@@ -178,15 +178,30 @@ class AssetHolding(models.Model):
         return val.get_value() if val else getattr(self, source_field, None)
 
     # --- Financial calculations ---
-    def get_current_value(self):
+    def current_value_stock_fx(self):
+        """
+        Value = quantity * price. We assume 'price' is already normalized (FX applied upstream).
+        Looks up column overrides first, then falls back to model fields.
+        """
         try:
-            quantity = Decimal(str(self.get_column_value('quantity') or 0))
-            price = Decimal(str(self.get_column_value('price') or 0))
-            return (quantity * price).quantize(Decimal('0.01'))
+            q = self.get_column_value('quantity')
+            p = self.get_column_value('price')
+
+            if q is None:
+                q = getattr(self, 'quantity', None)
+            if p is None:
+                asset = getattr(self, 'asset', None) or getattr(self, 'stock', None)
+                p = getattr(asset, 'price', None)
+
+            if q is None or p is None:
+                return None
+
+            val = Decimal(q) * Decimal(p)
+            return val.quantize(Decimal('0.01'))  # drop this line if you don't want rounding here
         except (InvalidOperation, TypeError):
             return None
 
-    def get_current_value_in_profile_fx(self):
+    def get_current_value_profile_fx(self):
         value = self.get_current_value()
         if not value:
             return None
@@ -208,15 +223,25 @@ class AssetHolding(models.Model):
         except (InvalidOperation, TypeError):
             return None
 
-    def get_unrealized_gain_profile_fx(self):
-        base_gain = self.get_unrealized_gain()
-        if not base_gain:
-            return None
+    def get_unrealized_gain(self):
         try:
-            fx_rate = get_fx_rate(
-                getattr(self.asset, 'currency', None), self.get_profile_currency()
-            )
-            return (base_gain * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
+            q = self.get_column_value('quantity')
+            p = self.get_column_value('price')
+            pp = self.get_column_value('purchase_price')
+
+            if q is None:
+                q = getattr(self, 'quantity', None)
+            if p is None:
+                asset = getattr(self, 'asset', None) or getattr(self, 'stock', None)
+                p = getattr(asset, 'price', None)
+            if pp is None:
+                pp = getattr(self, 'purchase_price', None)
+
+            if q is None or p is None or pp is None:
+                return None
+
+            val = (Decimal(p) - Decimal(pp)) * Decimal(q)
+            return val.quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
             return None
 

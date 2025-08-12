@@ -1,8 +1,6 @@
-from django.core.exceptions import ValidationError
 from django.db import models
 from .base import Asset, AssetHolding
 from accounts.models.stocks import SelfManagedAccount
-from external_data.fx import get_fx_rate
 from schemas.models import SchemaColumn, SchemaColumnValue
 
 

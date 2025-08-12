@@ -50,9 +50,20 @@ STOCK_SCHEMA_CONFIG = {
         },
     },
     "calculated": {
-        "current_value": {
-            "title": "Current Value",
+        "current_value_stock_fx": {
+            "title": "Current Value - Stock FX",
             "data_type": "decimal",
+            "formula_method": "current_value_stock_fx",
+            "editable": False,
+            "decimal_places": 2,
+            "is_deletable": False,
+            "is_default": True,
+            "is_system": True,
+        },
+        "current_value_profile_fx": {
+            "title": "Current Value - Profile FX",
+            "data_type": "decimal",
+            "formula_method": "current_value_profile_fx",
             "editable": False,
             "decimal_places": 2,
             "is_deletable": False,
