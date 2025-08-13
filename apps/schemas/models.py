@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.utils.text import slugify
 
 
 class Schema(models.Model):
@@ -98,14 +99,15 @@ class SchemaColumn(models.Model):
     def clean(self):
         super().clean()
 
-        # --- your existing rules (kept as-is) ---
+        # --- your existing rules (kept) ---
         formula_fields = [
             bool(self.formula_method and self.formula_method.strip()),
             bool(self.formula_expression and self.formula_expression.strip()),
         ]
         if sum(formula_fields) > 1:
             raise ValidationError(
-                "Only one of formula, formula_method, or formula_expression can be set.")
+                "Only one of formula, formula_method, or formula_expression can be set."
+            )
 
         if not self.title:
             raise ValidationError("Column title cannot be blank.")
@@ -114,9 +116,39 @@ class SchemaColumn(models.Model):
             raise ValidationError(
                 f"source_field is required for source='{self.source}'.")
 
-        # --- new: structure edit locking on UPDATEs only ---
+        # --- new: normalize & validate custom columns ---
+        if self.source == "custom":
+            # always non-system and deletable
+            self.is_system = False
+            self.is_deletable = True
+
+            # allow only string/decimal for MVP
+            if self.data_type not in ("string", "decimal"):
+                raise ValidationError(
+                    "Custom columns must be of type 'string' or 'decimal'.")
+
+            # decimal_places required only for decimal; cleared otherwise
+            if self.data_type == "decimal":
+                if self.decimal_places is None:
+                    raise ValidationError(
+                        "decimal_places is required for decimal custom columns.")
+                if not (0 <= int(self.decimal_places) <= 8):
+                    raise ValidationError(
+                        "decimal_places must be between 0 and 8.")
+            else:
+                self.decimal_places = None
+
+            # generate a source_field if missing
+            if not self.source_field:
+                self.source_field = slugify(self.title or "") or "custom_field"
+
+            # custom columns cannot have field_path or formulas in MVP
+            self.field_path = None
+            self.formula_method = None
+            self.formula_expression = None
+
+        # --- your structure edit locking on UPDATEs only (kept) ---
         if self.pk:
-            # fetch original to compare
             original = type(self).objects.only(
                 "data_type", "decimal_places", "source", "source_field", "field_path",
                 "is_system", "structure_edit_mode"
@@ -124,7 +156,8 @@ class SchemaColumn(models.Model):
 
             # Effective mode: system columns are always locked
             mode = "locked" if (self.is_system or original.is_system) else (
-                self.structure_edit_mode or original.structure_edit_mode)
+                self.structure_edit_mode or original.structure_edit_mode
+            )
 
             if mode == "locked":
                 locked_fields = ["data_type", "decimal_places",

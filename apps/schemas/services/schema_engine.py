@@ -150,7 +150,14 @@ class HoldingSchemaEngine:
             logger.debug("🚫 No schema set on engine. Exiting sync.")
             return
 
-        logger.debug(
-            f"🔁 Syncing columns for holding {self.holding} with schema {self.schema}")
-        for column in self.schema.columns.all():
-            self.sync_column(column)
+        cols = list(self.schema.columns.all())
+
+        # 1) Seed/update base columns (asset/holding/custom)
+        for c in cols:
+            if c.source != "calculated":
+                self.sync_column(c)
+
+        # 2) Compute calculated columns
+        for c in cols:
+            if c.source == "calculated":
+                self.sync_column(c)

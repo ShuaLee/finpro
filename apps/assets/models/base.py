@@ -1,7 +1,7 @@
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericRelation, GenericForeignKey
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from external_data.fx import get_fx_rate
@@ -168,7 +168,8 @@ class AssetHolding(models.Model):
                 val, _ = value_model.objects.get_or_create(
                     column=column,
                     account_id=self.id,
-                    account_ct=ContentType.objects.get_for_model(self.__class__),
+                    account_ct=ContentType.objects.get_for_model(
+                        self.__class__),
                     defaults={
                         'value': get_default_for_type(config.get('data_type')),
                         'is_edited': False,
@@ -190,14 +191,16 @@ class AssetHolding(models.Model):
             if q is None:
                 q = getattr(self, 'quantity', None)
             if p is None:
-                asset = getattr(self, 'asset', None) or getattr(self, 'stock', None)
+                asset = getattr(self, 'asset', None) or getattr(
+                    self, 'stock', None)
                 p = getattr(asset, 'price', None)
 
             if q is None or p is None:
                 return None
 
             val = Decimal(q) * Decimal(p)
-            return val.quantize(Decimal('0.01'))  # drop this line if you don't want rounding here
+            # drop this line if you don't want rounding here
+            return val.quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
             return None
 
@@ -218,7 +221,8 @@ class AssetHolding(models.Model):
         try:
             quantity = Decimal(str(self.get_column_value('quantity') or 0))
             price = Decimal(str(self.get_column_value('price') or 0))
-            purchase_price = Decimal(str(self.get_column_value('purchase_price') or 0))
+            purchase_price = Decimal(
+                str(self.get_column_value('purchase_price') or 0))
             return ((price - purchase_price) * quantity).quantize(Decimal('0.01'))
         except (InvalidOperation, TypeError):
             return None
@@ -232,7 +236,8 @@ class AssetHolding(models.Model):
             if q is None:
                 q = getattr(self, 'quantity', None)
             if p is None:
-                asset = getattr(self, 'asset', None) or getattr(self, 'stock', None)
+                asset = getattr(self, 'asset', None) or getattr(
+                    self, 'stock', None)
                 p = getattr(asset, 'price', None)
             if pp is None:
                 pp = getattr(self, 'purchase_price', None)
@@ -259,21 +264,18 @@ class AssetHolding(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         self.full_clean()
-        print(f"💾 Saving {self.__class__.__name__} for asset {getattr(self, 'asset', None)}")
-
         super().save(*args, **kwargs)
 
-        if is_new:
-            print("🛠 New holding detected. Attempting schema sync...")
+        def _sync_after_commit():
             schema = self.get_active_schema()
-            if schema:
-                print(f"📐 Schema found: {schema}")
-                # Lazy import to avoid circular dependency
-                from schemas.services.holding_sync_service import HoldingSchemaEngine
-                engine = HoldingSchemaEngine(self, self.get_asset_type())
-                engine.sync_all_columns()
-            else:
-                print("⚠️ No schema found. Skipping sync.")
+            if not schema:
+                return
+            # Lazy import to avoid circulars
+            from schemas.services.holding_sync_service import HoldingSchemaEngine
+            engine = HoldingSchemaEngine(self, self.get_asset_type())
+            engine.sync_all_columns()
+
+        transaction.on_commit(_sync_after_commit)
 
     def delete(self, *args, **kwargs):
         self.column_values.all().delete()
