@@ -125,8 +125,7 @@ def sync_schema_column_to_holdings(column: SchemaColumn):
     if not model:
         return
 
-    holdings = model.objects.filter(
-        **{schema.content_type.model: schema.object_id})
+    holdings = get_holdings_for_schema_object(schema.content_type, schema.object_id)
     for holding in holdings:
         engine = HoldingSchemaEngine(holding, holding.get_asset_type())
         engine.sync_column(column)

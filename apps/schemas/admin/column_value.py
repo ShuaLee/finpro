@@ -40,6 +40,7 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
                 ro += ["value", "is_edited"]
         return ro
 
+    @staticmethod
     def _get_engine_for_obj(obj):
         model = obj.account_ct.model_class()
         holding = model.objects.filter(pk=obj.account_id).first()

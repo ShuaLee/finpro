@@ -204,8 +204,8 @@ class AssetHolding(models.Model):
         except (InvalidOperation, TypeError):
             return None
 
-    def get_current_value_profile_fx(self):
-        value = self.get_current_value()
+    def current_value_profile_fx(self):
+        value = self.current_value_stock_fx()
         if not value:
             return None
 
