@@ -1,5 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
-from schemas.models import SchemaColumnValue
+from schemas.models import SchemaColumnValue, SchemaColumn
 from schemas.services.schema_engine import HoldingSchemaEngine
 from decimal import Decimal
 
@@ -115,11 +115,22 @@ def get_holdings_for_schema_object(content_type, object_id):
     return []
 
 
-def sync_schema_column_to_holdings(column):
+def sync_schema_column_to_holdings(column: SchemaColumn):
     schema = column.schema
-    holdings = get_holdings_for_schema_object(
-        schema.content_type, schema.object_id)
+    if not schema:
+        return
 
+    # Get all holdings for this schema
+    model = schema.content_type.model_class()
+    if not model:
+        return
+
+    holdings = model.objects.filter(
+        **{schema.content_type.model: schema.object_id})
     for holding in holdings:
-        engine = HoldingSchemaEngine(holding, asset_type=holding.asset_type)
+        engine = HoldingSchemaEngine(holding, holding.get_asset_type())
         engine.sync_column(column)
+
+
+def delete_column_values(column: SchemaColumn):
+    SchemaColumnValue.objects.filter(column=column).delete()

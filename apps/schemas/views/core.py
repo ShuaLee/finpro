@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from schemas.config import SCHEMA_CONFIG_REGISTRY
+from schemas.config.mappers import decimal_places_from_spec
 from schemas.config.utils import get_serialized_available_columns, get_available_config_columns
 from schemas.models import (
     Schema,
@@ -18,7 +19,6 @@ from schemas.serializers import (
     SchemaColumnValueSerializer,
     AddCustomColumnSerializer,
     AddCalculatedColumnSerializer,
-    AddFromConfigSerializer,
 )
 from schemas.permissions import is_schema_owner, is_holding_owner
 from schemas.services.column_value_resolver import cast_value
@@ -169,7 +169,7 @@ class SchemaViewSet(mixins.RetrieveModelMixin,
                 data_type=meta["data_type"],
                 editable=meta.get("editable", True),
                 is_deletable=meta.get("is_deletable", True),
-                decimal_places=meta.get("decimal_places"),
+                decimal_places=decimal_places_from_spec(meta),
                 formula_method=meta.get("formula_method"),
                 formula_expression=meta.get("formula_expression"),
             )
