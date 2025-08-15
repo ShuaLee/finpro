@@ -99,6 +99,9 @@ class SchemaColumn(models.Model):
     def clean(self):
         super().clean()
 
+        if self.data_type == "number":
+            self.data_type = "decimal"
+
         # --- your existing rules (kept) ---
         formula_fields = [
             bool(self.formula_method and self.formula_method.strip()),

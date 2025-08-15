@@ -118,6 +118,27 @@ class SchemaColumnInlineForm(forms.ModelForm):
 
 
 class SchemaColumnCustomAddForm(forms.ModelForm):
+    # ✅ Explicit data_type field so it always renders
+    data_type = forms.ChoiceField(
+        choices=[("string", "String"), ("decimal",
+                                        "Decimal"), ("number", "Number")],
+        required=True,
+        label="Data type",
+    )
+
+    # DECIMAL/NUMBER constraints
+    decimal_places = forms.IntegerField(
+        required=False, min_value=0, max_value=8, initial=2)
+    dec_min = forms.DecimalField(required=False)
+    dec_max = forms.DecimalField(required=False)
+
+    # STRING constraints
+    character_minimum = forms.IntegerField(
+        required=False, min_value=0, initial=0)
+    character_limit = forms.IntegerField(
+        required=False, min_value=1, initial=25)
+    all_caps = forms.BooleanField(required=False, initial=False)
+
     class Meta:
         model = SchemaColumn
         fields = (
@@ -133,27 +154,64 @@ class SchemaColumnCustomAddForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["data_type"].choices = [
-            ("string", "String"), ("decimal", "Decimal")]
-        # <- fixed
-        self.fields["decimal_places"].initial = self.fields["decimal_places"].initial or 2
+        if not self.fields["decimal_places"].initial:
+            self.fields["decimal_places"].initial = 2
+        self.fields["character_minimum"].help_text = "Minimum characters (default: 0)."
+        self.fields["character_limit"].help_text = "Maximum characters (default: 25)."
+        self.fields["all_caps"].help_text = "Force uppercase input."
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("data_type") == "decimal":
+        dt_raw = cleaned.get("data_type") or ""
+        dt = dt_raw.lower()
+        if dt == "number":
+            dt = "decimal"
+            cleaned["data_type"] = "decimal"
+
+        constraints = {}
+
+        if dt == "decimal":
             dp = cleaned.get("decimal_places")
             if dp is None:
                 self.add_error("decimal_places",
-                               "Required for decimal columns.")
+                               "Required for decimal/number columns.")
             elif not (0 <= int(dp) <= 8):
                 self.add_error("decimal_places", "Must be between 0 and 8.")
+
+            dec_min = cleaned.get("dec_min")
+            dec_max = cleaned.get("dec_max")
+            if dec_min is not None and dec_max is not None and dec_min > dec_max:
+                self.add_error("dec_max", "Max must be ≥ Min.")
+
+            constraints["decimal_places"] = dp
+            if dec_min is not None:
+                constraints["min"] = dec_min
+            if dec_max is not None:
+                constraints["max"] = dec_max
+
+        elif dt == "string":
+            char_min = cleaned.get("character_minimum")
+            char_max = cleaned.get("character_limit")
+            char_min = 0 if char_min is None else int(char_min)
+            char_max = 25 if char_max is None else int(char_max)
+            if char_min > char_max:
+                self.add_error("character_limit",
+                               "Max characters must be ≥ Min characters.")
+            constraints["character_minimum"] = char_min
+            constraints["character_limit"] = char_max
+            if cleaned.get("all_caps"):
+                constraints["all_caps"] = True
+            cleaned["decimal_places"] = None
         else:
             cleaned["decimal_places"] = None
+
+        cleaned["_constraints"] = constraints
         return cleaned
 
     def save(self, commit=True):
-        obj = super().save(commit=False)
-        # Always custom + deletable
+        obj: SchemaColumn = super().save(commit=False)
+
+        # Always custom & deletable for this form
         obj.source = "custom"
         obj.is_system = False
         obj.is_deletable = True
@@ -161,7 +219,14 @@ class SchemaColumnCustomAddForm(forms.ModelForm):
         obj.formula_method = None
         obj.formula_expression = None
 
-        # Generate unique-ish source_field within schema
+        constraints = self.cleaned_data.get("_constraints", {}) or {}
+        # If your model has a JSONField for constraints:
+        if hasattr(obj, "constraints"):
+            obj.constraints = constraints
+
+        obj.decimal_places = constraints.get(
+            "decimal_places") if obj.data_type == "decimal" else None
+
         if not obj.source_field:
             base = slugify(self.cleaned_data.get(
                 "title") or "") or "custom_field"
@@ -175,6 +240,9 @@ class SchemaColumnCustomAddForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+    class Media:
+        js = ("admin/schemas/column_constraints_toggle.js",)  # optional UX
 
 
 class SchemaColumnValueAdminForm(forms.ModelForm):
