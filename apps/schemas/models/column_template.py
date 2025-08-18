@@ -7,7 +7,7 @@ class SchemaColumnTemplate(models.Model):
     Template definition for SchemaColumns used in schema initialization.
     One per (asset_type, source_field).
     """
-    asset_type = models.CharField(max_length=50)
+    schema_type = models.CharField(max_length=50)
     source = models.CharField(max_length=20, choices=[
         ('asset', 'Asset'),
         ('holding', 'Holding'),

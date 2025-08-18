@@ -3,9 +3,10 @@ from .stock import STOCK_SCHEMA_CONFIG, STOCK_MANAGED_SCHEMA_CONFIG
 # from .custom import DEFAULT_COLUMNS as CUSTOM_DEFAULT_COLUMNS
 
 SCHEMA_CONFIG_REGISTRY = {
-    "stock": STOCK_SCHEMA_CONFIG,
-    "stock_self_managed": STOCK_SCHEMA_CONFIG,
-    "stock_managed": STOCK_MANAGED_SCHEMA_CONFIG,
-    # "precious_metal": METAL_SCHEMA_CONFIG,
-    # "custom": CUSTOM_DEFAULT_COLUMNS,
+    "stock": {
+        "managed": STOCK_MANAGED_SCHEMA_CONFIG,
+        "self_managed": STOCK_SCHEMA_CONFIG,
+    },
+    # "precious_metal": { ... },
+    # "custom": { ... }
 }

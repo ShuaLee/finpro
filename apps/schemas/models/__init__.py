@@ -1,6 +1,7 @@
 from .column_template import SchemaColumnTemplate
 from .schema import Schema, SchemaColumn, SchemaColumnValue, CustomAssetSchemaConfig
 from .visibility import SchemaColumnVisibility
+from .schema_link import SubPortfolioSchemaLink
 
 __all__ = [
     "CustomAssetSchemaConfig",
@@ -9,4 +10,5 @@ __all__ = [
     "SchemaColumnValue",
     "SchemaColumnTemplate",
     "SchemaColumnVisibility",
+    "SubPortfolioSchemaLink",
 ]

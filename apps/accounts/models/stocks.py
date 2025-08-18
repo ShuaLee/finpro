@@ -62,14 +62,6 @@ class SelfManagedAccount(BaseStockAccount):
         related_name='self_managed_accounts'
     )
 
-    active_schema = models.ForeignKey(
-        Schema,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="Schema used to display stock holdings for this account."
-    )
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -81,6 +73,10 @@ class SelfManagedAccount(BaseStockAccount):
     @property
     def sub_portfolio(self):
         return self.stock_portfolio
+    
+    @property
+    def active_schema(self):
+        return self.stock_portfolio.get_schema_for_account_model("self_managed") 
 
     def get_current_value_pfx(self):
         total = Decimal(0.0)
@@ -92,24 +88,6 @@ class SelfManagedAccount(BaseStockAccount):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
-
-        if is_new and not self.active_schema:
-            if self.stock_portfolio:
-                stock_ct = ContentType.objects.get_for_model(
-                    self.stock_portfolio)
-                schema_qs = Schema.objects.filter(
-                    content_type=stock_ct,
-                    object_id=self.stock_portfolio.id
-                )
-
-                if schema_qs.exists():
-                    self.active_schema = schema_qs.first()
-                else:
-                    raise ValidationError(
-                        "StockPortfolio must have at least one schema.")
-            else:
-                raise ValidationError("StockPortfolio is required.")
-
         super().save(*args, **kwargs)
 
         if is_new and self.active_schema:
@@ -123,14 +101,6 @@ class ManagedAccount(BaseStockAccount):
         related_name='managed_accounts'
     )
 
-    active_schema = models.ForeignKey(
-        Schema,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="managed_accounts"
-    )
-
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
@@ -142,6 +112,10 @@ class ManagedAccount(BaseStockAccount):
                 name='unique_managedaccount_name_in_portfolio'
             )
         ]
+    
+    @property
+    def active_schema(self):
+        return self.stock_portfolio.get_schema_for_account_model("self_managed") 
 
     def get_current_value_in_pfx(self):
         to_currency = self.stock_portfolio.portfolio.profile.currency
