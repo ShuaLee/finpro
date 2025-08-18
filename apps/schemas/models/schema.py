@@ -52,7 +52,8 @@ class SchemaColumn(models.Model):
     field_path = models.CharField(blank=True, null=True, max_length=255)
     editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
-    decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
+    constraints = models.JSONField(default=dict, blank=True)
+
     is_system = models.BooleanField(
         default=False, help_text="Whether this is a system default column")
     structure_edit_mode = models.CharField(
@@ -132,14 +133,12 @@ class SchemaColumn(models.Model):
 
             # decimal_places required only for decimal; cleared otherwise
             if self.data_type == "decimal":
-                if self.decimal_places is None:
-                    raise ValidationError(
-                        "decimal_places is required for decimal custom columns.")
-                if not (0 <= int(self.decimal_places) <= 8):
+                dp = self.constraints.get("decimal_places")
+                if dp is None:
+                    self.constraints["decimal_places"] = 2
+                elif not (0 <= int(dp) <= 8):
                     raise ValidationError(
                         "decimal_places must be between 0 and 8.")
-            else:
-                self.decimal_places = None
 
             # generate a source_field if missing
             if not self.source_field:
@@ -213,27 +212,6 @@ class SchemaColumnValue(models.Model):
 
     def get_value(self):
         return self.value
-
-
-class SchemaColumnVisibility(models.Model):
-    column = models.ForeignKey(
-        SchemaColumn,
-        on_delete=models.CASCADE,
-        related_name="visibility_settings"
-    )
-
-    # Generic relation to any account model
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
-    account = GenericForeignKey()
-
-    is_visible = models.BooleanField(default=True)
-
-    class Meta:
-        unique_together = ("column", "content_type", "object_id")
-
-    def __str__(self):
-        return f"{self.account} | {self.column.title}: {'Visible' if self.is_visible else 'Hidden'}"
 
 
 """

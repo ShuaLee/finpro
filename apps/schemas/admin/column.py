@@ -11,7 +11,7 @@ from .forms import SchemaColumnCustomAddForm
 class SchemaColumnAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'schema', 'title', 'custom_title', 'source', 'source_field',
-        'data_type', 'decimal_places', 'editable', 'is_deletable',
+        'data_type', 'editable', 'is_deletable',
         'is_system', 'scope', 'display_order', 'investment_theme',
     )
     list_filter = ('schema', 'source', 'data_type', 'editable',
@@ -33,7 +33,7 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         base_fields = (
             "schema",
             "title",
-            ("data_type", "decimal_places"),
+            ("data_type",),
             "editable",
             ("scope", "display_order"),
             "investment_theme",

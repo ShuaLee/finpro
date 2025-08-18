@@ -106,6 +106,7 @@ STOCK_SCHEMA_CONFIG = {
             "data_type": "decimal",
             "formula_method": "get_unrealized_gain",
             "editable": False,
+            "is_deletable": True,
             "is_system": True,
             "constraints": {
                 "decimal_places": 2,

@@ -49,7 +49,7 @@ class SchemaColumnInlineForm(forms.ModelForm):
         model = SchemaColumn
         fields = (
             "custom_title",                 # only editable for system rows
-            "title", "data_type", "decimal_places",
+            "title", "data_type",
             "source", "source_field", "field_path",
             "editable", "is_deletable",
             "is_system", "scope",
@@ -78,7 +78,7 @@ class SchemaColumnInlineForm(forms.ModelForm):
             self.fields['built_in'].widget = forms.HiddenInput()
         else:
             # new row: fields will be populated by built-in config
-            for name in ("title", "data_type", "decimal_places", "source", "source_field", "field_path",
+            for name in ("title", "data_type", "source", "source_field", "field_path",
                          "editable", "is_deletable", "is_system"):
                 if name in self.fields:
                     self.fields[name].disabled = True
@@ -323,7 +323,8 @@ class SchemaColumnValueAdminForm(forms.ModelForm):
             try:
                 dec = self._to_decimal(val)
                 if dec is not None:
-                    places = col.decimal_places or 4
+                    # Prefer constraint decimal_places, fallback to 4
+                    places = (col.constraints or {}).get("decimal_places", 4)
                     quant = Decimal(1).scaleb(-places)
                     dec = dec.quantize(quant, rounding=ROUND_HALF_UP)
                 cleaned["value"] = dec
