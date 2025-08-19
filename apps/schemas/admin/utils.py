@@ -25,7 +25,7 @@ def build_builtin_choices_for_schema(schema):
             if key in existing:
                 disabled.add(key)
         if group:
-            choices.append((group_label.title(), group))
+            choices.append((group_label._meta.verbose_name.title(), group))
     return choices, disabled, config
 
 

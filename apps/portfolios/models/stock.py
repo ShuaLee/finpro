@@ -54,7 +54,7 @@ class StockPortfolio(BaseAssetPortfolio):
         if self.pk and not self.schemas.exists():
             raise ValidationError(
                 "StockPortfolio must have at least one schema.")
-    
+
     def get_schema_for_account_model(self, account_model_class):
         ct = ContentType.objects.get_for_model(account_model_class)
         return (
@@ -67,7 +67,6 @@ class StockPortfolio(BaseAssetPortfolio):
             .values_list("schema", flat=True)
             .first()
         )
-    
 
     def save(self, *args, **kwargs):
         """

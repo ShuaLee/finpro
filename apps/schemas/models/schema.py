@@ -3,6 +3,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
+from schemas.validators import validate_value_against_constraints
 
 
 class Schema(models.Model):
@@ -152,7 +153,7 @@ class SchemaColumn(models.Model):
         # --- your structure edit locking on UPDATEs only (kept) ---
         if self.pk:
             original = type(self).objects.only(
-                "data_type", "decimal_places", "source", "source_field", "field_path",
+                "data_type", "source", "source_field", "field_path",
                 "is_system", "structure_edit_mode"
             ).get(pk=self.pk)
 
@@ -162,7 +163,7 @@ class SchemaColumn(models.Model):
             )
 
             if mode == "locked":
-                locked_fields = ["data_type", "decimal_places",
+                locked_fields = ["data_type",
                                  "source", "source_field", "field_path"]
             elif mode == "decimal_only":
                 locked_fields = ["data_type", "source",
@@ -212,6 +213,11 @@ class SchemaColumnValue(models.Model):
 
     def get_value(self):
         return self.value
+
+    def clean(self):
+        constraints = self.column.constraints or {}
+        data_type = self.column.data_type
+        validate_value_against_constraints(self.value, data_type, constraints)
 
 
 """

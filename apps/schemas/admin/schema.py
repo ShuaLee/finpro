@@ -16,14 +16,14 @@ class SchemaColumnInline(admin.TabularInline):
     form = SchemaColumnInlineForm
     extra = 0
     fields = (
-        "built_in",  # grouped built-ins
         "custom_title",
-        "title", "data_type", "decimal_places",
+        "title", "data_type",
         "source", "source_field", "field_path",
         "editable", "is_deletable",
         "is_system", "scope",
         "display_order", "investment_theme",
     )
+
     ordering = ("display_order",)
     show_change_link = True
 

@@ -98,11 +98,11 @@ class SchemaColumnInlineForm(forms.ModelForm):
             spec = self._config[source][source_field]
             spec_defaults = build_column_defaults_from_spec(spec, display_order=next_display_order(
                 self.instance.schema or self.cleaned_data.get("schema")))
+            model_fields = [f.name for f in SchemaColumn._meta.fields]
             cleaned.update({
                 "source": source,
                 "source_field": source_field,
-                # display_order handled on save()
-                **{k: v for k, v in spec_defaults.items() if k != "display_order"},
+                **{k: v for k, v in spec_defaults.items() if k in model_fields and k != "display_order"},
             })
         return cleaned
 
@@ -145,7 +145,6 @@ class SchemaColumnCustomAddForm(forms.ModelForm):
             "schema",
             "title",
             "data_type",
-            "decimal_places",
             "editable",
             "scope",
             "display_order",

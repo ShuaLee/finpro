@@ -54,7 +54,7 @@ class SchemaColumnAdmin(admin.ModelAdmin):
             "fields": (
                 "schema",
                 ("title", "custom_title"),
-                ("data_type", "decimal_places"),
+                ("data_type",),
                 ("source", "source_field", "field_path"),
                 ("formula_method", "formula_expression"),
                 ("editable", "is_deletable"),
@@ -71,7 +71,7 @@ class SchemaColumnAdmin(admin.ModelAdmin):
                 'field_path', 'formula_method', 'formula_expression', 'custom_title'
             ]
         elif obj and obj.is_system:
-            ro += ['data_type', 'decimal_places', 'source',
+            ro += ['data_type', 'source',
                    'source_field', 'field_path', 'is_system']
         return ro
 

@@ -36,7 +36,7 @@ def get_schema_column_defaults(schema_type: str, account_model_class=None):
 
     for source, fields in config.items():
         for field_key, meta in fields.items():
-            if meta.get("is_default", True):
+            if meta.get("is_default") is True:
                 columns.append({
                     "title": meta.get("title", field_key.replace("_", " ").title()),
                     "source": source,

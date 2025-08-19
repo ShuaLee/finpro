@@ -118,6 +118,19 @@ STOCK_SCHEMA_CONFIG = {
 
 STOCK_MANAGED_SCHEMA_CONFIG = {
     "custom": {
+        "title": {
+            "title": "Title",
+            "data_type": "string",
+            "editable": True,
+            "is_deletable": False,
+            "is_default": True,
+            "is_system": True,
+            "constraints": {
+                "character_limit": 200,
+                "character_minimum": 0,
+            },
+
+        },
         "current_value": {
             "title": "Current Value",
             "data_type": "decimal",

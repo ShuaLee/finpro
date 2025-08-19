@@ -66,6 +66,7 @@ class SelfManagedAccount(BaseStockAccount):
     account_variant = "self_managed"
 
     class Meta:
+        verbose_name = "Self-Managed Account"
         constraints = [
             models.UniqueConstraint(
                 fields=['stock_portfolio', 'name'],
@@ -111,6 +112,7 @@ class ManagedAccount(BaseStockAccount):
     strategy = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
+        verbose_name = "Managed Account"
         constraints = [
             models.UniqueConstraint(
                 fields=['stock_portfolio', 'name'],
