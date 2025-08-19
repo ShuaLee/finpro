@@ -45,45 +45,6 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
         )
 
 
-@transaction.atomic
-def initialize_stock_schema(stock_portfolio, name=None):
-    """
-    Creates and assigns schemas to a StockPortfolio for each account model (self-managed, managed).
-    """
-    account_model_map = {
-        SelfManagedAccount: "Self-Managed",
-        ManagedAccount: "Managed",
-    }
-
-    subportfolio_ct = ContentType.objects.get_for_model(stock_portfolio)
-
-    for account_model, label in account_model_map.items():
-        user_email = stock_portfolio.portfolio.profile.user.email
-        schema_name = f"{user_email}'s Stock ({label}) Schema"
-
-        # Create the schema
-        schema = Schema.objects.create(
-            name=schema_name,
-            schema_type="stock",
-            content_type=subportfolio_ct,
-            object_id=stock_portfolio.id,
-        )
-
-        # Pul default columns from registry using account model class
-        default_columns = get_schema_column_defaults(
-            "stock", account_model_class=account_model)
-
-        for col_data in default_columns:
-            SchemaColumn.objects.create(schema=schema, **col_data)
-
-        # Register the schema to the account model
-        SubPortfolioSchemaLink.objects.update_or_create(
-            subportfolio_ct=subportfolio_ct,
-            subportfolio_id=stock_portfolio.id,
-            account_model_ct=ContentType.objects.get_for_model(account_model),
-            defaults={"schema": schema}
-        )
-
 
 @transaction.atomic
 def add_custom_column(schema: Schema, title: str, data_type: str, editable=True, is_deletable=True):

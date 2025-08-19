@@ -1,22 +1,26 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from portfolios.models.portfolio import Portfolio
-from portfolios.models.stock import StockPortfolio
-from schemas.services.schema_initialization import initialize_stock_schema
+from accounts.config.account_model_registry import get_account_model_map
+from schemas.services.schema_initialization import initialize_asset_schema
 
-def create_asset_portfolio(portfolio: Portfolio, portfolio_model_class, schema_initializer_fn, related_name: str):
+def create_asset_portfolio(
+        portfolio: Portfolio, 
+        portfolio_model_class, 
+        related_name: str,
+        schema_type: str,
+        schema_namer_fn=None, 
+        ):
     """
     Generic creator for any asset portfolio (stocks, crypto, etc.).
     Ensures uniqueness and initializes schema.
-    
+
     Args:
         portfolio (Portfolio): The user's main portfolio.
         portfolio_model_class (Model): The subportfolio model to create (e.g., CryptoPortfolio).
-        schema_initializer_fn (Callable): A function that initializes the default schema.
-        related_name (str): The related_name used on Portfolio (e.g., 'stockportfolio').
-    
-    Returns:
-        The created subportfolio instance.
+        related_name (str): The related_name on Portfolio (e.g., 'stockportfolio').
+        schema_type (str): Schema config name (e.g., 'stock', 'crypto').
+        schema_namer_fn (callable, optional): Custom schema name formatter.
     """
     with transaction.atomic():
         # Check if the subportfolio already exists
@@ -28,27 +32,15 @@ def create_asset_portfolio(portfolio: Portfolio, portfolio_model_class, schema_i
         # Create the subportfolio
         subportfolio = portfolio_model_class.objects.create(portfolio=portfolio)
 
-        # Initialize the default schema
-        schema_initializer_fn(subportfolio)
+        # 🔁 Get account models for this asset type (from registry)
+        account_model_map = get_account_model_map(schema_type)
+
+        # ✅ Directly call the shared schema initializer here
+        initialize_asset_schema(
+            subportfolio=subportfolio,
+            schema_type=schema_type,
+            account_model_map=account_model_map,
+            custom_schema_namer=schema_namer_fn,
+        )
 
         return subportfolio
-
-
-
-@transaction.atomic
-def create_stock_portfolio(portfolio: Portfolio) -> StockPortfolio:
-    """
-    Creates a StockPortfolio for the given Portfolio and initializes its default schema.
-    """
-    # Check if the stock portfolio already exists
-    if hasattr(portfolio, "stockportfolio"):
-        raise ValidationError(
-            "StockPortfolio already exists for this portfolio.")
-
-    # Create the stock portfolio
-    stock_portfolio = StockPortfolio.objects.create(portfolio=portfolio)
-
-    # ✅ Create the default schema and columns for this stock portfolio
-    initialize_stock_schema(stock_portfolio)
-
-    return stock_portfolio
