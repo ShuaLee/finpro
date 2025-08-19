@@ -7,6 +7,45 @@ import re
 
 
 @transaction.atomic
+def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: dict, custom_schema_namer=None):
+    """
+    Generic initializer for any asset subportfolio schema (e.g., stock, crypto, metals).
+    `account_model_map`: {AccountModelClass: "Label"}
+    `schema_type`: str used in Schema.schema_type
+    `custom_schema_namer`: optional callable for overriding schema name
+    """
+    subportfolio_ct = ContentType.objects.get_for_model(subportfolio)
+
+    for account_model, label in account_model_map.items():
+        user_email = subportfolio.portfolio.profile.user.email
+
+        schema_name = (
+            custom_schema_namer(subportfolio, label) if custom_schema_namer else f"{user_email}'s {schema_type.title()} ({label}) Schema"
+        )
+
+        schema = Schema.objects.create(
+            name=schema_name,
+            schema_type=schema_type,
+            content_type=subportfolio_ct,
+            object_id=subportfolio.id,
+        )
+
+        default_columns = get_schema_column_defaults(
+            schema_type, account_model_class=account_model
+        )
+
+        for col_data in default_columns:
+            SchemaColumn.objects.create(schema=schema, **col_data)
+
+        SubPortfolioSchemaLink.objects.update_or_create(
+            subportfolio_ct=subportfolio_ct,
+            subportfolio_id=subportfolio.id,
+            account_model_ct=ContentType.objects.get_for_model(account_model),
+            defaults={"schema": schema}
+        )
+
+
+@transaction.atomic
 def initialize_stock_schema(stock_portfolio, name=None):
     """
     Creates and assigns schemas to a StockPortfolio for each account model (self-managed, managed).
