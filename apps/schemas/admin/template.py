@@ -4,27 +4,17 @@ from schemas.models import SchemaColumnTemplate
 
 @admin.register(SchemaColumnTemplate)
 class SchemaColumnTemplateAdmin(admin.ModelAdmin):
-    list_display = (
-        "asset_type",
-        "title",
-        "source",
-        "source_field",
-        "data_type",
-        "is_system",
-        "is_default",
-        "is_deletable",
-        "display_order",
-    )
-    list_filter = ("asset_type", "source", "is_system", "is_default")
-    search_fields = ("title", "source_field", "formula_method")
-    ordering = ("asset_type", "display_order")
+    list_display = ["get_account_model_name", "title",
+                    "source", "source_field", "data_type", "is_default"]
+    list_filter = ["source", "is_default", "is_system"]
+    search_fields = ["title", "source_field"]
+    ordering = ["display_order"]
 
     readonly_fields = ("created_at",)
 
     fieldsets = (
         (None, {
             "fields": (
-                "asset_type",
                 "title",
                 "source", "source_field",
                 "data_type", "field_path",
@@ -35,3 +25,7 @@ class SchemaColumnTemplateAdmin(admin.ModelAdmin):
             )
         }),
     )
+
+    @admin.display(description="Account Model")
+    def get_account_model_name(self, obj):
+        return obj.account_model_ct.model_class().__name__ if obj.account_model_ct else "-"

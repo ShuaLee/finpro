@@ -1,3 +1,4 @@
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils.text import slugify
 
@@ -7,6 +8,12 @@ class SchemaColumnTemplate(models.Model):
     Template definition for SchemaColumns used in schema initialization.
     One per (asset_type, source_field).
     """
+    account_model_ct = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        help_text="The account model this template applies to."
+    )
+
     schema_type = models.CharField(max_length=50)
     source = models.CharField(max_length=20, choices=[
         ('asset', 'Asset'),
@@ -51,11 +58,13 @@ class SchemaColumnTemplate(models.Model):
     class Meta:
         verbose_name = "Schema Column Template"
         verbose_name_plural = "Schema Column Templates"
-        unique_together = ("asset_type", "source", "source_field")
+        unique_together = ("account_model_ct", "source", "source_field")
         ordering = ["display_order"]
 
     def __str__(self):
-        return f"[{self.asset_type}] {self.title} ({self.source})"
+        model = self.account_model_ct.model_class()
+        model_name = model.__name__ if model else "Unknown"
+        return f"[{model_name}] {self.title} ({self.source})"
 
     def clean(self):
         if not self.title:
@@ -68,12 +77,12 @@ class SchemaColumnTemplate(models.Model):
         if self.source == "custom":
             if self.data_type not in ("decimal", "string"):
                 raise ValueError("Custom columns must be decimal or string.")
-            if self.data_type == "decimal" and self.decimal_places is None:
-                raise ValueError("Decimal places required for decimal type.")
+            if self.data_type == "decimal" and "decimal_places" not in self.constraints:
+                raise ValueError(
+                    "decimal_places required for decimal columns.")
             if not self.source_field:
                 self.source_field = slugify(self.title)
 
-        # Ensure only one formula type is set
         if self.formula_expression and self.formula_method:
             raise ValueError(
                 "Only one of formula_expression or formula_method can be set.")

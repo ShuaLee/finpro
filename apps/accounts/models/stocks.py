@@ -10,6 +10,7 @@ from decimal import Decimal
 
 
 class BaseStockAccount(BaseAccount):
+    asset_type = "stock"
     broker = models.CharField(
         max_length=100, blank=True, null=True,
         help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)"
@@ -62,6 +63,8 @@ class SelfManagedAccount(BaseStockAccount):
         related_name='self_managed_accounts'
     )
 
+    account_variant = "self_managed"
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -73,10 +76,10 @@ class SelfManagedAccount(BaseStockAccount):
     @property
     def sub_portfolio(self):
         return self.stock_portfolio
-    
+
     @property
     def active_schema(self):
-        return self.stock_portfolio.get_schema_for_account_model("self_managed") 
+        return self.stock_portfolio.get_schema_for_account_model("self_managed")
 
     def get_current_value_pfx(self):
         total = Decimal(0.0)
@@ -101,6 +104,8 @@ class ManagedAccount(BaseStockAccount):
         related_name='managed_accounts'
     )
 
+    account_variant = "managed"
+
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     strategy = models.CharField(max_length=100, null=True, blank=True)
@@ -112,10 +117,10 @@ class ManagedAccount(BaseStockAccount):
                 name='unique_managedaccount_name_in_portfolio'
             )
         ]
-    
+
     @property
     def active_schema(self):
-        return self.stock_portfolio.get_schema_for_account_model("self_managed") 
+        return self.stock_portfolio.get_schema_for_account_model("self_managed")
 
     def get_current_value_in_pfx(self):
         to_currency = self.stock_portfolio.portfolio.profile.currency

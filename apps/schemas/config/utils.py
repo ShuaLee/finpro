@@ -14,14 +14,29 @@ def get_column_constraints(schema_type: str, source: str, field: str) -> dict:
     return meta.get("constraints", {}) or {}
 
 
-def get_schema_column_defaults(asset_type):
-    config = SCHEMA_CONFIG_REGISTRY.get(asset_type, {})
+def get_schema_column_defaults(schema_type: str, account_model_class=None):
+    """
+    Returns a list of default schema column definitions for a given asset type (e.g., 'stock').
+    Optionally filters by a specific account model (e.g., SelfManagedAccount or ManagedAccount).
+    """
+    config = SCHEMA_CONFIG_REGISTRY.get(schema_type)
+    if not config:
+        raise ValueError(
+            f"No schema config found for schema type: '{schema_type}'")
+
+    # If the schema_type is nested by account model
+    if isinstance(config, dict) and account_model_class:
+        config = config.get(account_model_class)
+        if not config:
+            raise ValueError(
+                f"No config found for schema_type '{schema_type}' and model '{account_model_class.__name__}'")
+
     columns = []
-    display_counter = 0
+    display_counter = 1
 
     for source, fields in config.items():
         for field_key, meta in fields.items():
-            if meta.get("is_default"):
+            if meta.get("is_default", True):
                 columns.append({
                     "title": meta.get("title", field_key.replace("_", " ").title()),
                     "source": source,
@@ -29,13 +44,15 @@ def get_schema_column_defaults(asset_type):
                     "data_type": meta["data_type"],
                     "field_path": meta.get("field_path"),
                     "editable": meta.get("editable", True),
-                    "decimal_places": decimal_places_from_spec(meta),
                     "is_deletable": meta.get("is_deletable", True),
+                    "is_system": meta.get("is_system", False),
                     "formula_expression": meta.get("formula_expression"),
                     "formula_method": meta.get("formula_method"),
+                    "constraints": meta.get("constraints", {}),
                     "display_order": display_counter,
                 })
                 display_counter += 1
+
     return columns
 
 

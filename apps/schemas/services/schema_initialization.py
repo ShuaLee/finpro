@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from schemas.models import Schema, SchemaColumn
+from accounts.models import SelfManagedAccount, ManagedAccount
+from schemas.models import Schema, SchemaColumn, SubPortfolioSchemaLink
 from schemas.config.utils import get_schema_column_defaults
 import re
 
@@ -8,27 +9,41 @@ import re
 @transaction.atomic
 def initialize_stock_schema(stock_portfolio, name=None):
     """
-    Creates a schema for a StockPortfolio and populates it with default columns from config.
-    The schema name will default to: "<email>'s <SubPortfolioType> Schema"
+    Creates and assigns schemas to a StockPortfolio for each account model (self-managed, managed).
     """
-    if name is None:
-        email = stock_portfolio.portfolio.profile.user.email
-        portfolio_type = stock_portfolio.__class__.__name__
-        name = f"{email}'s {portfolio_type} Schema"
-        
-    schema = Schema.objects.create(
-        name=name,
-        schema_type="stock",
-        content_type=ContentType.objects.get_for_model(stock_portfolio),
-        object_id=stock_portfolio.id,
-    )
+    account_model_map = {
+        SelfManagedAccount: "Self-Managed",
+        ManagedAccount: "Managed",
+    }
 
-    default_columns = get_schema_column_defaults("stock")
+    subportfolio_ct = ContentType.objects.get_for_model(stock_portfolio)
 
-    for col_data in default_columns:
-        SchemaColumn.objects.create(schema=schema, **col_data)
+    for account_model, label in account_model_map.items():
+        user_email = stock_portfolio.portfolio.profile.user.email
+        schema_name = f"{user_email}'s Stock ({label}) Schema"
 
-    return schema
+        # Create the schema
+        schema = Schema.objects.create(
+            name=schema_name,
+            schema_type="stock",
+            content_type=subportfolio_ct,
+            object_id=stock_portfolio.id,
+        )
+
+        # Pul default columns from registry using account model class
+        default_columns = get_schema_column_defaults(
+            "stock", account_model_class=account_model)
+
+        for col_data in default_columns:
+            SchemaColumn.objects.create(schema=schema, **col_data)
+
+        # Register the schema to the account model
+        SubPortfolioSchemaLink.objects.update_or_create(
+            subportfolio_ct=subportfolio_ct,
+            subportfolio_id=stock_portfolio.id,
+            account_model_ct=ContentType.objects.get_for_model(account_model),
+            defaults={"schema": schema}
+        )
 
 
 @transaction.atomic
