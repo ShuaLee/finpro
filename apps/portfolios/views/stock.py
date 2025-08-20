@@ -12,8 +12,9 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from accounts.models import SelfManagedAccount, ManagedAccount
 from accounts.serializers import SelfManagedAccountSerializer, ManagedAccountSerializer
+from apps.portfolios.services import sub_portfolio_creation
 from portfolios.serializers.stock import StockPortfolioSerializer
-from portfolios.services import stock_service, portfolio_service
+from apps.portfolios.services import portfolio_management
 from users.models import Profile
 from decimal import Decimal
 
@@ -62,8 +63,9 @@ class StockPortfolioCreateView(APIView):
     def post(self, request):
         profile = Profile.objects.get(user=request.user)
         try:
-            portfolio = portfolio_service.get_portfolio(profile)
-            stock_portfolio = stock_service.create_stock_portfolio(portfolio)
+            portfolio = portfolio_management.get_portfolio(profile)
+            stock_portfolio = sub_portfolio_creation.create_stock_portfolio(
+                portfolio)
             serializer = StockPortfolioSerializer(stock_portfolio)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except ValidationError as e:

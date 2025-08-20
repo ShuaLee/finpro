@@ -72,18 +72,6 @@ def schema_field(
         "formula_expression": formula_expression,
         "source": source,
     }
-# ---------------------------------------------------------------------- #
-
-
-def _CustomAssetSchemaConfig():
-    # Lazy model import to avoid circulars
-    return apps.get_model('schemas', 'CustomAssetSchemaConfig')
-
-
-def get_column_constraints(schema_type: str, source: str, field: str) -> dict:
-    cfg = get_asset_schema_config(schema_type)
-    meta = (cfg.get(source, {}) or {}).get(field, {}) or {}
-    return meta.get("constraints", {}) or {}
 
 
 def get_schema_column_defaults(schema_type: str, account_model_class=None):
@@ -107,15 +95,15 @@ def get_schema_column_defaults(schema_type: str, account_model_class=None):
     display_counter = 1
 
     for source, fields in config.items():
-        for field_key, meta in fields.items():
+        for source_field, meta in fields.items():
             if meta.get("is_default") is True:
                 columns.append({
-                    "title": meta.get("title", field_key.replace("_", " ").title()),
                     "source": source,
-                    "source_field": field_key,
+                    "source_field": source_field,
+                    "title": meta["title"],
                     "data_type": meta["data_type"],
                     "field_path": meta.get("field_path"),
-                    "editable": meta.get("editable", True),
+                    "is_editable": meta.get("is_editable", True),
                     "is_deletable": meta.get("is_deletable", True),
                     "is_system": meta.get("is_system", False),
                     "formula_expression": meta.get("formula_expression"),
@@ -126,6 +114,18 @@ def get_schema_column_defaults(schema_type: str, account_model_class=None):
                 display_counter += 1
 
     return columns
+# ---------------------------------------------------------------------- #
+
+
+def _CustomAssetSchemaConfig():
+    # Lazy model import to avoid circulars
+    return apps.get_model('schemas', 'CustomAssetSchemaConfig')
+
+
+def get_column_constraints(schema_type: str, source: str, field: str) -> dict:
+    cfg = get_asset_schema_config(schema_type)
+    meta = (cfg.get(source, {}) or {}).get(field, {}) or {}
+    return meta.get("constraints", {}) or {}
 
 
 def get_asset_schema_config(schema_type):

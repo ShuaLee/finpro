@@ -9,8 +9,9 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from apps.portfolios.services import portfolio_management
 from portfolios.serializers.metal import MetalPortfolioSerializer
-from portfolios.services import metal_service, portfolio_service
+from portfolios.services import metal_service
 from users.models import Profile
 
 
@@ -23,7 +24,7 @@ class MetalPortfolioCreateView(APIView):
     def post(self, request):
         profile = Profile.objects.get(user=request.user)
         try:
-            portfolio = portfolio_service.get_portfolio(profile)
+            portfolio = portfolio_management.get_portfolio(profile)
             metal_portfolio = metal_service.create_metal_portfolio(portfolio)
             serializer = MetalPortfolioSerializer(metal_portfolio)
             return Response(serializer.data, status=status.HTTP_201_CREATED)

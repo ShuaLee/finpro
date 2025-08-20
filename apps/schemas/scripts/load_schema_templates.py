@@ -2,14 +2,24 @@ from django.contrib.contenttypes.models import ContentType
 from schemas.config import SCHEMA_CONFIG_REGISTRY
 from schemas.models import SchemaColumnTemplate
 from accounts.config.account_model_registry import ACCOUNT_MODEL_MAP
-from accounts.models import SelfManagedAccount, ManagedAccount
+from schemas.config.utils import validate_constraints
 
 
 def normalize_constraints(constraints, data_type):
+    """
+    Ensure default constraint values are set for each data type.
+    Also validates using constraint definitions.
+    """
     if not constraints:
         constraints = {}
-    if data_type == "decimal" and "decimal_places" not in constraints:
+
+    # Provide common defaults
+    if data_type in ["decimal", "calculated"] and "decimal_places" not in constraints:
         constraints["decimal_places"] = 2
+
+    # Validate using your central constraint validator
+    validate_constraints(data_type, constraints)
+
     return constraints
 
 
@@ -36,7 +46,7 @@ def load_column_templates():
                             "title": config["title"],
                             "data_type": config["data_type"],
                             "field_path": config.get("field_path"),
-                            "editable": config.get("editable", True),
+                            "is_editable": config.get("is_editable", True),
                             "is_default": config.get("is_default", True),
                             "is_deletable": config.get("is_deletable", True),
                             "is_system": config.get("is_system", False),
@@ -44,12 +54,10 @@ def load_column_templates():
                             "formula_expression": config.get("formula_expression"),
                             "constraints": normalize_constraints(config.get("constraints", {}), config["data_type"]),
                             "display_order": config.get("display_order", 0),
-                            "investment_theme_id": config.get("investment_theme_id"),
                         }
                     )
 
-            print(
-                f"✅ Finished loading templates for {schema_type} [{variant_key}]")
+            print(f"✅ Loaded templates for: {schema_type} [{variant_key}]")
 
 
 if __name__ == "__main__":

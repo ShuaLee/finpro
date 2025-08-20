@@ -44,6 +44,8 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
             defaults={"schema": schema}
         )
 
+# ---------------------------------------------------------------------------------- #
+
 
 @transaction.atomic
 def add_custom_column(schema: Schema, title: str, data_type: str, editable=True, is_deletable=True):

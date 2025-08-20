@@ -4,13 +4,14 @@ from portfolios.models.portfolio import Portfolio
 from accounts.config.account_model_registry import get_account_model_map
 from schemas.services.schema_initialization import initialize_asset_schema
 
-def create_asset_portfolio(
-        portfolio: Portfolio, 
-        portfolio_model_class, 
+
+def create_sub_portfolio(
+        portfolio: Portfolio,
+        portfolio_model_class,
         related_name: str,
         schema_type: str,
-        schema_namer_fn=None, 
-        ):
+        schema_namer_fn=None,
+):
     """
     Generic creator for any asset portfolio (stocks, crypto, etc.).
     Ensures uniqueness and initializes schema.
@@ -28,9 +29,10 @@ def create_asset_portfolio(
             raise ValidationError(
                 f"{portfolio_model_class.__name__} already exists for this portfolio."
             )
-        
+
         # Create the subportfolio
-        subportfolio = portfolio_model_class.objects.create(portfolio=portfolio)
+        subportfolio = portfolio_model_class.objects.create(
+            portfolio=portfolio)
 
         # 🔁 Get account models for this asset type (from registry)
         account_model_map = get_account_model_map(schema_type)
