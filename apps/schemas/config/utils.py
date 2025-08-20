@@ -1,6 +1,78 @@
+from django.apps import apps
 from . import SCHEMA_CONFIG_REGISTRY
 from schemas.config.mappers import decimal_places_from_spec
-from django.apps import apps
+from decimal import Decimal
+
+CONSTRAINT_DEFINITIONS = {
+    "decimal": {
+        "decimal_places": int,
+        "min": Decimal,
+        "max": Decimal,
+    },
+    "calculated": {
+        "decimal_places": int,
+        "min": Decimal,
+        "max": Decimal,
+    },
+    "string": {
+        "character_limit": int,
+        "character_minimum": int,
+        "all_caps": bool,
+    },
+    # Add more types if needed
+}
+
+
+def validate_constraints(data_type: str, constraints: dict):
+    allowed = CONSTRAINT_DEFINITIONS.get(data_type, {})
+    errors = []
+
+    for key, value in constraints.items():
+        expected_type = allowed.get(key)
+        if expected_type is None:
+            errors.append(
+                f"Invalid constraint '{key}' for data type '{data_type}'")
+        elif not isinstance(value, expected_type if isinstance(expected_type, tuple) else (expected_type,)):
+            errors.append(
+                f"Constraint '{key}' for '{data_type}' must be of type {expected_type}")
+
+    if errors:
+        raise ValueError("Invalid constraints: " + "; ".join(errors))
+
+
+def schema_field(
+    title: str,
+    data_type: str,
+    field_path: str = None,
+    is_editable: bool = True,
+    is_deletable: bool = True,
+    is_default: bool = False,
+    is_system: bool = True,
+    constraints: dict = None,
+    formula_method: str = None,
+    formula_expression: str = None,
+    source: str = None,
+) -> dict:
+    if constraints is None:
+        constraints = {}
+
+    # 🔒 Validate constraints
+    validate_constraints(data_type, constraints)
+
+    return {
+        "title": title,
+        "data_type": data_type,
+        "field_path": field_path,
+        "is_editable": is_editable,
+        "is_deletable": is_deletable,
+        "is_default": is_default,
+        "is_system": is_system,
+        "constraints": constraints,
+        "formula_method": formula_method,
+        "formula_expression": formula_expression,
+        "source": source,
+    }
+# ---------------------------------------------------------------------- #
 
 
 def _CustomAssetSchemaConfig():

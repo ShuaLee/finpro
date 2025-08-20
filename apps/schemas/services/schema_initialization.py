@@ -1,6 +1,5 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from accounts.models import SelfManagedAccount, ManagedAccount
 from schemas.models import Schema, SchemaColumn, SubPortfolioSchemaLink
 from schemas.config.utils import get_schema_column_defaults
 import re
@@ -20,7 +19,8 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
         user_email = subportfolio.portfolio.profile.user.email
 
         schema_name = (
-            custom_schema_namer(subportfolio, label) if custom_schema_namer else f"{user_email}'s {schema_type.title()} ({label}) Schema"
+            custom_schema_namer(
+                subportfolio, label) if custom_schema_namer else f"{user_email}'s {schema_type.title()} ({label}) Schema"
         )
 
         schema = Schema.objects.create(
@@ -43,7 +43,6 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
             account_model_ct=ContentType.objects.get_for_model(account_model),
             defaults={"schema": schema}
         )
-
 
 
 @transaction.atomic

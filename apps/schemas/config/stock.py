@@ -1,4 +1,4 @@
-STOCK_SCHEMA_CONFIG = {
+SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
     "asset": {
         "ticker": {
             "title": "Ticker",
@@ -116,7 +116,7 @@ STOCK_SCHEMA_CONFIG = {
     },
 }
 
-STOCK_MANAGED_SCHEMA_CONFIG = {
+MANAGED_ACCOUNT_SCHEMA_CONFIG = {
     "custom": {
         "title": {
             "title": "Title",

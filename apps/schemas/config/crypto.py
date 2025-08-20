@@ -1,4 +1,4 @@
-CRYPTO_SCHEMA_CONFIG = {
+CRYPTO_WALLET_SCHEMA_CONFIG = {
     "asset": {
         "ticker": {
             "title": "Ticker",
