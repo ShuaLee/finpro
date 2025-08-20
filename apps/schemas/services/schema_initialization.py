@@ -12,7 +12,7 @@ def get_schema_column_templates(schema_type: str, account_model_class):
 
     return SchemaColumnTemplate.objects.filter(
         account_model_ct=account_model_ct,
-        achema_type=schema_type,
+        schema_type=schema_type,
         is_default=True,
         is_system=True,
     ).order_by("display_order")
@@ -30,7 +30,6 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
 
     for account_model, label in account_model_map.items():
         user_email = subportfolio.portfolio.profile.user.email
-
         schema_name = (
             custom_schema_namer(
                 subportfolio, label) if custom_schema_namer else f"{user_email}'s {schema_type.title()} ({label}) Schema"
@@ -43,8 +42,14 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
             object_id=subportfolio.id,
         )
 
-        templates = get_schema_column_templates(schema_type, account_model_class=account_model)
+        # 1) Try exact templates
+        templates = list(get_schema_column_templates(schema_type, account_model_class=account_model))
 
+        # 2) If custom:* and none found, fall back to 'custom_default'
+        if not templates and schema_type.startswith("custom:"):
+            templates = list(get_schema_column_templates("custom_default", account_model_class=account_model))
+
+        # 3) Create columns from whichever template set we have
         for template in templates:
             SchemaColumn.objects.create(
                 schema=schema,
