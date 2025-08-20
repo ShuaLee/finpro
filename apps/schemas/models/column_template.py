@@ -34,7 +34,7 @@ class SchemaColumnTemplate(models.Model):
         ('url', 'URL'),
     ])
     field_path = models.CharField(max_length=255, null=True, blank=True)
-    editable = models.BooleanField(default=True)
+    is_editable = models.BooleanField(default=True)
     is_default = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(default=True)

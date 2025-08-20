@@ -1,8 +1,21 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from schemas.models import Schema, SchemaColumn, SubPortfolioSchemaLink
-from schemas.config.utils import get_schema_column_defaults
+from schemas.models import Schema, SchemaColumn, SubPortfolioSchemaLink, SchemaColumnTemplate
 import re
+
+
+def get_schema_column_templates(schema_type: str, account_model_class):
+    """
+    Fetches default system schema column templates for a given schema_type and account model.
+    """
+    account_model_ct = ContentType.objects.get_for_model(account_model_class)
+
+    return SchemaColumnTemplate.objects.filter(
+        account_model_ct=account_model_ct,
+        achema_type=schema_type,
+        is_default=True,
+        is_system=True,
+    ).order_by("display_order")
 
 
 @transaction.atomic
@@ -30,12 +43,24 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
             object_id=subportfolio.id,
         )
 
-        default_columns = get_schema_column_defaults(
-            schema_type, account_model_class=account_model
-        )
+        templates = get_schema_column_templates(schema_type, account_model_class=account_model)
 
-        for col_data in default_columns:
-            SchemaColumn.objects.create(schema=schema, **col_data)
+        for template in templates:
+            SchemaColumn.objects.create(
+                schema=schema,
+                source=template.source,
+                source_field=template.source_field,
+                title=template.title,
+                data_type=template.data_type,
+                field_path=template.field_path,
+                is_editable=template.is_editable,
+                is_deletable=template.is_deletable,
+                is_system=template.is_system,
+                formula_expression=template.formula_expression,
+                formula_method=template.formula_method,
+                constraints=template.constraints,
+                display_order=template.display_order,
+            )
 
         SubPortfolioSchemaLink.objects.update_or_create(
             subportfolio_ct=subportfolio_ct,
