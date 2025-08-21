@@ -1,3 +1,4 @@
+"""
 from django.contrib import admin
 from portfolios.models.crypto import CryptoPortfolio
 from accounts.config.account_model_registry import get_account_model_map
@@ -17,3 +18,4 @@ class CryptoPortfolioAdmin(admin.ModelAdmin):
                 schema_type="crypto",
                 account_model_map=account_model_map,
             )
+"""

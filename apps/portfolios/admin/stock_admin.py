@@ -1,3 +1,4 @@
+"""
 from django.contrib import admin
 from portfolios.models.stock import StockPortfolio
 from accounts.config.account_model_registry import get_account_model_map
@@ -18,3 +19,4 @@ class StockPortfolioAdmin(admin.ModelAdmin):
                 schema_type="stock",
                 account_model_map=account_model_map,
             )
+"""
