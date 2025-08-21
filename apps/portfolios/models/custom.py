@@ -38,19 +38,3 @@ class CustomPortfolio(BaseAssetPortfolio):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
-
-    def get_schema_for_account_model(self, account_model_class):
-        """
-        Return the Schema object linked for this sub-portfolio + account model class.
-        """
-        link = (
-            SubPortfolioSchemaLink.objects
-            .select_related("schema")
-            .filter(
-                subportfolio_ct=ContentType.objects.get_for_model(self),
-                subportfolio_id=self.id,
-                account_model_ct=ContentType.objects.get_for_model(account_model_class),
-            )
-            .first()
-        )
-        return link.schema if link else None

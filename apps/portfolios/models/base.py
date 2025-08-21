@@ -9,8 +9,9 @@ Features:
 - Common timestamp field (`created_at`).
 - Can be extended by specific asset portfolio models for consistency.
 """
-
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from schemas.models.schema_link import SubPortfolioSchemaLink
 
 
 class BaseAssetPortfolio(models.Model):
@@ -23,3 +24,12 @@ class BaseAssetPortfolio(models.Model):
 
     class Meta:
         abstract = True
+
+    def get_schema_for_account_model(self, account_model_class):
+        ct = ContentType.objects.get_for_model(account_model_class)
+        link = SubPortfolioSchemaLink.objects.select_related("schema").filter(
+            subportfolio_ct=ContentType.objects.get_for_model(self),
+            subportfolio_id=self.id,
+            account_model_ct=ct
+        ).first()
+        return link.schema if link else None

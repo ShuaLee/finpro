@@ -4,7 +4,7 @@ from .base import BaseAccount
 
 
 class StorageFacility(BaseAccount):
-    metals_portfolio = models.ForeignKey(
+    metal_portfolio = models.ForeignKey(
         MetalPortfolio,
         on_delete=models.CASCADE,
         related_name='storage_facilities'

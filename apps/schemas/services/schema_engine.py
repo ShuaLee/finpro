@@ -1,7 +1,6 @@
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from schemas.config.utils import get_asset_schema_config
 from schemas.models import SchemaColumn, SchemaColumnValue
 from schemas.services.expression_evaluator import evaluate_expression
 from decimal import Decimal
@@ -21,7 +20,7 @@ class HoldingSchemaEngine:
         )
 
         self.schema = self._get_active_schema()
-        self.config = get_asset_schema_config(asset_type)
+        self.config = {}
 
         logger.debug(f"🧪 Schema found: {self.schema}")
 

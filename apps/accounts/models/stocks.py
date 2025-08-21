@@ -1,10 +1,7 @@
-from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
 from django.db import models
 from common.utils.country_currency_catalog import get_common_currency_choices
 from external_data.fx import get_fx_rate
 from portfolios.models.stock import StockPortfolio
-from schemas.models import Schema
 from accounts.models.base import BaseAccount
 from decimal import Decimal
 
@@ -80,7 +77,7 @@ class SelfManagedAccount(BaseStockAccount):
 
     @property
     def active_schema(self):
-        return self.stock_portfolio.get_schema_for_account_model("self_managed")
+        return self.stock_portfolio.get_schema_for_account_model(self.__class__)
 
     def get_current_value_pfx(self):
         total = Decimal(0.0)
