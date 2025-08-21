@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from accounts.models.custom import CustomAccount
 from schemas.models.schema import SchemaColumn, SchemaColumnValue
@@ -25,14 +26,14 @@ class CustomHolding(AssetHolding):
     def asset(self):
         # No separate asset model in MVP; treat the holding as the object
         return self
-    
+
     def __str__(self):
         return self.label or f"Custom Holding #{self.id}"
-    
+
     def get_asset_type(self):
         # Namespace with slug so logs/context can distinguish types
         return f"custom:{self.account.custom_portfolio.slug}"
-    
+
     def get_active_schema(self):
         return self.account.active_schema
 
@@ -45,3 +46,14 @@ class CustomHolding(AssetHolding):
     def get_profile_currency(self):
         # If you use currency in formulas, pull from user’s profile
         return self.account.custom_portfolio.portfolio.profile.currency
+
+    def clean(self):
+        # A holding cannot be placed on a container (account with childred)
+        if self.account and self.account.children.exists():
+            raise ValidationError(
+                "Holdings can only be added to leaf accounts (no child accounts).")
+        super().clean()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
