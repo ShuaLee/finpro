@@ -1,5 +1,3 @@
-from django.apps import apps
-from . import SCHEMA_CONFIG_REGISTRY
 from decimal import Decimal
 
 # Define allowed constraints per data type
@@ -34,7 +32,8 @@ def validate_constraints(data_type: str, constraints: dict):
         expected_type = allowed.get(key)
 
         if expected_type is None:
-            errors.append(f"Invalid constraint '{key}' for data type '{data_type}'")
+            errors.append(
+                f"Invalid constraint '{key}' for data type '{data_type}'")
         elif not isinstance(value, expected_type if isinstance(expected_type, tuple) else (expected_type,)):
             errors.append(
                 f"Constraint '{key}' for '{data_type}' must be of type {expected_type}, got {type(value)}"
@@ -42,7 +41,6 @@ def validate_constraints(data_type: str, constraints: dict):
 
     if errors:
         raise ValueError("Invalid constraints: " + "; ".join(errors))
-
 
 
 def schema_field(
@@ -83,7 +81,10 @@ def get_schema_column_defaults(schema_type: str, account_model_class=None):
     """
     Returns a list of default schema column definitions for a given asset type (e.g., 'stock').
     Optionally filters by a specific account model (e.g., SelfManagedAccount or ManagedAccount).
+    Lazily imports the registry to avoid circular imports.
     """
+    from . import SCHEMA_CONFIG_REGISTRY
+
     config = SCHEMA_CONFIG_REGISTRY.get(schema_type)
     if not config:
         raise ValueError(
