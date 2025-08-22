@@ -122,8 +122,8 @@ class SchemaColumn(models.Model):
                 f"source_field is required for source='{self.source}'.")
 
         # --- new: normalize & validate custom columns ---
-        if self.source == "custom":
-            # always non-system and deletable
+        if self.source == "custom" and not self.pk and not self.schema_id:
+            # Only force is_system=False for user-created custom columns (not template-based)
             self.is_system = False
             self.is_deletable = True
 
