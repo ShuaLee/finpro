@@ -9,7 +9,23 @@ class StorageFacility(BaseAccount):
         on_delete=models.CASCADE,
         related_name='storage_facilities'
     )
-    is_lending_account = models.BooleanField(default=False)
-    is_insured = models.BooleanField(default=False)
-    interest_rate = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True)
+
+    asset_type = "metal"
+    account_variant = "storage_facility"
+
+    class Meta:
+        verbose_name = "Storage Facility"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['metal_portfolio', 'name'],
+                name='unique_storagefacility_name_in_portfolio'
+            )
+        ]
+
+    @property
+    def sub_portfolio(self):
+        return self.metal_portfolio
+
+    @property
+    def active_schema(self):
+        return self.metal_portfolio.get_schema_for_account_model("storage_facility")

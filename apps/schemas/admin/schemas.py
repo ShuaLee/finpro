@@ -20,7 +20,8 @@ class SchemaAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumn)
 class SchemaColumnAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "schema", "source", "data_type", "display_order", "is_system")
+    list_display = ("id", "title", "schema", "source",
+                    "data_type", "display_order", "is_system")
     list_filter = ("source", "data_type", "is_system")
     search_fields = ("title", "schema__name")
     autocomplete_fields = ["schema"]
@@ -29,7 +30,8 @@ class SchemaColumnAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumnTemplate)
 class SchemaColumnTemplateAdmin(admin.ModelAdmin):
-    list_display = ["get_account_model_name", "title", "source", "source_field", "data_type", "is_default"]
+    list_display = ["get_account_model_name", "title",
+                    "source", "source_field", "data_type", "is_default"]
     list_filter = ["source", "is_default", "is_system"]
     search_fields = ["title", "source_field"]
     ordering = ["display_order"]

@@ -51,7 +51,7 @@ class SchemaColumn(models.Model):
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
     field_path = models.CharField(blank=True, null=True, max_length=255)
-    editable = models.BooleanField(default=True)
+    is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     constraints = models.JSONField(default=dict, blank=True)
 
