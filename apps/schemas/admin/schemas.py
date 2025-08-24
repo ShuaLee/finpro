@@ -1,4 +1,5 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from schemas.models import (
     Schema,
     SchemaColumn,
@@ -8,14 +9,92 @@ from schemas.models import (
     SubPortfolioSchemaLink,
     CustomAssetSchemaConfig,
 )
+from schemas.services.schema_deletion import delete_schema_if_allowed
+
+# Inlines
+
+
+class SchemaColumnInline(admin.TabularInline):  # or StackedInline
+    model = SchemaColumn
+    extra = 0
+    fields = ("title", "data_type", "field_path", "is_default", "is_system")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "schema_type", "content_type", "created_at")
-    search_fields = ("name", "schema_type")
+    list_display = ("id", "name", "schema_type", "get_user_email",
+                    "get_portfolio_type", "created_at")
     list_filter = ("schema_type", "content_type")
-    readonly_fields = ("created_at",)
+    search_fields = ["name"]
+    readonly_fields = ["created_at"]
+
+    actions = ["delete_selected_safely"]
+
+    inlines = [SchemaColumnInline]
+
+    def get_user_email(self, obj):
+        try:
+            return obj.content_object.portfolio.profile.user.email
+        except AttributeError:
+            return "-"
+    get_user_email.short_description = "User Email"
+
+    def get_portfolio_type(self, obj):
+        try:
+            return obj.content_object.__class__.__name__
+        except AttributeError:
+            return "-"
+    get_portfolio_type.short_description = "Subportfolio Type"
+
+    def delete_model(self, request, obj):
+        """
+        Prevent deletion if it's the last schema for a portfolio/account type.
+        """
+        try:
+            delete_schema_if_allowed(obj)
+            obj.delete()
+            self.message_user(
+                request, f"✅ Deleted schema: {obj}", level=messages.SUCCESS)
+        except ValidationError as e:
+            self.message_user(
+                request, f"❌ Could not delete schema '{obj}': {e.messages[0]}", level=messages.ERROR)
+
+    @admin.action(description="Delete selected schemas with validation")
+    def delete_selected_safely(self, request, queryset):
+        deleted = 0
+        failed = []
+
+        for schema in queryset:
+            try:
+                delete_schema_if_allowed(schema)
+                schema.delete()
+                deleted += 1
+            except ValidationError as e:
+                failed.append(
+                    f"❌ Could not delete schema '{schema}': {e.messages[0]}")
+
+        if deleted:
+            self.message_user(
+                request, f"✅ Deleted {deleted} schemas successfully.", level=messages.SUCCESS)
+
+        for error in failed:
+            self.message_user(request, error, level=messages.ERROR)
+
+    @admin.action(description="Delete orphaned schemas (no subportfolio link)")
+    def delete_orphaned_schemas(self, request, queryset):
+        from schemas.models import SubPortfolioSchemaLink
+
+        orphaned = queryset.exclude(
+            id__in=SubPortfolioSchemaLink.objects.values_list(
+                "schema_id", flat=True)
+        )
+
+        count = orphaned.count()
+        for schema in orphaned:
+            schema.delete()
+
+        self.message_user(request, f"✅ Deleted {count} orphaned schemas.")
 
 
 @admin.register(SchemaColumn)

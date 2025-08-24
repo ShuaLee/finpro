@@ -53,6 +53,8 @@ class SchemaColumn(models.Model):
     field_path = models.CharField(blank=True, null=True, max_length=255)
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
+    is_default = models.BooleanField(
+        default=False, help_text="Is this a default column from the template config?")
     constraints = models.JSONField(default=dict, blank=True)
 
     is_system = models.BooleanField(
