@@ -57,6 +57,7 @@ class SchemaColumnAdder:
         column.save()
         return column
 
+    @staticmethod
     def get_available_schema_column_templates(schema):
         """
         Fetches all templates for the schema's type and account model,

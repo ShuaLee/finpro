@@ -61,15 +61,6 @@ class SchemaColumn(models.Model):
 
     is_system = models.BooleanField(
         default=False, help_text="Whether this is a system default column")
-    structure_edit_mode = models.CharField(
-        max_length=20,
-        choices=[
-            ('full', 'Full'),
-            ('decimal_only', 'Decimal only'),
-            ('locked', 'Locked')
-        ],
-        default='locked'
-    )
 
     formula_method = models.CharField(
         max_length=100, blank=True, null=True, help_text="Backend Python method to evaluate this column")
@@ -105,14 +96,14 @@ class SchemaColumn(models.Model):
         if self.data_type == "number":
             self.data_type = "decimal"
 
-        # --- your existing rules (kept) ---
+        # --- Rule: only one formula field should be set ---
         formula_fields = [
             bool(self.formula_method and self.formula_method.strip()),
             bool(self.formula_expression and self.formula_expression.strip()),
         ]
         if sum(formula_fields) > 1:
             raise ValidationError(
-                "Only one of formula, formula_method, or formula_expression can be set."
+                "Only one of formula_method or formula_expression can be set."
             )
 
         if not self.title:
@@ -120,64 +111,52 @@ class SchemaColumn(models.Model):
 
         if self.source in ["asset", "holding"] and not self.source_field:
             raise ValidationError(
-                f"source_field is required for source='{self.source}'.")
+                f"source_field is required for source='{self.source}'."
+            )
 
-        # --- new: normalize & validate custom columns ---
+        # --- Custom column rules for MVP ---
         if self.source == "custom" and not self.pk and not self.schema_id:
-            # Only force is_system=False for user-created custom columns (not template-based)
+            # Only force is_system=False for new, user-created custom columns
             self.is_system = False
             self.is_deletable = True
 
-            # allow only string/decimal for MVP
             if self.data_type not in ("string", "decimal"):
                 raise ValidationError(
-                    "Custom columns must be of type 'string' or 'decimal'.")
+                    "Custom columns must be of type 'string' or 'decimal'."
+                )
 
-            # decimal_places required only for decimal; cleared otherwise
             if self.data_type == "decimal":
                 dp = self.constraints.get("decimal_places")
                 if dp is None:
                     self.constraints["decimal_places"] = 2
                 elif not (0 <= int(dp) <= 8):
                     raise ValidationError(
-                        "decimal_places must be between 0 and 8.")
+                        "decimal_places must be between 0 and 8."
+                    )
 
-            # generate a source_field if missing
             if not self.source_field:
                 self.source_field = slugify(self.title or "") or "custom_field"
 
-            # custom columns cannot have field_path or formulas in MVP
+            # Custom columns can't have formulas or field_path
             self.field_path = None
             self.formula_method = None
             self.formula_expression = None
 
-        # --- your structure edit locking on UPDATEs only (kept) ---
+        # --- Enforce system immutability on update ---
         if self.pk:
             original = type(self).objects.only(
-                "data_type", "source", "source_field", "field_path",
-                "is_system", "structure_edit_mode"
+                "data_type", "source", "source_field", "field_path", "is_system"
             ).get(pk=self.pk)
 
-            # Effective mode: system columns are always locked
-            mode = "locked" if (self.is_system or original.is_system) else (
-                self.structure_edit_mode or original.structure_edit_mode
-            )
+            if self.is_system or original.is_system:
+                locked_fields = ["data_type", "source", "source_field", "field_path"]
+                errors = {}
+                for field in locked_fields:
+                    if getattr(self, field) != getattr(original, field):
+                        errors[field] = f"'{field}' is locked because this is a system column."
+                if errors:
+                    raise ValidationError(errors)
 
-            if mode == "locked":
-                locked_fields = ["data_type",
-                                 "source", "source_field", "field_path"]
-            elif mode == "decimal_only":
-                locked_fields = ["data_type", "source",
-                                 "source_field", "field_path"]
-            else:
-                locked_fields = []
-
-            errors = {}
-            for f in locked_fields:
-                if getattr(self, f) != getattr(original, f):
-                    errors[f] = f"'{f}' is locked by structure_edit_mode='{mode}'."
-            if errors:
-                raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.full_clean()
