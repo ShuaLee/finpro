@@ -137,10 +137,41 @@ class SchemaColumnTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumnValue)
 class SchemaColumnValueAdmin(admin.ModelAdmin):
-    list_display = ("id", "column", "holding", "value")
+    list_display = ("id", "column", "value", "get_account", "get_user_email")
     search_fields = ("column__title",)
     autocomplete_fields = ("column",)
     list_filter = ("column__schema",)
+
+    def get_account(self, obj):
+        try:
+            holding_or_account = obj.account
+            return getattr(holding_or_account, "account", None)
+        except Exception as e:
+            return f"(err: {e})"
+
+    get_account.short_description = "Account"
+
+    def get_user_email(self, obj):
+        try:
+            # Try to resolve the full chain: holding → account → portfolio → profile → user
+            target = obj.account
+            account = getattr(target, "account", None)
+
+            # Support both account and holding types
+            if hasattr(account, "stock_portfolio"):
+                profile = account.stock_portfolio.portfolio.profile
+            elif hasattr(account, "precious_metal_portfolio"):
+                profile = account.precious_metal_portfolio.portfolio.profile
+            elif hasattr(account, "portfolio"):  # fallback if directly attached
+                profile = account.portfolio.profile
+            else:
+                return "(no profile)"
+
+            return profile.user.email if profile and profile.user else "(no user)"
+        except Exception as e:
+            return f"(err: {e})"
+
+    get_user_email.short_description = "User Email"
 
 
 @admin.register(SchemaColumnVisibility)
