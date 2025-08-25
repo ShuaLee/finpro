@@ -43,6 +43,7 @@ class SchemaColumn(models.Model):
         ('time', 'Time'),
         ('url', 'URL'),
     ])
+
     source = models.CharField(max_length=20, choices=[
         ('asset', 'Asset'),
         ('holding', 'Holding'),
@@ -50,6 +51,7 @@ class SchemaColumn(models.Model):
         ('custom', 'Custom'),
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
+
     field_path = models.CharField(blank=True, null=True, max_length=255)
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
@@ -68,11 +70,7 @@ class SchemaColumn(models.Model):
         ],
         default='locked'
     )
-    # scope = models.CharField(max_length=20, choices=[
-    #     ('portfolio', 'Portfolio-wide'),
-    #     ('subportfolio', 'Subportfolio-wide'),
-    #     ('account', 'Account-specific')
-    # ], default='subportfolio')
+
     formula_method = models.CharField(
         max_length=100, blank=True, null=True, help_text="Backend Python method to evaluate this column")
     formula_expression = models.TextField(
@@ -80,6 +78,7 @@ class SchemaColumn(models.Model):
         blank=True,
         help_text="User-defined formula like '(quantity * price) / pe_ratio' -> something that wont be in the backend."
     )
+
     display_order = models.PositiveIntegerField(default=0)
 
     # This field does not mean that each SchemaColumn maps to one theme across all holdings. Instead, it's a soft link

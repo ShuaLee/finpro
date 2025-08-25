@@ -56,3 +56,26 @@ class SchemaColumnAdder:
 
         column.save()
         return column
+
+    def get_available_schema_column_templates(schema):
+        """
+        Fetches all templates for the schema's type and account model,
+        and flags which ones are already active in the schema.
+        """
+        active_columns = set(
+            SchemaColumn.objects
+            .filter(schema=schema, is_system=True)
+            .values_list("source", "source_field")
+        )
+
+        templates = SchemaColumnTemplate.objects.filter(
+            schema_type=schema.schema_type,
+            # Optional, if you want to filter by account type
+            account_model_ct=schema.content_type
+        )
+
+        # Dynamically tag each template with is_active (not saved to DB)
+        for tpl in templates:
+            tpl.is_active = (tpl.source, tpl.source_field) in active_columns
+
+        return templates

@@ -1,5 +1,10 @@
+from schemas.models import SchemaColumn, SchemaColumnTemplate, SubPortfolioSchemaLink
+from django import forms
 from django.contrib import admin, messages
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.shortcuts import redirect, render
+from django.urls import path
 from schemas.models import (
     Schema,
     SchemaColumn,
@@ -11,6 +16,7 @@ from schemas.models import (
 )
 from schemas.services.schema_deletion import delete_schema_if_allowed
 
+
 # Inlines
 
 
@@ -19,6 +25,54 @@ class SchemaColumnInline(admin.TabularInline):  # or StackedInline
     extra = 0
     fields = ("title", "data_type", "field_path", "is_default", "is_system")
     readonly_fields = ("created_at",)
+
+# Forms
+
+
+class AddSchemaColumnForm(forms.Form):
+    MODE_CHOICES = [
+        ("template", "From Template"),
+        ("custom", "Custom Column"),
+    ]
+    mode = forms.ChoiceField(choices=MODE_CHOICES, widget=forms.RadioSelect)
+
+    template = forms.ModelChoiceField(
+        queryset=SchemaColumnTemplate.objects.none(),
+        required=False
+    )
+
+    # Custom input fields
+    title = forms.CharField(required=False)
+    data_type = forms.ChoiceField(
+        choices=SchemaColumn._meta.get_field("data_type").choices,
+        required=False,
+    )
+
+    def __init__(self, *args, schema=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.schema = schema
+
+        if schema:
+            # Find all account models linked to this schema
+            links = SubPortfolioSchemaLink.objects.filter(schema=schema)
+            account_model_cts = [link.account_model_ct for link in links]
+
+            # Which (source, source_field) pairs are already in use
+            used_pairs = set(
+                schema.columns.values_list("source", "source_field")
+            )
+
+            # Grab templates for those account models
+            templates = SchemaColumnTemplate.objects.filter(
+                account_model_ct__in=account_model_cts,
+                schema_type=schema.schema_type,
+            ).order_by("display_order")
+
+            # Tag them as used or not
+            for tpl in templates:
+                tpl.is_used = (tpl.source, tpl.source_field) in used_pairs
+
+            self.fields["template"].queryset = templates
 
 
 @admin.register(Schema)
@@ -31,6 +85,7 @@ class SchemaAdmin(admin.ModelAdmin):
 
     actions = ["delete_selected_safely"]
 
+    change_form_template = "admin/schemas/schema/change_form.html"
     inlines = [SchemaColumnInline]
 
     def get_user_email(self, obj):
@@ -95,6 +150,81 @@ class SchemaAdmin(admin.ModelAdmin):
             schema.delete()
 
         self.message_user(request, f"✅ Deleted {count} orphaned schemas.")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:schema_id>/add-column/',
+                self.admin_site.admin_view(self.add_column_view),
+                name='schemas_schema_add_column',
+            ),
+        ]
+        return custom_urls + urls
+
+    def add_column_view(self, request, schema_id):
+        schema = Schema.objects.get(pk=schema_id)
+
+        if request.method == 'POST':
+            form = AddSchemaColumnForm(request.POST, schema=schema)
+            if form.is_valid():
+                mode = form.cleaned_data['mode']
+                if mode == 'template':
+                    template = form.cleaned_data['template']
+                    if template:
+                        # Check if schema already has a column with this source + source_field
+                        exists = schema.columns.filter(
+                            source=template.source,
+                            source_field=template.source_field
+                        ).exists()
+
+                        if exists:
+                            messages.error(
+                                request, f"Column from template '{template.title}' is already in this schema.")
+                        else:
+                            SchemaColumn.objects.create(
+                                schema=schema,
+                                title=template.title,
+                                data_type=template.data_type,
+                                source=template.source,
+                                source_field=template.source_field,
+                                field_path=template.field_path,
+                                is_system=template.is_system,
+                                is_default=template.is_default,
+                                is_editable=template.is_editable,
+                                is_deletable=template.is_deletable,
+                                constraints=template.constraints,
+                            )
+                            messages.success(
+                                request, f"Added column from template: {template.title}")
+
+                    else:
+                        messages.error(
+                            request, "This template is already in use.")
+                elif mode == 'custom':
+                    SchemaColumn.objects.create(
+                        schema=schema,
+                        title=form.cleaned_data['title'],
+                        data_type=form.cleaned_data['data_type'],
+                        source="custom",          # 🔒 always custom
+                        source_field=None,        # 🔒 force None
+                        is_system=False,
+                        is_editable=True,
+                        is_deletable=True,
+                    )
+                    messages.success(
+                        request, f"Added custom column: {form.cleaned_data['title']}")
+
+                return redirect('admin:schemas_schema_change', schema_id)
+        else:
+            form = AddSchemaColumnForm(schema=schema)
+
+        return render(request, 'admin/schemas/schema/add_schema_column.html', {
+            'form': form,
+            'schema': schema,
+            'opts': self.model._meta,
+            'title': 'Add Schema Column',
+        })
 
 
 @admin.register(SchemaColumn)
