@@ -68,11 +68,11 @@ class SchemaColumn(models.Model):
         ],
         default='locked'
     )
-    scope = models.CharField(max_length=20, choices=[
-        ('portfolio', 'Portfolio-wide'),
-        ('subportfolio', 'Subportfolio-wide'),
-        ('account', 'Account-specific')
-    ], default='subportfolio')
+    # scope = models.CharField(max_length=20, choices=[
+    #     ('portfolio', 'Portfolio-wide'),
+    #     ('subportfolio', 'Subportfolio-wide'),
+    #     ('account', 'Account-specific')
+    # ], default='subportfolio')
     formula_method = models.CharField(
         max_length=100, blank=True, null=True, help_text="Backend Python method to evaluate this column")
     formula_expression = models.TextField(
