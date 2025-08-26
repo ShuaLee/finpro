@@ -24,6 +24,17 @@ class Schema(models.Model):
     def __str__(self):
         return f"{self.schema_type.capitalize()} Schema: {self.name}"
 
+    def clean(self):
+        super().clean()
+        if self.pk:
+            original = type(self).objects.get(pk=self.pk)
+            if (
+                self.content_type_id != original.content_type_id or
+                self.object_id != original.object_id
+            ):
+                raise ValidationError(
+                    "Schema portfolio assignment cannot be changed once saved.")
+
 
 class SchemaColumn(models.Model):
     """
@@ -55,8 +66,7 @@ class SchemaColumn(models.Model):
     field_path = models.CharField(blank=True, null=True, max_length=255)
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
-    is_default = models.BooleanField(
-        default=False, help_text="Is this a default column from the template config?")
+
     constraints = models.JSONField(default=dict, blank=True)
 
     is_system = models.BooleanField(
@@ -67,12 +77,11 @@ class SchemaColumn(models.Model):
     formula_expression = models.TextField(
         null=True,
         blank=True,
-        help_text="User-defined formula like '(quantity * price) / pe_ratio' -> something that wont be in the backend."
+        help_text="User-defined formula like '(quantity * price) / pe_ratio' -> something that won't be in the backend."
     )
 
     display_order = models.PositiveIntegerField(default=0)
 
-    # This field does not mean that each SchemaColumn maps to one theme across all holdings. Instead, it's a soft link
     investment_theme = models.ForeignKey(
         'assets.InvestmentTheme',
         on_delete=models.SET_NULL,
@@ -145,18 +154,22 @@ class SchemaColumn(models.Model):
         # --- Enforce system immutability on update ---
         if self.pk:
             original = type(self).objects.only(
-                "data_type", "source", "source_field", "field_path", "is_system"
+                "schema_id", "data_type", "source", "source_field", "field_path", "is_system"
             ).get(pk=self.pk)
 
+            if self.schema_id != original.schema_id:
+                raise ValidationError(
+                    "Schema assignment cannot be changed after creation.")
+
             if self.is_system or original.is_system:
-                locked_fields = ["data_type", "source", "source_field", "field_path"]
+                locked_fields = ["data_type", "source",
+                                 "source_field", "field_path"]
                 errors = {}
                 for field in locked_fields:
                     if getattr(self, field) != getattr(original, field):
                         errors[field] = f"'{field}' is locked because this is a system column."
                 if errors:
                     raise ValidationError(errors)
-
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -177,7 +190,6 @@ class SchemaColumnValue(models.Model):
     column = models.ForeignKey(
         SchemaColumn, on_delete=models.CASCADE, related_name='values')
 
-    # Generic reference to Account or Holding
     account_ct = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     account_id = models.PositiveIntegerField()
     account = GenericForeignKey('account_ct', 'account_id')
@@ -200,17 +212,12 @@ class SchemaColumnValue(models.Model):
         validate_value_against_constraints(self.value, data_type, constraints)
 
 
-"""
-Custom asset config.
-"""
-
-
 class CustomAssetSchemaConfig(models.Model):
     """
     Stores custom schema configurations for user-defined asset types.
     """
     asset_type = models.CharField(max_length=100, unique=True)
-    config = models.JSONField()  # Holds schema definition
+    config = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
