@@ -82,14 +82,6 @@ class SchemaColumn(models.Model):
 
     display_order = models.PositiveIntegerField(default=0)
 
-    investment_theme = models.ForeignKey(
-        'assets.InvestmentTheme',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="If this column represents a custom theme, link it here."
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

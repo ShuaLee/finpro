@@ -1,6 +1,7 @@
 from django.contrib import admin
 from schemas.models import (
     SchemaColumn,
+
 )
 
 
@@ -17,11 +18,10 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         base = super().get_readonly_fields(request, obj)
         readonly = (
             "display_order",  # Always readonly
-            # System-lock fields:
             "title", "schema", "data_type", "source", "source_field",
             "field_path", "constraints", "formula_method",
-            "formula_expression", "created_at"
+            "formula_expression", "is_system", "is_editable", "is_deletable", "created_at"
         )
         if obj and obj.is_system:
             return base + readonly
-        return base + ("display_order",)  # For non-system, still lock display_order
+        return base + ("display_order",)

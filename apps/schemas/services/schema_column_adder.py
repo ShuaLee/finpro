@@ -26,13 +26,11 @@ class SchemaColumnAdder:
             source_field=template.source_field,
             field_path=template.field_path,
             is_editable=template.is_editable,
-            is_default=template.is_default,
             is_deletable=template.is_deletable,
             is_system=template.is_system,
             formula_method=template.formula_method,
             formula_expression=template.formula_expression,
             constraints=template.constraints,
-            investment_theme=template.investment_theme,
         )
         column.save()
         return column

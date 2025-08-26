@@ -1,0 +1,9 @@
+{% extends "admin/change_form.html" %} {% block object-tools-items %} {{
+block.super }}
+<li>
+  <a href="{{ add_from_template_url }}" class="addlink">➕ Add from Template</a>
+</li>
+<li>
+  <a href="{{ add_custom_url }}" class="addlink">➕ Add Custom Column</a>
+</li>
+{% endblock %}
