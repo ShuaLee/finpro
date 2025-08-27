@@ -25,8 +25,7 @@ class SchemaColumnTemplate(models.Model):
 
     title = models.CharField(max_length=100)
     data_type = models.CharField(max_length=20, choices=[
-        ('decimal', 'Decimal'),
-        ('integer', 'Integer'),
+        ('decimal', 'Number'),
         ('string', 'Text'),
         ('date', 'Date'),
         ('datetime', 'Datetime'),
@@ -40,7 +39,6 @@ class SchemaColumnTemplate(models.Model):
     is_system = models.BooleanField(default=True)
 
     formula_expression = models.TextField(null=True, blank=True)
-    formula_method = models.CharField(max_length=100, null=True, blank=True)
     constraints = models.JSONField(default=dict, blank=True)
 
     investment_theme = models.ForeignKey(
@@ -55,10 +53,16 @@ class SchemaColumnTemplate(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    template_key = models.SlugField(
+        max_length=100,
+        help_text="Stable key for formulas, e.g. 'earnings', 'price_to_book'",
+    )
+
     class Meta:
         verbose_name = "Schema Column Template"
         verbose_name_plural = "Schema Column Templates"
-        unique_together = ("account_model_ct", "source", "source_field")
+        unique_together = ("account_model_ct", "source",
+                           "source_field", "template_key")
         ordering = ["display_order"]
 
     def __str__(self):

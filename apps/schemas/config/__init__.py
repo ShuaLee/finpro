@@ -2,10 +2,10 @@ from accounts.models.crypto import CryptoWallet
 from accounts.models.custom import CustomAccount
 from accounts.models.metals import StorageFacility
 from accounts.models.stocks import SelfManagedAccount, ManagedAccount
-from .stock import SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG, MANAGED_ACCOUNT_SCHEMA_CONFIG
-from .crypto import CRYPTO_WALLET_SCHEMA_CONFIG
-from .custom_default import CUSTOM_DEFAULT_SCHEMA_CONFIG
-from .metal import METALS_STORAGE_FACILITY_SCHEMA_CONFIG
+from schemas.config.schema_registry.stock import SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG, MANAGED_ACCOUNT_SCHEMA_CONFIG
+from schemas.config.schema_registry.crypto import CRYPTO_WALLET_SCHEMA_CONFIG
+from schemas.config.schema_registry.custom_default import CUSTOM_DEFAULT_SCHEMA_CONFIG
+from schemas.config.schema_registry.metal import METALS_STORAGE_FACILITY_SCHEMA_CONFIG
 # from .custom import DEFAULT_COLUMNS as CUSTOM_DEFAULT_COLUMNS
 
 SCHEMA_CONFIG_REGISTRY = {

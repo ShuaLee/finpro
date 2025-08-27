@@ -46,8 +46,7 @@ class SchemaColumn(models.Model):
     title = models.CharField(max_length=100)
     custom_title = models.CharField(max_length=100, blank=True, null=True)
     data_type = models.CharField(max_length=20, choices=[
-        ('decimal', 'Decimal'),
-        ('integer', 'Integer'),
+        ('decimal', 'Number'),
         ('string', 'Text'),
         ('date', 'Date'),
         ('datetime', 'Datetime'),
@@ -62,18 +61,16 @@ class SchemaColumn(models.Model):
         ('custom', 'Custom'),
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
-
     field_path = models.CharField(blank=True, null=True, max_length=255)
+
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
-
-    constraints = models.JSONField(default=dict, blank=True)
-
     is_system = models.BooleanField(
         default=False, help_text="Whether this is a system default column")
 
-    formula_method = models.CharField(
-        max_length=100, blank=True, null=True, help_text="Backend Python method to evaluate this column")
+    constraints = models.JSONField(default=dict, blank=True)
+
+    identifier = models.SlugField(max_length=100, unique=False, editable=False)
     formula_expression = models.TextField(
         null=True,
         blank=True,
@@ -165,6 +162,15 @@ class SchemaColumn(models.Model):
 
     def save(self, *args, **kwargs):
         self.full_clean()
+        if not self.identifier:
+            base = slugify(self.title or "col")
+            identifier = base
+            counter = 2
+            while SchemaColumn.objects.filter(schema=self.schema, identifier=identifier).exists():
+                identifier = f"{base}_{counter}"
+                counter += 1
+            self.identifier = identifier
+
         if self._state.adding and self.display_order == 0:
             max_order = (
                 SchemaColumn.objects.filter(schema=self.schema).aggregate(
