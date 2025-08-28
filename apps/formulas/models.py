@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 
-# Create your models here.
+
 class Formula(models.Model):
     key = models.SlugField(
         max_length=100,
@@ -18,6 +18,17 @@ class Formula(models.Model):
     )
 
     dependencies = models.JSONField(default=list, blank=True)
+
+    # Explicit user-chosen decimal places (required)
+    decimal_places = models.PositiveSmallIntegerField(
+        choices=[(0, "0 (whole numbers)"),
+                 (2, "2 (cents)"),
+                 (4, "4 (fx / crypto standard)"),
+                 (8, "8 (crypto max precision)")],
+        null=True, blank=True,
+        help_text="User-specified precision; system formulas may use constraints"
+    )
+
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -1,7 +1,7 @@
-from formulas.services.precision import apply_precision
-from decimal import Decimal
-import ast
 import operator
+import ast
+from decimal import Decimal
+from formulas.services.precision import apply_precision
 
 
 class FormulaEvaluator:
@@ -15,8 +15,8 @@ class FormulaEvaluator:
     def __init__(self, formula, values: dict, constraints: dict = None):
         """
         formula: Formula object
-        values: dict mapping identifier -> Decimal (e.g., {"quantity": Decimal("5"), "price": Decimal("100.25")})
-        constraints: column constraints (like {"decimal_places": 2})
+        values: dict mapping identifiers -> Decimal values
+        constraints: optional dict, e.g. from SchemaColumnTemplate (system formulas)
         """
         self.formula = formula
         self.values = values
@@ -25,7 +25,14 @@ class FormulaEvaluator:
     def eval(self) -> Decimal:
         expr_ast = ast.parse(self.formula.expression, mode="eval").body
         result = self._eval_ast(expr_ast)
-        return apply_precision(result, list(self.values.values()), self.constraints)
+
+        # System formulas -> constraints decide precision
+        # User formulas -> formula.decimal_places must be set
+        return apply_precision(
+            result,
+            self.formula,
+            self.constraints
+        )
 
     def _eval_ast(self, node):
         if isinstance(node, ast.BinOp):
@@ -33,9 +40,12 @@ class FormulaEvaluator:
             right = self._eval_ast(node.right)
             op = self.SAFE_OPERATORS[type(node.op)]
             return op(left, right)
-        elif isinstance(node, ast.Num):
-            return Decimal(str(node.n))
+
+        elif isinstance(node, ast.Constant):  # Python 3.8+
+            return Decimal(str(node.value))
+
         elif isinstance(node, ast.Name):
             return self.values.get(node.id, Decimal("0"))
+
         else:
             raise ValueError(f"Unsupported AST node: {node}")

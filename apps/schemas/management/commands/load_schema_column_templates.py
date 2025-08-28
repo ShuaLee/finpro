@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
 from django.contrib.contenttypes.models import ContentType
 
+from formulas.models import Formula
+
 from schemas.models import SchemaColumnTemplate
 from schemas.config import SCHEMA_CONFIG_REGISTRY
-from schemas.config.utils import validate_constraints
+from schemas.config.schema_registry.utils import validate_constraints
 
 from decimal import Decimal
 
