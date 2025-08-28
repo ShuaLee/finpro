@@ -39,12 +39,36 @@ class Schema(models.Model):
 class SchemaColumn(models.Model):
     """
     Represents a column in a schema.
-    Columns define attributes for holdings/accounts and can be asset-based, holding-based, calculated, or custom.
+    Columns define attributes for holdings/accounts and can be:
+    - asset-based,
+    - holding-based,
+    - calculated (via formula/template),
+    - custom.
     """
+
+    # References
     schema = models.ForeignKey(
-        Schema, on_delete=models.CASCADE, related_name="columns")
+        Schema,
+        on_delete=models.CASCADE,
+        related_name="columns"
+    )
+    template = models.ForeignKey(
+        "schemas.SchemaColumnTemplate",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Template this column was created from, if any"
+    )
+    formula = models.ForeignKey(
+        "formulas.Formula",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Direct formula if this is a custom calculated column"
+    )
+
+    # Column metadata
     title = models.CharField(max_length=100)
-    custom_title = models.CharField(max_length=100, blank=True, null=True)
     data_type = models.CharField(max_length=20, choices=[
         ('decimal', 'Number'),
         ('string', 'Text'),
@@ -53,7 +77,6 @@ class SchemaColumn(models.Model):
         ('time', 'Time'),
         ('url', 'URL'),
     ])
-
     source = models.CharField(max_length=20, choices=[
         ('asset', 'Asset'),
         ('holding', 'Holding'),
@@ -63,6 +86,7 @@ class SchemaColumn(models.Model):
     source_field = models.CharField(max_length=100, blank=True, null=True)
     field_path = models.CharField(blank=True, null=True, max_length=255)
 
+    # Behaviour flags
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(
@@ -70,15 +94,11 @@ class SchemaColumn(models.Model):
 
     constraints = models.JSONField(default=dict, blank=True)
 
+    # Schema-specific identifier (stable, slugified)
     identifier = models.SlugField(max_length=100, unique=False, editable=False)
-    formula_expression = models.TextField(
-        null=True,
-        blank=True,
-        help_text="User-defined formula like '(quantity * price) / pe_ratio' -> something that won't be in the backend."
-    )
 
+    # Ordering & timestamps
     display_order = models.PositiveIntegerField(default=0)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -86,35 +106,42 @@ class SchemaColumn(models.Model):
 
     @property
     def display_title(self):
-        return self.custom_title or self.title
+        """
+        The current display name (user-editable)
+        """
+        return self.title
+
+    @property
+    def effective_formula(self):
+        """
+        Get the formula driving this column (if any).
+        Priority:
+        - If linked to a template with a formula, use that.
+        - Otherwise use column.formula (custom calculated).
+        """
+        if self.template and self.template.formula:
+            return self.template.formula
+        return self.formula
 
     def clean(self):
         super().clean()
 
+        # Normalize "number" -> "decimal"
         if self.data_type == "number":
             self.data_type = "decimal"
 
-        # --- Rule: only one formula field should be set ---
-        formula_fields = [
-            bool(self.formula_method and self.formula_method.strip()),
-            bool(self.formula_expression and self.formula_expression.strip()),
-        ]
-        if sum(formula_fields) > 1:
-            raise ValidationError(
-                "Only one of formula_method or formula_expression can be set."
-            )
-
+        # Title cannot be blank
         if not self.title:
             raise ValidationError("Column title cannot be blank.")
 
+        # Enforce source_field for asset/holding columns
         if self.source in ["asset", "holding"] and not self.source_field:
             raise ValidationError(
                 f"source_field is required for source='{self.source}'."
             )
 
-        # --- Custom column rules for MVP ---
+        # --- Custom column rules ---
         if self.source == "custom" and not self.pk and not self.schema_id:
-            # Only force is_system=False for new, user-created custom columns
             self.is_system = False
             self.is_deletable = True
 
@@ -135,12 +162,12 @@ class SchemaColumn(models.Model):
             if not self.source_field:
                 self.source_field = slugify(self.title or "") or "custom_field"
 
-            # Custom columns can't have formulas or field_path
-            self.field_path = None
-            self.formula_method = None
-            self.formula_expression = None
+            # Custom columns cannot have a template
+            if self.template:
+                raise ValidationError(
+                    "Custom columns cannot link to a template.")
 
-        # --- Enforce system immutability on update ---
+        # --- Enforce immutability on system columns ---
         if self.pk:
             original = type(self).objects.only(
                 "schema_id", "data_type", "source", "source_field", "field_path", "is_system"
@@ -148,7 +175,8 @@ class SchemaColumn(models.Model):
 
             if self.schema_id != original.schema_id:
                 raise ValidationError(
-                    "Schema assignment cannot be changed after creation.")
+                    "Schema assignment cannot be changed after creation."
+                )
 
             if self.is_system or original.is_system:
                 locked_fields = ["data_type", "source",
@@ -162,6 +190,8 @@ class SchemaColumn(models.Model):
 
     def save(self, *args, **kwargs):
         self.full_clean()
+
+        # Auto-generate schema-unique identifier
         if not self.identifier:
             base = slugify(self.title or "col")
             identifier = base
@@ -171,12 +201,14 @@ class SchemaColumn(models.Model):
                 counter += 1
             self.identifier = identifier
 
+        # Auto-assign display order
         if self._state.adding and self.display_order == 0:
             max_order = (
-                SchemaColumn.objects.filter(schema=self.schema).aggregate(
-                    models.Max("display_order"))["display_order__max"]
+                SchemaColumn.objects.filter(schema=self.schema)
+                .aggregate(models.Max("display_order"))["display_order__max"]
             )
             self.display_order = (max_order or 0) + 1
+
         super().save(*args, **kwargs)
 
 

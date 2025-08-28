@@ -14,55 +14,60 @@ class SchemaColumnTemplate(models.Model):
         help_text="The account model this template applies to."
     )
 
+    # Link to a formula if this template defines a calculated column
+    formula = models.ForeignKey(
+        "formulas.Formula",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        help_text="If this is a calculated column, link to the formula"
+    )
+
     schema_type = models.CharField(max_length=50)
     source = models.CharField(max_length=20, choices=[
-        ('asset', 'Asset'),
-        ('holding', 'Holding'),
-        ('calculated', 'Calculated'),
-        ('custom', 'Custom'),
+        ("asset", "Asset"),
+        ("holding", "Holding"),
+        ("calculated", "Calculated"),
+        ("custom", "Custom"),
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
 
     title = models.CharField(max_length=100)
     data_type = models.CharField(max_length=20, choices=[
-        ('decimal', 'Number'),
-        ('string', 'Text'),
-        ('date', 'Date'),
-        ('datetime', 'Datetime'),
-        ('time', 'Time'),
-        ('url', 'URL'),
+        ("decimal", "Number"),
+        ("string", "Text"),
+        ("date", "Date"),
+        ("datetime", "Datetime"),
+        ("time", "Time"),
+        ("url", "URL"),
     ])
     field_path = models.CharField(max_length=255, null=True, blank=True)
+
+    # Behavior flags
     is_editable = models.BooleanField(default=True)
     is_default = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(default=True)
 
-    formula_expression = models.TextField(null=True, blank=True)
     constraints = models.JSONField(default=dict, blank=True)
 
-    investment_theme = models.ForeignKey(
-        'assets.InvestmentTheme',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="If this column represents a custom theme, link it here."
-    )
-
     display_order = models.PositiveIntegerField(default=0)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Stable key for formulas/expressions
     template_key = models.SlugField(
         max_length=100,
-        help_text="Stable key for formulas, e.g. 'earnings', 'price_to_book'",
+        help_text="Stable key for formulas, e.g. 'earnings', 'price_to_book'"
     )
 
     class Meta:
         verbose_name = "Schema Column Template"
         verbose_name_plural = "Schema Column Templates"
-        unique_together = ("account_model_ct", "source",
-                           "source_field", "template_key")
+        unique_together = (
+            "account_model_ct",
+            "source",
+            "source_field",
+            "template_key",
+        )
         ordering = ["display_order"]
 
     def __str__(self):
@@ -86,7 +91,3 @@ class SchemaColumnTemplate(models.Model):
                     "decimal_places required for decimal columns.")
             if not self.source_field:
                 self.source_field = slugify(self.title)
-
-        if self.formula_expression and self.formula_method:
-            raise ValueError(
-                "Only one of formula_expression or formula_method can be set.")

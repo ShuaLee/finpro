@@ -1,4 +1,4 @@
-from schemas.config.utils import schema_field
+from schemas.config.schema_registry.utils import schema_field
 from decimal import Decimal
 
 SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
