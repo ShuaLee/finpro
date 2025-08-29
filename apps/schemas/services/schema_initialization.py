@@ -31,8 +31,8 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
     for account_model, label in account_model_map.items():
         user_email = subportfolio.portfolio.profile.user.email
         schema_name = (
-            custom_schema_namer(
-                subportfolio, label) if custom_schema_namer else f"{user_email}'s {schema_type.title()} ({label}) Schema"
+            custom_schema_namer(subportfolio, label)
+            if custom_schema_namer else f"{user_email}'s {schema_type.title()} ({label}) Schema"
         )
 
         schema = Schema.objects.create(
@@ -43,16 +43,19 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
         )
 
         # 1) Try exact templates
-        templates = list(get_schema_column_templates(schema_type, account_model_class=account_model))
+        templates = list(get_schema_column_templates(
+            schema_type, account_model_class=account_model))
 
         # 2) If custom:* and none found, fall back to 'custom_default'
         if not templates and schema_type.startswith("custom:"):
-            templates = list(get_schema_column_templates("custom_default", account_model_class=account_model))
+            templates = list(get_schema_column_templates(
+                "custom_default", account_model_class=account_model))
 
         # 3) Create columns from whichever template set we have
         for template in templates:
             SchemaColumn.objects.create(
                 schema=schema,
+                template=template,        # ✅ store link back to template
                 source=template.source,
                 source_field=template.source_field,
                 title=template.title,
@@ -61,10 +64,10 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
                 is_editable=template.is_editable,
                 is_deletable=template.is_deletable,
                 is_system=template.is_system,
-                formula_expression=template.formula_expression,
-                formula_method=template.formula_method,
                 constraints=template.constraints,
                 display_order=template.display_order,
+                # ✅ FK to Formula (instead of expression/method)
+                formula=template.formula,
             )
 
         SubPortfolioSchemaLink.objects.update_or_create(
@@ -74,11 +77,12 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
             defaults={"schema": schema}
         )
 
+
 # ---------------------------------------------------------------------------------- #
 
 
 @transaction.atomic
-def add_custom_column(schema: Schema, title: str, data_type: str, editable=True, is_deletable=True):
+def add_custom_column(schema: Schema, title: str, data_type: str, is_editable=True, is_deletable=True):
     """
     Adds a new custom (user-defined) column to the schema.
     """
@@ -87,7 +91,7 @@ def add_custom_column(schema: Schema, title: str, data_type: str, editable=True,
         title=title,
         data_type=data_type,
         source="custom",
-        editable=editable,
+        is_editable=is_editable,
         is_deletable=is_deletable,
     )
 
@@ -101,12 +105,13 @@ def extract_variables_from_formula(formula: str):
 
 
 @transaction.atomic
-def add_calculated_column(schema: Schema, title: str, formula: str):
+def add_calculated_column(schema: Schema, title: str, formula_obj):
     """
     Adds a calculated column to the schema.
     Also creates any missing referenced variables as editable custom fields.
+    `formula_obj`: Formula instance
     """
-    variables = extract_variables_from_formula(formula)
+    variables = formula_obj.dependencies or []
     existing_fields = [
         col.source_field.lower() if col.source_field else col.title.lower().replace(" ", "_")
         for col in schema.columns.all()
@@ -120,8 +125,8 @@ def add_calculated_column(schema: Schema, title: str, formula: str):
                 data_type="decimal",
                 source="custom",
                 source_field=var,
-                editable=True,
-                is_deletable=True
+                is_editable=True,
+                is_deletable=True,
             )
 
     return SchemaColumn.objects.create(
@@ -129,7 +134,7 @@ def add_calculated_column(schema: Schema, title: str, formula: str):
         title=title,
         data_type="decimal",
         source="calculated",
-        formula_expression=formula,
-        editable=False,
+        formula=formula_obj,   # ✅ link to Formula FK instead of raw expression
+        is_editable=False,
         is_deletable=True,
     )

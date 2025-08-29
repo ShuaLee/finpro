@@ -65,37 +65,29 @@ SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
         "current_value_stock_fx": schema_field(
             title="Current Value - Stock FX",
             data_type="decimal",
-            formula_method="current_value_stock_fx",
+            formula_key="current_value_stock_fx",  # 🔑 references formula
             is_editable=False,
             is_deletable=False,
             is_default=True,
-            constraints={
-                "decimal_places": 2,
-                "min": Decimal("0")
-            }
+            constraints={"decimal_places": 2, "min": Decimal("0")},
         ),
         "current_value_profile_fx": schema_field(
             title="Current Value - Profile FX",
             data_type="decimal",
-            formula_method="current_value_profile_fx",
+            formula_key="current_value_profile_fx",
             is_editable=False,
             is_deletable=False,
             is_default=True,
-            constraints={
-                "decimal_places": 2,
-                "min": Decimal("0")
-            }
+            constraints={"decimal_places": 2, "min": Decimal("0")},
         ),
         "unrealized_gain": schema_field(
             title="Unrealized Gain",
             data_type="decimal",
-            formula_method="get_unrealized_gain",
+            formula_key="unrealized_gain",
             is_editable=False,
             is_deletable=True,
-            constraints={
-                "decimal_places": 2,
-                "min": Decimal("0")
-            }
+            is_default=True,
+            constraints={"decimal_places": 2, "min": Decimal("0")},
         ),
     },
 }
@@ -107,10 +99,7 @@ MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             data_type="string",
             is_deletable=False,
             is_default=True,
-            constraints={
-                "character_limit": 200,
-                "character_minimum": 0
-            }
+            constraints={"character_limit": 200, "character_minimum": 0}
         ),
         "current_value": schema_field(
             title="Current Value",
@@ -118,10 +107,7 @@ MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             is_editable=False,
             is_deletable=False,
             is_default=True,
-            constraints={
-                "decimal_places": 2,
-                "min": Decimal("0")
-            }
+            constraints={"decimal_places": 2, "min": Decimal("0")},
         ),
         "currency": schema_field(
             title="Currency",
@@ -129,11 +115,8 @@ MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             is_editable=False,
             is_deletable=False,
             is_default=True,
-            constraints={
-                "character_limit": 3,
-                "character_minimum": 3,
-                "all_caps": True
-            }
+            constraints={"character_limit": 3,
+                         "character_minimum": 3, "all_caps": True},
         ),
     },
 }

@@ -1,4 +1,4 @@
-from schemas.config.utils import schema_field
+from schemas.config.schema_registry.utils import schema_field
 from decimal import Decimal
 
 METALS_STORAGE_FACILITY_SCHEMA_CONFIG = {

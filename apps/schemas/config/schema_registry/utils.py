@@ -17,7 +17,7 @@ CONSTRAINT_DEFINITIONS = {
         "character_minimum": int,
         "all_caps": bool,
     },
-    # You can add 'integer', 'date', etc. if needed
+    # You can extend with 'date', 'datetime', etc. as needed
 }
 
 
@@ -33,7 +33,8 @@ def validate_constraints(data_type: str, constraints: dict):
 
         if expected_type is None:
             errors.append(
-                f"Invalid constraint '{key}' for data type '{data_type}'")
+                f"Invalid constraint '{key}' for data type '{data_type}'"
+            )
         elif not isinstance(value, expected_type if isinstance(expected_type, tuple) else (expected_type,)):
             errors.append(
                 f"Constraint '{key}' for '{data_type}' must be of type {expected_type}, got {type(value)}"
@@ -52,10 +53,12 @@ def schema_field(
     is_default: bool = False,
     is_system: bool = True,
     constraints: dict = None,
-    formula_method: str = None,
-    formula_expression: str = None,
     source: str = None,
+    formula_key: str = None,  # 🔑 NEW: stable FK into Formula table
 ) -> dict:
+    """
+    Utility to standardize schema field definitions inside registry configs.
+    """
     if constraints is None:
         constraints = {}
 
@@ -71,9 +74,8 @@ def schema_field(
         "is_default": is_default,
         "is_system": is_system,
         "constraints": constraints,
-        "formula_method": formula_method,
-        "formula_expression": formula_expression,
         "source": source,
+        "formula_key": formula_key,  # 🔑 replaces formula_method/expr
     }
 
 
@@ -88,14 +90,16 @@ def get_schema_column_defaults(schema_type: str, account_model_class=None):
     config = SCHEMA_CONFIG_REGISTRY.get(schema_type)
     if not config:
         raise ValueError(
-            f"No schema config found for schema type: '{schema_type}'")
+            f"No schema config found for schema type: '{schema_type}'"
+        )
 
     # If the schema_type is nested by account model
     if isinstance(config, dict) and account_model_class:
         config = config.get(account_model_class)
         if not config:
             raise ValueError(
-                f"No config found for schema_type '{schema_type}' and model '{account_model_class.__name__}'")
+                f"No config found for schema_type '{schema_type}' and model '{account_model_class.__name__}'"
+            )
 
     columns = []
     display_counter = 1
@@ -112,8 +116,7 @@ def get_schema_column_defaults(schema_type: str, account_model_class=None):
                     "is_editable": meta.get("is_editable", True),
                     "is_deletable": meta.get("is_deletable", True),
                     "is_system": meta.get("is_system", False),
-                    "formula_expression": meta.get("formula_expression"),
-                    "formula_method": meta.get("formula_method"),
+                    "formula_key": meta.get("formula_key"),  # 🔑
                     "constraints": meta.get("constraints", {}),
                     "display_order": display_counter,
                 })

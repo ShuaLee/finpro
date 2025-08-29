@@ -1,4 +1,4 @@
-from schemas.config.utils import schema_field
+from schemas.config.schema_registry.utils import schema_field
 from decimal import Decimal
 
 # System-wide default starter set for *any* custom:<slug> schema
