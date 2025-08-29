@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 from schemas.validators import validate_value_against_constraints
+import re
 
 
 class Schema(models.Model):
@@ -46,9 +47,8 @@ class SchemaColumn(models.Model):
     - custom.
     """
 
-    # References
     schema = models.ForeignKey(
-        Schema,
+        "schemas.Schema",
         on_delete=models.CASCADE,
         related_name="columns"
     )
@@ -67,37 +67,35 @@ class SchemaColumn(models.Model):
         help_text="Direct formula if this is a custom calculated column"
     )
 
-    # Column metadata
     title = models.CharField(max_length=100)
     data_type = models.CharField(max_length=20, choices=[
-        ('decimal', 'Number'),
-        ('string', 'Text'),
-        ('date', 'Date'),
-        ('datetime', 'Datetime'),
-        ('time', 'Time'),
-        ('url', 'URL'),
+        ("decimal", "Number"),
+        ("string", "Text"),
+        ("date", "Date"),
+        ("datetime", "Datetime"),
+        ("time", "Time"),
+        ("url", "URL"),
     ])
     source = models.CharField(max_length=20, choices=[
-        ('asset', 'Asset'),
-        ('holding', 'Holding'),
-        ('calculated', 'Calculated'),
-        ('custom', 'Custom'),
+        ("asset", "Asset"),
+        ("holding", "Holding"),
+        ("calculated", "Calculated"),
+        ("custom", "Custom"),
     ])
     source_field = models.CharField(max_length=100, blank=True, null=True)
     field_path = models.CharField(blank=True, null=True, max_length=255)
 
-    # Behaviour flags
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(
-        default=False, help_text="Whether this is a system default column")
+        default=False, help_text="Whether this is a system default column"
+    )
 
     constraints = models.JSONField(default=dict, blank=True)
 
-    # Schema-specific identifier (stable, slugified)
+    # 🔥 You can drop `identifier` entirely if you want
     identifier = models.SlugField(max_length=100, unique=False, editable=False)
 
-    # Ordering & timestamps
     display_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -106,19 +104,10 @@ class SchemaColumn(models.Model):
 
     @property
     def display_title(self):
-        """
-        The current display name (user-editable)
-        """
         return self.title
 
     @property
     def effective_formula(self):
-        """
-        Get the formula driving this column (if any).
-        Priority:
-        - If linked to a template with a formula, use that.
-        - Otherwise use column.formula (custom calculated).
-        """
         if self.template and self.template.formula:
             return self.template.formula
         return self.formula
@@ -134,11 +123,18 @@ class SchemaColumn(models.Model):
         if not self.title:
             raise ValidationError("Column title cannot be blank.")
 
-        # Enforce source_field for asset/holding columns
+        # Enforce source_field for asset/holding
         if self.source in ["asset", "holding"] and not self.source_field:
             raise ValidationError(
                 f"source_field is required for source='{self.source}'."
             )
+
+        # --- Enforce snake_case on ALL source_fields ---
+        if self.source_field:
+            if not re.match(r'^[a-z][a-z0-9_]*$', self.source_field):
+                raise ValidationError(
+                    "source_field must be snake_case (e.g. 'purchase_price')."
+                )
 
         # --- Custom column rules ---
         if self.source == "custom" and not self.pk and not self.schema_id:
@@ -160,12 +156,14 @@ class SchemaColumn(models.Model):
                     )
 
             if not self.source_field:
-                self.source_field = slugify(self.title or "") or "custom_field"
+                # Generate a snake_case field name
+                self.source_field = re.sub(r'[^a-z0-9_]', '_',
+                                           (self.title or "").lower()) or "custom_field"
 
-            # Custom columns cannot have a template
             if self.template:
                 raise ValidationError(
-                    "Custom columns cannot link to a template.")
+                    "Custom columns cannot link to a template."
+                )
 
         # --- Enforce immutability on system columns ---
         if self.pk:
@@ -179,8 +177,7 @@ class SchemaColumn(models.Model):
                 )
 
             if self.is_system or original.is_system:
-                locked_fields = ["data_type", "source",
-                                 "source_field", "field_path"]
+                locked_fields = ["data_type", "source", "source_field", "field_path"]
                 errors = {}
                 for field in locked_fields:
                     if getattr(self, field) != getattr(original, field):
@@ -210,6 +207,25 @@ class SchemaColumn(models.Model):
             self.display_order = (max_order or 0) + 1
 
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """
+        Prevent deleting this column if other columns in the same schema
+        depend on its `source_field`.
+        """
+        if self.source_field:
+            dependents = SchemaColumn.objects.filter(
+                schema=self.schema,
+                formula__dependencies__contains=[self.source_field]
+            ).exclude(id=self.id)
+
+            if dependents.exists():
+                titles = ", ".join([d.title for d in dependents])
+                raise ValidationError(
+                    f"❌ Cannot delete column '{self.title}' because it is required by: {titles}"
+                )
+
+        return super().delete(*args, **kwargs)
 
 
 class SchemaColumnValue(models.Model):

@@ -1,4 +1,5 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from schemas.models import (
     SchemaColumn,
 
@@ -19,9 +20,17 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         readonly = (
             "display_order",  # Always readonly
             "title", "schema", "data_type", "source", "source_field",
-            "field_path", "constraints", "formula_method",
-            "formula_expression", "is_system", "is_editable", "is_deletable", "created_at"
+            "field_path", "constraints",
+            "formula",   # ✅ keep FK, drop old fields
+            "is_system", "is_editable", "is_deletable", "created_at",
         )
         if obj and obj.is_system:
             return base + readonly
         return base + ("display_order",)
+    
+    def delete_model(self, request, obj):
+        try:
+            obj.delete()
+            self.message_user(request, f"✅ Deleted column: {obj.title}")
+        except ValidationError as e:
+            self.message_user(request, f"❌ {e.messages[0]}", level=messages.ERROR)

@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand
 from django.contrib.contenttypes.models import ContentType
-from django.utils.text import slugify
 from decimal import Decimal
 
 from schemas.models import SchemaColumnTemplate
@@ -30,8 +29,7 @@ class Command(BaseCommand):
 
         for schema_type, variant_map in SCHEMA_CONFIG_REGISTRY.items():
             for account_model, fields in variant_map.items():
-                account_model_ct = ContentType.objects.get_for_model(
-                    account_model)
+                account_model_ct = ContentType.objects.get_for_model(account_model)
 
                 for source, columns in fields.items():
                     for source_field, meta in columns.items():
@@ -96,14 +94,14 @@ class Command(BaseCommand):
                             "constraints": convert_decimal(meta.get("constraints", {})),
                             "display_order": meta.get("display_order", 0),
                             "formula": formula,
-                            "template_key": meta.get("template_key", slugify(meta["title"])),
+                            "source": source,
                         }
 
                         obj, created_flag = SchemaColumnTemplate.objects.update_or_create(
                             account_model_ct=account_model_ct,
+                            schema_type=schema_type,
                             source=source,
                             source_field=source_field,
-                            template_key=defaults["template_key"],
                             defaults=defaults,
                         )
 
