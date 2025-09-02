@@ -14,7 +14,8 @@ class SchemaAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "schema_type", "created_at")
     list_filter = ("schema_type",)
     search_fields = ["name"]
-    readonly_fields = ("schema_type", "content_type", "object_id", "created_at")
+    readonly_fields = ("schema_type", "content_type",
+                       "object_id", "created_at")
     fields = ("name", "schema_type", "content_type", "object_id", "created_at")
 
     actions = ["delete_selected_safely"]
@@ -87,20 +88,23 @@ class SchemaAdmin(admin.ModelAdmin):
             if form.is_valid():
                 template = form.cleaned_data["template"]
                 try:
-                    column = SchemaColumnAdder(schema).add_from_template(template)
-                    messages.success(request, f"✅ Added column: {column.title}")
+                    column, created = SchemaColumnAdder(
+                        schema).add_from_template(template)
+                    if created:
+                        messages.success(
+                            request, f"✅ Added new column: {column.title}")
+                    else:
+                        messages.warning(
+                            request, f"⚠️ Column '{column.title}' already exists in this schema.")
                 except ValidationError as e:
-                    messages.error(request, f"❌ {'; '.join(e.messages)}")
+                    messages.error(request, f"❌ {e.messages[0]}")
                 return redirect("admin:schemas_schema_change", schema.id)
         else:
             form = AddFromTemplateForm(schema)
-        return render(
-            request,
-            "admin/schemas/add_from_template.html",
-            {"form": form, "schema": schema},
-        )
+        return render(request, "admin/schemas/add_from_template.html", {"form": form, "schema": schema})
 
     # --- Add custom column ---
+
     def add_custom_column(self, request, schema_id):
         schema = get_object_or_404(Schema, pk=schema_id)
         if request.method == "POST":
@@ -110,7 +114,8 @@ class SchemaAdmin(admin.ModelAdmin):
                     title=form.cleaned_data["title"],
                     data_type=form.cleaned_data["data_type"],
                     constraints=(
-                        {"decimal_places": int(form.cleaned_data["decimal_places"])}
+                        {"decimal_places": int(
+                            form.cleaned_data["decimal_places"])}
                         if form.cleaned_data["data_type"] == "decimal"
                         else {}
                     ),

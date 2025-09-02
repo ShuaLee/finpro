@@ -6,7 +6,8 @@ from schemas.models import SchemaColumn, SchemaColumnTemplate, SubPortfolioSchem
 class SchemaColumnAdder:
     def __init__(self, schema):
         self.schema = schema
-        self.link = SubPortfolioSchemaLink.objects.filter(schema=schema).first()
+        self.link = SubPortfolioSchemaLink.objects.filter(
+            schema=schema).first()
         if not self.link:
             raise ValidationError("Schema is not linked to any account model.")
 
@@ -34,11 +35,13 @@ class SchemaColumnAdder:
                     # Recursively add dependency first
                     self.add_from_template(dep_template)
 
-        # Avoid duplicates — check by source_field
-        if self.schema.columns.filter(source_field=template.source_field).exists():
-            return self.schema.columns.get(source_field=template.source_field)
+        # Already exists?
+        existing = self.schema.columns.filter(
+            source_field=template.source_field).first()
+        if existing:
+            return existing, False  # 🚨 indicate not created
 
-        return SchemaColumn.objects.create(
+        column = SchemaColumn.objects.create(
             schema=self.schema,
             template=template,
             formula=template.formula,
@@ -53,6 +56,7 @@ class SchemaColumnAdder:
             constraints=template.constraints,
             display_order=template.display_order,
         )
+        return column, True  # ✅ indicate created
 
     def add_custom_column(self, title, data_type, constraints=None):
         return SchemaColumn.objects.create(

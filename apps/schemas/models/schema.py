@@ -93,9 +93,6 @@ class SchemaColumn(models.Model):
 
     constraints = models.JSONField(default=dict, blank=True)
 
-    # 🔥 You can drop `identifier` entirely if you want
-    identifier = models.SlugField(max_length=100, unique=False, editable=False)
-
     display_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -177,7 +174,8 @@ class SchemaColumn(models.Model):
                 )
 
             if self.is_system or original.is_system:
-                locked_fields = ["data_type", "source", "source_field", "field_path"]
+                locked_fields = ["data_type", "source",
+                                 "source_field", "field_path"]
                 errors = {}
                 for field in locked_fields:
                     if getattr(self, field) != getattr(original, field):
@@ -187,16 +185,6 @@ class SchemaColumn(models.Model):
 
     def save(self, *args, **kwargs):
         self.full_clean()
-
-        # Auto-generate schema-unique identifier
-        if not self.identifier:
-            base = slugify(self.title or "col")
-            identifier = base
-            counter = 2
-            while SchemaColumn.objects.filter(schema=self.schema, identifier=identifier).exists():
-                identifier = f"{base}_{counter}"
-                counter += 1
-            self.identifier = identifier
 
         # Auto-assign display order
         if self._state.adding and self.display_order == 0:
@@ -213,17 +201,32 @@ class SchemaColumn(models.Model):
         Prevent deleting this column if other columns in the same schema
         depend on its `source_field`.
         """
-        if self.source_field:
-            dependents = SchemaColumn.objects.filter(
-                schema=self.schema,
-                formula__dependencies__contains=[self.source_field]
-            ).exclude(id=self.id)
+        if not self.source_field:
+            return super().delete(*args, **kwargs)
 
-            if dependents.exists():
-                titles = ", ".join([d.title for d in dependents])
-                raise ValidationError(
-                    f"❌ Cannot delete column '{self.title}' because it is required by: {titles}"
-                )
+        dependents = []
+
+        # 1. Custom calculated columns (direct formula FK)
+        custom_dependents = SchemaColumn.objects.filter(
+            schema=self.schema,
+            formula__dependencies__contains=[self.source_field]
+        ).exclude(id=self.id)
+
+        dependents.extend(list(custom_dependents))
+
+        # 2. Template-driven calculated columns (formula lives on template)
+        template_dependents = SchemaColumn.objects.filter(
+            schema=self.schema,
+            template__formula__dependencies__contains=[self.source_field]
+        ).exclude(id=self.id)
+
+        dependents.extend(list(template_dependents))
+
+        if dependents:
+            titles = ", ".join([d.title for d in dependents])
+            raise ValidationError(
+                f"❌ Cannot delete column '{self.title}' because it is required by: {titles}"
+            )
 
         return super().delete(*args, **kwargs)
 

@@ -86,7 +86,7 @@ SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             formula_key="unrealized_gain",
             is_editable=False,
             is_deletable=True,
-            is_default=True,
+            is_default=False,
             constraints={"decimal_places": 2, "min": Decimal("0")},
         ),
     },
