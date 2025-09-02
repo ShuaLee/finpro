@@ -53,9 +53,8 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
 
         # 3) Create columns from whichever template set we have
         for template in templates:
-            SchemaColumn.objects.create(
+            create_kwargs = dict(
                 schema=schema,
-                template=template,        # ✅ store link back to template
                 source=template.source,
                 source_field=template.source_field,
                 title=template.title,
@@ -66,9 +65,15 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
                 is_system=template.is_system,
                 constraints=template.constraints,
                 display_order=template.display_order,
-                # ✅ FK to Formula (instead of expression/method)
                 formula=template.formula,
             )
+
+            # ✅ Only attach template if not a custom column
+            if template.source != "custom":
+                create_kwargs["template"] = template
+
+            # identifier will be auto-generated in SchemaColumn.clean()
+            SchemaColumn.objects.create(**create_kwargs)
 
         SubPortfolioSchemaLink.objects.update_or_create(
             subportfolio_ct=subportfolio_ct,
@@ -81,16 +86,36 @@ def initialize_asset_schema(subportfolio, schema_type: str, account_model_map: d
 # ---------------------------------------------------------------------------------- #
 
 
+def _generate_identifier(schema: Schema, title: str, prefix: str = "col") -> str:
+    """
+    Generate a unique snake_case identifier for a column within a schema.
+    """
+    base = re.sub(r'[^a-z0-9_]', '_', title.lower())
+    base = re.sub(r'_+', '_', base).strip('_') or prefix
+    proposed = base
+    counter = 1
+
+    while SchemaColumn.objects.filter(schema=schema, identifier=proposed).exists():
+        counter += 1
+        proposed = f"{base}_{counter}"
+
+    return proposed
+
+
 @transaction.atomic
 def add_custom_column(schema: Schema, title: str, data_type: str, is_editable=True, is_deletable=True):
     """
     Adds a new custom (user-defined) column to the schema.
+    Ensures identifier is set and unique within the schema.
     """
+    identifier = _generate_identifier(schema, title, prefix="custom_field")
+
     return SchemaColumn.objects.create(
         schema=schema,
         title=title,
         data_type=data_type,
         source="custom",
+        identifier=identifier,
         is_editable=is_editable,
         is_deletable=is_deletable,
     )
@@ -112,29 +137,16 @@ def add_calculated_column(schema: Schema, title: str, formula_obj):
     `formula_obj`: Formula instance
     """
     variables = formula_obj.dependencies or []
-    existing_fields = [
-        col.source_field.lower() if col.source_field else col.title.lower().replace(" ", "_")
-        for col in schema.columns.all()
-    ]
+    existing_identifiers = [col.identifier for col in schema.columns.all() if col.identifier]
 
     for var in variables:
-        if var.lower() not in existing_fields:
+        if var not in existing_identifiers:
             SchemaColumn.objects.create(
                 schema=schema,
                 title=var.replace("_", " ").title(),
                 data_type="decimal",
                 source="custom",
-                source_field=var,
+                identifier=var,  # ✅ treat formula deps as identifiers directly
                 is_editable=True,
                 is_deletable=True,
             )
-
-    return SchemaColumn.objects.create(
-        schema=schema,
-        title=title,
-        data_type="decimal",
-        source="calculated",
-        formula=formula_obj,   # ✅ link to Formula FK instead of raw expression
-        is_editable=False,
-        is_deletable=True,
-    )

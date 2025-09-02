@@ -2,11 +2,14 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
+from django.utils.text import slugify
+
+from formulas.models import Formula
 
 from schemas.models import Schema
 from schemas.services.schema_column_adder import SchemaColumnAdder
 from schemas.services.schema_deletion import delete_schema_if_allowed
-from schemas.admin.add_forms import AddFromTemplateForm, AddCustomColumnForm
+from schemas.admin.add_forms import AddFromTemplateForm, AddCustomColumnForm, AddCalculatedColumnForm
 
 
 @admin.register(Schema)
@@ -77,6 +80,11 @@ class SchemaAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.add_custom_column),
                 name="schema_add_custom",
             ),
+            path(
+                "<int:schema_id>/add-calculated/",
+                self.admin_site.admin_view(self.add_calculated_column),
+                name="schema_add_calculated",
+            ),
         ]
         return custom + urls
 
@@ -131,6 +139,51 @@ class SchemaAdmin(admin.ModelAdmin):
             "admin/schemas/add_custom_column.html",
             {"form": form, "schema": schema},
         )
+    
+    def add_calculated_column(self, request, schema_id):
+        schema = get_object_or_404(Schema, pk=schema_id)
+        if request.method == "POST":
+            form = AddCalculatedColumnForm(schema, request.POST)
+            if form.is_valid():
+                title = form.cleaned_data["title"]
+                expression = form.cleaned_data["expression"]
+
+                # Extract identifiers from the expression (simple regex for a-z, underscores)
+                import re
+                identifiers = set(re.findall(r"[a-z_][a-z0-9_]*", expression))
+
+                # Create formula
+                formula = Formula.objects.create(
+                    key=slugify(title),
+                    title=title,
+                    expression=expression,
+                    dependencies=list(identifiers),
+                    decimal_places=2,
+                    is_system=False,
+                    created_by=request.user,
+                )
+
+                # Create SchemaColumn linked to formula
+                schema.columns.create(
+                    title=title,
+                    data_type="decimal",
+                    source="calculated",
+                    formula=formula,
+                    is_editable=False,
+                    is_deletable=True,
+                    is_system=False,
+                )
+
+                messages.success(request, f"✅ Added calculated column: {title}")
+                return redirect("admin:schemas_schema_change", schema.id)
+        else:
+            form = AddCalculatedColumnForm(schema)
+
+        return render(
+            request,
+            "admin/schemas/add_calculated_column.html",
+            {"form": form, "schema": schema},
+        )
 
     # --- Inject buttons into Schema detail page ---
     def change_view(self, request, object_id, form_url="", extra_context=None):
@@ -141,6 +194,7 @@ class SchemaAdmin(admin.ModelAdmin):
         extra_context["add_custom_url"] = reverse(
             "admin:schema_add_custom", args=[object_id]
         )
+        extra_context["add_calculated_url"] = reverse("admin:schema_add_calculated", args=[object_id])
         return super().change_view(
             request, object_id, form_url, extra_context=extra_context
         )

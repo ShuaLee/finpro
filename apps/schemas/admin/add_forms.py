@@ -33,3 +33,23 @@ class AddCustomColumnForm(forms.Form):
             raise forms.ValidationError(
                 "Decimal places required for decimals.")
         return cleaned
+
+class AddCalculatedColumnForm(forms.Form):
+    title = forms.CharField(max_length=100, help_text="Name of the new calculated column")
+
+    expression = forms.CharField(
+        widget=forms.Textarea,
+        help_text="Enter a formula using identifiers of existing numeric columns (e.g. 'price * cool_ratio / quantity').",
+    )
+
+    def __init__(self, schema, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate available numeric columns
+        numeric_cols = schema.columns.filter(data_type="decimal")
+        choices = [(col.identifier, f"{col.title} ({col.identifier})") for col in numeric_cols]
+        self.fields["available_columns"] = forms.MultipleChoiceField(
+            choices=choices,
+            required=False,
+            widget=forms.CheckboxSelectMultiple,
+            help_text="Available numeric columns you can use in your formula",
+        )

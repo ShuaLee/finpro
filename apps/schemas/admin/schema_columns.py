@@ -8,7 +8,7 @@ from schemas.models import (
 
 @admin.register(SchemaColumn)
 class SchemaColumnAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "schema", "source",
+    list_display = ("id", "title", "identifier", "schema", "source",
                     "data_type", "display_order", "is_system")
     list_filter = ("source", "data_type", "is_system", "schema")
     search_fields = ("title", "schema__name")

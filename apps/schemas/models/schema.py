@@ -68,6 +68,14 @@ class SchemaColumn(models.Model):
     )
 
     title = models.CharField(max_length=100)
+
+    identifier = models.SlugField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Stable internal key used for referencing this column in formulas. Auto-generated for custom columns.",
+    )
+
     data_type = models.CharField(max_length=20, choices=[
         ("decimal", "Number"),
         ("string", "Text"),
@@ -125,42 +133,60 @@ class SchemaColumn(models.Model):
             raise ValidationError(
                 f"source_field is required for source='{self.source}'."
             )
+        
+        if not self.identifier:
+            base = re.sub(r'[^a-z0-9_]', '_', (self.title or "").lower())
+            base = re.sub(r'_+', '_', base).strip('_') or "col"
+            proposed = base
+            counter = 1
 
-        # --- Enforce snake_case on ALL source_fields ---
-        if self.source_field:
-            if not re.match(r'^[a-z][a-z0-9_]*$', self.source_field):
-                raise ValidationError(
-                    "source_field must be snake_case (e.g. 'purchase_price')."
-                )
+            while SchemaColumn.objects.filter(
+                schema=self.schema,
+                identifier=proposed
+            ).exclude(pk=self.pk).exists():
+                counter += 1
+                proposed = f"{base}_{counter}"
 
-        # --- Custom column rules ---
-        if self.source == "custom" and not self.pk and not self.schema_id:
+            self.identifier = proposed
+
+        # --- Auto-generate + ensure uniqueness of source_field for custom ---
+        if self.source == "custom" and not self.pk:
+            if not self.identifier:
+                # Create slug-style identifier
+                base = re.sub(r'[^a-z0-9_]', '_', self.title.lower())
+                base = re.sub(r'_+', '_', base).strip('_') or "custom_field"
+                proposed = base
+                counter = 1
+
+                while SchemaColumn.objects.filter(
+                    schema=self.schema,
+                    identifier=proposed
+                ).exclude(pk=self.pk).exists():
+                    counter += 1
+                    proposed = f"{base}_{counter}"
+
+                self.identifier = proposed
+
+            if self.template:
+                raise ValidationError("Custom columns cannot link to a template.")
+
             self.is_system = False
             self.is_deletable = True
 
             if self.data_type not in ("string", "decimal"):
-                raise ValidationError(
-                    "Custom columns must be of type 'string' or 'decimal'."
-                )
+                raise ValidationError("Custom columns must be of type 'string' or 'decimal'.")
 
             if self.data_type == "decimal":
                 dp = self.constraints.get("decimal_places")
                 if dp is None:
                     self.constraints["decimal_places"] = 2
                 elif not (0 <= int(dp) <= 8):
-                    raise ValidationError(
-                        "decimal_places must be between 0 and 8."
-                    )
+                    raise ValidationError("decimal_places must be between 0 and 8.")
 
-            if not self.source_field:
-                # Generate a snake_case field name
-                self.source_field = re.sub(r'[^a-z0-9_]', '_',
-                                           (self.title or "").lower()) or "custom_field"
-
-            if self.template:
-                raise ValidationError(
-                    "Custom columns cannot link to a template."
-                )
+        # --- Enforce snake_case on ALL source_fields ---
+        if self.source_field:
+            if not re.match(r'^[a-z][a-z0-9_]*$', self.source_field):
+                raise ValidationError("source_field must be snake_case (e.g. 'purchase_price').")
 
         # --- Enforce immutability on system columns ---
         if self.pk:
@@ -169,19 +195,31 @@ class SchemaColumn(models.Model):
             ).get(pk=self.pk)
 
             if self.schema_id != original.schema_id:
-                raise ValidationError(
-                    "Schema assignment cannot be changed after creation."
-                )
+                raise ValidationError("Schema assignment cannot be changed after creation.")
 
             if self.is_system or original.is_system:
-                locked_fields = ["data_type", "source",
-                                 "source_field", "field_path"]
-                errors = {}
-                for field in locked_fields:
-                    if getattr(self, field) != getattr(original, field):
-                        errors[field] = f"'{field}' is locked because this is a system column."
+                locked_fields = ["data_type", "source", "source_field", "field_path"]
+                errors = {
+                    field: f"'{field}' is locked because this is a system column."
+                    for field in locked_fields
+                    if getattr(self, field) != getattr(original, field)
+                }
                 if errors:
                     raise ValidationError(errors)
+
+        # 🔒 Final safety: check uniqueness of source_field per schema
+        if self.source_field and self.schema_id:
+            conflict_qs = SchemaColumn.objects.filter(
+                schema_id=self.schema_id,
+                source_field=self.source_field
+            )
+            if self.pk:
+                conflict_qs = conflict_qs.exclude(pk=self.pk)
+            if conflict_qs.exists():
+                raise ValidationError({
+                    "source_field": f"A column with source_field='{self.source_field}' already exists in this schema."
+                })
+
 
     def save(self, *args, **kwargs):
         self.full_clean()
