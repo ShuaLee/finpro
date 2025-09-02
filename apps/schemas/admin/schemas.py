@@ -148,34 +148,42 @@ class SchemaAdmin(admin.ModelAdmin):
                 title = form.cleaned_data["title"]
                 expression = form.cleaned_data["expression"]
 
-                # Extract identifiers from the expression (simple regex for a-z, underscores)
                 import re
                 identifiers = set(re.findall(r"[a-z_][a-z0-9_]*", expression))
 
-                # Create formula
-                formula = Formula.objects.create(
-                    key=slugify(title),
-                    title=title,
-                    expression=expression,
-                    dependencies=list(identifiers),
-                    decimal_places=2,
-                    is_system=False,
-                    created_by=request.user,
-                )
+                try:
+                    # ✅ validate dependencies first
+                    SchemaColumnAdder(schema).validate_dependencies(identifiers)
 
-                # Create SchemaColumn linked to formula
-                schema.columns.create(
-                    title=title,
-                    data_type="decimal",
-                    source="calculated",
-                    formula=formula,
-                    is_editable=False,
-                    is_deletable=True,
-                    is_system=False,
-                )
+                    # ✅ only create formula after validation passes
+                    formula, _ = Formula.objects.get_or_create(
+                        key=slugify(title),
+                        defaults={
+                            "title": title,
+                            "expression": expression,
+                            "dependencies": list(identifiers),
+                            "decimal_places": 2,
+                            "is_system": False,
+                            "created_by": request.user,
+                        },
+                    )
 
-                messages.success(request, f"✅ Added calculated column: {title}")
-                return redirect("admin:schemas_schema_change", schema.id)
+                    column, created = SchemaColumnAdder(schema).add_calculated_column(
+                        title=title,
+                        formula=formula,
+                    )
+                    if created:
+                        messages.success(request, f"✅ Added calculated column: {title}")
+                    else:
+                        messages.warning(
+                            request,
+                            f"⚠️ Calculated column '{title}' already exists in this schema.",
+                        )
+                    return redirect("admin:schemas_schema_change", schema.id)
+
+                except ValidationError as e:
+                    form.add_error("expression", e.messages[0])
+
         else:
             form = AddCalculatedColumnForm(schema)
 
@@ -184,6 +192,7 @@ class SchemaAdmin(admin.ModelAdmin):
             "admin/schemas/add_calculated_column.html",
             {"form": form, "schema": schema},
         )
+
 
     # --- Inject buttons into Schema detail page ---
     def change_view(self, request, object_id, form_url="", extra_context=None):

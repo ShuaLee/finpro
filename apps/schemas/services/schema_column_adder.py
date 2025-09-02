@@ -69,3 +69,48 @@ class SchemaColumnAdder:
             is_deletable=True,
             is_system=False,
         )
+    
+    def add_calculated_column(self, title, formula):
+        """
+        Add a calculated column that references an existing Formula.
+        Validates dependencies exist in the schema.
+        """
+        missing = [
+            dep for dep in (formula.dependencies or [])
+            if not self.schema.columns.filter(identifier=dep).exists()
+        ]
+        if missing:
+            raise ValidationError(
+                f"❌ Cannot create calculated column. "
+                f"Missing dependencies in schema: {', '.join(missing)}"
+            )
+
+        # Already exists?
+        existing = self.schema.columns.filter(
+            formula=formula, title=title
+        ).first()
+        if existing:
+            return existing, False
+
+        column = SchemaColumn.objects.create(
+            schema=self.schema,
+            formula=formula,
+            source="calculated",
+            title=title,
+            data_type="decimal",
+            is_editable=False,
+            is_deletable=True,
+            is_system=False,
+        )
+        return column, True
+    
+    def validate_dependencies(self, identifiers):
+        """Ensure all identifiers exist in this schema."""
+        missing = [
+            dep for dep in identifiers
+            if not self.schema.columns.filter(identifier=dep).exists()
+        ]
+        if missing:
+            raise ValidationError(
+                f"❌ Cannot create calculated column. Missing dependencies in schema: {', '.join(missing)}"
+            )
