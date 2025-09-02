@@ -1,13 +1,11 @@
 from django.core.exceptions import ValidationError
-from django.db import models
 from schemas.models import SchemaColumn, SchemaColumnTemplate, SubPortfolioSchemaLink
 
 
 class SchemaColumnAdder:
     def __init__(self, schema):
         self.schema = schema
-        self.link = SubPortfolioSchemaLink.objects.filter(
-            schema=schema).first()
+        self.link = SubPortfolioSchemaLink.objects.filter(schema=schema).first()
         if not self.link:
             raise ValidationError("Schema is not linked to any account model.")
 
@@ -19,32 +17,26 @@ class SchemaColumnAdder:
         formula = template.formula
         if formula and formula.dependencies:
             for dep in formula.dependencies:
-                # 🔑 Always resolve dependencies by source_field
                 if not self.schema.columns.filter(source_field=dep).exists():
                     dep_template = SchemaColumnTemplate.objects.filter(
                         schema_type=self.schema.schema_type,
                         account_model_ct=self.link.account_model_ct,
                         source_field=dep,
                     ).first()
-
                     if not dep_template:
                         raise ValidationError(
                             f"Missing template for dependency '{dep}'"
                         )
-
-                    # Recursively add dependency first
                     self.add_from_template(dep_template)
 
-        # Already exists?
-        existing = self.schema.columns.filter(
-            source_field=template.source_field).first()
+        existing = self.schema.columns.filter(source_field=template.source_field).first()
         if existing:
-            return existing, False  # 🚨 indicate not created
+            return existing, False
 
         column = SchemaColumn.objects.create(
             schema=self.schema,
             template=template,
-            formula=template.formula,
+            formula=template.formula,  # ✅ system/global formulas only
             source=template.source,
             source_field=template.source_field,
             title=template.title,
@@ -56,7 +48,7 @@ class SchemaColumnAdder:
             constraints=template.constraints,
             display_order=template.display_order,
         )
-        return column, True  # ✅ indicate created
+        return column, True
 
     def add_custom_column(self, title, data_type, constraints=None):
         return SchemaColumn.objects.create(
@@ -69,7 +61,7 @@ class SchemaColumnAdder:
             is_deletable=True,
             is_system=False,
         )
-    
+
     def add_calculated_column(self, title, formula):
         """
         Add a calculated column that references an existing Formula.
@@ -85,10 +77,7 @@ class SchemaColumnAdder:
                 f"Missing dependencies in schema: {', '.join(missing)}"
             )
 
-        # Already exists?
-        existing = self.schema.columns.filter(
-            formula=formula, title=title
-        ).first()
+        existing = self.schema.columns.filter(formula=formula, title=title).first()
         if existing:
             return existing, False
 
@@ -103,7 +92,7 @@ class SchemaColumnAdder:
             is_system=False,
         )
         return column, True
-    
+
     def validate_dependencies(self, identifiers):
         """Ensure all identifiers exist in this schema."""
         missing = [
@@ -112,5 +101,6 @@ class SchemaColumnAdder:
         ]
         if missing:
             raise ValidationError(
-                f"❌ Cannot create calculated column. Missing dependencies in schema: {', '.join(missing)}"
+                f"❌ Cannot create calculated column. "
+                f"Missing dependencies in schema: {', '.join(missing)}"
             )

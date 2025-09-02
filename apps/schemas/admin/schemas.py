@@ -152,12 +152,14 @@ class SchemaAdmin(admin.ModelAdmin):
                 identifiers = set(re.findall(r"[a-z_][a-z0-9_]*", expression))
 
                 try:
-                    # ✅ validate dependencies first
+                    # ✅ validate dependencies before creating formula
                     SchemaColumnAdder(schema).validate_dependencies(identifiers)
 
-                    # ✅ only create formula after validation passes
+                    # ✅ schema-scoped formula creation
+                    from formulas.models import Formula
                     formula, _ = Formula.objects.get_or_create(
                         key=slugify(title),
+                        schema=schema,             # ✅ scoped to schema
                         defaults={
                             "title": title,
                             "expression": expression,

@@ -13,6 +13,15 @@ class Formula(models.Model):
     title = models.CharField(max_length=100)
     description = models.TextField(blank=True)
 
+    schema = models.ForeignKey(
+        "schemas.Schema",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="formulas",
+        help_text="If null, this is a global/system formula. Otherwise, scoped to schema."
+    )
+
     # Expression in terms of other source_fields
     expression = models.TextField(
         help_text="Expression using other column source_fields, e.g. '(price - purchase_price) * quantity'"
@@ -47,8 +56,24 @@ class Formula(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["key"],
+                condition=models.Q(is_system=True),
+                name="unique_system_formula_key"
+            ),
+            models.UniqueConstraint(
+                fields=["schema", "key"],
+                condition=models.Q(is_system=False),
+                name="unique_schema_formula_key"
+            ),
+        ]
+
     def clean(self):
         super().clean()
+
+        # --- Base validations ---
         if not self.key:
             raise ValueError("Formula must have a stable key.")
         if not self.expression:
@@ -59,9 +84,16 @@ class Formula(models.Model):
             if not isinstance(dep, str):
                 raise ValueError(f"Invalid dependency '{dep}', must be a string.")
 
+        # --- Enforce schema scoping rules ---
+        if self.is_system and self.schema is not None:
+            raise ValueError("System formulas must not be tied to a schema (schema must be NULL).")
+        if not self.is_system and self.schema is None:
+            raise ValueError("Non-system formulas must be tied to a schema.")
+
     def save(self, *args, **kwargs):
         if not self.key:
             self.key = slugify(self.title)
+        self.full_clean()  # ✅ ensure clean() rules are enforced
         super().save(*args, **kwargs)
 
     def __str__(self):
