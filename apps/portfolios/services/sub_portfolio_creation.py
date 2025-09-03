@@ -2,7 +2,7 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from portfolios.models.portfolio import Portfolio
 from accounts.config.account_model_registry import get_account_model_map
-from schemas.services.schema_initialization import initialize_asset_schema
+from schemas.services.schema_generator import SchemaGenerator
 
 
 def create_sub_portfolio(
@@ -24,25 +24,24 @@ def create_sub_portfolio(
         schema_namer_fn (callable, optional): Custom schema name formatter.
     """
     with transaction.atomic():
-        # Check if the subportfolio already exists
+        # 🚦 1. Ensure uniqueness
         if hasattr(portfolio, related_name):
             raise ValidationError(
                 f"{portfolio_model_class.__name__} already exists for this portfolio."
             )
 
-        # Create the subportfolio
-        subportfolio = portfolio_model_class.objects.create(
-            portfolio=portfolio)
+        # 🆕 2. Create the subportfolio
+        subportfolio = portfolio_model_class.objects.create(portfolio=portfolio)
 
-        # 🔁 Get account models for this asset type (from registry)
+        # 🔁 3. Get account models for this asset type (from registry)
         account_model_map = get_account_model_map(schema_type)
 
-        # ✅ Directly call the shared schema initializer here
-        initialize_asset_schema(
-            subportfolio=subportfolio,
-            schema_type=schema_type,
+        # 🛠 4. Generate schema(s) via SchemaGenerator
+        generator = SchemaGenerator(subportfolio, schema_type)
+        generator.initialize(
             account_model_map=account_model_map,
             custom_schema_namer=schema_namer_fn,
         )
 
         return subportfolio
+    

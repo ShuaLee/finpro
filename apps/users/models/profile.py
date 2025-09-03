@@ -101,10 +101,10 @@ class Profile(models.Model):
                 stock_portfolio__portfolio__profile=self
             ).update(currency=self.currency)
 
-            # If currency changed → recalc calculated SCVs for all holdings in this profile
-            if old_currency and old_currency != self.currency:
-                from schemas.services.recalc_triggers import recalc_holdings_for_profile
-                recalc_holdings_for_profile(self)
+            # # If currency changed → recalc calculated SCVs for all holdings in this profile
+            # if old_currency and old_currency != self.currency:
+            #     from schemas.services.recalc_triggers import recalc_holdings_for_profile
+            #     recalc_holdings_for_profile(self)
 
         transaction.on_commit(_after_commit)
 

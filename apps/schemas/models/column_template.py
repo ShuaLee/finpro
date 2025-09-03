@@ -50,7 +50,6 @@ class SchemaColumnTemplate(models.Model):
         ("time", "Time"),
         ("url", "URL"),
     ])
-    field_path = models.CharField(max_length=255, null=True, blank=True)
 
     # Behavior flags
     is_editable = models.BooleanField(default=True)

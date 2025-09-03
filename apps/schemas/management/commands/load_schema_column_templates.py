@@ -86,7 +86,6 @@ class Command(BaseCommand):
                             "schema_type": schema_type,
                             "title": meta["title"],
                             "data_type": meta["data_type"],
-                            "field_path": meta.get("field_path"),
                             "is_editable": meta.get("is_editable", True),
                             "is_default": meta.get("is_default", True),
                             "is_deletable": meta.get("is_deletable", True),
