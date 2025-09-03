@@ -65,7 +65,7 @@ class SchemaColumnAdder:
         )
 
         # 🔑 initialize values
-        initialize_column_values(column, self._get_accounts())
+        initialize_column_values(column)
 
         return column, True
 
@@ -82,7 +82,7 @@ class SchemaColumnAdder:
         )
 
         # 🔑 initialize values
-        initialize_column_values(column, self._get_accounts())
+        initialize_column_values(column)
 
         return column
 
@@ -118,7 +118,7 @@ class SchemaColumnAdder:
         )
 
         # 🔑 initialize values
-        initialize_column_values(column, self._get_accounts())
+        initialize_column_values(column)
 
         return column, True
 

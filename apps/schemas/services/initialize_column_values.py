@@ -1,42 +1,48 @@
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal, ROUND_DOWN
-from schemas.models import SchemaColumnValue, SchemaColumn
+from schemas.models import SchemaColumnValue
 
 
-def initialize_column_values(column: SchemaColumn, accounts=None):
+def initialize_column_values(column):
     """
     Ensure all holdings/accounts in the schema have a value for this column.
-    Defaults: 0 (with decimal_places) for decimals, "-" for strings, None otherwise.
+    Works for both portfolio.holdings and portfolio.accounts.
     """
     schema = column.schema
     portfolio = schema.portfolio
+    if not portfolio:
+        return
 
-    # Fallback if no accounts explicitly passed
-    if accounts is None:
-        if not portfolio or not hasattr(portfolio, "holdings"):
-            return
+    # 🔑 support both holdings and accounts
+    if hasattr(portfolio, "holdings"):
         accounts = portfolio.holdings.all()
+    elif hasattr(portfolio, "accounts"):
+        accounts = portfolio.accounts.all()
+    else:
+        accounts = []
 
     if not accounts:
         return
 
-    # Default value logic
+    content_type = ContentType.objects.get_for_model(accounts.model)
+
+    # Default value based on column type
     if column.data_type == "decimal":
         dp = int(column.constraints.get("decimal_places", 2))
         default_val = Decimal("0").quantize(
-            Decimal(f"1.{'0'*dp}"), rounding=ROUND_DOWN
+            Decimal(f"1.{'0'*dp}"),
+            rounding=ROUND_DOWN
         )
     elif column.data_type == "string":
         default_val = "-"
     else:
         default_val = None
 
-    ct = ContentType.objects.get_for_model(accounts.model)
-
+    # 🔑 backfill missing SCVs
     for account in accounts:
         SchemaColumnValue.objects.get_or_create(
             column=column,
-            account_ct=ct,
+            account_ct=content_type,
             account_id=account.id,
             defaults={"value": default_val, "is_edited": False},
         )

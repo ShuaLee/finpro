@@ -1,8 +1,8 @@
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from formulas.services.resolver import FormulaResolver
 from schemas.models import SchemaColumn, SchemaColumnValue
-from schemas.services.expression_evaluator import evaluate_expression
 from decimal import Decimal, ROUND_DOWN
 import logging
 
@@ -126,49 +126,57 @@ class HoldingSchemaEngine:
         return values
 
     def get_configured_value(self, column: SchemaColumn):
+        """
+        Resolve the correct value for this column on the holding,
+        respecting SchemaColumnValue overrides and formulas.
+        """
+        # --- Step 1: Try to get SCV override (is_edited=True) ---
+        scv = column.values.filter(
+            account_ct=ContentType.objects.get_for_model(self.holding),
+            account_id=self.holding.id,
+        ).first()
+
+        if scv and scv.is_edited:
+            return scv.get_value()
+
+        # --- Step 2: Non-calculated columns ---
         if column.source != "calculated":
             raw_value = None
+
+            # Pull from holding via source_field/field_path
             if column.field_path:
                 raw_value = self.resolve_value(column.field_path)
             elif column.source_field:
                 raw_value = self.resolve_value(f"{column.source}.{column.source_field}")
 
-            # --- Apply defaults if missing ---
+            # Fallback defaults
             if raw_value is None:
                 if column.data_type == "decimal":
                     dp = int(column.constraints.get("decimal_places", 2))
                     raw_value = Decimal("0").quantize(
-                        Decimal(f"1.{'0'*dp}"),
-                        rounding=ROUND_DOWN
+                        Decimal(f"1.{'0'*dp}"), rounding=ROUND_DOWN
                     )
                 elif column.data_type == "string":
                     raw_value = "-"
+
             return raw_value
 
-        # --- Calculated columns ---
-        context = self.get_all_available_values()
-
+        # --- Step 3: Calculated columns ---
         formula = column.effective_formula
         if formula and formula.expression and formula.expression.strip():
             try:
-                return evaluate_expression(formula.expression, context)
+                resolver = FormulaResolver(self.holding, self.schema)
+                return resolver.evaluate(formula, column.constraints)
             except Exception as e:
                 logger.warning(
                     f"❌ Failed to evaluate formula '{formula.key}' "
                     f"for column '{column.title}': {e}"
                 )
-                # Default for calculated if it fails
-                dp = int(column.constraints.get("decimal_places", 2))
-                return Decimal("0").quantize(
-                    Decimal(f"1.{'0'*dp}"),
-                    rounding=ROUND_DOWN
-                )
 
-        # Default for calculated if no formula is present
+        # --- Step 4: Default for calculated if missing/failed ---
         dp = int(column.constraints.get("decimal_places", 2))
         return Decimal("0").quantize(
-            Decimal(f"1.{'0'*dp}"),
-            rounding=ROUND_DOWN
+            Decimal(f"1.{'0'*dp}"), rounding=ROUND_DOWN
         )
 
 
