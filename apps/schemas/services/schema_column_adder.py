@@ -1,13 +1,27 @@
 from django.core.exceptions import ValidationError
 from schemas.models import SchemaColumn, SchemaColumnTemplate, SubPortfolioSchemaLink
+from schemas.services.initialize_column_values import initialize_column_values
 
 
 class SchemaColumnAdder:
     def __init__(self, schema):
         self.schema = schema
-        self.link = SubPortfolioSchemaLink.objects.filter(schema=schema).first()
+        self.link = SubPortfolioSchemaLink.objects.filter(
+            schema=schema).first()
         if not self.link:
             raise ValidationError("Schema is not linked to any account model.")
+
+    def _get_accounts(self):
+        """
+        Get all accounts/holdings linked to this schema's portfolio.
+        Assumes schema.portfolio exposes a .holdings or .accounts relation.
+        """
+        portfolio = self.schema.portfolio
+        if hasattr(portfolio, "holdings"):
+            return portfolio.holdings.all()
+        if hasattr(portfolio, "accounts"):
+            return portfolio.accounts.all()
+        return []
 
     def add_from_template(self, template: SchemaColumnTemplate):
         """
@@ -29,7 +43,8 @@ class SchemaColumnAdder:
                         )
                     self.add_from_template(dep_template)
 
-        existing = self.schema.columns.filter(source_field=template.source_field).first()
+        existing = self.schema.columns.filter(
+            source_field=template.source_field).first()
         if existing:
             return existing, False
 
@@ -48,10 +63,14 @@ class SchemaColumnAdder:
             constraints=template.constraints,
             display_order=template.display_order,
         )
+
+        # 🔑 initialize values
+        initialize_column_values(column, self._get_accounts())
+
         return column, True
 
     def add_custom_column(self, title, data_type, constraints=None):
-        return SchemaColumn.objects.create(
+        column = SchemaColumn.objects.create(
             schema=self.schema,
             title=title,
             data_type=data_type,
@@ -61,6 +80,11 @@ class SchemaColumnAdder:
             is_deletable=True,
             is_system=False,
         )
+
+        # 🔑 initialize values
+        initialize_column_values(column, self._get_accounts())
+
+        return column
 
     def add_calculated_column(self, title, formula):
         """
@@ -77,7 +101,8 @@ class SchemaColumnAdder:
                 f"Missing dependencies in schema: {', '.join(missing)}"
             )
 
-        existing = self.schema.columns.filter(formula=formula, title=title).first()
+        existing = self.schema.columns.filter(
+            formula=formula, title=title).first()
         if existing:
             return existing, False
 
@@ -91,6 +116,10 @@ class SchemaColumnAdder:
             is_deletable=True,
             is_system=False,
         )
+
+        # 🔑 initialize values
+        initialize_column_values(column, self._get_accounts())
+
         return column, True
 
     def validate_dependencies(self, identifiers):

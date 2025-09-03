@@ -3,7 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from schemas.models import SchemaColumn, SchemaColumnValue
 from schemas.services.expression_evaluator import evaluate_expression
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 import logging
 
 logger = logging.getLogger(__name__)
@@ -54,9 +54,11 @@ class HoldingSchemaEngine:
             return None
 
     def sync_column(self, column):
-        if not column.field_path and not column.formula_expression and not column.formula_method:
+        # ✅ Column must have either a field_path (asset/holding/custom) or a formula (calculated)
+        if not column.field_path and not column.formula:
             logger.debug(
-                f"⚠️ Column {column.title} has no valid field_path or formula. Skipping.")
+                f"⚠️ Column {column.title} has no valid field_path or formula. Skipping."
+            )
             return
 
         value = self.get_configured_value(column)
@@ -125,21 +127,30 @@ class HoldingSchemaEngine:
 
     def get_configured_value(self, column: SchemaColumn):
         if column.source != "calculated":
+            raw_value = None
             if column.field_path:
-                return self.resolve_value(column.field_path)
+                raw_value = self.resolve_value(column.field_path)
             elif column.source_field:
-                return self.resolve_value(f"{column.source}.{column.source_field}")
-            return None
+                raw_value = self.resolve_value(
+                    f"{column.source}.{column.source_field}")
 
+            # --- Apply defaults if missing ---
+            if raw_value is None:
+                if column.data_type == "decimal":
+                    dp = int(column.constraints.get("decimal_places", 2))
+                    raw_value = Decimal("0").quantize(
+                        Decimal(f"1.{'0'*dp}"),
+                        rounding=ROUND_DOWN
+                    )
+                elif column.data_type == "string":
+                    raw_value = "-"
+            return raw_value
+
+        # --- Calculated columns ---
         context = self.get_all_available_values()
 
-        if column.formula_expression and column.formula_expression.strip():
-            return evaluate_expression(column.formula_expression, context)
-
-        if column.formula_method:
-            method = getattr(self.holding, column.formula_method, None)
-            if method and callable(method):
-                return method()
+        if column.effective_formula and column.effective_formula.expression.strip():
+            return evaluate_expression(column.effective_formula.expression, context)
 
         return None
 
@@ -149,14 +160,56 @@ class HoldingSchemaEngine:
             logger.debug("🚫 No schema set on engine. Exiting sync.")
             return
 
+        # ✅ Ensure missing SchemaColumnValues exist before syncing
+        self.ensure_all_values_exist()
+
         cols = list(self.schema.columns.all())
 
-        # 1) Seed/update base columns (asset/holding/custom)
+        # 1) Sync base columns (asset/holding/custom)
         for c in cols:
             if c.source != "calculated":
                 self.sync_column(c)
 
-        # 2) Compute calculated columns
+        # 2) Sync calculated columns
         for c in cols:
             if c.source == "calculated":
                 self.sync_column(c)
+
+    def ensure_all_values_exist(self):
+        """
+        Guarantee every SchemaColumn in the schema has a SchemaColumnValue
+        for this holding. If missing, create with sensible defaults.
+        """
+        if not self.schema:
+            return
+
+        content_type = ContentType.objects.get_for_model(self.holding)
+
+        for column in self.schema.columns.all():
+            if SchemaColumnValue.objects.filter(
+                column=column,
+                account_ct=content_type,
+                account_id=self.holding.id
+            ).exists():
+                continue  # already has a value
+
+            # --- Default fallbacks ---
+            default_val = None
+            if column.data_type == "decimal":
+                dp = int(column.constraints.get("decimal_places", 2))
+                default_val = Decimal("0").quantize(
+                    Decimal(f"1.{'0'*dp}"), rounding=ROUND_DOWN
+                )
+            elif column.data_type == "string":
+                default_val = "-"
+            else:
+                default_val = None  # can extend later for dates, etc.
+
+            # ✅ Always create missing SCV with default
+            SchemaColumnValue.objects.create(
+                column=column,
+                account_ct=content_type,
+                account_id=self.holding.id,
+                value=default_val,
+                is_edited=False,
+            )
