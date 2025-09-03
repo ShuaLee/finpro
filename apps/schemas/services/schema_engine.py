@@ -131,8 +131,7 @@ class HoldingSchemaEngine:
             if column.field_path:
                 raw_value = self.resolve_value(column.field_path)
             elif column.source_field:
-                raw_value = self.resolve_value(
-                    f"{column.source}.{column.source_field}")
+                raw_value = self.resolve_value(f"{column.source}.{column.source_field}")
 
             # --- Apply defaults if missing ---
             if raw_value is None:
@@ -149,10 +148,29 @@ class HoldingSchemaEngine:
         # --- Calculated columns ---
         context = self.get_all_available_values()
 
-        if column.effective_formula and column.effective_formula.expression.strip():
-            return evaluate_expression(column.effective_formula.expression, context)
+        formula = column.effective_formula
+        if formula and formula.expression and formula.expression.strip():
+            try:
+                return evaluate_expression(formula.expression, context)
+            except Exception as e:
+                logger.warning(
+                    f"❌ Failed to evaluate formula '{formula.key}' "
+                    f"for column '{column.title}': {e}"
+                )
+                # Default for calculated if it fails
+                dp = int(column.constraints.get("decimal_places", 2))
+                return Decimal("0").quantize(
+                    Decimal(f"1.{'0'*dp}"),
+                    rounding=ROUND_DOWN
+                )
 
-        return None
+        # Default for calculated if no formula is present
+        dp = int(column.constraints.get("decimal_places", 2))
+        return Decimal("0").quantize(
+            Decimal(f"1.{'0'*dp}"),
+            rounding=ROUND_DOWN
+        )
+
 
     @transaction.atomic
     def sync_all_columns(self):
