@@ -1,13 +1,17 @@
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
+import re
 
+
+def to_snake_case(value: str) -> str:
+    value = slugify(value)  # "Cool Ratio" -> "cool-ratio"
+    return re.sub(r'[-\s]+', '_', value)  # "cool-ratio" -> "cool_ratio"
 
 
 class Formula(models.Model):
     key = models.SlugField(
         max_length=100,
-        unique=True,
         help_text="Stable identifier for this formula, e.g. 'pe_ratio', 'unrealized_gain'"
     )
     title = models.CharField(max_length=100)
@@ -82,17 +86,21 @@ class Formula(models.Model):
             raise ValueError("Formula dependencies must be a list.")
         for dep in self.dependencies:
             if not isinstance(dep, str):
-                raise ValueError(f"Invalid dependency '{dep}', must be a string.")
+                raise ValueError(
+                    f"Invalid dependency '{dep}', must be a string.")
 
         # --- Enforce schema scoping rules ---
         if self.is_system and self.schema is not None:
-            raise ValueError("System formulas must not be tied to a schema (schema must be NULL).")
+            raise ValueError(
+                "System formulas must not be tied to a schema (schema must be NULL).")
         if not self.is_system and self.schema is None:
             raise ValueError("Non-system formulas must be tied to a schema.")
 
     def save(self, *args, **kwargs):
         if not self.key:
-            self.key = slugify(self.title)
+            self.key = to_snake_case(self.title)
+        else:
+            self.key = to_snake_case(self.key)
         self.full_clean()  # ✅ ensure clean() rules are enforced
         super().save(*args, **kwargs)
 

@@ -139,7 +139,7 @@ class SchemaAdmin(admin.ModelAdmin):
             "admin/schemas/add_custom_column.html",
             {"form": form, "schema": schema},
         )
-    
+
     def add_calculated_column(self, request, schema_id):
         schema = get_object_or_404(Schema, pk=schema_id)
         if request.method == "POST":
@@ -153,12 +153,15 @@ class SchemaAdmin(admin.ModelAdmin):
 
                 try:
                     # ✅ validate dependencies before creating formula
-                    SchemaColumnAdder(schema).validate_dependencies(identifiers)
+                    SchemaColumnAdder(
+                        schema).validate_dependencies(identifiers)
 
                     # ✅ schema-scoped formula creation
                     from formulas.models import Formula
+                    # enforce snake_case
+                    key = re.sub(r'[-\s]+', '_', slugify(title))
                     formula, _ = Formula.objects.get_or_create(
-                        key=slugify(title),
+                        key=key,
                         schema=schema,             # ✅ scoped to schema
                         defaults={
                             "title": title,
@@ -175,7 +178,8 @@ class SchemaAdmin(admin.ModelAdmin):
                         formula=formula,
                     )
                     if created:
-                        messages.success(request, f"✅ Added calculated column: {title}")
+                        messages.success(
+                            request, f"✅ Added calculated column: {title}")
                     else:
                         messages.warning(
                             request,
@@ -195,8 +199,8 @@ class SchemaAdmin(admin.ModelAdmin):
             {"form": form, "schema": schema},
         )
 
-
     # --- Inject buttons into Schema detail page ---
+
     def change_view(self, request, object_id, form_url="", extra_context=None):
         extra_context = extra_context or {}
         extra_context["add_from_template_url"] = reverse(
@@ -205,7 +209,8 @@ class SchemaAdmin(admin.ModelAdmin):
         extra_context["add_custom_url"] = reverse(
             "admin:schema_add_custom", args=[object_id]
         )
-        extra_context["add_calculated_url"] = reverse("admin:schema_add_calculated", args=[object_id])
+        extra_context["add_calculated_url"] = reverse(
+            "admin:schema_add_calculated", args=[object_id])
         return super().change_view(
             request, object_id, form_url, extra_context=extra_context
         )
