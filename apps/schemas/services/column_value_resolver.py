@@ -9,17 +9,6 @@ import re
 
 
 def resolve_column_value(holding, column, fallback_to_default):
-    """
-    Resolves the current value for a schema column for a given holding.
-
-    Resolution order:
-    1. SchemaColumnValue (if edited)
-    2. HoldingThemeValue (if linked to investment_theme)
-    3. Holding.<source_field>
-    4. Holding.asset.<source_field>
-    5. holding.<formula_method>() if present
-    6. Evaluate formula_expression
-    """
     content_type = ContentType.objects.get_for_model(holding)
 
     # 1️⃣ Edited SchemaColumnValue
@@ -45,34 +34,49 @@ def resolve_column_value(holding, column, fallback_to_default):
     # 3️⃣ Holding source
     if column.source == "holding":
         raw = getattr(holding, column.source_field, None)
-        return format_value(raw, column)
+        return format_value(_default_if_none(raw, column), column)
 
     # 4️⃣ Asset source
     elif column.source == "asset":
         asset = getattr(holding, holding.asset_field_name, None)
         if asset:
             raw = getattr(asset, column.source_field, None)
-            return format_value(raw, column)
+            return format_value(_default_if_none(raw, column), column)
 
     # 5️⃣ Formula method
     if column.source == "calculated":
         if column.formula_method:
             method = getattr(holding, column.formula_method, None)
             if method and callable(method):
-                return format_value(method(), column)
+                try:
+                    return format_value(method(), column)
+                except Exception as e:
+                    return _fallback_default(column)
 
         # 6️⃣ Formula expression
         elif column.formula_expression:
-            return format_value(
-                evaluate_symbolic_formula(holding, column.formula_expression),
-                column
-            )
+            val = evaluate_symbolic_formula(holding, column.formula_expression)
+            return format_value(_default_if_none(val, column), column)
 
     if fallback_to_default:
-        return None
+        return _fallback_default(column)
 
     raise ValueError(f"Could not resolve value for column {column.title}")
 
+
+def _default_if_none(val, column):
+    if val is not None:
+        return val
+    return _fallback_default(column)
+
+
+def _fallback_default(column):
+    if column.data_type == "decimal":
+        dp = int(column.constraints.get("decimal_places", 2))
+        return Decimal("0").quantize(Decimal(f"1.{'0'*dp}"))
+    elif column.data_type == "string":
+        return "-"
+    return None
 
 def cast_value(value, column):
     """

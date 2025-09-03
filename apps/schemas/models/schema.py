@@ -2,8 +2,8 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.utils.text import slugify
 from schemas.validators import validate_value_against_constraints
+from decimal import Decimal, InvalidOperation
 import re
 
 
@@ -291,12 +291,138 @@ class SchemaColumnValue(models.Model):
         return f"{self.account} - {self.column.title}: {self.value}"
 
     def get_value(self):
-        return self.value
+        if self.is_edited:
+            return self._cast_runtime(self.value)
+
+        if self.column.source_field or self.column.field_path:
+            return self._resolve_source_value()
+
+        return self._default_value()
+    
+    def _cast_runtime(self, value):
+        dt = self.column.data_type
+        if value in [None, ""]:
+            return None
+        if dt == "decimal":
+            return Decimal(str(value))
+        if dt == "integer":
+            return int(value)
+        return value
 
     def clean(self):
+        if not self.is_edited:
+            return  # ✅ Skip validation if value is not manually edited
+
         constraints = self.column.constraints or {}
         data_type = self.column.data_type
         validate_value_against_constraints(self.value, data_type, constraints)
+
+    def _resolve_source_value(self):
+        value = None
+
+        if self.column.field_path:
+            value = self._resolve_field_path(self.column.field_path)
+        elif self.column.source_field:
+            value = getattr(self.account, self.column.source_field, None)
+
+        # If value is still None, apply default fallback
+        if value is None:
+            if self.column.data_type == "decimal":
+                dp = int(self.column.constraints.get("decimal_places", 2))
+                return Decimal("0").quantize(Decimal(f"1.{'0'*dp}"))
+            elif self.column.data_type == "string":
+                return "-"
+            # You can add more fallbacks here as needed
+
+        return value
+    
+    def _resolve_field_path(self, path: str):
+        """Utility to walk dotted field paths (like 'stock.price')."""
+        value = self.account
+        for part in path.split("."):
+            value = getattr(value, part, None)
+            if value is None:
+                break
+        return value
+    
+    def _cast_value(self, value):
+        data_type = self.column.data_type
+
+        if value in [None, ""]:
+            return None
+
+        try:
+            if data_type == "decimal":
+                return str(Decimal(str(value)))  # Store as string, casted
+            elif data_type == "string":
+                return str(value)
+            elif data_type == "integer":
+                return str(int(value))
+            # Add more types as needed
+        except Exception:
+            return value  # Let clean() catch bad data
+
+        return value
+    
+    def save(self, *args, **kwargs):
+        if self.is_edited:
+            self.value = self._cast_and_stringify(self.value)
+        else:
+            resolved = self._resolve_source_value()
+            if resolved is not None:
+                self.value = resolved
+
+        super().save(*args, **kwargs)
+        self.recompute_dependents()
+
+
+    def _cast_and_stringify(self, value):
+        """
+        Casts the edited value to the correct type, validates it,
+        and returns it as a string (because SCV.value is TextField).
+        """
+        data_type = self.column.data_type
+
+        if value in [None, ""]:
+            return None
+
+        try:
+            if data_type == "decimal":
+                # ⚠️ Cast to Decimal, then save as string
+                return str(Decimal(str(value)))
+
+            elif data_type == "integer":
+                return str(int(value))
+
+            elif data_type in ["string", "url"]:
+                return str(value)
+
+            # Extend as needed
+
+        except (InvalidOperation, ValueError, TypeError) as e:
+            raise ValueError(f"Invalid value for type {data_type}: {value} ({e})")
+
+        return str(value)  # fallback
+
+    def recompute_dependents(self):
+        """
+        Recompute all calculated columns in the same schema
+        that depend on this column.identifier.
+        """
+        from schemas.services.schema_engine import HoldingSchemaEngine  # 🔑 lazy import here
+
+        schema = self.column.schema
+        dependents = schema.columns.filter(source="calculated")
+
+        for col in dependents:
+            formula = col.effective_formula
+            if not formula:
+                continue
+            if self.column.identifier in (formula.dependencies or []):
+                engine = HoldingSchemaEngine(self.account, schema.schema_type)
+                engine.sync_column(col)
+    
+
 
 
 class CustomAssetSchemaConfig(models.Model):
