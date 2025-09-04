@@ -2,6 +2,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericRelation, GenericForeignKey
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.db.models import ForeignKey
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
 from schemas.services.schema_manager import SchemaManager
@@ -95,6 +96,19 @@ class AssetHolding(models.Model):
 
     class Meta:
         abstract = True
+    
+    @property
+    def account(self):
+        """
+        Auto-detect the FK field point to an Account model.
+        Assumes exactly one FK to an Account exists.
+        """
+        for field in self._meta.get_fields():
+            if isinstance(field, ForeignKey):
+                target = getattr(self, field.name, None)
+                if target and target.__class__.__name__.endswith("Account"):
+                    return target
+        return None
 
     @property
     @abstractmethod
@@ -153,8 +167,13 @@ class AssetHolding(models.Model):
         super().save(*args, **kwargs)
 
         def _sync_after_commit():
-            account = self.self_managed_account  # or however the holding links
+            account = self.account  # ✅ universal across holdings
+            if not account:
+                return
+
+            from schemas.services.schema_manager import SchemaManager
             schema_manager = SchemaManager.for_account(account)
+
             if is_new:
                 schema_manager.ensure_for_holding(self)
             else:

@@ -25,18 +25,25 @@ class SchemaManager:
         """
         Ensure all SCVs exist for this holding.
         """
+        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
         ct = ContentType.objects.get_for_model(holding.__class__)
+
         for col in self.schema.columns.all():
-            scv, _ = SchemaColumnValue.objects.get_or_create(
+            scv, created = SchemaColumnValue.objects.get_or_create(
                 column=col,
                 account_ct=ct,
                 account_id=holding.id,
                 defaults={
-                    "value": SchemaColumnValueManager.default_for_column(col),
+                    "value": SchemaColumnValueManager.default_for_column(col, holding),
                     "is_edited": False,
                 },
             )
-            SchemaColumnValueManager(scv).sync()
+
+            if not created:
+                # Re-sync value from source if not edited
+                if not scv.is_edited:
+                    scv.value = SchemaColumnValueManager.default_for_column(col, holding)
+                    scv.save(update_fields=["value"])
 
     def ensure_for_all_holdings(self, account):
         """
@@ -60,7 +67,7 @@ class SchemaManager:
                 account_id=holding.id,
             ).first()
             if scv:
-                SchemaColumnValueManager(scv).sync()
+                SchemaColumnValueManager(scv).reset_to_source()
             else:
                 self.ensure_for_holding(holding)
 
@@ -85,7 +92,7 @@ class SchemaManager:
                 account_ct=ct,
                 account_id=holding.id,
                 defaults={
-                    "value": SchemaColumnValueManager.default_for_column(column),
+                    "value": SchemaColumnValueManager.default_for_column(column, holding),
                     "is_edited": False,
                 },
             )

@@ -3,7 +3,7 @@ from portfolios.models.metal import MetalPortfolio
 from .base import BaseAccount
 
 
-class StorageFacility(BaseAccount):
+class MetalAccount(BaseAccount):
     metal_portfolio = models.ForeignKey(
         MetalPortfolio,
         on_delete=models.CASCADE,

@@ -2,7 +2,7 @@ from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
 
 # System-wide default starter set for *any* custom:<slug> schema
-CUSTOM_DEFAULT_SCHEMA_CONFIG = {
+CUSTOM_ACCOUNT_SCHEMA_CONFIG = {
     "holding": {
         "title": SchemaTemplateManager.schema_field(
             title="Title",

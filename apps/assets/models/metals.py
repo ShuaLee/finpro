@@ -1,6 +1,6 @@
 from django.db import models
 from decimal import Decimal
-from accounts.models.metals import StorageFacility
+from accounts.models.metals import MetalAccount
 from assets.models.base import Asset, AssetHolding
 from common.utils.country_currency_catalog import get_common_currency_choices
 from schemas.models import SchemaColumn, SchemaColumnValue
@@ -42,7 +42,7 @@ class PreciousMetal(Asset):
 
 class PreciousMetalHolding(AssetHolding):
     storage_facility = models.ForeignKey(
-        StorageFacility,
+        MetalAccount,
         on_delete=models.CASCADE,
         related_name='holdings'
     )

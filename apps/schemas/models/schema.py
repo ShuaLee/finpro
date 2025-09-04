@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from schemas.validators import validate_constraints
 
 
 
@@ -109,6 +110,7 @@ class SchemaColumn(models.Model):
 
         if not self.identifier:
             raise ValidationError("SchemaColumn.identifier must be set explicitly (use SchemaGenerator).")
+        
 
 
 class SchemaColumnValue(models.Model):
@@ -126,11 +128,35 @@ class SchemaColumnValue(models.Model):
     value = models.TextField(blank=True, null=True)
     is_edited = models.BooleanField(default=False)
 
+    def get_value(self):
+        """
+        Return the stored SCV value.
+        Always correct because the manager syncs it with source or edit.
+        """
+        return self.value
+
+    
+
     class Meta:
         unique_together = ('column', 'account_ct', 'account_id')
 
     def __str__(self):
         return f"{self.account} - {self.column.title}: {self.value}"
+    
+    def save(self, *args, **kwargs):
+        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+        manager = SchemaColumnValueManager(self)
+
+        if self.column.source == "holding":
+            manager.save_value(self.value, is_edited=False)
+        elif self.is_edited:
+            manager.save_value(self.value, is_edited=True)
+        else:
+            manager.reset_to_source()
+
+        # Persist final state
+        super().save(*args, **kwargs)
+
 
 
 

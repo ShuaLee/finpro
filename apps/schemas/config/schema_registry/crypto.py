@@ -2,7 +2,7 @@ from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
 
 
-CRYPTO_WALLET_SCHEMA_CONFIG = {
+CRYPTO_ACCOUNT_SCHEMA_CONFIG = {
     "asset": {
         "ticker": SchemaTemplateManager.schema_field(
             title="Ticker",

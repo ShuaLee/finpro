@@ -2,7 +2,7 @@ from django.db import models
 from accounts.models.base import BaseAccount
 from portfolios.models.crypto import CryptoPortfolio
 
-class CryptoWallet(BaseAccount):
+class CryptoAccount(BaseAccount):
     crypto_portfolio = models.ForeignKey(
         CryptoPortfolio,
         on_delete=models.CASCADE,

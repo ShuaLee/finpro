@@ -1,7 +1,7 @@
 from django.contrib import admin
-from accounts.models.crypto import CryptoWallet
+from accounts.models.crypto import CryptoAccount
 
-@admin.register(CryptoWallet)
+@admin.register(CryptoAccount)
 class CryptoWalletAdmin(admin.ModelAdmin):
     list_display = ("name", "get_user_email", "crypto_portfolio", "created_at")
     search_fields = ("name",)

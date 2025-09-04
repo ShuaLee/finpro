@@ -14,6 +14,10 @@ class BaseAccount(models.Model):
 
     def __str__(self):
         return self.name
+    
+    @property
+    def active_schema(self):
+        return self.get_active_schema()
 
     def get_active_schema(self):
         """

@@ -205,12 +205,10 @@ class StockAdmin(admin.ModelAdmin):
 class StockHoldingAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'asset', 'quantity', 'purchase_price', 'purchase_date',
-        'themes_display',
     )
     # FK/OneToOne only here:
     list_select_related = ('stock', 'self_managed_account')
 
-    list_filter = (('investment_theme', admin.RelatedOnlyFieldListFilter),)
     # asset__symbol likely wrong; use real FKs
     search_fields = ('stock__ticker', 'stock__name')
     list_editable = ['quantity', 'purchase_price', 'purchase_date']
@@ -218,7 +216,7 @@ class StockHoldingAdmin(admin.ModelAdmin):
 
     fields = [
         'self_managed_account', 'stock', 'quantity', 'purchase_price',
-        'purchase_date', 'investment_theme'
+        'purchase_date',
     ]
     autocomplete_fields = ['stock', 'self_managed_account']
     actions = ['refresh_holding_values']
@@ -227,11 +225,8 @@ class StockHoldingAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         # IMPORTANT: prefetch M2M; select_related for FKs
         return qs.select_related('stock', 'self_managed_account') \
-                 .prefetch_related('investment_theme', 'column_values__column')
+                 .prefetch_related('column_values__column')
 
-    @admin.display(description="Themes")
-    def themes_display(self, obj):
-        return ", ".join(obj.investment_theme.values_list('name', flat=True))
 
     def get_admin_url(self, obj, model):
         return reverse(

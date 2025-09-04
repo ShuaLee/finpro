@@ -1,8 +1,8 @@
 from django.contrib import admin
-from accounts.models.metals import StorageFacility
+from accounts.models.metals import MetalAccount
 
 
-@admin.register(StorageFacility)
+@admin.register(MetalAccount)
 class StorageFacilityAdmin(admin.ModelAdmin):
     list_display = (
         "name", "get_user_email", "metal_portfolio", "created_at"

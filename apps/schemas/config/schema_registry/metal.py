@@ -1,7 +1,7 @@
 from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
 
-METALS_STORAGE_FACILITY_SCHEMA_CONFIG = {
+METALS_ACCOUNT_SCHEMA_CONFIG = {
     "asset": {
         "ticker": SchemaTemplateManager.schema_field(
             title="Ticker",

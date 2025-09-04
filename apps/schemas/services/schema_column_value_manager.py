@@ -1,4 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from schemas.models import SchemaColumnValue
 from schemas.validators import validate_constraints
 from decimal import Decimal
@@ -17,32 +18,57 @@ class SchemaColumnValueManager:
         Save or update the SCV with validation.
         """
         if self.column.source == "holding":
-            # direct edit -> update the holding model
-            setattr(self.scv.account, self.column.source_field, raw_value)
-            self.scv.account.save(update_fields=[self.column.source_field])
-            return self.scv.account
+            # Try casting to the right type
+            casted = self._cast_value(raw_value)
 
+            # Run constraints (min/max, etc.)
+            try:
+                validate_constraints(self.column.data_type, self.column.constraints)
+            except Exception as e:
+                raise ValidationError(f"Invalid value for {self.column.title}: {e}")
+
+            # Update the holding field
+            setattr(self.scv.account, self.column.source_field, casted)
+            self.scv.account.save(update_fields=[self.column.source_field])
+
+            # Mirror into SCV for consistency
+            self.scv.value = str(casted)
+            self.scv.is_edited = False
+            return self.scv
+
+        # -------------------
+        # Non-holding columns
+        # -------------------
         self.scv.is_edited = is_edited
         if is_edited:
             casted = self._cast_value(raw_value)
-            validate_constraints(self.column.data_type,
-                                 self.column.constraints)
-            self.scv.value = str(casted)  # store as str for TextField
+            validate_constraints(self.column.data_type, self.column.constraints)
+            self.scv.value = str(casted)
         else:
-            self.scv.save()
-            return self.scv
+            self.reset_to_source()
+
+        return self.scv
 
     def _cast_value(self, raw_value):
         """
-        Casts raw value to the SC data type.
+        Casts raw value to the SC data type with normalization.
         """
         if raw_value in [None, ""]:
             return None
+
         dt = self.column.data_type
+
         if dt == "decimal":
-            return Decimal(str(raw_value))
+            dp = int(self.column.constraints.get("decimal_places", 2))
+            q = Decimal("1." + "0" * dp)
+            return Decimal(str(raw_value)).quantize(q)
+
+        if dt == "integer":
+            return int(raw_value)
+
         if dt == "string":
             return str(raw_value)
+
         return raw_value
 
     # ----------------------------
@@ -50,33 +76,69 @@ class SchemaColumnValueManager:
     # ----------------------------
     def reset_to_source(self):
         """
-        Reset SCV back to source-driven value (remove manual edit)
+        Reset SCV back to source-driven value (remove manual edit).
         """
         self.scv.is_edited = False
-        self.scv.value = self._resolve_source_value()
-        self.scv.save()
+        self.scv.value = self.resolve()
         return self.scv
 
-    def _resolve_source_value(self):
+
+    def resolve(self):
         """
-        Resolve SCV from column definition if not edited.
+        Resolve correct value for this SCV (holding or asset based).
         """
         if self.column.source_field:
-            return getattr(self.scv.account, self.column.source_field, None)
+            # holding-level first
+            if hasattr(self.scv.account, self.column.source_field):
+                return getattr(self.scv.account, self.column.source_field, None)
+
+            # fallback: try asset-level (e.g., stock.price)
+            if hasattr(self.scv.account, "asset"):
+                asset = self.scv.account.asset
+                if asset and hasattr(asset, self.column.source_field):
+                    return getattr(asset, self.column.source_field, None)
 
         # fallback default
-        return self._get_default_value()
+        return self._static_default(self.column)
 
-    def _get_default_value(self):
+    # ----------------------------
+    # Default resolution
+    # ----------------------------
+    @staticmethod
+    def default_for_column(column, account):
         """
-        Provide a default value based on data type + constraints.
+        Try to resolve a value from holding or asset.
+        Fallback to type-safe static default.
         """
-        if self.column.data_type == "decimal":
-            dp = int(self.column.constraints.get("decimal_places", 2))
+        value = None
+
+        # Holding-backed
+        if column.source == "holding" and column.source_field:
+            value = getattr(account, column.source_field, None)
+
+        # Asset-backed
+        elif column.source == "asset" and column.source_field:
+            asset = getattr(account, "asset", None)
+            if asset:
+                value = getattr(asset, column.source_field, None)
+
+        # Fallback
+        if value is None:
+            value = SchemaColumnValueManager._static_default(column)
+
+        return value
+
+    @staticmethod
+    def _static_default(column):
+        """
+        Static safe defaults by type.
+        """
+        if column.data_type == "decimal":
+            dp = int(column.constraints.get("decimal_places", 2))
             return str(Decimal("0").quantize(Decimal(f"1.{'0'*dp}")))
-        elif self.column.data_type == "string":
+        elif column.data_type == "string":
             return "-"
-        elif self.column.data_type == "integer":
+        elif column.data_type == "integer":
             return "0"
         return None
 
@@ -94,22 +156,8 @@ class SchemaColumnValueManager:
             account_ct=ct,
             account_id=account.id,
             defaults={
-                "value": cls._static_default(column),
+                "value": cls.default_for_column(column, account),
                 "is_edited": False,
             }
         )
         return cls(scv)
-
-    @staticmethod
-    def _static_default(column):
-        """
-        Static default helper for classmethod use.
-        """
-        if column.data_type == "decimal":
-            dp = int(column.constraints.get("decimal_places", 2))
-            return str(Decimal("0").quantize(Decimal(f"1.{'0'*dp}")))
-        elif column.data_type == "string":
-            return "-"
-        elif column.data_type == "integer":
-            return "0"
-        return None
