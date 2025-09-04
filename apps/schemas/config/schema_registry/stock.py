@@ -1,68 +1,86 @@
-from schemas.config.schema_registry.utils import schema_field
+from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
 
 SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
     "asset": {
-        "ticker": schema_field(
+        "ticker": SchemaTemplateManager.schema_field(
             title="Ticker",
             data_type="string",
-            field_path="stock.ticker",
+            source_field="ticker",
             is_editable=False,
             is_deletable=False,
             is_default=True,
             constraints={
                 "character_limit": 10,
                 "all_caps": True
-            }
+            },
+            display_order=1,
         ),
-        "price": schema_field(
+        "price": SchemaTemplateManager.schema_field(
             title="Price",
             data_type="decimal",
-            field_path="stock.price",
+            source_field="price",
+            is_editable=False,
+            is_deletable=False,
             is_default=True,
             constraints={
                 "decimal_places": 2,
                 "min": Decimal("0")
-            }
+            },
+            display_order=4,
         ),
-        "name": schema_field(
+        "name": SchemaTemplateManager.schema_field(
             title="Name",
             data_type="string",
-            field_path="stock.name",
-            constraints={"character_limit": 200}
+            source_field="name",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
+            constraints={"character_limit": 200},
+            display_order=2,
         ),
-        "currency": schema_field(
+        "currency": SchemaTemplateManager.schema_field(
             title="Currency",
             data_type="string",
-            field_path="stock.currency",
+            source_field="currency",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
             constraints={
                 "character_limit": 3,
                 "character_minimum": 3,
                 "all_caps": True
-            }
+            },
+            display_order=3,
         ),
     },
     "holding": {
-        "quantity": schema_field(
+        "quantity": SchemaTemplateManager.schema_field(
             title="Quantity",
             data_type="decimal",
-            field_path="quantity",
+            source_field="quantity",
+            is_editable=True,
             is_default=True,
             is_deletable=False,
-            constraints={"decimal_places": 4}
+            constraints={"decimal_places": 4},
+            display_order=5,
         ),
-        "purchase_price": schema_field(
+        "purchase_price": SchemaTemplateManager.schema_field(
             title="Purchase Price",
             data_type="decimal",
-            field_path="purchase_price",
+            source_field="purchase_price",
+            is_editable=True,
+            is_deletable=False,
+            is_default=True,
             constraints={
                 "decimal_places": 2,
                 "min": Decimal("0")
-            }
+            },
+            display_order=6,
         ),
     },
     "calculated": {
-        "current_value_stock_fx": schema_field(
+        "current_value_stock_fx": SchemaTemplateManager.schema_field(
             title="Current Value - Stock FX",
             data_type="decimal",
             formula_key="current_value_stock_fx",  # 🔑 references formula
@@ -70,8 +88,9 @@ SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             is_deletable=False,
             is_default=True,
             constraints={"decimal_places": 2, "min": Decimal("0")},
+            display_order=7,
         ),
-        "current_value_profile_fx": schema_field(
+        "current_value_profile_fx": SchemaTemplateManager.schema_field(
             title="Current Value - Profile FX",
             data_type="decimal",
             formula_key="current_value_profile_fx",
@@ -79,8 +98,9 @@ SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             is_deletable=False,
             is_default=True,
             constraints={"decimal_places": 2, "min": Decimal("0")},
+            display_order=8,
         ),
-        "unrealized_gain": schema_field(
+        "unrealized_gain": SchemaTemplateManager.schema_field(
             title="Unrealized Gain",
             data_type="decimal",
             formula_key="unrealized_gain",
@@ -94,22 +114,24 @@ SELF_MANAGED_ACCOUNT_SCHEMA_CONFIG = {
 
 MANAGED_ACCOUNT_SCHEMA_CONFIG = {
     "custom": {
-        "title": schema_field(
+        "title": SchemaTemplateManager.schema_field(
             title="Title",
             data_type="string",
             is_deletable=False,
             is_default=True,
-            constraints={"character_limit": 200, "character_minimum": 0}
+            constraints={"character_limit": 200, "character_minimum": 0},
+            display_order=1,
         ),
-        "current_value": schema_field(
+        "current_value": SchemaTemplateManager.schema_field(
             title="Current Value",
             data_type="decimal",
             is_editable=False,
             is_deletable=False,
             is_default=True,
             constraints={"decimal_places": 2, "min": Decimal("0")},
+            display_order=2,
         ),
-        "currency": schema_field(
+        "currency": SchemaTemplateManager.schema_field(
             title="Currency",
             data_type="string",
             is_editable=False,
@@ -117,6 +139,7 @@ MANAGED_ACCOUNT_SCHEMA_CONFIG = {
             is_default=True,
             constraints={"character_limit": 3,
                          "character_minimum": 3, "all_caps": True},
+            display_order=3,
         ),
     },
 }

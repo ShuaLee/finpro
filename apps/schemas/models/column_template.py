@@ -59,7 +59,11 @@ class SchemaColumnTemplate(models.Model):
 
     constraints = models.JSONField(default=dict, blank=True)
 
-    display_order = models.PositiveIntegerField(default=0)
+    display_order = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Optional order hint. Will be applied if column is created as default."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -76,18 +80,22 @@ class SchemaColumnTemplate(models.Model):
             raise ValidationError("Template must have a title.")
 
         if self.source in ["asset", "holding"] and not self.source_field:
-            raise ValidationError(f"source_field required for source '{self.source}'")
+            raise ValidationError(
+                f"source_field required for source '{self.source}'")
 
         if self.source == "custom":
             if self.data_type not in ("decimal", "string"):
-                raise ValidationError("Custom columns must be decimal or string.")
+                raise ValidationError(
+                    "Custom columns must be decimal or string.")
             if self.data_type == "decimal" and "decimal_places" not in self.constraints:
-                raise ValidationError("decimal_places required for decimal columns.")
+                raise ValidationError(
+                    "decimal_places required for decimal columns.")
 
         # ✅ enforce snake_case for source_field
         if self.source_field:
             if not re.match(r'^[a-z][a-z0-9_]*$', self.source_field):
-                raise ValidationError("source_field must be snake_case (e.g. 'purchase_price').")
+                raise ValidationError(
+                    "source_field must be snake_case (e.g. 'purchase_price').")
 
     def save(self, *args, **kwargs):
         self.full_clean()  # ensures validation is run

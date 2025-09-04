@@ -1,5 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from django.db import transaction, models
 from schemas.models import SchemaColumn, SchemaColumnTemplate, Schema, SubPortfolioSchemaLink
 import re
 
@@ -66,7 +66,8 @@ class SchemaGenerator:
             if not templates and self.schema_type.startswith("custom:"):
                 templates = list(
                     SchemaColumnTemplate.objects.filter(
-                        account_model_ct=ContentType.objects.get_for_model(account_model),
+                        account_model_ct=ContentType.objects.get_for_model(
+                            account_model),
                         schema_type="custom_default",
                         is_default=True,
                         is_system=True,
@@ -81,7 +82,8 @@ class SchemaGenerator:
             SubPortfolioSchemaLink.objects.update_or_create(
                 subportfolio_ct=self.subportfolio_ct,
                 subportfolio_id=self.subportfolio.id,
-                account_model_ct=ContentType.objects.get_for_model(account_model),
+                account_model_ct=ContentType.objects.get_for_model(
+                    account_model),
                 defaults={"schema": self.schema},
             )
 
@@ -106,6 +108,14 @@ class SchemaGenerator:
         display_order=0,
     ):
         identifier = self.generate_identifier(title, prefix=source)
+
+        if display_order is None:
+            max_order = (
+                SchemaColumn.objects.filter(schema=self.schema)
+                .aggregate(models.Max("display_order"))["display_order__max"]
+                or 0
+            )
+            display_order = max_order + 1
 
         return SchemaColumn.objects.create(
             schema=self.schema,

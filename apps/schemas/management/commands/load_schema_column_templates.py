@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from schemas.models import SchemaColumnTemplate
 from schemas.config import SCHEMA_CONFIG_REGISTRY
-from schemas.config.schema_registry.utils import validate_constraints
+from schemas.validators import validate_constraints
 from formulas.models import Formula
 from formulas.config.formula_registry.formulas import FORMULAS_REGISTRY
 
@@ -29,7 +29,8 @@ class Command(BaseCommand):
 
         for schema_type, variant_map in SCHEMA_CONFIG_REGISTRY.items():
             for account_model, fields in variant_map.items():
-                account_model_ct = ContentType.objects.get_for_model(account_model)
+                account_model_ct = ContentType.objects.get_for_model(
+                    account_model)
 
                 for source, columns in fields.items():
                     for source_field, meta in columns.items():

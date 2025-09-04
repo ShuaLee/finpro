@@ -1,49 +1,43 @@
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
-from django.core.exceptions import ValidationError
+from decimal import Decimal
+
+CONSTRAINT_DEFINITIONS = {
+    "decimal": {
+        "decimal_places": int,
+        "min": (int, float, Decimal),
+        "max": (int, float, Decimal),
+    },
+    "calculated": {
+        "decimal_places": int,
+        "min": (int, float, Decimal),
+        "max": (int, float, Decimal),
+    },
+    "string": {
+        "character_limit": int,
+        "character_minimum": int,
+        "all_caps": bool,
+    },
+    # You can extend with 'date', 'datetime', etc. as needed
+}
 
 
-def validate_value_against_constraints(value, data_type, constraints):
-    if not constraints:
-        return
+def validate_constraints(data_type: str, constraints: dict):
+    """
+    Validates that the given constraints dict is appropriate for the given data_type.
+    """
+    allowed = CONSTRAINT_DEFINITIONS.get(data_type, {})
+    errors = []
 
-    if data_type == "decimal":
-        try:
-            value = Decimal(str(value))
-        except (InvalidOperation, ValueError):
-            raise ValidationError("Invalid decimal value.")
+    for key, value in constraints.items():
+        expected_type = allowed.get(key)
 
-        # decimal_places
-        if "decimal_places" in constraints:
-            quant = Decimal(f"1.{'0' * constraints['decimal_places']}")
-            if value != value.quantize(quant, rounding=ROUND_HALF_UP):
-                raise ValidationError(
-                    f"Must have at most {constraints['decimal_places']} decimal places."
-                )
+        if expected_type is None:
+            errors.append(
+                f"Invalid constraint '{key}' for data type '{data_type}'"
+            )
+        elif not isinstance(value, expected_type if isinstance(expected_type, tuple) else (expected_type,)):
+            errors.append(
+                f"Constraint '{key}' for '{data_type}' must be of type {expected_type}, got {type(value)}"
+            )
 
-        # min
-        if "min" in constraints:
-            if value < Decimal(str(constraints["min"])):
-                raise ValidationError(
-                    f"Must be at least {constraints['min']}.")
-
-        # max (optional support)
-        if "max" in constraints:
-            if value > Decimal(str(constraints["max"])):
-                raise ValidationError(f"Must be at most {constraints['max']}.")
-
-    elif data_type == "string":
-        if not isinstance(value, str):
-            raise ValidationError("Value must be a string.")
-
-        if "character_limit" in constraints:
-            if len(value) > constraints["character_limit"]:
-                raise ValidationError(
-                    f"Cannot exceed {constraints['character_limit']} characters.")
-
-        if "character_minimum" in constraints:
-            if len(value) < constraints["character_minimum"]:
-                raise ValidationError(
-                    f"Must be at least {constraints['character_minimum']} characters.")
-
-        if constraints.get("all_caps") and value != value.upper():
-            raise ValidationError("Must be all uppercase.")
+    if errors:
+        raise ValueError("Invalid constraints: " + "; ".join(errors))

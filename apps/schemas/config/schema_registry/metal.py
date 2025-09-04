@@ -1,54 +1,59 @@
-from schemas.config.schema_registry.utils import schema_field
+from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
 
 METALS_STORAGE_FACILITY_SCHEMA_CONFIG = {
     "asset": {
-        "ticker": schema_field(
+        "ticker": SchemaTemplateManager.schema_field(
             title="Ticker",
             data_type="string",
-            field_path="crypto.ticker",
+            source_field="ticker",
+            is_default=True,
             is_editable=False,
             is_deletable=False,
             is_system=True,
             constraints={
                 "character_limit": 10
-            }
+            },
+            display_order=1,
         ),
-        "price": schema_field(
+        "price": SchemaTemplateManager.schema_field(
             title="Price",
             data_type="decimal",
-            field_path="crypto.price",
+            source_field="price",
             is_default=True,
             is_deletable=False,
             is_system=True,
             constraints={
                 "decimal_places": 2,
                 "min": Decimal("0")
-            }
+            },
+            display_order=2,
         ),
-        "name": schema_field(
+        "name": SchemaTemplateManager.schema_field(
             title="Name",
             data_type="string",
-            field_path="crypto.name",
+            source_field="name",
             is_default=True,
             is_system=True,
             constraints={
                 "character_limit": 200
-            }
+            },
+            display_order=3,
         ),
     },
     "holding": {
-        "quantity": schema_field(
+        "quantity": SchemaTemplateManager.schema_field(
             title="Quantity",
             data_type="decimal",
-            field_path="quantity",
+            source_field="quantity",
             is_default=True,
             is_deletable=False,
             is_system=True,
             constraints={
                 "decimal_places": 8,
                 "min": Decimal("0")
-            }
+            },
+            display_order=4,
         ),
     }
 }
