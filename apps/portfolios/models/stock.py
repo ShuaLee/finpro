@@ -38,6 +38,14 @@ class StockPortfolio(BaseAssetPortfolio):
     class Meta:
         app_label = 'portfolios'
 
+    def _map_variant_to_model(self, variant: str):
+        from accounts.models.stocks import SelfManagedAccount, ManagedAccount
+        if variant == "self_managed":
+            return SelfManagedAccount
+        elif variant == "managed":
+            return ManagedAccount
+        raise ValueError(f"Unknown account variant: {variant}")
+
     def __str__(self):
         return f"Stock Portfolio for {self.portfolio.profile.user.email}"
 
@@ -53,7 +61,7 @@ class StockPortfolio(BaseAssetPortfolio):
         if self.pk and not self.schemas.exists():
             raise ValidationError(
                 "StockPortfolio must have at least one schema.")
-    
+
     def save(self, *args, **kwargs):
         """
         Override save to ensure model validation before saving.

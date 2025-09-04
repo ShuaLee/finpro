@@ -8,6 +8,7 @@ from decimal import Decimal
 
 class BaseStockAccount(BaseAccount):
     asset_type = "stock"
+
     broker = models.CharField(
         max_length=100, blank=True, null=True,
         help_text="Brokerage platform (e.g. Robinhood, Interactive Brokers, etc.)"
@@ -75,10 +76,6 @@ class SelfManagedAccount(BaseStockAccount):
     def sub_portfolio(self):
         return self.stock_portfolio
 
-    @property
-    def active_schema(self):
-        return self.stock_portfolio.get_schema_for_account_model(self.__class__)
-
     def get_current_value_pfx(self):
         total = Decimal(0.0)
         for holding in self.holdings.all():
@@ -116,10 +113,6 @@ class ManagedAccount(BaseStockAccount):
                 name='unique_managedaccount_name_in_portfolio'
             )
         ]
-
-    @property
-    def active_schema(self):
-        return self.stock_portfolio.get_schema_for_account_model("self_managed")
 
     def get_current_value_in_pfx(self):
         to_currency = self.stock_portfolio.portfolio.profile.currency

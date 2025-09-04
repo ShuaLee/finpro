@@ -15,6 +15,19 @@ class BaseAccount(models.Model):
     def __str__(self):
         return self.name
 
+    def get_active_schema(self):
+        """
+        Resolve the active schema for this account via its parent sub-portfolio.
+        Works across all asset types.
+        """
+        subportfolio = getattr(self, "sub_portfolio", None)
+        if not subportfolio:
+            raise RuntimeError(
+                f"{self.__class__.__name__} has no `sub_portfolio` property defined."
+            )
+
+        return subportfolio.get_schema_for_account_model(self.__class__)
+
     def get_profile(self):
         """
         Return the Profile that owns this account via its sub-portfolio.

@@ -4,9 +4,9 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 from portfolios.models.portfolio import Portfolio
-from external_data.fx import get_fx_rate
+from schemas.services.schema_manager import SchemaManager
+from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from assets.utils import get_default_for_type
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import logging
 from abc import abstractmethod
 
@@ -85,12 +85,6 @@ class AssetHolding(models.Model):
     )
     purchase_date = models.DateTimeField(null=True, blank=True)
 
-    investment_theme = models.ManyToManyField(
-        InvestmentTheme,
-        blank=True,
-        related_name='%(class)s_investments'
-    )
-
     # Use string ref to avoid importing schemas.models at import time
     column_values = GenericRelation(
         'schemas.SchemaColumnValue',
@@ -108,26 +102,6 @@ class AssetHolding(models.Model):
         """Return the related asset object (e.g., Stock instance)."""
         pass
 
-    @abstractmethod
-    def get_profile_currency(self):
-        pass
-
-    @abstractmethod
-    def get_asset_type(self):
-        pass
-
-    @abstractmethod
-    def get_active_schema(self):
-        pass
-
-    @abstractmethod
-    def get_column_model(self):
-        pass
-
-    @abstractmethod
-    def get_column_value_model(self):
-        pass
-
     def get_column_value(self, source_field):
         """
         Get or create SchemaColumnValue for a given source field.
@@ -143,114 +117,26 @@ class AssetHolding(models.Model):
             return getattr(self, source_field, None)
 
         # If this column is linked to a theme, fetch from HoldingThemeValue
-        if getattr(column, 'investment_theme_id', None):
-            htv = HoldingThemeValue.objects.filter(
-                holding_ct=ContentType.objects.get_for_model(self.__class__),
-                holding_id=self.id,
-                theme=column.investment_theme_id
-            ).select_related('theme').first()
+        if getattr(column, "investment_theme_id", None):
+            htv = (
+                HoldingThemeValue.objects.filter(
+                    holding_ct=ContentType.objects.get_for_model(
+                        self.__class__),
+                    holding_id=self.id,
+                    theme=column.investment_theme_id,
+                )
+                .select_related("theme")
+                .first()
+            )
             return htv.get_value() if htv else None
 
-        # Otherwise, check if a SchemaColumnValue exists
-        val = self.column_values.select_related('column').filter(
-            column=column
-        ).first()
-
-        if val is None:
-            # Lazy import here to avoid circular import at module load
-            from schemas.config.utils import get_asset_schema_config
-
-            config = (get_asset_schema_config(self.get_asset_type())
-                      .get('holding', {})
-                      .get(source_field))
-            if config:
-                value_model = self.get_column_value_model()
-                val, _ = value_model.objects.get_or_create(
-                    column=column,
-                    account_id=self.id,
-                    account_ct=ContentType.objects.get_for_model(
-                        self.__class__),
-                    defaults={
-                        'value': get_default_for_type(config.get('data_type')),
-                        'is_edited': False,
-                    }
-                )
-
-        return val.get_value() if val else getattr(self, source_field, None)
-
-    # --- Financial calculations ---
-    def current_value_stock_fx(self):
-        """
-        Value = quantity * price. We assume 'price' is already normalized (FX applied upstream).
-        Looks up column overrides first, then falls back to model fields.
-        """
-        try:
-            q = self.get_column_value('quantity')
-            p = self.get_column_value('price')
-
-            if q is None:
-                q = getattr(self, 'quantity', None)
-            if p is None:
-                asset = getattr(self, 'asset', None) or getattr(
-                    self, 'stock', None)
-                p = getattr(asset, 'price', None)
-
-            if q is None or p is None:
-                return None
-
-            val = Decimal(q) * Decimal(p)
-            # drop this line if you don't want rounding here
-            return val.quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            return None
-
-    def current_value_profile_fx(self):
-        value = self.current_value_stock_fx()
-        if not value:
-            return None
-
-        fx_rate = get_fx_rate(
-            getattr(self.asset, 'currency', None), self.get_profile_currency()
-        )
-        try:
-            return (value * Decimal(str(fx_rate))).quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            return None
-
-    def get_unrealized_gain(self):
-        try:
-            quantity = Decimal(str(self.get_column_value('quantity') or 0))
-            price = Decimal(str(self.get_column_value('price') or 0))
-            purchase_price = Decimal(
-                str(self.get_column_value('purchase_price') or 0))
-            return ((price - purchase_price) * quantity).quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            return None
-
-    def get_unrealized_gain(self):
-        try:
-            q = self.get_column_value('quantity')
-            p = self.get_column_value('price')
-            pp = self.get_column_value('purchase_price')
-
-            if q is None:
-                q = getattr(self, 'quantity', None)
-            if p is None:
-                asset = getattr(self, 'asset', None) or getattr(
-                    self, 'stock', None)
-                p = getattr(asset, 'price', None)
-            if pp is None:
-                pp = getattr(self, 'purchase_price', None)
-
-            if q is None or p is None or pp is None:
-                return None
-
-            val = (Decimal(p) - Decimal(pp)) * Decimal(q)
-            return val.quantize(Decimal('0.01'))
-        except (InvalidOperation, TypeError):
-            return None
+        # ✅ Centralized SCV creation/retrieval
+        manager = SchemaColumnValueManager.get_or_create(
+            account=self, column=column)
+        return manager.scv.get_value()
 
     # --- Validation ---
+
     def clean(self):
         if self.quantity < 0:
             raise ValidationError("Quantity cannot be negative.")
@@ -267,13 +153,12 @@ class AssetHolding(models.Model):
         super().save(*args, **kwargs)
 
         def _sync_after_commit():
-            schema = self.get_active_schema()
-            if not schema:
-                return
-            # Lazy import to avoid circulars
-            from schemas.services.holding_sync_service import HoldingSchemaEngine
-            engine = HoldingSchemaEngine(self, self.get_asset_type())
-            engine.sync_all_columns()
+            account = self.self_managed_account  # or however the holding links
+            schema_manager = SchemaManager.for_account(account)
+            if is_new:
+                schema_manager.ensure_for_holding(self)
+            else:
+                schema_manager.sync_for_holding(self)
 
         transaction.on_commit(_sync_after_commit)
 
