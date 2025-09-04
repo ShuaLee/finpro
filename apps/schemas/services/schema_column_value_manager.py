@@ -161,3 +161,11 @@ class SchemaColumnValueManager:
             }
         )
         return cls(scv)
+    
+    def apply_rules(self):
+        if self.column.source == "holding":
+            self.save_value(self.scv.value, is_edited=False)
+        elif self.scv.is_edited:
+            self.save_value(self.scv.value, is_edited=True)
+        else:
+            self.reset_to_source()

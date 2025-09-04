@@ -146,16 +146,8 @@ class SchemaColumnValue(models.Model):
     def save(self, *args, **kwargs):
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
         manager = SchemaColumnValueManager(self)
-
-        if self.column.source == "holding":
-            manager.save_value(self.value, is_edited=False)
-        elif self.is_edited:
-            manager.save_value(self.value, is_edited=True)
-        else:
-            manager.reset_to_source()
-
-        # Persist final state
-        super().save(*args, **kwargs)
+        manager.apply_rules()  # ensures rounding/constraints are applied
+        super().save(*args, **kwargs)  # persist cleaned value
 
 
 
