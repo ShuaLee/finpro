@@ -8,21 +8,29 @@ from django.conf import settings
 from django.db import models, transaction
 from common.utils.country_currency_catalog import get_common_currency_choices, get_common_country_choices
 
+class ProfileManager(models.Manager):
+    def with_plan(self, slug):
+        return self.filter(plan__slug=slug)
+    
+    def for_user(self, user):
+        return self.get(user=user)
 
 class Profile(models.Model):
     """
     Extended user details for personalization and subscription management.
 
-    - Basic identity (optional): first_name, last_name, birth_date
-    - Preferences: language, preferred_currency, country
-    - Business logic: plan, account_type, email preferences
+    Fields:
+    - Identity: full_name (optional now, may be required for KYC later)
+    - Preferences: language, preferred_currency (default USD), country (optional)
+    - Subscriptions: plan, account_type
+    - Notifications: email updates
     """
 
     user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-
-    # Profile check
-    is_profile_complete = models.BooleanField(default=False)
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name="profile"
+    )
 
     # Basic identity info
     full_name = models.CharField(max_length=150, blank=True, null=True)
@@ -33,7 +41,8 @@ class Profile(models.Model):
     country = models.CharField(
         max_length=2,
         choices=get_common_country_choices(),
-        default="US"
+        blank=True,  # ✅ optional for now
+        null=True,
     )
     currency = models.CharField(
         max_length=3,

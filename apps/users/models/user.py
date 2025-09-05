@@ -40,8 +40,8 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
 
-        from users.services import bootstrap_user_profile
-        bootstrap_user_profile(user)
+        from users.services.profile_service import ProfileService
+        ProfileService.bootstrap(user)
 
         return user
 

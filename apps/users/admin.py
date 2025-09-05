@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 from users.models import User, Profile
-from users.services import bootstrap_user_profile
+from users.services.profile_service import ProfileService
 
 
 class ProfileInline(admin.StackedInline):
@@ -12,8 +12,7 @@ class ProfileInline(admin.StackedInline):
     verbose_name_plural = "Profile"
     fk_name = "user"
     extra = 0
-    fields = ("full_name", "country", "currency",
-              "is_profile_complete")  # ✅ Added
+    fields = ("full_name", "country", "currency", "plan", "account_type")
 
 
 @admin.register(User)
@@ -28,8 +27,7 @@ class UserAdmin(BaseUserAdmin):
     # Fields for detail view
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        (_("Permissions"), {
-         "fields": ("is_active", "is_staff", "is_superuser")}),
+        (_("Permissions"), {"fields": ("is_active", "is_staff", "is_superuser")}),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
 
@@ -43,7 +41,8 @@ class UserAdmin(BaseUserAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        bootstrap_user_profile(obj)  # ✅ Ensure profile exists after saving
+        # Ensure profile exists after saving
+        ProfileService.bootstrap(obj)
 
     inlines = [ProfileInline]
 
@@ -51,10 +50,7 @@ class UserAdmin(BaseUserAdmin):
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     """Standalone Profile admin for advanced editing."""
-    list_display = ["user", "full_name", "country", "currency",
-                    "plan", "account_type", "is_profile_complete"]  # ✅ Added
-    list_filter = ["country", "plan", "account_type",
-                   "is_profile_complete"]  # ✅ Added filter
+    list_display = ["user", "full_name", "country", "currency", "plan", "account_type"]
+    list_filter = ["country", "plan", "account_type"]
     search_fields = ["user__email", "full_name"]
     ordering = ["user__email"]
-    readonly_fields = ["is_profile_complete"]  # ✅ Prevent manual change
