@@ -1,0 +1,1 @@
+1. Making a Custom Portfolio should probably take "asset" as an input and generate the name "asset Portfolio" and that would generate a custom asset as well?

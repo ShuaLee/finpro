@@ -29,7 +29,7 @@ def bootstrap_user_profile(user):
     Raises:
         ValidationError: If the default Free plan does not exist.
     """
-    from apps.portfolios.services.portfolio_management import ensure_portfolio_for_profile
+    from portfolios.services.portfolio_manager import PortfolioManager
 
     profile, created = Profile.objects.get_or_create(user=user)
 
@@ -50,7 +50,7 @@ def bootstrap_user_profile(user):
         profile.account_type = individual_type
 
     # Ensure Portfolio exists for this Profile
-    ensure_portfolio_for_profile(profile)
+    PortfolioManager.ensure_portfolio_for_profile(profile)
 
     # ✅ Set completion status
     profile.is_profile_complete = check_profile_completion(profile)

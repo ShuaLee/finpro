@@ -1,30 +1,28 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
+from portfolios.config import SUBPORTFOLIO_CONFIG
 from portfolios.models.portfolio import Portfolio
 
 
 class SubPortfolio(models.Model):
     """
-    Unified subportfolio model that replaces StockPortfolio, CryptoPortfolio,
+    Unified SubPortfolio model that replaces StockPortfolio, CryptoPortfolio,
     MetalPortfolio, and CustomPortfolio.
 
-    Responsibilities:
-    - Belongs to a main Portfolio.
-    - Has a `type` (e.g., stock, crypto, metal, custom).
-    - Enforces uniqueness rules per type (via config).
-    - Optional name/slug for custom portfolios.
+    The available types and their defaults are defined in SUBPORTFOLIO_CONFIG.
     """
 
-    class SubPortfolioType(models.TextChoices):
-        STOCK = "stock", "Stock"
-        CRYPTO = "crypto", "Crypto"
-        METAL = "metal", "Metal"
-        CUSTOM = "custom", "Custom"
+    # Choices are dynamically built from config
+    TYPES = [(key, cfg["default_name"])
+             for key, cfg in SUBPORTFOLIO_CONFIG.items()]
 
     portfolio = models.ForeignKey(
-        Portfolio, on_delete=models.CASCADE, related_name="subportfolios"
+        Portfolio,
+        on_delete=models.CASCADE,
+        related_name="subportfolios"
     )
-    type = models.CharField(max_length=50, choices=SubPortfolioType.choices)
+    type = models.CharField(max_length=50, choices=TYPES)
     name = models.CharField(max_length=100, blank=True, null=True)
     slug = models.SlugField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -34,20 +32,31 @@ class SubPortfolio(models.Model):
         app_label = "portfolios"
 
     def __str__(self):
-        if self.type == self.SubPortfolioType.CUSTOM:
-            return f"{self.portfolio.profile.user.email} | {self.name}"
-        return f"{self.get_type_display()} Portfolio for {self.portfolio.profile.user.email}"
+        return f"{self.name or self.get_type_display()} for {self.portfolio.profile.user.email}"
 
     def clean(self):
         """
-        Ensure slug for custom subportfolios.
-        Uniqueness/allowed-type constraints will be enforced by service/manager.
+        Auto-fill name/slug if not provided.
         """
-        if self.type == self.SubPortfolioType.CUSTOM:
-            if not self.slug:
-                self.slug = slugify(self.name or "")
-            if not self.slug:
-                from django.core.exceptions import ValidationError
+        cfg = SUBPORTFOLIO_CONFIG.get(self.type, {})
+
+        # Default name
+        if not self.name:
+            self.name = cfg.get(
+                "default_name", f"{self.type.capitalize()} Portfolio")
+
+        # Default slug
+        if not self.slug:
+            self.slug = slugify(self.name or f"{self.type}-portfolio")
+
+        # Enforce uniqueness: only one stock/crypto/metal per portfolio
+        if cfg.get("unique", False):
+            qs = SubPortfolio.objects.filter(
+                portfolio=self.portfolio, type=self.type)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
                 raise ValidationError(
-                    "CustomPortfolio must have a non-empty slug.")
+                    f"Only one {self.get_type_display()} is allowed per portfolio.")
+
         super().clean()

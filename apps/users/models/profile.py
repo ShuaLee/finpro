@@ -88,17 +88,19 @@ class Profile(models.Model):
         old_currency = None
         if self.pk:
             try:
-                old_currency = type(self).objects.only("currency").get(pk=self.pk).currency
+                old_currency = type(self).objects.only(
+                    "currency").get(pk=self.pk).currency
             except type(self).DoesNotExist:
                 old_currency = None
 
         super().save(*args, **kwargs)
 
         def _after_commit():
-            # Keep accounts in sync (you already had this)
+            # Keep accounts in sync
             from accounts.models.stocks import SelfManagedAccount
             SelfManagedAccount.objects.filter(
-                stock_portfolio__portfolio__profile=self
+                subportfolio__portfolio__profile=self,
+                subportfolio__type="stock"
             ).update(currency=self.currency)
 
             # # If currency changed → recalc calculated SCVs for all holdings in this profile
@@ -108,7 +110,4 @@ class Profile(models.Model):
 
         transaction.on_commit(_after_commit)
 
-        from accounts.models.stocks import SelfManagedAccount
-        SelfManagedAccount.objects.filter(
-            stock_portfolio__portfolio__profile=self
-        ).update(currency=self.currency)
+        # ✅ Remove duplicate block — only keep the on_commit version
