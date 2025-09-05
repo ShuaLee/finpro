@@ -29,10 +29,9 @@ class SchemaGenerator:
     # -------------------------------
     # Template fetching
     # -------------------------------
-    def _get_templates(self, account_model):
-        account_model_ct = ContentType.objects.get_for_model(account_model)
+    def _get_templates(self, account_type: str):
         return SchemaColumnTemplate.objects.filter(
-            account_model_ct=account_model_ct,
+            account_type=account_type,  # 🔄 updated
             schema_type=self.schema_type,
             is_default=True,
             is_system=True,
@@ -42,16 +41,16 @@ class SchemaGenerator:
     # Schema initialization
     # -------------------------------
     @transaction.atomic
-    def initialize(self, account_model_map: dict, custom_schema_namer=None):
+    def initialize(self, account_types: list[str], custom_schema_namer=None):
         """
-        Build schema + columns for each account model in account_model_map.
+        Build schema + columns for each account type in the given list.
         """
-        for account_model, label in account_model_map.items():
+        for account_type in account_types:
             user_email = self.subportfolio.portfolio.profile.user.email
             schema_name = (
-                custom_schema_namer(self.subportfolio, label)
+                custom_schema_namer(self.subportfolio, account_type)
                 if custom_schema_namer
-                else f"{user_email}'s {self.schema_type.title()} ({label}) Schema"
+                else f"{user_email}'s {self.schema_type.title()} ({account_type}) Schema"
             )
 
             self.schema = Schema.objects.create(
@@ -62,12 +61,11 @@ class SchemaGenerator:
             )
 
             # Load templates (fallback to custom_default if needed)
-            templates = list(self._get_templates(account_model))
+            templates = list(self._get_templates(account_type))
             if not templates and self.schema_type.startswith("custom:"):
                 templates = list(
                     SchemaColumnTemplate.objects.filter(
-                        account_model_ct=ContentType.objects.get_for_model(
-                            account_model),
+                        account_type=account_type,
                         schema_type="custom_default",
                         is_default=True,
                         is_system=True,
@@ -78,12 +76,11 @@ class SchemaGenerator:
             for template in templates:
                 self.add_from_template(template)
 
-            # Link schema <-> subportfolio
+            # Link schema <-> subportfolio + account type
             SubPortfolioSchemaLink.objects.update_or_create(
                 subportfolio_ct=self.subportfolio_ct,
                 subportfolio_id=self.subportfolio.id,
-                account_model_ct=ContentType.objects.get_for_model(
-                    account_model),
+                account_type=account_type,  # 🔄 updated
                 defaults={"schema": self.schema},
             )
 

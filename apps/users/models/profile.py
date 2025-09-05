@@ -105,11 +105,11 @@ class Profile(models.Model):
         super().save(*args, **kwargs)
 
         def _after_commit():
-            # Keep accounts in sync
-            from accounts.models.stocks import SelfManagedAccount
-            SelfManagedAccount.objects.filter(
+            # Keep stock accounts in sync
+            from accounts.models.account import Account, AccountType
+            Account.objects.filter(
                 subportfolio__portfolio__profile=self,
-                subportfolio__type="stock"
+                type__in=[AccountType.STOCK_SELF_MANAGED, AccountType.STOCK_MANAGED],
             ).update(currency=self.currency)
 
             # # If currency changed → recalc calculated SCVs for all holdings in this profile

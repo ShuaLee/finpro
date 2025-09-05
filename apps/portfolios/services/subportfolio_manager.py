@@ -7,8 +7,7 @@ from portfolios.config import SUBPORTFOLIO_CONFIG
 from portfolios.models.portfolio import Portfolio
 from portfolios.models.subportfolio import SubPortfolio
 
-from accounts.config.account_model_registry import get_account_model_map
-
+from accounts.models.account import AccountType
 from schemas.models import Schema
 from schemas.services.schema_generator import SchemaGenerator
 
@@ -63,13 +62,13 @@ class SubPortfolioManager:
                 portfolio=portfolio, type=type, name=final_name, slug=final_slug
             )
 
-            # 🔁 4. Get account models for this type (from registry)
-            account_model_map = get_account_model_map(cfg["schema_type"])
+            # 🔁 4. Determine allowed account types for this subportfolio
+            account_types = cfg.get("account_types", [])
 
             # 🛠 5. Generate schema(s) via SchemaGenerator
             generator = SchemaGenerator(subportfolio, cfg["schema_type"])
             generator.initialize(
-                account_model_map=account_model_map,
+                account_types=account_types,
                 custom_schema_namer=schema_name_fn,
             )
 

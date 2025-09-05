@@ -1,6 +1,6 @@
 from django.db import models
 from decimal import Decimal
-from accounts.models.metals import MetalAccount
+from accounts.models.account import Account
 from assets.models.base import Asset, AssetHolding
 from common.utils.country_currency_catalog import get_common_currency_choices
 from schemas.models import SchemaColumn, SchemaColumnValue
@@ -10,7 +10,8 @@ class PreciousMetal(Asset):
     symbol = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=50)
     price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
+        max_digits=20, decimal_places=4, null=True, blank=True
+    )
     currency = models.CharField(
         max_length=3,
         choices=get_common_currency_choices(),
@@ -41,15 +42,15 @@ class PreciousMetal(Asset):
 
 
 class PreciousMetalHolding(AssetHolding):
-    storage_facility = models.ForeignKey(
-        MetalAccount,
+    account = models.ForeignKey(
+        Account,
         on_delete=models.CASCADE,
-        related_name='holdings'
+        related_name="metal_holdings"
     )
     precious_metal = models.ForeignKey(
         PreciousMetal,
         on_delete=models.CASCADE,
-        related_name='precious_metal_holdings'
+        related_name="holdings"
     )
 
     @property
@@ -60,10 +61,10 @@ class PreciousMetalHolding(AssetHolding):
         return f"{self.precious_metal} ({self.quantity} oz)"
 
     def get_asset_type(self):
-        return 'metal'
+        return "metal"
 
     def get_active_schema(self):
-        return self.storage_facility.metal_portfolio.active_schema
+        return self.account.active_schema
 
     def get_column_model(self):
         return SchemaColumn
@@ -72,16 +73,16 @@ class PreciousMetalHolding(AssetHolding):
         return SchemaColumnValue
 
     def get_profile_currency(self):
-        return self.storage_facility.metal_portfolio.portfolio.profile.currency
+        return self.account.profile.currency
 
     class Meta:
         indexes = [
-            models.Index(fields=["storage_facility"]),
+            models.Index(fields=["account"]),
             models.Index(fields=["precious_metal"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["storage_facility", "precious_metal"],
-                name="unique_precious_metal_per_storage"
+                fields=["account", "precious_metal"],
+                name="unique_precious_metal_per_account"
             )
         ]

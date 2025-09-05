@@ -1,6 +1,6 @@
 from django.db import models
 from .base import Asset, AssetHolding
-from accounts.models.stocks import SelfManagedAccount
+from accounts.models.account import Account
 from schemas.models import SchemaColumn, SchemaColumnValue
 
 
@@ -8,17 +8,21 @@ class Stock(Asset):
     ticker = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=200, blank=True, null=True)
     exchange = models.CharField(
-        max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)")
+        max_length=50, null=True, blank=True, help_text="Stock exchange (e.g., NYSE, NASDAQ)"
+    )
     is_adr = models.BooleanField(default=False)
     price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
+        max_digits=20, decimal_places=4, null=True, blank=True
+    )
     currency = models.CharField(max_length=3, blank=True, null=True)
     average_volume = models.BigIntegerField(null=True, blank=True)
     volume = models.BigIntegerField(null=True, blank=True)
     dividend_yield = models.DecimalField(
-        max_digits=6, decimal_places=4, blank=True, null=True)
+        max_digits=6, decimal_places=4, blank=True, null=True
+    )
     pe_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
+        max_digits=10, decimal_places=4, null=True, blank=True
+    )
     is_etf = models.BooleanField(default=False)
     sector = models.CharField(max_length=100, null=True, blank=True)
     industry = models.CharField(max_length=100, null=True, blank=True)
@@ -30,9 +34,9 @@ class Stock(Asset):
 
     class Meta:
         indexes = [
-            models.Index(fields=['ticker']),
-            models.Index(fields=['is_custom']),
-            models.Index(fields=['exchange'])
+            models.Index(fields=["ticker"]),
+            models.Index(fields=["is_custom"]),
+            models.Index(fields=["exchange"]),
         ]
 
     def __str__(self):
@@ -48,20 +52,16 @@ class Stock(Asset):
 
 
 class StockHolding(AssetHolding):
-    self_managed_account = models.ForeignKey(
-        SelfManagedAccount,
+    account = models.ForeignKey(
+        Account,
         on_delete=models.CASCADE,
-        related_name='holdings'
+        related_name="stock_holdings"
     )
     stock = models.ForeignKey(
         Stock,
         on_delete=models.CASCADE,
-        related_name='stock_holdings'
+        related_name="holdings"
     )
-
-    @property
-    def account(self):
-        return self.self_managed_account
 
     @property
     def asset(self):
@@ -71,10 +71,10 @@ class StockHolding(AssetHolding):
         return f"{self.stock} ({self.quantity} shares)"
 
     def get_asset_type(self):
-        return 'stock'
+        return "stock"
 
     def get_active_schema(self):
-        return self.self_managed_account.active_schema
+        return self.account.active_schema
 
     def get_column_model(self):
         return SchemaColumn
@@ -83,16 +83,16 @@ class StockHolding(AssetHolding):
         return SchemaColumnValue
 
     def get_profile_currency(self):
-        return self.self_managed_account.stock_portfolio.portfolio.profile.currency
+        return self.account.profile.currency
 
     class Meta:
         indexes = [
-            models.Index(fields=['self_managed_account']),
-            models.Index(fields=['stock'])
+            models.Index(fields=["account"]),
+            models.Index(fields=["stock"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=['self_managed_account', 'stock'],
-                name='unique_holding_per_account'
+                fields=["account", "stock"],
+                name="unique_stock_holding_per_account",
             ),
         ]
