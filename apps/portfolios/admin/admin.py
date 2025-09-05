@@ -25,13 +25,19 @@ class SubPortfolioAdmin(admin.ModelAdmin):
     list_display = ("id", "type", "name", "slug", "get_user_email",
                     "created_at")  # 🔥 removed name + slug
     search_fields = ["portfolio__profile__user__email", "type"]
-    readonly_fields = ["created_at"]
+    readonly_fields = ["created_at", "name", "slug"]
     list_filter = ["type", "created_at"]
 
     def get_user_email(self, obj):
         return obj.portfolio.profile.user.email
     get_user_email.short_description = "User Email"
     get_user_email.admin_order_field = "portfolio__profile__user__email"
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if obj:  # editing existing object
+            ro.append("type")
+        return ro
 
     def save_model(self, request, obj, form, change):
         if obj.type == "custom" and not obj.slug:

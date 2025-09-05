@@ -60,3 +60,10 @@ class SubPortfolio(models.Model):
                     f"Only one {self.get_type_display()} is allowed per portfolio.")
 
         super().clean()
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            old = SubPortfolio.objects.filter(pk=self.pk).values_list("type", flat=True).first()
+            if old and old != self.type:
+                raise ValidationError("SubPortfolio type cannot be changed once created.")
+        super().save(*args, **kwargs)
