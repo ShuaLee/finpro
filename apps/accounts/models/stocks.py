@@ -1,7 +1,7 @@
 from django.db import models
 from common.utils.country_currency_catalog import get_common_currency_choices
 from external_data.fx import get_fx_rate
-from portfolios.models.stock import StockPortfolio
+from portfolios.models.subportfolio import SubPortfolio
 from accounts.models.base import BaseAccount
 from decimal import Decimal
 
@@ -55,8 +55,8 @@ class BaseStockAccount(BaseAccount):
 
 
 class SelfManagedAccount(BaseStockAccount):
-    stock_portfolio = models.ForeignKey(
-        StockPortfolio,
+    subportfolio = models.ForeignKey(
+        SubPortfolio,
         on_delete=models.CASCADE,
         related_name='self_managed_accounts'
     )
@@ -67,14 +67,10 @@ class SelfManagedAccount(BaseStockAccount):
         verbose_name = "Self-Managed Account"
         constraints = [
             models.UniqueConstraint(
-                fields=['stock_portfolio', 'name'],
+                fields=['subportfolio', 'name'],
                 name='unique_selfmanagedstockaccount_name_in_portfolio'
             )
         ]
-
-    @property
-    def sub_portfolio(self):
-        return self.stock_portfolio
 
     def get_current_value_pfx(self):
         total = Decimal(0.0)
@@ -93,8 +89,8 @@ class SelfManagedAccount(BaseStockAccount):
 
 
 class ManagedAccount(BaseStockAccount):
-    stock_portfolio = models.ForeignKey(
-        StockPortfolio,
+    subportfolio = models.ForeignKey(
+        SubPortfolio,
         on_delete=models.CASCADE,
         related_name='managed_accounts'
     )
@@ -109,7 +105,7 @@ class ManagedAccount(BaseStockAccount):
         verbose_name = "Managed Account"
         constraints = [
             models.UniqueConstraint(
-                fields=['stock_portfolio', 'name'],
+                fields=['subportfolio', 'name'],
                 name='unique_managedaccount_name_in_portfolio'
             )
         ]

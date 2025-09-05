@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from portfolios.models.custom import CustomPortfolio
+from portfolios.models.subportfolio import SubPortfolio
 from accounts.models.base import BaseAccount
 
 # portfolio -> level0 -> level1 -> level2 (holdings can be at any level, but recommend leaves)
@@ -9,21 +9,22 @@ MAX_ACCOUNT_DEPTH = 3
 
 class CustomAccount(BaseAccount):
     """
-    Hierarchical account/folder under a CustomPortfolio.
+    Hierarchical account/folder under a Custom SubPortfolio.
     Rule: an account EITHER has children OR holdings, never both.
     """
-    custom_portfolio = models.ForeignKey(
-        CustomPortfolio,
+
+    subportfolio = models.ForeignKey(
+        SubPortfolio,
         on_delete=models.CASCADE,
-        related_name='accounts'
+        related_name="custom_accounts"
     )
 
     parent = models.ForeignKey(
-        'self',
+        "self",
         null=True,
         blank=True,
         on_delete=models.CASCADE,
-        related_name='children'
+        related_name="children"
     )
 
     # Cached depth for validation/queries (0 for root)
@@ -37,23 +38,23 @@ class CustomAccount(BaseAccount):
         constraints = [
             # ✅ Unique name among siblings (including top level where parent is NULL)
             models.UniqueConstraint(
-                fields=['custom_portfolio', 'parent', 'name'],
-                name='uniq_custom_account_name_within_parent'
+                fields=["subportfolio", "parent", "name"],
+                name="uniq_custom_account_name_within_parent"
             )
         ]
 
     def is_leaf(self) -> bool:
-        return not self.children.exist()
+        return not self.children.exists()
 
     def has_holdings(self) -> bool:
         # Related name from CustomHolding.account
         return hasattr(self, "holdings") and self.holdings.exists()
 
     def clean(self):
-        # Ensure parent belongs to same portfolio
-        if self.parent and self.parent.custom_portfolio_id != self.custom_portfolio_id:
+        # Ensure parent belongs to same subportfolio
+        if self.parent and self.parent.subportfolio_id != self.subportfolio_id:
             raise ValidationError(
-                "Parent must belong to the same CustomPortfolio.")
+                "Parent must belong to the same SubPortfolio.")
 
         # Compute depth & enforce max depth
         d = 0
@@ -67,10 +68,6 @@ class CustomAccount(BaseAccount):
         self.depth = d
 
         # exclusivity rule (container vs leaf):
-        # If this account has holdings, it cannot have children
-        # (We can't query self.children on unsaved brand-new instance with pending changes,
-        #  so we validate the *parent* when adding a child; see below.)
-        # Note: here we only enforce the case "has children -> no holdings" on the *parent*.
         if self.parent:
             # You are creating/moving this account under `parent` -> parent must not have holdings
             if getattr(self.parent, "holdings", None) and self.parent.holdings.exists():
@@ -84,10 +81,8 @@ class CustomAccount(BaseAccount):
         super().save(*args, **kwargs)
 
     @property
-    def sub_portfolio(self):
-        return self.custom_portfolio
-
-    @property
     def active_schema(self):
-        # Return the Schema object for this portfolio + account model
-        return self.custom_portfolio.get_schema_for_account_model(type(self))
+        """
+        Return the Schema object for this subportfolio + account model
+        """
+        return self.subportfolio.get_schema_for_account_model("custom_account")

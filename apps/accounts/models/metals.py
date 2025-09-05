@@ -1,11 +1,11 @@
 from django.db import models
-from portfolios.models.metal import MetalPortfolio
+from portfolios.models.subportfolio import SubPortfolio
 from .base import BaseAccount
 
 
 class MetalAccount(BaseAccount):
-    metal_portfolio = models.ForeignKey(
-        MetalPortfolio,
+    subportfolio = models.ForeignKey(
+        SubPortfolio,
         on_delete=models.CASCADE,
         related_name='storage_facilities'
     )
@@ -17,15 +17,15 @@ class MetalAccount(BaseAccount):
         verbose_name = "Storage Facility"
         constraints = [
             models.UniqueConstraint(
-                fields=['metal_portfolio', 'name'],
-                name='unique_storagefacility_name_in_portfolio'
+                fields=["subportfolio", "name"],
+                name="unique_storagefacility_name_in_subportfolio"
             )
         ]
 
     @property
-    def sub_portfolio(self):
-        return self.metal_portfolio
-
-    @property
     def active_schema(self):
-        return self.metal_portfolio.get_schema_for_account_model("storage_facility")
+        """
+        Get the active schema for this metal account by asking the
+        subportfolio for its schema mapped to this account variant.
+        """
+        return self.subportfolio.get_schema_for_account_model("storage_facility")

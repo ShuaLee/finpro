@@ -1,10 +1,13 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from portfolios.config import SUBPORTFOLIO_CONFIG
 from portfolios.models.portfolio import Portfolio
+from portfolios.models.subportfolio import SubPortfolio
 from accounts.config.account_model_registry import get_account_model_map
 from schemas.models import Schema
 from schemas.services.schema_generator import SchemaGenerator
+
 
 class SubPortfolioManager:
     """
@@ -13,51 +16,62 @@ class SubPortfolioManager:
     """
 
     @staticmethod
-    def create_sub_portfolio(
+    def create_subportfolio(
         portfolio: Portfolio,
-        portfolio_model_class,
-        related_name: str,
-        schema_type: str,
-        schema_namer_fn=None,
-    ):
+        type: str,
+        name: str = None,
+        slug: str = None,
+        schema_name_fn=None,
+    ) -> SubPortfolio:
         """
-        Generic creator for any asset portfolio (stocks, crypto, etc.).
-        Ensures uniqueness and initializes schema.
+        Creates a SubPortfolio for the given Portfolio.
 
         Args:
-            portfolio (Portfolio): The user's main portfolio.
-            portfolio_model_class (Model): The subportfolio model to create (e.g., CryptoPortfolio).
-            related_name (str): The related_name on Portfolio (e.g., 'stockportfolio').
-            schema_type (str): Schema config name (e.g., 'stock', 'crypto').
+            portfolio (Portfolio): The main portfolio.
+            type (str): Subportfolio type (stock, crypto, metal, custom).
+            name (str, optional): For custom subportfolios.
+            slug (str, optional): For custom subportfolios.
             schema_namer_fn (callable, optional): Custom schema name formatter.
+
+        Returns:
+            SubPortfolio
         """
+        if type not in SUBPORTFOLIO_CONFIG:
+            raise ValidationError(f"Unknown subportfolio type: {type}")
+
+        cfg = SUBPORTFOLIO_CONFIG[type]
+
         with transaction.atomic():
-            # 🚦 1. Ensure uniqueness
-            if hasattr(portfolio, related_name):
-                raise ValidationError(
-                    f"{portfolio_model_class.__name__} already exists for this portfolio."
-                )
+            # 1. Uniqueness check
+            if cfg["unique"]:
+                if SubPortfolio.objects.filter(portfolio=portfolio, type=type).exists():
+                    raise ValidationError(
+                        f"{type.capitalize()} portfolio already exists for this portfolio."
+                    )
 
-            # 🆕 2. Create the subportfolio
-            subportfolio = portfolio_model_class.objects.create(portfolio=portfolio)
+            # 2. Create SubPortfolio row
+            subportfolio = SubPortfolio.objects.create(
+                portfolio=portfolio, type=type, name=name, slug=slug
+            )
 
-            # 🔁 3. Get account models for this asset type (from registry)
-            account_model_map = get_account_model_map(schema_type)
+            # 3. Get account models for this type (from registry)
+            account_model_map = get_account_model_map(cfg["schema_type"])
 
-            # 🛠 4. Generate schema(s) via SchemaGenerator
-            generator = SchemaGenerator(subportfolio, schema_type)
+            # 4. Generate schema(s) via SchemaGenerator
+            generator = SchemaGenerator(subportfolio, cfg["schema_type"])
             generator.initialize(
                 account_model_map=account_model_map,
-                custom_schema_namer=schema_namer_fn,
+                custom_schema_namer=schema_name_fn,
             )
 
             return subportfolio
-        
+
     @staticmethod
-    def delete_subportfolio_with_schema(portfolio):
+    def delete_subportfolio(subportfolio: SubPortfolio):
         """
-        Deletes a subportfolio and its associated schema.
+        Deletes a SubPortfolio and its associated schema.
         """
-        ct = ContentType.objects.get_for_model(portfolio.__class__)
-        Schema.objects.filter(content_type=ct, object_id=portfolio.id).delete()
-        portfolio.delete()
+        ct = ContentType.objects.get_for_model(SubPortfolio)
+        Schema.objects.filter(
+            content_type=ct, object_id=subportfolio.id).delete()
+        subportfolio.delete()
