@@ -1,7 +1,8 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from accounts.constants import AccountType
 from portfolios.models.subportfolio import SubPortfolio
-from common.utils.country_currency_catalog import get_common_currency_choices
+
 
 class Account(models.Model):
     """
@@ -25,12 +26,6 @@ class Account(models.Model):
         db_index=True,
     )
 
-    currency = models.CharField(
-        max_length=3,
-        choices=get_common_currency_choices(),
-        default="USD",
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     last_synced = models.DateTimeField(null=True, blank=True)
 
@@ -43,14 +38,38 @@ class Account(models.Model):
             )
         ]
 
+    def clean(self):
+        """
+        Ensure account type matches subportfolio type.
+        """
+        type_to_subportfolio = {
+            AccountType.STOCK_SELF_MANAGED: "stock",
+            AccountType.STOCK_MANAGED: "stock",
+            AccountType.CRYPTO_WALLET: "crypto",
+            AccountType.METAL_STORAGE: "metal",
+            AccountType.CUSTOM: "custom",
+        }
+
+        expected_type = type_to_subportfolio.get(self.type)
+        if expected_type and self.subportfolio.type != expected_type:
+            raise ValidationError(
+                f"Account type '{self.get_type_display()}' "
+                f"can only be added to a '{expected_type}' subportfolio."
+            )
+
     def __str__(self):
         return f"{self.get_type_display()} ({self.name})"
-    
+
     @property
     def profile(self):
         """Convenience to fetch profile via subportfolio → portfolio → profile."""
         return self.subportfolio.portfolio.profile
-    
+
+    @property
+    def currency(self):
+        """Always use the profile's currency."""
+        return self.profile.currency
+
     @property
     def active_schema(self):
         """Look up schema for this account based on type."""

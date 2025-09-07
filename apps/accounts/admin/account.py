@@ -27,10 +27,12 @@ class CustomAccountDetailsInline(admin.StackedInline):
 
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ("name", "get_type_display", "subportfolio", "currency", "created_at")
-    list_filter = ("type", "currency", "created_at")
+    list_display = ("name", "get_type_display",
+                    "subportfolio", "created_at")
+    list_filter = ("type", "created_at")
     search_fields = ("name", "subportfolio__portfolio__profile__user__email")
     ordering = ["subportfolio", "name"]
+    readonly_fields = ("created_at", "last_synced")
 
     def get_inlines(self, request, obj=None):
         """Show detail inline depending on account type."""

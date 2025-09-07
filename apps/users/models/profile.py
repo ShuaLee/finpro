@@ -8,12 +8,14 @@ from django.conf import settings
 from django.db import models, transaction
 from common.utils.country_currency_catalog import get_common_currency_choices, get_common_country_choices
 
+
 class ProfileManager(models.Manager):
     def with_plan(self, slug):
         return self.filter(plan__slug=slug)
-    
+
     def for_user(self, user):
         return self.get(user=user)
+
 
 class Profile(models.Model):
     """
@@ -27,7 +29,7 @@ class Profile(models.Model):
     """
 
     user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, 
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="profile"
     )
@@ -94,29 +96,4 @@ class Profile(models.Model):
         if self.currency:
             self.currency = self.currency.upper()
 
-        old_currency = None
-        if self.pk:
-            try:
-                old_currency = type(self).objects.only(
-                    "currency").get(pk=self.pk).currency
-            except type(self).DoesNotExist:
-                old_currency = None
-
         super().save(*args, **kwargs)
-
-        def _after_commit():
-            # Keep stock accounts in sync
-            from accounts.models.account import Account, AccountType
-            Account.objects.filter(
-                subportfolio__portfolio__profile=self,
-                type__in=[AccountType.STOCK_SELF_MANAGED, AccountType.STOCK_MANAGED],
-            ).update(currency=self.currency)
-
-            # # If currency changed → recalc calculated SCVs for all holdings in this profile
-            # if old_currency and old_currency != self.currency:
-            #     from schemas.services.recalc_triggers import recalc_holdings_for_profile
-            #     recalc_holdings_for_profile(self)
-
-        transaction.on_commit(_after_commit)
-
-        # ✅ Remove duplicate block — only keep the on_commit version
