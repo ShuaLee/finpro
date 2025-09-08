@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from accounts.models.account import Account, AccountType
+from accounts.models.account import AccountType
 from assets.models.asset import Holding
 from portfolios.models.subportfolio import SubPortfolio
 
@@ -102,13 +102,6 @@ class SchemaColumnValue(models.Model):
     column = models.ForeignKey(
         SchemaColumn, on_delete=models.CASCADE, related_name='values')
 
-    account = models.ForeignKey(
-        Account,
-        on_delete=models.CASCADE,
-        related_name="schema_values",
-        null=True,
-        blank=True,
-    )
     holding = models.ForeignKey(
         Holding,
         on_delete=models.CASCADE,
@@ -120,32 +113,19 @@ class SchemaColumnValue(models.Model):
     value = models.TextField(blank=True, null=True)
     is_edited = models.BooleanField(default=False)
 
+    class Meta:
+        unique_together = ("column", "holding")
+        # You don’t really need conditional constraints anymore,
+        # because holding is always required.
+
+    def __str__(self):
+        return f"{self.holding} - {self.column.title}: {self.value}"
+
     def get_value(self):
         """
         Return the stored SCV value.
-        Always correct because the manager syncs it with source or edit.
         """
         return self.value
-
-    class Meta:
-        constraints = [
-            # Enforce uniqueness only when account is set
-            models.UniqueConstraint(
-                fields=["column", "account"],
-                name="unique_scv_account",
-                condition=models.Q(account__isnull=False),
-            ),
-            # Enforce uniqueness only when holding is set
-            models.UniqueConstraint(
-                fields=["column", "holding"],
-                name="unique_scv_holding",
-                condition=models.Q(holding__isnull=False),
-            ),
-        ]
-
-    def __str__(self):
-        target = self.account or self.holding
-        return f"{target} - {self.column.title}: {self.value}"
 
     def save(self, *args, **kwargs):
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager

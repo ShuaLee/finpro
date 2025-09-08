@@ -1,44 +1,24 @@
-from .metals import fetch_precious_metal_data, apply_fmp_precious_metal_data
-from .stocks import fetch_stock_data, apply_fmp_stock_data
 import logging
+from external_data.fmp.stocks import fetch_stock_quote, fetch_stock_profile
+from external_data.fmp.metals import fetch_precious_metal_quote
 
 logger = logging.getLogger(__name__)
 
-def fetch_asset_data(asset_obj, asset_type: str, *, verify_custom=False) -> bool:
-    """
-    Centralized fetcher for any asset type (e.g. stock, precious_metal).
-    Updates the asset in place based on external data.
-    """
-    if asset_type == 'stock':
-        if asset_obj.is_custom and not verify_custom:
-            logger.info(f"Skipping fetch for custom stock: {asset_obj.ticker}")
-            return True
-        
-        data = fetch_stock_data(asset_obj.ticker)
-        if not data:
-            if verify_custom:
-                asset_obj.is_custom = True
-            return False
-        
-        success = apply_fmp_stock_data(asset_obj, data['quote'], data['profile'])
-        if success:
-            asset_obj.is_custom = False
-        return success
-    
-    elif asset_type == 'precious_metal':
-        if asset_obj.is_custom and not verify_custom:
-            logger.info(f"Skipping fetch for custom metal: {asset_obj.symbol}")
-            return True
 
-        data = fetch_precious_metal_data(asset_obj.symbol)
-        if not data:
-            if verify_custom:
-                asset_obj.is_custom = True
-            return False
+def fetch_asset_data(symbol: str, asset_type: str) -> dict | None:
+    """
+    Centralized fetcher for any asset type.
+    Returns JSON/dict, leaves DB updates to sync services.
+    """
+    if asset_type == "stock":
+        quote = fetch_stock_quote(symbol)
+        profile = fetch_stock_profile(symbol)
+        if not quote or not profile:
+            return None
+        return {"quote": quote, "profile": profile}
 
-        success = apply_fmp_precious_metal_data(asset_obj, data)
-        if success:
-            asset_obj.is_custom = False
-        return success
-    
-    raise NotImplementedError(f"Unsupported asset type: {asset_type}")
+    elif asset_type == "metal":
+        return fetch_precious_metal_quote(symbol)
+
+    else:
+        raise NotImplementedError(f"Unsupported asset type: {asset_type}")

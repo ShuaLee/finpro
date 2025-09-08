@@ -12,7 +12,7 @@ class AssetType(models.TextChoices):
 class Asset(models.Model):
     asset_type = models.CharField(max_length=20, choices=AssetType.choices)
     symbol = models.CharField(max_length=20, db_index=True)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

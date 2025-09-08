@@ -72,10 +72,15 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "column",
-        "account",   # ✅ direct FK now
+        "holding",
         "value",
         "is_edited",
     )
-    search_fields = ("column__title", "account__id", "value")  # ✅ FK lookup
+    search_fields = (
+        "column__title",
+        "holding__asset__symbol",
+        "holding__account__name",
+        "value",
+    )
     list_filter = ("is_edited", "column__schema")
-    raw_id_fields = ("column", "account")  # ✅ both real FKs
+    raw_id_fields = ("column", "holding")  # ✅ both real FKs
