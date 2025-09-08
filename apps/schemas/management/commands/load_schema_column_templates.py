@@ -28,9 +28,6 @@ class Command(BaseCommand):
         template_created, template_updated, template_skipped = 0, 0, 0
         formula_created, formula_updated = 0, 0
 
-        # ✅ All templates tied to Account (single model)
-        account_model_ct = ContentType.objects.get_for_model(Account)
-
         for account_type, fields in SCHEMA_CONFIG_REGISTRY.items():
             for source, columns in fields.items():
                 for source_field, meta in columns.items():

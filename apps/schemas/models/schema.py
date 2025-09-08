@@ -1,39 +1,20 @@
 from django.db import models
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from schemas.validators import validate_constraints
-
+from accounts.models.account import Account, AccountType
+from assets.models.asset import Holding
+from portfolios.models.subportfolio import SubPortfolio
 
 
 class Schema(models.Model):
-    """
-    Represents a dynamic schema linked to any sub-portfolio (Stock, Metal, Custom).
-    Each schema defines the structure of holdings/accounts under that sub-portfolio.
-    """
+    subportfolio = models.ForeignKey(
+        SubPortfolio, on_delete=models.CASCADE, related_name="schemas")
+    account_type = models.CharField(max_length=30, choices=AccountType.choices)
     name = models.CharField(max_length=100)
-    schema_type = models.CharField(max_length=50)  # e.g., stock, metal, custom
-
-    # Generic link to sub-portfolio
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
-    portfolio = GenericForeignKey('content_type', 'object_id')
-
+    schema_type = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"{self.name}"
-
-    def clean(self):
-        super().clean()
-        if self.pk:
-            original = type(self).objects.get(pk=self.pk)
-            if (
-                self.content_type_id != original.content_type_id or
-                self.object_id != original.object_id
-            ):
-                raise ValidationError(
-                    "Schema portfolio assignment cannot be changed once saved.")
+    class Meta:
+        unique_together = ("subportfolio", "account_type")
 
 
 class SchemaColumn(models.Model):
@@ -104,13 +85,13 @@ class SchemaColumn(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.source})"
-    
+
     def clean(self):
         super().clean()
 
         if not self.identifier:
-            raise ValidationError("SchemaColumn.identifier must be set explicitly (use SchemaGenerator).")
-        
+            raise ValidationError(
+                "SchemaColumn.identifier must be set explicitly (use SchemaGenerator).")
 
 
 class SchemaColumnValue(models.Model):
@@ -121,9 +102,20 @@ class SchemaColumnValue(models.Model):
     column = models.ForeignKey(
         SchemaColumn, on_delete=models.CASCADE, related_name='values')
 
-    account_ct = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    account_id = models.PositiveIntegerField()
-    account = GenericForeignKey('account_ct', 'account_id')
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name="schema_values",
+        null=True,
+        blank=True,
+    )
+    holding = models.ForeignKey(
+        Holding,
+        on_delete=models.CASCADE,
+        related_name="schema_values",
+        null=True,
+        blank=True,
+    )
 
     value = models.TextField(blank=True, null=True)
     is_edited = models.BooleanField(default=False)
@@ -135,35 +127,28 @@ class SchemaColumnValue(models.Model):
         """
         return self.value
 
-    
-
     class Meta:
-        unique_together = ('column', 'account_ct', 'account_id')
+        constraints = [
+            # Enforce uniqueness only when account is set
+            models.UniqueConstraint(
+                fields=["column", "account"],
+                name="unique_scv_account",
+                condition=models.Q(account__isnull=False),
+            ),
+            # Enforce uniqueness only when holding is set
+            models.UniqueConstraint(
+                fields=["column", "holding"],
+                name="unique_scv_holding",
+                condition=models.Q(holding__isnull=False),
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.account} - {self.column.title}: {self.value}"
-    
+        target = self.account or self.holding
+        return f"{target} - {self.column.title}: {self.value}"
+
     def save(self, *args, **kwargs):
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
         manager = SchemaColumnValueManager(self)
-        manager.apply_rules()  # ensures rounding/constraints are applied
-        super().save(*args, **kwargs)  # persist cleaned value
-
-
-
-
-# class CustomAssetSchemaConfig(models.Model):
-#     """
-#     Stores custom schema configurations for user-defined asset types.
-#     """
-#     asset_type = models.CharField(max_length=100, unique=True)
-#     config = models.JSONField()
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     updated_at = models.DateTimeField(auto_now=True)
-
-#     class Meta:
-#         verbose_name = "Asset Schema Config"
-#         verbose_name_plural = "Asset Schema Configs"
-
-#     def __str__(self):
-#         return f"SchemaConfig: {self.asset_type}"
+        manager.apply_rules()
+        super().save(*args, **kwargs)

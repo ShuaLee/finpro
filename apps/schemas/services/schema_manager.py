@@ -1,11 +1,10 @@
-from django.contrib.contenttypes.models import ContentType
 from schemas.models import SchemaColumnValue
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
 
 class SchemaManager:
     """
-    Manages a schema and its relationship to holdings + SCVs.
+    Manages a schema and its relationship to holdings + SchemaColumnValues (SCVs).
     """
 
     def __init__(self, schema):
@@ -13,7 +12,7 @@ class SchemaManager:
 
     @classmethod
     def for_account(cls, account):
-        schema = account.get_active_schema()
+        schema = account.active_schema
         if not schema:
             raise ValueError(f"No active schema for account {account}")
         return cls(schema)
@@ -25,25 +24,21 @@ class SchemaManager:
         """
         Ensure all SCVs exist for this holding.
         """
-        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-        ct = ContentType.objects.get_for_model(holding.__class__)
-
         for col in self.schema.columns.all():
             scv, created = SchemaColumnValue.objects.get_or_create(
                 column=col,
-                account_ct=ct,
-                account_id=holding.id,
+                holding=holding,  # ✅ direct FK
                 defaults={
                     "value": SchemaColumnValueManager.default_for_column(col, holding),
                     "is_edited": False,
                 },
             )
 
-            if not created:
-                # Re-sync value from source if not edited
-                if not scv.is_edited:
-                    scv.value = SchemaColumnValueManager.default_for_column(col, holding)
-                    scv.save(update_fields=["value"])
+            if not created and not scv.is_edited:
+                # Re-sync if not manually edited
+                scv.value = SchemaColumnValueManager.default_for_column(
+                    col, holding)
+                scv.save(update_fields=["value"])
 
     def ensure_for_all_holdings(self, account):
         """
@@ -59,13 +54,12 @@ class SchemaManager:
         """
         Sync all SCVs for a single holding.
         """
-        ct = ContentType.objects.get_for_model(holding.__class__)
         for col in self.schema.columns.all():
             scv = SchemaColumnValue.objects.filter(
                 column=col,
-                account_ct=ct,
-                account_id=holding.id,
+                holding=holding,  # ✅ direct FK
             ).first()
+
             if scv:
                 SchemaColumnValueManager(scv).reset_to_source()
             else:
@@ -85,12 +79,10 @@ class SchemaManager:
         """
         When a new SchemaColumn is added, backfill SCVs for all holdings.
         """
-        ct = ContentType.objects.get_for_model(account.holdings.model)
         for holding in account.holdings.all():
             SchemaColumnValue.objects.get_or_create(
                 column=column,
-                account_ct=ct,
-                account_id=holding.id,
+                holding=holding,  # ✅ direct FK
                 defaults={
                     "value": SchemaColumnValueManager.default_for_column(column, holding),
                     "is_edited": False,

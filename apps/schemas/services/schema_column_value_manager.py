@@ -23,9 +23,11 @@ class SchemaColumnValueManager:
 
             # Run constraints (min/max, etc.)
             try:
-                validate_constraints(self.column.data_type, self.column.constraints)
+                validate_constraints(self.column.data_type,
+                                     self.column.constraints)
             except Exception as e:
-                raise ValidationError(f"Invalid value for {self.column.title}: {e}")
+                raise ValidationError(
+                    f"Invalid value for {self.column.title}: {e}")
 
             # Update the holding field
             setattr(self.scv.account, self.column.source_field, casted)
@@ -42,7 +44,8 @@ class SchemaColumnValueManager:
         self.scv.is_edited = is_edited
         if is_edited:
             casted = self._cast_value(raw_value)
-            validate_constraints(self.column.data_type, self.column.constraints)
+            validate_constraints(self.column.data_type,
+                                 self.column.constraints)
             self.scv.value = str(casted)
         else:
             self.reset_to_source()
@@ -81,7 +84,6 @@ class SchemaColumnValueManager:
         self.scv.is_edited = False
         self.scv.value = self.resolve()
         return self.scv
-
 
     def resolve(self):
         """
@@ -148,20 +150,18 @@ class SchemaColumnValueManager:
     @classmethod
     def get_or_create(cls, account, column):
         """
-        Ensure an SCV exists for this account/column.
+        Ensure a SchemaColumnValue exists for this account/column.
         """
-        ct = ContentType.objects.get_for_model(type(account))
         scv, created = SchemaColumnValue.objects.get_or_create(
             column=column,
-            account_ct=ct,
-            account_id=account.id,
+            account=account,  # ✅ direct FK
             defaults={
                 "value": cls.default_for_column(column, account),
                 "is_edited": False,
-            }
+            },
         )
         return cls(scv)
-    
+
     def apply_rules(self):
         if self.column.source == "holding":
             self.save_value(self.scv.value, is_edited=False)

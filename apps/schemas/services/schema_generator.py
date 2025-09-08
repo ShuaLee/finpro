@@ -1,6 +1,5 @@
-from django.contrib.contenttypes.models import ContentType
 from django.db import transaction, models
-from schemas.models import SchemaColumn, SchemaColumnTemplate, Schema, SubPortfolioSchemaLink
+from schemas.models import SchemaColumn, SchemaColumnTemplate, Schema
 import re
 
 
@@ -8,7 +7,6 @@ class SchemaGenerator:
     def __init__(self, subportfolio, schema_type: str):
         self.subportfolio = subportfolio
         self.schema_type = schema_type
-        self.subportfolio_ct = ContentType.objects.get_for_model(subportfolio)
         self.schema = None
 
     # -------------------------------
@@ -31,7 +29,7 @@ class SchemaGenerator:
     # -------------------------------
     def _get_templates(self, account_type: str):
         return SchemaColumnTemplate.objects.filter(
-            account_type=account_type,  # 🔄 updated
+            account_type=account_type,
             schema_type=self.schema_type,
             is_default=True,
             is_system=True,
@@ -53,11 +51,14 @@ class SchemaGenerator:
                 else f"{user_email}'s {self.schema_type.title()} ({account_type}) Schema"
             )
 
-            self.schema = Schema.objects.create(
-                name=schema_name,
-                schema_type=self.schema_type,
-                content_type=self.subportfolio_ct,
-                object_id=self.subportfolio.id,
+            # 🚨 NEW: create or update Schema directly (no SchemaLink needed)
+            self.schema, _ = Schema.objects.update_or_create(
+                subportfolio=self.subportfolio,
+                account_type=account_type,
+                defaults={
+                    "name": schema_name,
+                    "schema_type": self.schema_type,
+                },
             )
 
             # Load templates (fallback to custom_default if needed)
@@ -75,14 +76,6 @@ class SchemaGenerator:
             # 🚀 Use unified creation logic for all template columns
             for template in templates:
                 self.add_from_template(template)
-
-            # Link schema <-> subportfolio + account type
-            SubPortfolioSchemaLink.objects.update_or_create(
-                subportfolio_ct=self.subportfolio_ct,
-                subportfolio_id=self.subportfolio.id,
-                account_type=account_type,  # 🔄 updated
-                defaults={"schema": self.schema},
-            )
 
         return self.schema
 

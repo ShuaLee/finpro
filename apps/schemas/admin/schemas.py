@@ -5,9 +5,11 @@ from schemas.models import Schema, SchemaColumn, SchemaColumnValue
 from schemas.validators import validate_constraints
 from decimal import Decimal
 
+
 @admin.register(Schema)
 class SchemaAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "schema_type", "portfolio", "created_at")
+    list_display = ("id", "name", "schema_type",
+                    "subportfolio", "account_type", "created_at")
     search_fields = ("name", "schema_type")
     list_filter = ("schema_type", "created_at")
 
@@ -63,16 +65,17 @@ class SchemaColumnValueForm(forms.ModelForm):
 
         return value
 
+
 @admin.register(SchemaColumnValue)
 class SchemaColumnValueAdmin(admin.ModelAdmin):
     form = SchemaColumnValueForm
     list_display = (
         "id",
         "column",
-        "account",
+        "account",   # ✅ direct FK now
         "value",
         "is_edited",
     )
-    search_fields = ("column__title", "account_id", "value")
+    search_fields = ("column__title", "account__id", "value")  # ✅ FK lookup
     list_filter = ("is_edited", "column__schema")
-    raw_id_fields = ("column", "account_ct")  # keeps admin light
+    raw_id_fields = ("column", "account")  # ✅ both real FKs

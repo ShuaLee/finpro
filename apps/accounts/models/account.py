@@ -72,5 +72,11 @@ class Account(models.Model):
 
     @property
     def active_schema(self):
-        """Look up schema for this account based on type."""
-        return self.subportfolio.get_schema_for_account_model(self.type)
+        from schemas.models import Schema  # local import to avoid circular deps
+        try:
+            return Schema.objects.get(
+                subportfolio=self.subportfolio,
+                account_type=self.type,
+            )
+        except Schema.DoesNotExist:
+            return None

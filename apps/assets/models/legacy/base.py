@@ -14,34 +14,10 @@ from abc import abstractmethod
 logger = logging.getLogger(__name__)
 
 
-class InvestmentTheme(models.Model):
-    portfolio = models.ForeignKey(
-        Portfolio, on_delete=models.CASCADE, related_name='asset_tags'
-    )
-    name = models.CharField(max_length=100)
-    parent = models.ForeignKey(
-        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtags'
-    )
-
-    class Meta:
-        unique_together = ('portfolio', 'name')
-
-    def __str__(self):
-        # Full hierarchy display
-        full_path = [self.name]
-        parent = self.parent
-        while parent:
-            full_path.append(parent.name)
-            parent = parent.parent
-        return " > ".join(reversed(full_path))
-
-
 class HoldingThemeValue(models.Model):
     holding_ct = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     holding_id = models.PositiveIntegerField()
     holding = GenericForeignKey("holding_ct", "holding_id")
-
-    theme = models.ForeignKey(InvestmentTheme, on_delete=models.CASCADE)
 
     # Support various value types (same as SchemaColumnValue)
     value_string = models.CharField(max_length=255, null=True, blank=True)
@@ -96,7 +72,7 @@ class AssetHolding(models.Model):
 
     class Meta:
         abstract = True
-    
+
     @property
     def account(self):
         """

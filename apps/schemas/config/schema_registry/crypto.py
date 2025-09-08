@@ -1,60 +1,107 @@
 from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
 
-
-CRYPTO_ACCOUNT_SCHEMA_CONFIG = {
+CRYPTO_SCHEMA_CONFIG = {
     "asset": {
-        "ticker": SchemaTemplateManager.schema_field(
-            title="Ticker",
+        "symbol": SchemaTemplateManager.schema_field(
+            title="Symbol",
             data_type="string",
-            source_field="ticker",
-            is_default=True,
             is_editable=False,
             is_deletable=False,
-            is_system=True,
-            constraints={
-                "character_limit": 10
-            },
-            display_order=1,
-        ),
-        "price": SchemaTemplateManager.schema_field(
-            title="Price",
-            data_type="decimal",
-            source_field="price",
             is_default=True,
-            is_deletable=False,
             is_system=True,
-            constraints={
-                "decimal_places": 2,
-                "min": Decimal("0")
-            },
-            display_order=2,
+            constraints={"character_limit": 10, "all_caps": True},
+            display_order=1,
         ),
         "name": SchemaTemplateManager.schema_field(
             title="Name",
             data_type="string",
-            source_field="name",
+            is_editable=False,
+            is_deletable=False,
             is_default=True,
             is_system=True,
-            constraints={
-                "character_limit": 200
-            },
+            constraints={"character_limit": 200},
+            display_order=2,
+        ),
+        "currency": SchemaTemplateManager.schema_field(
+            title="Currency",
+            data_type="string",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
+            is_system=True,
+            constraints={"character_limit": 3,
+                         "character_minimum": 3, "all_caps": True},
             display_order=3,
+        ),
+        "price": SchemaTemplateManager.schema_field(
+            title="Price",
+            data_type="decimal",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
+            is_system=True,
+            constraints={"decimal_places": 8, "min": Decimal("0")},
+            display_order=4,
         ),
     },
     "holding": {
         "quantity": SchemaTemplateManager.schema_field(
             title="Quantity",
             data_type="decimal",
-            source_field="quantity",
-            is_default=True,
+            is_editable=True,
             is_deletable=False,
-            is_system=True,
-            constraints={
-                "decimal_places": 8,
-                "min": Decimal("0")
-            },
-            display_order=4,
+            is_default=True,
+            constraints={"decimal_places": 8},  # 8 dp for BTC/ETH
+            display_order=5,
         ),
-    }
+        "purchase_price": SchemaTemplateManager.schema_field(
+            title="Purchase Price",
+            data_type="decimal",
+            is_editable=True,
+            is_deletable=False,
+            is_default=True,
+            constraints={"decimal_places": 8, "min": Decimal("0")},
+            display_order=6,
+        ),
+        "purchase_date": SchemaTemplateManager.schema_field(
+            title="Purchase Date",
+            data_type="date",
+            is_editable=True,
+            is_default=True,
+            display_order=7,
+        ),
+    },
+    "calculated": {
+        "current_value_crypto_fx": SchemaTemplateManager.schema_field(
+            title="Current Value - Crypto FX",
+            data_type="decimal",
+            formula_key="current_value_crypto_fx",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
+            constraints={"decimal_places": 8, "min": Decimal("0")},
+            display_order=8,
+        ),
+        "current_value_profile_fx": SchemaTemplateManager.schema_field(
+            title="Current Value - Profile FX",
+            data_type="decimal",
+            formula_key="current_value_profile_fx",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
+            constraints={"decimal_places": 2, "min": Decimal("0")},
+            display_order=9,
+        ),
+        "unrealized_gain": SchemaTemplateManager.schema_field(
+            title="Unrealized Gain",
+            data_type="decimal",
+            formula_key="unrealized_gain",
+            is_editable=False,
+            is_deletable=True,
+            is_default=False,
+            constraints={"decimal_places": 2},
+            display_order=10,
+        ),
+    },
 }
