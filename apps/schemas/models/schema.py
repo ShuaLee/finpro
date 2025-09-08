@@ -32,13 +32,7 @@ class SchemaColumn(models.Model):
         on_delete=models.CASCADE,
         related_name="columns"
     )
-    template = models.ForeignKey(
-        "schemas.SchemaColumnTemplate",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="Template this column was created from, if any"
-    )
+
     formula = models.ForeignKey(
         "formulas.Formula",
         on_delete=models.SET_NULL,

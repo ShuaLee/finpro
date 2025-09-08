@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
+from core.types import DomainType
 from portfolios.config import SUBPORTFOLIO_CONFIG
 from portfolios.models.portfolio import Portfolio
 
@@ -12,17 +13,12 @@ class SubPortfolio(models.Model):
 
     The available types and their defaults are defined in SUBPORTFOLIO_CONFIG.
     """
-
-    # Choices are dynamically built from config
-    TYPES = [(key, cfg["default_name"])
-             for key, cfg in SUBPORTFOLIO_CONFIG.items()]
-
     portfolio = models.ForeignKey(
         Portfolio,
         on_delete=models.CASCADE,
         related_name="subportfolios"
     )
-    type = models.CharField(max_length=50, choices=TYPES)
+    type = models.CharField(max_length=50, choices=DomainType.choices)
     name = models.CharField(max_length=100, blank=True, null=True)
     slug = models.SlugField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -38,11 +34,13 @@ class SubPortfolio(models.Model):
         """
         Auto-fill name/slug if not provided.
         """
-        cfg = SUBPORTFOLIO_CONFIG.get(self.type, {})
+        from core.types import DOMAIN_TYPE_REGISTRY
+
+        domain_meta = DOMAIN_TYPE_REGISTRY.get(self.type, {})
 
         # Default name
         if not self.name:
-            self.name = cfg.get(
+            self.name = domain_meta.get(
                 "default_name", f"{self.type.capitalize()} Portfolio")
 
         # Default slug
@@ -50,7 +48,7 @@ class SubPortfolio(models.Model):
             self.slug = slugify(self.name or f"{self.type}-portfolio")
 
         # Enforce uniqueness: only one stock/crypto/metal per portfolio
-        if cfg.get("unique", False):
+        if domain_meta.get("unique", False):
             qs = SubPortfolio.objects.filter(
                 portfolio=self.portfolio, type=self.type)
             if self.pk:

@@ -1,5 +1,6 @@
 from django.db import transaction, models
-from schemas.models import SchemaColumn, SchemaColumnTemplate, Schema
+from schemas.models import SchemaColumn, Schema
+from core.types import get_schema_config_for_account_type
 import re
 
 
@@ -25,23 +26,12 @@ class SchemaGenerator:
         return proposed
 
     # -------------------------------
-    # Template fetching
-    # -------------------------------
-    def _get_templates(self, account_type: str):
-        return SchemaColumnTemplate.objects.filter(
-            account_type=account_type,
-            schema_type=self.schema_type,
-            is_default=True,
-            is_system=True,
-        ).order_by("display_order")
-
-    # -------------------------------
     # Schema initialization
     # -------------------------------
     @transaction.atomic
     def initialize(self, account_types: list[str], custom_schema_namer=None):
         """
-        Build schema + columns for each account type in the given list.
+        Build schema + system columns for each account type using DOMAIN_TYPE_REGISTRY.
         """
         for account_type in account_types:
             user_email = self.subportfolio.portfolio.profile.user.email
@@ -51,7 +41,6 @@ class SchemaGenerator:
                 else f"{user_email}'s {self.schema_type.title()} ({account_type}) Schema"
             )
 
-            # 🚨 NEW: create or update Schema directly (no SchemaLink needed)
             self.schema, _ = Schema.objects.update_or_create(
                 subportfolio=self.subportfolio,
                 account_type=account_type,
@@ -61,21 +50,27 @@ class SchemaGenerator:
                 },
             )
 
-            # Load templates (fallback to custom_default if needed)
-            templates = list(self._get_templates(account_type))
-            if not templates and self.schema_type.startswith("custom:"):
-                templates = list(
-                    SchemaColumnTemplate.objects.filter(
-                        account_type=account_type,
-                        schema_type="custom_default",
-                        is_default=True,
-                        is_system=True,
-                    )
-                )
+            # 🔍 Fetch config from central domain registry
+            config = get_schema_config_for_account_type(account_type)
+            if not config:
+                raise ValueError(f"No schema config found for account type '{account_type}'")
 
-            # 🚀 Use unified creation logic for all template columns
-            for template in templates:
-                self.add_from_template(template)
+            # 🧱 Add columns defined in config
+            for source, field_defs in config.items():
+                for source_field, col_def in field_defs.items():
+                    if col_def.get("is_default"):
+                        self.add_column(
+                            title=col_def["title"],
+                            data_type=col_def["data_type"],
+                            source=source,
+                            source_field=source_field,
+                            formula_obj=None,  # Hook formula resolution later
+                            is_editable=col_def.get("is_editable", True),
+                            is_deletable=col_def.get("is_deletable", True),
+                            is_system=col_def.get("is_system", False),
+                            constraints=col_def.get("constraints", {}),
+                            display_order=col_def.get("display_order", 0),
+                        )
 
         return self.schema
 
@@ -90,7 +85,6 @@ class SchemaGenerator:
         *,
         source_field: str = None,
         formula_obj=None,
-        template=None,
         is_editable=True,
         is_deletable=True,
         is_system=False,
@@ -115,27 +109,11 @@ class SchemaGenerator:
             source_field=source_field,
             identifier=identifier,
             formula=formula_obj,
-            template=template if source != "custom" else None,
             is_editable=is_editable,
             is_deletable=is_deletable,
             is_system=is_system,
             constraints=constraints or {},
             display_order=display_order,
-        )
-
-    def add_from_template(self, template):
-        return self.add_column(
-            title=template.title,
-            data_type=template.data_type,
-            source=template.source,
-            source_field=template.source_field,
-            formula_obj=template.formula,
-            template=template,
-            is_editable=template.is_editable,
-            is_deletable=template.is_deletable,
-            is_system=template.is_system,
-            constraints=template.constraints,
-            display_order=template.display_order,
         )
 
     def add_custom_column(self, title: str, data_type: str, **kwargs):
