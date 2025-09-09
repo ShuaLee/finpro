@@ -1,7 +1,7 @@
 from typing import Type
 from django.db import models
 
-from core.types import DomainType
+from core.types import DOMAIN_TYPE_REGISTRY, DomainType
 from accounts.models.account import Account
 from accounts.models.details import (
     StockSelfManagedDetails,
@@ -19,18 +19,23 @@ ACCOUNT_DETAILS_MODELS = {
 
 
 def get_account_details_models(domain_type: str) -> list[Type[models.Model]]:
-    """
-    Return all eligible detail models for a given domain type.
-    """
+    """Return all eligible detail models for a given domain type."""
     return ACCOUNT_DETAILS_MODELS.get(domain_type, [])
 
 
 def get_account_detail_model_for(account: Account) -> Type[models.Model] | None:
-    """
-    Given an Account instance, return the detail model class if one exists and is related.
-    """
-    for model in get_account_details_models(account.type):
+    """Given an Account instance, return the detail model class if one exists and is related."""
+    for model in get_account_details_models(account.domain_type):
         rel_name = model._meta.model_name
         if hasattr(account, rel_name):
             return model
     return None
+
+
+def get_domain_meta_with_details(domain_type: str) -> dict:
+    """Return full domain metadata, enriched with account detail models."""
+    if domain_type not in DOMAIN_TYPE_REGISTRY:
+        raise ValueError(f"Unknown domain type: {domain_type}")
+
+    base = DOMAIN_TYPE_REGISTRY[domain_type]
+    return {**base, "account_details_models": get_account_details_models(domain_type)}

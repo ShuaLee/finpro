@@ -46,27 +46,23 @@ DOMAIN_TYPE_REGISTRY = {
 
 
 # -------------------------------
-# Core helpers (no accounts import!)
+# Core helpers
 # -------------------------------
 def get_schema_config_for_domain(domain_type: str) -> dict:
-    """Return schema config for a given domain (stock, crypto, etc.)."""
     if domain_type not in DOMAIN_TYPE_REGISTRY:
         raise ValueError(f"Unknown domain type: {domain_type}")
     return DOMAIN_TYPE_REGISTRY[domain_type]["schema_config"]
 
 
 def get_label_for_domain(domain_type: str) -> str:
-    """Return a user-friendly label for a domain (e.g. 'Stocks')."""
     return DOMAIN_TYPE_REGISTRY.get(domain_type, {}).get("label", domain_type.title())
 
 
 def get_all_domain_types() -> list[str]:
-    """Return all domain type keys (stock, crypto, metal, custom)."""
     return list(DOMAIN_TYPE_REGISTRY.keys())
 
 
 def get_all_schema_configs() -> dict[str, dict]:
-    """Return a dict mapping all domains → schema config dicts."""
     return {
         domain: meta["schema_config"]
         for domain, meta in DOMAIN_TYPE_REGISTRY.items()
@@ -74,14 +70,10 @@ def get_all_schema_configs() -> dict[str, dict]:
 
 
 def get_all_domains_with_labels() -> list[tuple[str, str]]:
-    """Return a list of (domain, label) tuples for choice fields, UI, etc."""
     return [(domain, meta["label"]) for domain, meta in DOMAIN_TYPE_REGISTRY.items()]
 
 
 def get_domain_for_account_type(account_type: str) -> str:
-    """
-    Given an account_type (e.g. 'stock_self'), return its parent domain (e.g. 'stock').
-    """
     for domain, meta in DOMAIN_TYPE_REGISTRY.items():
         if account_type in meta.get("account_types", []):
             return domain
