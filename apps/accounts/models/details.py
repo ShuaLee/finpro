@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from .account import Account, AccountType
+from .account import Account
 
 
 # -------------------------------

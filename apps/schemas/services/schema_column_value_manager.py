@@ -1,5 +1,3 @@
-from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ValidationError
 from schemas.models import SchemaColumnValue
 from schemas.validators import validate_constraints
 from decimal import Decimal
@@ -9,38 +7,24 @@ class SchemaColumnValueManager:
     def __init__(self, scv: SchemaColumnValue):
         self.scv = scv
         self.column = scv.column
+        self.holding = scv.holding
 
-    # ----------------------------
-    # Save / update
-    # ----------------------------
     def save_value(self, raw_value, is_edited: bool):
         """
         Save or update the SCV with validation.
         """
         if self.column.source == "holding":
-            # Try casting to the right type
             casted = self._cast_value(raw_value)
+            validate_constraints(self.column.data_type,
+                                 self.column.constraints)
 
-            # Run constraints (min/max, etc.)
-            try:
-                validate_constraints(self.column.data_type,
-                                     self.column.constraints)
-            except Exception as e:
-                raise ValidationError(
-                    f"Invalid value for {self.column.title}: {e}")
+            setattr(self.holding, self.column.source_field, casted)
+            self.holding.save(update_fields=[self.column.source_field])
 
-            # Update the holding field
-            setattr(self.scv.account, self.column.source_field, casted)
-            self.scv.account.save(update_fields=[self.column.source_field])
-
-            # Mirror into SCV for consistency
             self.scv.value = str(casted)
             self.scv.is_edited = False
             return self.scv
 
-        # -------------------
-        # Non-holding columns
-        # -------------------
         self.scv.is_edited = is_edited
         if is_edited:
             casted = self._cast_value(raw_value)
@@ -52,15 +36,33 @@ class SchemaColumnValueManager:
 
         return self.scv
 
+    def reset_to_source(self):
+        self.scv.is_edited = False
+        self.scv.value = self.resolve()
+        return self.scv
+
+    def resolve(self):
+        if self.column.formula:
+            # Placeholder for future formula logic
+            # return self.column.formula.evaluate(self.holding)
+            pass
+
+        if self.column.source_field:
+            if hasattr(self.holding, self.column.source_field):
+                return getattr(self.holding, self.column.source_field, None)
+
+            if hasattr(self.holding, "asset"):
+                asset = self.holding.asset
+                if asset and hasattr(asset, self.column.source_field):
+                    return getattr(asset, self.column.source_field, None)
+
+        return self._static_default(self.column)
+
     def _cast_value(self, raw_value):
-        """
-        Casts raw value to the SC data type with normalization.
-        """
         if raw_value in [None, ""]:
             return None
 
         dt = self.column.data_type
-
         if dt == "decimal":
             dp = int(self.column.constraints.get("decimal_places", 2))
             q = Decimal("1." + "0" * dp)
@@ -74,57 +76,18 @@ class SchemaColumnValueManager:
 
         return raw_value
 
-    # ----------------------------
-    # Reset / source resolution
-    # ----------------------------
-    def reset_to_source(self):
-        """
-        Reset SCV back to source-driven value (remove manual edit).
-        """
-        self.scv.is_edited = False
-        self.scv.value = self.resolve()
-        return self.scv
-
-    def resolve(self):
-        """
-        Resolve correct value for this SCV (holding or asset based).
-        """
-        if self.column.source_field:
-            # holding-level first
-            if hasattr(self.scv.account, self.column.source_field):
-                return getattr(self.scv.account, self.column.source_field, None)
-
-            # fallback: try asset-level (e.g., stock.price)
-            if hasattr(self.scv.account, "asset"):
-                asset = self.scv.account.asset
-                if asset and hasattr(asset, self.column.source_field):
-                    return getattr(asset, self.column.source_field, None)
-
-        # fallback default
-        return self._static_default(self.column)
-
-    # ----------------------------
-    # Default resolution
-    # ----------------------------
     @staticmethod
-    def default_for_column(column, account):
-        """
-        Try to resolve a value from holding or asset.
-        Fallback to type-safe static default.
-        """
+    def default_for_column(column, holding):
         value = None
 
-        # Holding-backed
         if column.source == "holding" and column.source_field:
-            value = getattr(account, column.source_field, None)
+            value = getattr(holding, column.source_field, None)
 
-        # Asset-backed
         elif column.source == "asset" and column.source_field:
-            asset = getattr(account, "asset", None)
+            asset = getattr(holding, "asset", None)
             if asset:
                 value = getattr(asset, column.source_field, None)
 
-        # Fallback
         if value is None:
             value = SchemaColumnValueManager._static_default(column)
 
@@ -132,9 +95,6 @@ class SchemaColumnValueManager:
 
     @staticmethod
     def _static_default(column):
-        """
-        Static safe defaults by type.
-        """
         if column.data_type == "decimal":
             dp = int(column.constraints.get("decimal_places", 2))
             return str(Decimal("0").quantize(Decimal(f"1.{'0'*dp}")))
@@ -144,19 +104,13 @@ class SchemaColumnValueManager:
             return "0"
         return None
 
-    # ----------------------------
-    # Creation helpers
-    # ----------------------------
     @classmethod
-    def get_or_create(cls, account, column):
-        """
-        Ensure a SchemaColumnValue exists for this account/column.
-        """
+    def get_or_create(cls, holding, column):
         scv, created = SchemaColumnValue.objects.get_or_create(
             column=column,
-            account=account,  # ✅ direct FK
+            holding=holding,
             defaults={
-                "value": cls.default_for_column(column, account),
+                "value": cls.default_for_column(column, holding),
                 "is_edited": False,
             },
         )

@@ -1,9 +1,9 @@
-from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
+from core.schema_config.utils import schema_field
 
-CRYPTO_SCHEMA_CONFIG = {
+STOCK_SCHEMA_CONFIG = {
     "asset": {
-        "symbol": SchemaTemplateManager.schema_field(
+        "symbol": schema_field(
             title="Symbol",
             data_type="string",
             is_editable=False,
@@ -13,7 +13,7 @@ CRYPTO_SCHEMA_CONFIG = {
             constraints={"character_limit": 10, "all_caps": True},
             display_order=1,
         ),
-        "name": SchemaTemplateManager.schema_field(
+        "name": schema_field(
             title="Name",
             data_type="string",
             is_editable=False,
@@ -23,7 +23,7 @@ CRYPTO_SCHEMA_CONFIG = {
             constraints={"character_limit": 200},
             display_order=2,
         ),
-        "currency": SchemaTemplateManager.schema_field(
+        "currency": schema_field(
             title="Currency",
             data_type="string",
             is_editable=False,
@@ -34,37 +34,37 @@ CRYPTO_SCHEMA_CONFIG = {
                          "character_minimum": 3, "all_caps": True},
             display_order=3,
         ),
-        "price": SchemaTemplateManager.schema_field(
+        "price": schema_field(
             title="Price",
             data_type="decimal",
             is_editable=False,
             is_deletable=False,
             is_default=True,
             is_system=True,
-            constraints={"decimal_places": 8, "min": Decimal("0")},
+            constraints={"decimal_places": 2, "min": Decimal("0")},
             display_order=4,
         ),
     },
     "holding": {
-        "quantity": SchemaTemplateManager.schema_field(
+        "quantity": schema_field(
             title="Quantity",
             data_type="decimal",
             is_editable=True,
             is_deletable=False,
             is_default=True,
-            constraints={"decimal_places": 8},  # 8 dp for BTC/ETH
+            constraints={"decimal_places": 4},
             display_order=5,
         ),
-        "purchase_price": SchemaTemplateManager.schema_field(
+        "purchase_price": schema_field(
             title="Purchase Price",
             data_type="decimal",
             is_editable=True,
             is_deletable=False,
             is_default=True,
-            constraints={"decimal_places": 8, "min": Decimal("0")},
+            constraints={"decimal_places": 2, "min": Decimal("0")},
             display_order=6,
         ),
-        "purchase_date": SchemaTemplateManager.schema_field(
+        "purchase_date": schema_field(
             title="Purchase Date",
             data_type="date",
             is_editable=True,
@@ -73,17 +73,17 @@ CRYPTO_SCHEMA_CONFIG = {
         ),
     },
     "calculated": {
-        "current_value_crypto_fx": SchemaTemplateManager.schema_field(
-            title="Current Value - Crypto FX",
+        "current_value_stock_fx": schema_field(
+            title="Current Value - Stock FX",
             data_type="decimal",
-            formula_key="current_value_crypto_fx",
+            formula_key="current_value_stock_fx",
             is_editable=False,
             is_deletable=False,
             is_default=True,
-            constraints={"decimal_places": 8, "min": Decimal("0")},
+            constraints={"decimal_places": 2, "min": Decimal("0")},
             display_order=8,
         ),
-        "current_value_profile_fx": SchemaTemplateManager.schema_field(
+        "current_value_profile_fx": schema_field(
             title="Current Value - Profile FX",
             data_type="decimal",
             formula_key="current_value_profile_fx",
@@ -93,7 +93,7 @@ CRYPTO_SCHEMA_CONFIG = {
             constraints={"decimal_places": 2, "min": Decimal("0")},
             display_order=9,
         ),
-        "unrealized_gain": SchemaTemplateManager.schema_field(
+        "unrealized_gain": schema_field(
             title="Unrealized Gain",
             data_type="decimal",
             formula_key="unrealized_gain",

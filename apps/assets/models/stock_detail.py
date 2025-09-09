@@ -1,5 +1,6 @@
 from django.db import models
-from assets.models.asset import Asset, AssetType
+from assets.models.asset import Asset
+from core.types import DomainType
 
 
 class StockDetail(models.Model):
@@ -7,7 +8,7 @@ class StockDetail(models.Model):
         Asset,
         on_delete=models.CASCADE,
         related_name="stock_detail",
-        limit_choices_to={"asset_type": AssetType.STOCK}
+        limit_choices_to={"asset_type": DomainType.STOCK}
     )
 
     # Identification
@@ -54,4 +55,3 @@ class StockDetail(models.Model):
 
     def __str__(self):
         return f"{self.asset.symbol} ({self.exchange})"
-

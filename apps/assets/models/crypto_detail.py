@@ -1,5 +1,6 @@
 from django.db import models
-from assets.models.asset import Asset, AssetType
+from assets.models.asset import Asset
+from core.types import DomainType
 
 
 class CryptoDetail(models.Model):
@@ -12,7 +13,7 @@ class CryptoDetail(models.Model):
         Asset,
         on_delete=models.CASCADE,
         related_name="crypto_detail",
-        limit_choices_to={"asset_type": AssetType.CRYPTO},
+        limit_choices_to={"asset_type": DomainType.CRYPTO},
     )
 
     decimals = models.PositiveSmallIntegerField(

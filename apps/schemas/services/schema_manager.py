@@ -27,7 +27,7 @@ class SchemaManager:
         for col in self.schema.columns.all():
             scv, created = SchemaColumnValue.objects.get_or_create(
                 column=col,
-                holding=holding,  # ✅ direct FK
+                holding=holding,
                 defaults={
                     "value": SchemaColumnValueManager.default_for_column(col, holding),
                     "is_edited": False,
@@ -35,14 +35,13 @@ class SchemaManager:
             )
 
             if not created and not scv.is_edited:
-                # Re-sync if not manually edited
                 scv.value = SchemaColumnValueManager.default_for_column(
                     col, holding)
                 scv.save(update_fields=["value"])
 
     def ensure_for_all_holdings(self, account):
         """
-        Ensure all SCVs exist for every holding in this account.
+        Ensure SCVs for every holding in this account.
         """
         for holding in account.holdings.all():
             self.ensure_for_holding(holding)
@@ -51,38 +50,37 @@ class SchemaManager:
     # SCV syncing
     # -------------------------------
     def sync_for_holding(self, holding):
-        """
-        Sync all SCVs for a single holding.
-        """
         for col in self.schema.columns.all():
             scv = SchemaColumnValue.objects.filter(
-                column=col,
-                holding=holding,  # ✅ direct FK
-            ).first()
-
+                column=col, holding=holding).first()
             if scv:
                 SchemaColumnValueManager(scv).reset_to_source()
             else:
                 self.ensure_for_holding(holding)
 
     def sync_for_all_holdings(self, account):
-        """
-        Sync all SCVs for all holdings in this account.
-        """
         for holding in account.holdings.all():
             self.sync_for_holding(holding)
+
+    def refresh_all(self, account):
+        """
+        Force-resync all SCVs (ignoring edit flags).
+        """
+        for holding in account.holdings.all():
+            for col in self.schema.columns.all():
+                scv = SchemaColumnValue.objects.filter(
+                    column=col, holding=holding).first()
+                if scv:
+                    SchemaColumnValueManager(scv).reset_to_source()
 
     # -------------------------------
     # Column-level operations
     # -------------------------------
     def on_column_added(self, column, account):
-        """
-        When a new SchemaColumn is added, backfill SCVs for all holdings.
-        """
         for holding in account.holdings.all():
             SchemaColumnValue.objects.get_or_create(
                 column=column,
-                holding=holding,  # ✅ direct FK
+                holding=holding,
                 defaults={
                     "value": SchemaColumnValueManager.default_for_column(column, holding),
                     "is_edited": False,
@@ -90,7 +88,4 @@ class SchemaManager:
             )
 
     def on_column_deleted(self, column):
-        """
-        When a column is deleted, remove all its SCVs.
-        """
         SchemaColumnValue.objects.filter(column=column).delete()

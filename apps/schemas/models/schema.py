@@ -1,16 +1,16 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from accounts.models.account import AccountType
 from assets.models.asset import Holding
+from core.types import DomainType
 from portfolios.models.subportfolio import SubPortfolio
 
 
 class Schema(models.Model):
     subportfolio = models.ForeignKey(
         SubPortfolio, on_delete=models.CASCADE, related_name="schemas")
-    account_type = models.CharField(max_length=30, choices=AccountType.choices)
+    account_type = models.CharField(max_length=20, choices=DomainType.choices)
     name = models.CharField(max_length=100)
-    schema_type = models.CharField(max_length=50)
+    schema_type = models.CharField(max_length=20, choices=DomainType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

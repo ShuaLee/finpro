@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from accounts.constants import AccountType
+from core.types import DomainType
 from portfolios.models.subportfolio import SubPortfolio
 
 
@@ -21,8 +21,8 @@ class Account(models.Model):
 
     name = models.CharField(max_length=100)
     type = models.CharField(
-        max_length=30,
-        choices=AccountType.choices,
+        max_length=20,
+        choices=DomainType.choices,
         db_index=True,
     )
 
@@ -42,19 +42,10 @@ class Account(models.Model):
         """
         Ensure account type matches subportfolio type.
         """
-        type_to_subportfolio = {
-            AccountType.STOCK_SELF_MANAGED: "stock",
-            AccountType.STOCK_MANAGED: "stock",
-            AccountType.CRYPTO_WALLET: "crypto",
-            AccountType.METAL_STORAGE: "metal",
-            AccountType.CUSTOM: "custom",
-        }
-
-        expected_type = type_to_subportfolio.get(self.type)
-        if expected_type and self.subportfolio.type != expected_type:
+        if self.type != self.subportfolio.type:
             raise ValidationError(
                 f"Account type '{self.get_type_display()}' "
-                f"can only be added to a '{expected_type}' subportfolio."
+                f"can only be added to a '{self.subportfolio.type}' subportfolio."
             )
 
     def __str__(self):

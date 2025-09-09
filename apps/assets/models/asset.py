@@ -1,16 +1,13 @@
 from django.db import models
 from accounts.models.account import Account
-
-
-class AssetType(models.TextChoices):
-    STOCK = "stock", "Stock"
-    CRYPTO = "crypto", "Crypto"
-    METAL = "metal", "Metal"
-    CUSTOM = "custom", "Custom"
+from core.types import DomainType
 
 
 class Asset(models.Model):
-    asset_type = models.CharField(max_length=20, choices=AssetType.choices)
+    asset_type = models.CharField(
+        max_length=20,
+        choices=DomainType.choices,
+    )
     symbol = models.CharField(max_length=20, db_index=True)
     name = models.CharField(max_length=200, blank=True, null=True)
 

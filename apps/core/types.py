@@ -1,14 +1,16 @@
 from django.db import models
 
-# ✅ Import your actual schema config dicts
-from schemas.config.stock import STOCK_SCHEMA_CONFIG
-from schemas.config.crypto import CRYPTO_SCHEMA_CONFIG
-from schemas.config.metal import METAL_SCHEMA_CONFIG
-from schemas.config.custom_default import CUSTOM_SCHEMA_CONFIG
+from accounts.models.account import Account
+from accounts.models.details import (
+    StockSelfManagedDetails,
+    StockManagedDetails,
+    CustomAccountDetails,
+)
 
-# 🔁 Optional: migrate AssetType/AccountType to pull from this registry later
-from assets.models.asset import AssetType
-from accounts.constants import AccountType
+from core.schema_config.stock import STOCK_SCHEMA_CONFIG
+from core.schema_config.crypto import CRYPTO_SCHEMA_CONFIG
+from core.schema_config.metal import METAL_SCHEMA_CONFIG
+from core.schema_config.custom import CUSTOM_SCHEMA_CONFIG
 
 
 class DomainType(models.TextChoices):
@@ -18,51 +20,78 @@ class DomainType(models.TextChoices):
     CUSTOM = "custom", "Custom"
 
 
-# 🎯 Central registry for all schema + asset + account config by domain
 DOMAIN_TYPE_REGISTRY = {
     DomainType.STOCK: {
         "label": "Stocks",
         "schema_config": STOCK_SCHEMA_CONFIG,
-        "asset_type": AssetType.STOCK,
-        "account_types": [
-            AccountType.STOCK_SELF_MANAGED,
-            AccountType.STOCK_MANAGED,
+        "unique_subportfolio": True,
+        "default_subportfolio_name": "Stock Portfolio",
+        "account_details_models": [
+            StockSelfManagedDetails,
+            StockManagedDetails,
         ],
     },
     DomainType.CRYPTO: {
         "label": "Crypto",
         "schema_config": CRYPTO_SCHEMA_CONFIG,
-        "asset_type": AssetType.CRYPTO,
-        "account_types": [
-            AccountType.CRYPTO_WALLET,
-        ],
+        "unique_subportfolio": True,
+        "default_subportfolio_name": "Crypto Portfolio",
+        "account_details_models": [],
     },
     DomainType.METAL: {
         "label": "Metals",
         "schema_config": METAL_SCHEMA_CONFIG,
-        "asset_type": AssetType.METAL,
-        "account_types": [
-            AccountType.METAL_STORAGE,
-        ],
+        "unique_subportfolio": True,
+        "default_subportfolio_name": "Metal Portfolio",
+        "account_details_models": [],
     },
     DomainType.CUSTOM: {
         "label": "Custom",
         "schema_config": CUSTOM_SCHEMA_CONFIG,
-        "asset_type": AssetType.CUSTOM,
-        "account_types": [
-            AccountType.CUSTOM,
+        "unique_subportfolio": False,
+        "default_subportfolio_name": "Custom Portfolio",
+        "account_details_models": [
+            CustomAccountDetails,
         ],
     },
 }
 
 
-def get_domain_type_from_account_type(account_type: str) -> str:
-    for domain, meta in DOMAIN_TYPE_REGISTRY.items():
-        if account_type in meta["account_types"]:
-            return domain
-    raise ValueError(f"Unknown account type: {account_type}")
+def get_schema_config_for_domain(domain_type: str) -> dict:
+    if domain_type not in DOMAIN_TYPE_REGISTRY:
+        raise ValueError(f"Unknown domain type: {domain_type}")
+    return DOMAIN_TYPE_REGISTRY[domain_type]["schema_config"]
 
 
-def get_schema_config_for_account_type(account_type: str) -> dict:
-    domain = get_domain_type_from_account_type(account_type)
-    return DOMAIN_TYPE_REGISTRY[domain]["schema_config"]
+def get_label_for_domain(domain_type: str) -> str:
+    return DOMAIN_TYPE_REGISTRY.get(domain_type, {}).get("label", domain_type.title())
+
+
+def get_all_domain_types() -> list[str]:
+    return list(DOMAIN_TYPE_REGISTRY.keys())
+
+
+def get_all_schema_configs() -> dict[str, dict]:
+    return {
+        domain: meta["schema_config"]
+        for domain, meta in DOMAIN_TYPE_REGISTRY.items()
+    }
+
+
+def get_all_domains_with_labels() -> list[tuple[str, str]]:
+    return [(domain, meta["label"]) for domain, meta in DOMAIN_TYPE_REGISTRY.items()]
+
+
+def get_account_details_models(domain_type: str) -> list[type[models.Model]]:
+    return DOMAIN_TYPE_REGISTRY.get(domain_type, {}).get("account_details_models", [])
+
+
+def get_account_detail_model_for(account: Account) -> type[models.Model] | None:
+    """
+    Given an account, return the matching details model class if it exists and is related.
+    """
+    for model in get_account_details_models(account.type):
+        rel_name = model._meta.model_name
+        if hasattr(account, rel_name):
+            return model
+    return None

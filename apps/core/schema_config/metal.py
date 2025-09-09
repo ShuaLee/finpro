@@ -1,64 +1,76 @@
-from schemas.services.schema_template_manager import SchemaTemplateManager
 from decimal import Decimal
+from core.schema_config.utils import schema_field
 
-CUSTOM_SCHEMA_CONFIG = {
+METAL_SCHEMA_CONFIG = {
     "asset": {
-        "symbol": SchemaTemplateManager.schema_field(
+        "symbol": schema_field(
             title="Symbol",
             data_type="string",
-            is_editable=True,
+            is_editable=False,
             is_deletable=False,
             is_default=True,
-            constraints={"character_limit": 10},
+            is_system=True,
+            constraints={"character_limit": 10, "all_caps": True},
             display_order=1,
         ),
-        "name": SchemaTemplateManager.schema_field(
+        "name": schema_field(
             title="Name",
             data_type="string",
-            is_editable=True,
+            is_editable=False,
             is_deletable=False,
             is_default=True,
+            is_system=True,
             constraints={"character_limit": 200},
             display_order=2,
         ),
+        "price": schema_field(
+            title="Price per Ounce",
+            data_type="decimal",
+            is_editable=False,
+            is_deletable=False,
+            is_default=True,
+            is_system=True,
+            constraints={"decimal_places": 2, "min": Decimal("0")},
+            display_order=3,
+        ),
     },
     "holding": {
-        "quantity": SchemaTemplateManager.schema_field(
-            title="Quantity",
+        "weight_oz": schema_field(
+            title="Weight (oz)",
             data_type="decimal",
             is_editable=True,
             is_deletable=False,
             is_default=True,
-            constraints={"decimal_places": 2},  # safe default
-            display_order=3,
+            constraints={"decimal_places": 4},
+            display_order=4,
         ),
-        "purchase_price": SchemaTemplateManager.schema_field(
-            title="Purchase Price",
+        "purchase_price": schema_field(
+            title="Purchase Price per Ounce",
             data_type="decimal",
             is_editable=True,
             is_deletable=False,
             is_default=True,
             constraints={"decimal_places": 2, "min": Decimal("0")},
-            display_order=4,
+            display_order=5,
         ),
-        "purchase_date": SchemaTemplateManager.schema_field(
+        "purchase_date": schema_field(
             title="Purchase Date",
             data_type="date",
             is_editable=True,
             is_default=True,
-            display_order=5,
+            display_order=6,
         ),
     },
     "calculated": {
-        "current_value_custom_fx": SchemaTemplateManager.schema_field(
-            title="Current Value - Custom FX",
+        "current_value_metal_fx": schema_field(
+            title="Current Value - Metal FX",
             data_type="decimal",
-            formula_key="current_value_custom_fx",
+            formula_key="current_value_metal_fx",
             is_editable=False,
             is_deletable=True,
             is_default=False,
             constraints={"decimal_places": 2, "min": Decimal("0")},
-            display_order=6,
+            display_order=7,
         ),
     },
 }
