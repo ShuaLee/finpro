@@ -2,7 +2,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 from core.types import DomainType
-from portfolios.config import SUBPORTFOLIO_CONFIG
 from portfolios.models.portfolio import Portfolio
 
 
@@ -11,7 +10,7 @@ class SubPortfolio(models.Model):
     Unified SubPortfolio model that replaces StockPortfolio, CryptoPortfolio,
     MetalPortfolio, and CustomPortfolio.
 
-    The available types and their defaults are defined in SUBPORTFOLIO_CONFIG.
+    The available types and their defaults are defined in DOMAIN_TYPE_REGISTRY.
     """
     portfolio = models.ForeignKey(
         Portfolio,

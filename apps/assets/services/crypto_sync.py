@@ -1,8 +1,10 @@
-from decimal import Decimal
 import logging
-from assets.models.asset import Asset, AssetType
+from decimal import Decimal
+
+from assets.models.asset import Asset
 from assets.models.crypto_detail import CryptoDetail
 from external_data.fmp.crypto import fetch_crypto_quote
+from core.types import DomainType
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ class CryptoSyncService:
         Fetch data for a crypto asset and update its CryptoDetail.
         Returns True if sync succeeded, False otherwise.
         """
-        if asset.asset_type != AssetType.CRYPTO:
+        if asset.asset_type != DomainType.CRYPTO:
             logger.warning(f"Asset {asset.symbol} is not a crypto, skipping sync")
             return False
 

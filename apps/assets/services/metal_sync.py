@@ -1,8 +1,10 @@
-from decimal import Decimal
 import logging
-from assets.models.asset import Asset, AssetType
+from decimal import Decimal
+
+from assets.models.asset import Asset
 from assets.models.metal_detail import MetalDetail
 from external_data.fmp.metals import fetch_precious_metal_quote
+from core.types import DomainType
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ class MetalSyncService:
         Fetch data for a precious metal asset and update its MetalDetail.
         Returns True if sync succeeded, False otherwise.
         """
-        if asset.asset_type != AssetType.METAL:
+        if asset.asset_type != DomainType.METAL:
             logger.warning(f"Asset {asset.symbol} is not a metal, skipping sync")
             return False
 

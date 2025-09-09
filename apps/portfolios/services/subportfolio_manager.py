@@ -1,27 +1,24 @@
 from django.db import transaction
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 
-from portfolios.config import SUBPORTFOLIO_CONFIG
 from portfolios.models.portfolio import Portfolio
 from portfolios.models.subportfolio import SubPortfolio
-
-from accounts.models.account import AccountType
 from schemas.models import Schema
 from schemas.services.schema_generator import SchemaGenerator
+from core.types import DOMAIN_TYPE_REGISTRY
 
 
 class SubPortfolioManager:
     """
     Service class for handling lifecycle and business logic of sub-portfolios
-    (stocks, crypto, metals, custom, etc.).
+    (stock, crypto, metal, custom, etc.).
     """
 
     @staticmethod
     def create_subportfolio(
         portfolio: Portfolio,
-        type: str,
+        domain_type: str,
         name: str = None,
         slug: str = None,
         schema_name_fn=None,
@@ -31,7 +28,7 @@ class SubPortfolioManager:
 
         Args:
             portfolio (Portfolio): The main portfolio.
-            type (str): Subportfolio type (stock, crypto, metal, custom).
+            domain_type (str): One of DomainType (stock, crypto, metal, custom).
             name (str, optional): Custom name (mainly for custom type).
             slug (str, optional): Slug (mainly for custom type).
             schema_name_fn (callable, optional): Custom schema name formatter.
@@ -39,36 +36,36 @@ class SubPortfolioManager:
         Returns:
             SubPortfolio
         """
-        if type not in SUBPORTFOLIO_CONFIG:
-            raise ValidationError(f"Unknown subportfolio type: {type}")
+        if domain_type not in DOMAIN_TYPE_REGISTRY:
+            raise ValidationError(f"Unknown subportfolio type: {domain_type}")
 
-        cfg = SUBPORTFOLIO_CONFIG[type]
+        cfg = DOMAIN_TYPE_REGISTRY[domain_type]
 
         with transaction.atomic():
             # 🚦 1. Uniqueness check (only one stock/crypto/metal per portfolio)
-            if cfg.get("unique", False):
-                if SubPortfolio.objects.filter(portfolio=portfolio, type=type).exists():
+            if cfg.get("unique_subportfolio", False):
+                if SubPortfolio.objects.filter(
+                    portfolio=portfolio, type=domain_type
+                ).exists():
                     raise ValidationError(
-                        f"{cfg['default_name']} already exists for this portfolio."
+                        f"{cfg['default_subportfolio_name']} already exists for this portfolio."
                     )
 
             # 🆕 2. Auto-generate name/slug if not provided
             final_name = name or cfg.get(
-                "default_name", f"{type.capitalize()} Portfolio")
+                "default_subportfolio_name", f"{domain_type.capitalize()} Portfolio"
+            )
             final_slug = slug or slugify(final_name)
 
             # 3. Create SubPortfolio row
             subportfolio = SubPortfolio.objects.create(
-                portfolio=portfolio, type=type, name=final_name, slug=final_slug
+                portfolio=portfolio, type=domain_type, name=final_name, slug=final_slug
             )
 
-            # 🔁 4. Determine allowed account types for this subportfolio
-            account_types = cfg.get("account_types", [])
-
-            # 🛠 5. Generate schema(s) via SchemaGenerator
-            generator = SchemaGenerator(subportfolio, cfg["schema_type"])
+            # 🛠 4. Generate schema for this subportfolio
+            generator = SchemaGenerator(subportfolio, domain_type)
             generator.initialize(
-                account_types=account_types,
+                account_types=[domain_type],  # ✅ now just domain types
                 custom_schema_namer=schema_name_fn,
             )
 
@@ -79,7 +76,5 @@ class SubPortfolioManager:
         """
         Deletes a SubPortfolio and its associated schema.
         """
-        ct = ContentType.objects.get_for_model(SubPortfolio)
-        Schema.objects.filter(
-            content_type=ct, object_id=subportfolio.id).delete()
+        Schema.objects.filter(subportfolio=subportfolio).delete()
         subportfolio.delete()

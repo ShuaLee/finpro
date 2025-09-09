@@ -1,8 +1,10 @@
-from decimal import Decimal
 import logging
-from assets.models.asset import Asset, AssetType
+from decimal import Decimal
+
+from assets.models.asset import Asset
 from assets.models.stock_detail import StockDetail
 from external_data.fmp.stocks import fetch_stock_quote, fetch_stock_profile
+from core.types import DomainType
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ class StockSyncService:
         Fetch data for a stock asset and update its StockDetail.
         Returns True if sync succeeded, False otherwise.
         """
-        if asset.asset_type != AssetType.STOCK:
+        if asset.asset_type != DomainType.STOCK:
             logger.warning(f"Asset {asset.symbol} is not a stock, skipping sync")
             return False
 
@@ -39,10 +41,13 @@ class StockSyncService:
             detail.is_adr = bool(profile.get("isAdr", False))
 
             # Map quote fields
-            detail.last_price = Decimal(str(quote.get("price") or "0"))
+            price_val = quote.get("price")
+            detail.last_price = Decimal(str(price_val)) if price_val is not None else None
             detail.volume = quote.get("volume")
             detail.average_volume = quote.get("avgVolume")
-            detail.pe_ratio = Decimal(str(quote.get("pe") or "0")) if quote.get("pe") else None
+
+            pe_val = quote.get("pe")
+            detail.pe_ratio = Decimal(str(pe_val)) if pe_val is not None else None
 
             # Calculate dividend yield if possible
             last_div = profile.get("lastDiv")
