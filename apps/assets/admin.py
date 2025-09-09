@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from assets.models.asset import Asset
+from assets.models.holding import Holding
 from assets.models.crypto_detail import CryptoDetail
 from assets.models.metal_detail import MetalDetail
 from assets.models.stock_detail import StockDetail
@@ -128,3 +130,64 @@ class MetalDetailAdmin(admin.ModelAdmin):
     list_display = ("asset", "currency", "last_price", "is_custom")
     search_fields = ("asset__symbol", "asset__name")
     list_filter = ("is_custom", "currency")
+
+
+
+# ------------------------------
+# Holding Admins
+# ------------------------------
+@admin.register(Holding)
+class HoldingAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "account",
+        "asset",
+        "quantity",
+        "purchase_price",
+        "purchase_date",
+        "created_at",
+    )
+    list_filter = ("account__subportfolio__type", "purchase_date", "created_at")
+    search_fields = (
+        "asset__symbol",
+        "asset__name",
+        "account__name",
+        "account__subportfolio__portfolio__profile__user__email",
+    )
+    autocomplete_fields = ("account", "asset")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-created_at",)
+
+    def save_model(self, request, obj, form, change):
+        """
+        Run validation before saving.
+        """
+        try:
+            obj.full_clean()
+            super().save_model(request, obj, form, change)
+        except ValidationError as e:
+            self.message_user(request, f"❌ {e}", level=messages.ERROR)
+
+    fieldsets = (
+        (None, {
+            "fields": ("account", "asset", "quantity")
+        }),
+        ("Purchase info", {
+            "fields": ("purchase_price", "purchase_date")
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+        }),
+    )
+
+    def get_queryset(self, request):
+        """
+        Optimize queries by selecting related account + asset.
+        """
+        return super().get_queryset(request).select_related(
+            "account",
+            "asset",
+            "account__subportfolio",
+            "account__subportfolio__portfolio",
+            "account__subportfolio__portfolio__profile__user",
+        )

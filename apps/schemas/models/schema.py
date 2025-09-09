@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from assets.models.asset import Holding
+from assets.models.holding import Holding
 from core.types import DomainType
 from portfolios.models.subportfolio import SubPortfolio
 
