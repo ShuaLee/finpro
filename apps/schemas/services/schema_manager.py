@@ -14,7 +14,10 @@ class SchemaManager:
     def for_account(cls, account):
         schema = account.active_schema
         if not schema:
-            raise ValueError(f"No active schema for account {account}")
+            raise ValueError(
+                f"No active schema for account {account} "
+                f"(subportfolio={account.subportfolio}, account_type={account.type})"
+            )
         return cls(schema)
 
     # -------------------------------

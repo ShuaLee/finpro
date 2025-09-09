@@ -16,49 +16,57 @@ class DomainType(models.TextChoices):
 DOMAIN_TYPE_REGISTRY = {
     DomainType.STOCK: {
         "label": "Stocks",
-        "schema_config": STOCK_SCHEMA_CONFIG,
         "unique_subportfolio": True,
         "default_subportfolio_name": "Stock Portfolio",
+        "account_types": ["stock_self", "stock_managed"],
+        "schema_config": STOCK_SCHEMA_CONFIG,
     },
     DomainType.CRYPTO: {
         "label": "Crypto",
-        "schema_config": CRYPTO_SCHEMA_CONFIG,
         "unique_subportfolio": True,
         "default_subportfolio_name": "Crypto Portfolio",
+        "account_types": ["crypto_wallet"],
+        "schema_config": CRYPTO_SCHEMA_CONFIG,
     },
     DomainType.METAL: {
         "label": "Metals",
-        "schema_config": METAL_SCHEMA_CONFIG,
         "unique_subportfolio": True,
         "default_subportfolio_name": "Metal Portfolio",
+        "account_types": ["metal_storage"],
+        "schema_config": METAL_SCHEMA_CONFIG,
     },
     DomainType.CUSTOM: {
         "label": "Custom",
-        "schema_config": CUSTOM_SCHEMA_CONFIG,
         "unique_subportfolio": False,
         "default_subportfolio_name": "Custom Portfolio",
+        "account_types": ["custom"],
+        "schema_config": CUSTOM_SCHEMA_CONFIG,
     },
 }
 
 
 # -------------------------------
-# Helpers
+# Core helpers (no accounts import!)
 # -------------------------------
 def get_schema_config_for_domain(domain_type: str) -> dict:
+    """Return schema config for a given domain (stock, crypto, etc.)."""
     if domain_type not in DOMAIN_TYPE_REGISTRY:
         raise ValueError(f"Unknown domain type: {domain_type}")
     return DOMAIN_TYPE_REGISTRY[domain_type]["schema_config"]
 
 
 def get_label_for_domain(domain_type: str) -> str:
+    """Return a user-friendly label for a domain (e.g. 'Stocks')."""
     return DOMAIN_TYPE_REGISTRY.get(domain_type, {}).get("label", domain_type.title())
 
 
 def get_all_domain_types() -> list[str]:
+    """Return all domain type keys (stock, crypto, metal, custom)."""
     return list(DOMAIN_TYPE_REGISTRY.keys())
 
 
 def get_all_schema_configs() -> dict[str, dict]:
+    """Return a dict mapping all domains → schema config dicts."""
     return {
         domain: meta["schema_config"]
         for domain, meta in DOMAIN_TYPE_REGISTRY.items()
@@ -66,4 +74,15 @@ def get_all_schema_configs() -> dict[str, dict]:
 
 
 def get_all_domains_with_labels() -> list[tuple[str, str]]:
+    """Return a list of (domain, label) tuples for choice fields, UI, etc."""
     return [(domain, meta["label"]) for domain, meta in DOMAIN_TYPE_REGISTRY.items()]
+
+
+def get_domain_for_account_type(account_type: str) -> str:
+    """
+    Given an account_type (e.g. 'stock_self'), return its parent domain (e.g. 'stock').
+    """
+    for domain, meta in DOMAIN_TYPE_REGISTRY.items():
+        if account_type in meta.get("account_types", []):
+            return domain
+    raise ValueError(f"Unknown account type: {account_type}")

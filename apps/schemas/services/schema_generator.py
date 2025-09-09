@@ -1,6 +1,6 @@
 from django.db import transaction, models
-from schemas.models import SchemaColumn, Schema
-from core.types import get_schema_config_for_domain
+from schemas.models import Schema, SchemaColumn
+from core.types import get_domain_meta
 import re
 
 
@@ -31,51 +31,58 @@ class SchemaGenerator:
     @transaction.atomic
     def initialize(self, custom_schema_namer=None):
         """
-        Build schema + system columns for this subportfolio using DOMAIN_TYPE_REGISTRY.
+        Build one schema per account_type in this subportfolio’s domain.
+        Example: stock subportfolio → [self-managed schema, managed schema].
         """
-        user_email = self.subportfolio.portfolio.profile.user.email
-        schema_name = (
-            custom_schema_namer(self.subportfolio, self.domain_type)
-            if custom_schema_namer
-            else f"{user_email}'s {self.domain_type.title()} Schema"
-        )
+        domain_meta = get_domain_meta(self.domain_type)
+        account_types = domain_meta.get("account_types", [])
 
-        # 🚨 Ensure one schema per subportfolio/domain_type
-        self.schema, _ = Schema.objects.update_or_create(
-            subportfolio=self.subportfolio,
-            account_type=self.domain_type,  # keep FK field name for compatibility
-            defaults={
-                "name": schema_name,
-                "schema_type": self.domain_type,
-            },
-        )
+        if not account_types:
+            raise ValueError(f"No account types registered for domain {self.domain_type}")
 
-        # 🔍 Fetch config from central domain registry
-        config = get_schema_config_for_domain(self.domain_type)
-        if not config:
-            raise ValueError(f"No schema config found for domain type '{self.domain_type}'")
+        for account_type in account_types:
+            user_email = self.subportfolio.portfolio.profile.user.email
+            schema_name = (
+                custom_schema_namer(self.subportfolio, account_type)
+                if custom_schema_namer
+                else f"{user_email}'s {self.domain_type.title()} ({account_type}) Schema"
+            )
 
-        # 🧱 Add columns defined in config
-        for source, field_defs in config.items():
-            for source_field, col_def in field_defs.items():
-                if col_def.get("is_default"):
-                    self.add_column(
-                        title=col_def["title"],
-                        data_type=col_def["data_type"],
-                        source=source,
-                        source_field=source_field,
-                        formula_obj=None,  # Hook formula resolution later
-                        is_editable=col_def.get("is_editable", True),
-                        is_deletable=col_def.get("is_deletable", True),
-                        is_system=col_def.get("is_system", False),
-                        constraints=col_def.get("constraints", {}),
-                        display_order=col_def.get("display_order", 0),
-                    )
+            # 🚀 Ensure one schema per (subportfolio, account_type)
+            self.schema, _ = Schema.objects.update_or_create(
+                subportfolio=self.subportfolio,
+                account_type=account_type,
+                defaults={
+                    "domain_type": self.domain_type,
+                    "name": schema_name,
+                    "schema_type": "default",
+                },
+            )
+
+            # 🔍 Fetch config from domain
+            config = domain_meta["schema_config"]
+
+            # 🧱 Add columns
+            for source, field_defs in config.items():
+                for source_field, col_def in field_defs.items():
+                    if col_def.get("is_default"):
+                        self.add_column(
+                            title=col_def["title"],
+                            data_type=col_def["data_type"],
+                            source=source,
+                            source_field=source_field,
+                            formula_obj=None,
+                            is_editable=col_def.get("is_editable", True),
+                            is_deletable=col_def.get("is_deletable", True),
+                            is_system=col_def.get("is_system", False),
+                            constraints=col_def.get("constraints", {}),
+                            display_order=col_def.get("display_order", 0),
+                        )
 
         return self.schema
 
     # -------------------------------
-    # Column creation (core + wrappers)
+    # Column creation
     # -------------------------------
     def add_column(
         self,
