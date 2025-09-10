@@ -2,7 +2,6 @@ from typing import Type
 from django.db import models
 
 from core.types import DOMAIN_TYPE_REGISTRY, DomainType
-from accounts.models.account import Account
 from accounts.models.details import (
     StockSelfManagedDetails,
     StockManagedDetails,
@@ -23,8 +22,10 @@ def get_account_details_models(domain_type: str) -> list[Type[models.Model]]:
     return ACCOUNT_DETAILS_MODELS.get(domain_type, [])
 
 
-def get_account_detail_model_for(account: Account) -> Type[models.Model] | None:
-    """Given an Account instance, return the detail model class if one exists and is related."""
+def get_account_detail_model_for(account) -> Type[models.Model] | None:
+    # ✅ move here to avoid circular import
+    from accounts.models.account import Account
+
     for model in get_account_details_models(account.domain_type):
         rel_name = model._meta.model_name
         if hasattr(account, rel_name):

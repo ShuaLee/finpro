@@ -41,18 +41,18 @@ class Holding(models.Model):
 
     def __str__(self):
         return f"{self.quantity} {self.asset.symbol} in {self.account.name}"
-    
+
     # ----------------------------
     # Validation
     # ----------------------------
     def clean(self):
         """
-        Ensure the asset type matches the account type.
+        Ensure the asset type matches the account's domain type.
         """
-        if self.asset.asset_type != self.account.type:
+        if self.asset.asset_type != self.account.domain_type:
             raise ValidationError(
-                f"Asset type '{self.asset.asset_type}' does not match "
-                f"account type '{self.account.type}'."
+                f"Asset domain '{self.asset.asset_type}' does not match "
+                f"account domain '{self.account.domain_type}'."
             )
         super().clean()
 

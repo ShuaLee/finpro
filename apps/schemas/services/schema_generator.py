@@ -3,6 +3,10 @@ from schemas.models import Schema, SchemaColumn
 from core.types import get_domain_meta
 import re
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class SchemaGenerator:
     def __init__(self, subportfolio, domain_type: str):
@@ -19,7 +23,9 @@ class SchemaGenerator:
         proposed = base
         counter = 1
 
-        while SchemaColumn.objects.filter(schema=self.schema, identifier=proposed).exists():
+        while SchemaColumn.objects.filter(
+            schema=self.schema, identifier=proposed
+        ).exists():
             counter += 1
             proposed = f"{base}_{counter}"
 
@@ -34,52 +40,80 @@ class SchemaGenerator:
         Build one schema per account_type in this subportfolio’s domain.
         Example: stock subportfolio → [self-managed schema, managed schema].
         """
-        domain_meta = get_domain_meta(self.domain_type)
-        account_types = domain_meta.get("account_types", [])
+        logger.debug(
+            f"🛠 Initializing schema for subportfolio={self.subportfolio.id}, domain={self.domain_type}")
 
-        if not account_types:
-            raise ValueError(f"No account types registered for domain {self.domain_type}")
+        try:
+            domain_meta = get_domain_meta(self.domain_type)
+            logger.debug(
+                f"✅ Fetched domain meta for {self.domain_type}: {domain_meta}")
 
-        for account_type in account_types:
-            user_email = self.subportfolio.portfolio.profile.user.email
-            schema_name = (
-                custom_schema_namer(self.subportfolio, account_type)
-                if custom_schema_namer
-                else f"{user_email}'s {self.domain_type.title()} ({account_type}) Schema"
-            )
+            account_types = domain_meta.get("account_types", [])
+            schema_config = domain_meta.get("schema_config")
 
-            # 🚀 Ensure one schema per (subportfolio, account_type)
-            self.schema, _ = Schema.objects.update_or_create(
-                subportfolio=self.subportfolio,
-                account_type=account_type,
-                defaults={
-                    "domain_type": self.domain_type,
-                    "name": schema_name,
-                    "schema_type": "default",
-                },
-            )
+            if not account_types:
+                logger.error(
+                    f"❌ No account types registered for domain {self.domain_type}")
+                raise ValueError(
+                    f"No account types registered for domain {self.domain_type}")
 
-            # 🔍 Fetch config from domain
-            config = domain_meta["schema_config"]
+            if not schema_config:
+                logger.error(
+                    f"❌ No schema config found for domain {self.domain_type}")
+                raise ValueError(
+                    f"No schema config found for domain {self.domain_type}")
 
-            # 🧱 Add columns
-            for source, field_defs in config.items():
-                for source_field, col_def in field_defs.items():
-                    if col_def.get("is_default"):
-                        self.add_column(
-                            title=col_def["title"],
-                            data_type=col_def["data_type"],
-                            source=source,
-                            source_field=source_field,
-                            formula_obj=None,
-                            is_editable=col_def.get("is_editable", True),
-                            is_deletable=col_def.get("is_deletable", True),
-                            is_system=col_def.get("is_system", False),
-                            constraints=col_def.get("constraints", {}),
-                            display_order=col_def.get("display_order", 0),
-                        )
+            for account_type in account_types:
+                user_email = self.subportfolio.portfolio.profile.user.email
+                schema_name = (
+                    custom_schema_namer(self.subportfolio, account_type)
+                    if custom_schema_namer
+                    else f"{user_email}'s {self.domain_type.title()} ({account_type}) Schema"
+                )
 
-        return self.schema
+                logger.debug(
+                    f"📄 Creating/updating schema for account_type={account_type}, name={schema_name}")
+
+                # 🚀 Ensure one schema per (subportfolio, account_type)
+                self.schema, created = Schema.objects.update_or_create(
+                    subportfolio=self.subportfolio,
+                    account_type=account_type,
+                    defaults={
+                        "domain_type": self.domain_type,
+                        "name": schema_name,
+                        "schema_type": "default",
+                    },
+                )
+                logger.debug(
+                    f"✅ {'Created' if created else 'Updated'} schema: {self.schema.id}")
+
+                # 🧱 Add columns
+                for source, field_defs in schema_config.items():
+                    for source_field, col_def in field_defs.items():
+                        if col_def.get("is_default"):
+                            logger.debug(
+                                f"➕ Adding column: {col_def['title']} from source={source}")
+                            self.add_column(
+                                title=col_def["title"],
+                                data_type=col_def["data_type"],
+                                source=source,
+                                source_field=source_field,
+                                formula_obj=None,
+                                is_editable=col_def.get("is_editable", True),
+                                is_deletable=col_def.get("is_deletable", True),
+                                is_system=col_def.get("is_system", False),
+                                constraints=col_def.get("constraints", {}),
+                                display_order=col_def.get("display_order", 0),
+                            )
+
+            logger.debug(
+                f"🎉 Finished initializing schema(s) for subportfolio={self.subportfolio.id}")
+            return self.schema
+
+        except Exception as e:
+            logger.exception(
+                f"🔥 Schema initialization failed for subportfolio={self.subportfolio.id}: {e}")
+            raise
 
     # -------------------------------
     # Column creation
@@ -127,4 +161,6 @@ class SchemaGenerator:
         return self.add_column(title, data_type, "custom", **kwargs)
 
     def add_calculated_column(self, title: str, formula_obj, **kwargs):
-        return self.add_column(title, "decimal", "calculated", formula_obj=formula_obj, **kwargs)
+        return self.add_column(
+            title, "decimal", "calculated", formula_obj=formula_obj, **kwargs
+        )

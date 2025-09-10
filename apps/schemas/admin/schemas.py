@@ -27,7 +27,6 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         "is_editable",
         "is_system",
         "display_order",
-        "created_at",
     )
     search_fields = ("title", "identifier", "source_field")
     list_filter = ("schema", "source", "data_type", "is_system", "is_editable")

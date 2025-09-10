@@ -1,6 +1,5 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from .account import Account
 
 
 # -------------------------------
@@ -8,7 +7,7 @@ from .account import Account
 # -------------------------------
 class StockSelfManagedDetails(models.Model):
     account = models.OneToOneField(
-        Account, on_delete=models.CASCADE, related_name="stock_self_details"
+        "accounts.Account", on_delete=models.CASCADE, related_name="stock_self_details"
     )
     broker = models.CharField(max_length=100, blank=True, null=True)
     tax_status = models.CharField(
@@ -40,7 +39,7 @@ class StockSelfManagedDetails(models.Model):
 # -------------------------------
 class StockManagedDetails(models.Model):
     account = models.OneToOneField(
-        Account, on_delete=models.CASCADE, related_name="stock_managed_details"
+        "accounts.Account", on_delete=models.CASCADE, related_name="stock_managed_details"
     )
     current_value = models.DecimalField(max_digits=12, decimal_places=2)
     invested_amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -58,7 +57,7 @@ MAX_CUSTOM_ACCOUNT_DEPTH = 3
 
 class CustomAccountDetails(models.Model):
     account = models.OneToOneField(
-        Account, on_delete=models.CASCADE, related_name="custom_details"
+        "accounts.Account", on_delete=models.CASCADE, related_name="custom_details"
     )
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.CASCADE, related_name="children"

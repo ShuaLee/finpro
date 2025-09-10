@@ -29,3 +29,18 @@ def fetch_precious_metal_quote(symbol: str) -> dict | None:
     except Exception as e:
         logger.warning(f"Failed to fetch metal {symbol}: {e}")
         return None
+
+
+def fetch_metal_profile(symbol: str) -> dict | None:
+    """
+    Fetch company/profile info to check exchange or classification of a metal symbol.
+    """
+    url = f"{FMP_BASE}/profile/{symbol}?apikey={FMP_API_KEY}"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return data[0] if data else None
+    except Exception as e:
+        logger.warning(f"Failed to fetch metal profile for {symbol}: {e}")
+        return None

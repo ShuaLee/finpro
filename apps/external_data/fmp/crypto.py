@@ -29,3 +29,15 @@ def fetch_crypto_quote(symbol: str) -> dict | None:
     except Exception as e:
         logger.warning(f"Failed to fetch crypto {symbol}: {e}")
         return None
+
+
+def fetch_crypto_profile(symbol: str) -> dict | None:
+    url = f"{FMP_BASE}/profile/{symbol}?apikey={FMP_API_KEY}"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return data[0] if data else None
+    except Exception as e:
+        logger.warning(f"Failed to fetch crypto profile for {symbol}: {e}")
+        return None

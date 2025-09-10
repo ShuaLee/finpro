@@ -59,8 +59,22 @@ class SubPortfolio(models.Model):
         super().clean()
 
     def save(self, *args, **kwargs):
-        if self.pk:
-            old = SubPortfolio.objects.filter(pk=self.pk).values_list("type", flat=True).first()
+        is_new = self.pk is None  # check if creating new subportfolio
+
+        if not is_new:
+            # Prevent type changes
+            old = SubPortfolio.objects.filter(
+                pk=self.pk
+            ).values_list("type", flat=True).first()
             if old and old != self.type:
-                raise ValidationError("SubPortfolio type cannot be changed once created.")
+                raise ValidationError(
+                    "SubPortfolio type cannot be changed once created."
+                )
+
         super().save(*args, **kwargs)
+
+        # 🛠 Generate schemas on creation
+        if is_new:
+            from schemas.services.schema_generator import SchemaGenerator
+            generator = SchemaGenerator(self, self.type)
+            generator.initialize()

@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from core.types import get_domain_for_account_type
+from core.types import get_domain_for_account_type, get_account_type_choices
 from accounts.services.detail_model_resolver import get_domain_meta_with_details
 from portfolios.models.subportfolio import SubPortfolio
 
@@ -16,6 +16,7 @@ class Account(models.Model):
     account_type = models.CharField(
         max_length=50,
         db_index=True,
+        choices=get_account_type_choices(),
         help_text="Specific account type (e.g. stock_self, stock_managed, crypto_wallet)."
     )
 

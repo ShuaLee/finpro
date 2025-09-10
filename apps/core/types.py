@@ -69,6 +69,16 @@ def get_all_schema_configs() -> dict[str, dict]:
     }
 
 
+def get_domain_meta(domain_type: str) -> dict:
+    """
+    Return full domain metadata for a given domain type.
+    Includes schema config, account types, and registry fields.
+    """
+    if domain_type not in DOMAIN_TYPE_REGISTRY:
+        raise ValueError(f"Unknown domain type: {domain_type}")
+    return DOMAIN_TYPE_REGISTRY[domain_type]
+
+
 def get_all_domains_with_labels() -> list[tuple[str, str]]:
     return [(domain, meta["label"]) for domain, meta in DOMAIN_TYPE_REGISTRY.items()]
 
@@ -78,3 +88,11 @@ def get_domain_for_account_type(account_type: str) -> str:
         if account_type in meta.get("account_types", []):
             return domain
     raise ValueError(f"Unknown account type: {account_type}")
+
+
+def get_account_type_choices() -> list[tuple[str, str]]:
+    return [
+        (atype, atype.replace("_", " ").title())
+        for meta in DOMAIN_TYPE_REGISTRY.values()
+        for atype in meta["account_types"]
+    ]
