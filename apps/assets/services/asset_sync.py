@@ -3,6 +3,7 @@ from assets.models.asset import Asset
 from assets.services.stock_sync import StockSyncService
 from assets.services.crypto_sync import CryptoSyncService
 from assets.services.metal_sync import MetalSyncService
+from assets.services.bond_sync import BondSyncService
 from core.types import DomainType
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ SYNC_REGISTRY = {
     DomainType.STOCK: StockSyncService,
     DomainType.CRYPTO: CryptoSyncService,
     DomainType.METAL: MetalSyncService,
+    DomainType.BOND: BondSyncService, 
     # DomainType.CUSTOM intentionally omitted → skip sync
 }
 

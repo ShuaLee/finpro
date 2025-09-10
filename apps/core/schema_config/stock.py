@@ -44,6 +44,14 @@ STOCK_SCHEMA_CONFIG = {
             constraints={"decimal_places": 2, "min": Decimal("0")},
             display_order=4,
         ),
+        "is_mutual_fund": schema_field(
+            title="Mutual Fund",
+            data_type="boolean",
+            is_editable=False,
+            is_deletable=True,
+            is_default=False,
+            is_system=True,
+        ),
     },
     "holding": {
         "quantity": schema_field(

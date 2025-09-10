@@ -2,7 +2,7 @@ import logging
 from decimal import Decimal
 
 from assets.models.asset import Asset
-from assets.models.metal_detail import MetalDetail
+from apps.assets.models.details.metal_detail import MetalDetail
 from external_data.fmp.metals import fetch_precious_metal_quote, fetch_metal_profile
 from core.types import DomainType
 

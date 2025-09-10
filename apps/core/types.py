@@ -3,6 +3,8 @@ from django.db import models
 from core.schema_config.stock import STOCK_SCHEMA_CONFIG
 from core.schema_config.crypto import CRYPTO_SCHEMA_CONFIG
 from core.schema_config.metal import METAL_SCHEMA_CONFIG
+from core.schema_config.bond import BOND_SCHEMA_CONFIG
+from core.schema_config.real_estate import REAL_ESTATE_SCHEMA_CONFIG
 from core.schema_config.custom import CUSTOM_SCHEMA_CONFIG
 
 
@@ -10,6 +12,8 @@ class DomainType(models.TextChoices):
     STOCK = "stock", "Stocks"
     CRYPTO = "crypto", "Crypto"
     METAL = "metal", "Metals"
+    BOND = "bond", "Bonds"
+    REAL_ESTATE = "real_estate", "Real Estate"
     CUSTOM = "custom", "Custom"
 
 
@@ -34,6 +38,20 @@ DOMAIN_TYPE_REGISTRY = {
         "default_subportfolio_name": "Metal Portfolio",
         "account_types": ["metal_storage"],
         "schema_config": METAL_SCHEMA_CONFIG,
+    },
+    DomainType.BOND: {
+    "label": "Bonds",
+    "unique_subportfolio": True,
+    "default_subportfolio_name": "Bond Portfolio",
+    "account_types": ["bond_broker", "bond_trust"],
+    "schema_config": BOND_SCHEMA_CONFIG,  # 🔜 to create
+    },
+    DomainType.REAL_ESTATE: {
+        "label": "Real Estate",
+        "unique_subportfolio": False,
+        "default_subportfolio_name": "Real Estate",
+        "account_types": ["real_estate"],
+        "schema_config": REAL_ESTATE_SCHEMA_CONFIG,  # 🔜 to create
     },
     DomainType.CUSTOM: {
         "label": "Custom",

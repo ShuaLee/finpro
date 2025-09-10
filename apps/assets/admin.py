@@ -3,9 +3,9 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from assets.models.asset import Asset
 from assets.models.holding import Holding
-from assets.models.crypto_detail import CryptoDetail
-from assets.models.metal_detail import MetalDetail
-from assets.models.stock_detail import StockDetail
+from assets.models.details.crypto_detail import CryptoDetail
+from apps.assets.models.details.metal_detail import MetalDetail
+from apps.assets.models.details.equity_detail import StockDetail
 from assets.services.asset_sync import AssetSyncService
 
 
