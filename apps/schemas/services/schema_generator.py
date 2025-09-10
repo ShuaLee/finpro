@@ -1,5 +1,6 @@
 from django.db import transaction, models
 from schemas.models import Schema, SchemaColumn
+from schemas.utils import normalize_constraints
 from core.types import get_domain_meta
 import re
 
@@ -153,7 +154,7 @@ class SchemaGenerator:
             is_editable=is_editable,
             is_deletable=is_deletable,
             is_system=is_system,
-            constraints=constraints or {},
+            constraints=normalize_constraints(constraints or {}),
             display_order=display_order,
         )
 

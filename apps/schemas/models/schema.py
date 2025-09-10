@@ -2,6 +2,8 @@ from django.db import models
 from core.types import DomainType
 from portfolios.models.subportfolio import SubPortfolio
 from assets.models.holding import Holding
+from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+from schemas.utils import normalize_constraints
 
 
 class Schema(models.Model):
@@ -42,7 +44,7 @@ class SchemaColumn(models.Model):
     Defines a column in a Schema (system, custom, or calculated).
     """
     schema = models.ForeignKey(
-        Schema,
+        "Schema",
         on_delete=models.CASCADE,
         related_name="columns",
     )
@@ -51,13 +53,21 @@ class SchemaColumn(models.Model):
 
     data_type = models.CharField(
         max_length=20,
-        choices=[("string", "String"), ("decimal", "Decimal"),
-                 ("integer", "Integer"), ("date", "Date")],
+        choices=[
+            ("string", "String"),
+            ("decimal", "Decimal"),
+            ("integer", "Integer"),
+            ("date", "Date"),
+        ],
     )
     source = models.CharField(
         max_length=20,
-        choices=[("holding", "Holding"), ("asset", "Asset"),
-                 ("calculated", "Calculated"), ("custom", "Custom")],
+        choices=[
+            ("holding", "Holding"),
+            ("asset", "Asset"),
+            ("calculated", "Calculated"),
+            ("custom", "Custom"),
+        ],
     )
     source_field = models.CharField(max_length=100, null=True, blank=True)
 
@@ -75,6 +85,7 @@ class SchemaColumn(models.Model):
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(default=False)
 
+    # Constraints (JSON, normalized in clean())
     constraints = models.JSONField(default=dict, blank=True)
     display_order = models.PositiveIntegerField(default=0)
 
@@ -84,6 +95,22 @@ class SchemaColumn(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.schema.name})"
+
+    # -------------------------------
+    # Normalization
+    # -------------------------------
+    def clean(self):
+        if self.constraints:
+            self.constraints = normalize_constraints(self.constraints)
+        super().clean()
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        super().save(*args, **kwargs)
+
+        # 🔑 Create SCVs automatically for all existing holdings when new column is added
+        if is_new:
+            SchemaColumnValueManager.ensure_for_column(self)
 
 
 class SchemaColumnValue(models.Model):
