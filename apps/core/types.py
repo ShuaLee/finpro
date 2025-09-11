@@ -1,6 +1,6 @@
 from django.db import models
 
-from core.schema_config.stock import STOCK_SCHEMA_CONFIG
+from core.schema_config.equity import EQUITY_SCHEMA_CONFIG
 from core.schema_config.crypto import CRYPTO_SCHEMA_CONFIG
 from core.schema_config.metal import METAL_SCHEMA_CONFIG
 from core.schema_config.bond import BOND_SCHEMA_CONFIG
@@ -9,7 +9,7 @@ from core.schema_config.custom import CUSTOM_SCHEMA_CONFIG
 
 
 class DomainType(models.TextChoices):
-    STOCK = "stock", "Stocks"
+    EQUITY = "equity", "Equities"
     CRYPTO = "crypto", "Crypto"
     METAL = "metal", "Metals"
     BOND = "bond", "Bonds"
@@ -18,12 +18,12 @@ class DomainType(models.TextChoices):
 
 
 DOMAIN_TYPE_REGISTRY = {
-    DomainType.STOCK: {
-        "label": "Stocks",
+    DomainType.EQUITY: {
+        "label": "Equities",
         "unique_subportfolio": True,
-        "default_subportfolio_name": "Stock Portfolio",
-        "account_types": ["stock_self", "stock_managed"],
-        "schema_config": STOCK_SCHEMA_CONFIG,
+        "default_subportfolio_name": "Equity Portfolio",
+        "account_types": ["equity_self", "equity_managed"],
+        "schema_config": EQUITY_SCHEMA_CONFIG,
     },
     DomainType.CRYPTO: {
         "label": "Crypto",
@@ -40,18 +40,18 @@ DOMAIN_TYPE_REGISTRY = {
         "schema_config": METAL_SCHEMA_CONFIG,
     },
     DomainType.BOND: {
-    "label": "Bonds",
-    "unique_subportfolio": True,
-    "default_subportfolio_name": "Bond Portfolio",
-    "account_types": ["bond_broker", "bond_trust"],
-    "schema_config": BOND_SCHEMA_CONFIG,  # 🔜 to create
+        "label": "Bonds",
+        "unique_subportfolio": True,
+        "default_subportfolio_name": "Bond Portfolio",
+        "account_types": ["bond_broker", "bond_trust"],
+        "schema_config": BOND_SCHEMA_CONFIG,
     },
     DomainType.REAL_ESTATE: {
         "label": "Real Estate",
         "unique_subportfolio": False,
         "default_subportfolio_name": "Real Estate",
         "account_types": ["real_estate"],
-        "schema_config": REAL_ESTATE_SCHEMA_CONFIG,  # 🔜 to create
+        "schema_config": REAL_ESTATE_SCHEMA_CONFIG,
     },
     DomainType.CUSTOM: {
         "label": "Custom",

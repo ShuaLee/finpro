@@ -4,7 +4,7 @@ from django.utils import timezone
 from accounts.models.stocks import SelfManagedAccount
 from assets.models.stocks import Stock
 from external_data.fmp.dispatch import fetch_asset_data
-from external_data.fmp.stocks import apply_fmp_stock_data
+from apps.external_data.fmp.equity import apply_fmp_stock_data
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -26,7 +26,7 @@ class FMPIntegrationTests(TestCase):
         self.account = SelfManagedAccount.objects.create(
             name="Test Account", stock_portfolio=self.portfolio.stockportfolio
         )
-    
+
     @patch("external_data.fmp.dispatch.fetch_stock_data")
     def test_create_stock_and_not_custom(self, mock_fetch):
         mock_fetch.return_value = {

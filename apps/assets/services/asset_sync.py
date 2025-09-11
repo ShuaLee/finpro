@@ -1,6 +1,6 @@
 import logging
 from assets.models.asset import Asset
-from assets.services.stock_sync import StockSyncService
+from apps.assets.services.equity_sync import EquitySyncService
 from assets.services.crypto_sync import CryptoSyncService
 from assets.services.metal_sync import MetalSyncService
 from assets.services.bond_sync import BondSyncService
@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 # Sync Service Registry
 # ------------------------------
 SYNC_REGISTRY = {
-    DomainType.STOCK: StockSyncService,
+    DomainType.STOCK: EquitySyncService,
     DomainType.CRYPTO: CryptoSyncService,
     DomainType.METAL: MetalSyncService,
-    DomainType.BOND: BondSyncService, 
+    DomainType.BOND: BondSyncService,
     # DomainType.CUSTOM intentionally omitted → skip sync
 }
 
@@ -33,13 +33,15 @@ class AssetSyncService:
 
         service = SYNC_REGISTRY.get(asset.asset_type)
         if not service:
-            logger.info(f"No sync service for asset type {asset.asset_type}, skipping")
+            logger.info(
+                f"No sync service for asset type {asset.asset_type}, skipping")
             return False
 
         try:
             return service.sync(asset)
         except Exception as e:
-            logger.error(f"Error syncing {asset.asset_type} {asset.symbol}: {e}", exc_info=True)
+            logger.error(
+                f"Error syncing {asset.asset_type} {asset.symbol}: {e}", exc_info=True)
             return False
 
     @staticmethod

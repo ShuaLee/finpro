@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 from assets.models.asset import Asset
 from assets.models.details.equity_detail import EquityDetail
-from external_data.fmp.stocks import fetch_stock_quote, fetch_stock_profile
+from apps.external_data.fmp.equity import fetch_stock_quote, fetch_stock_profile
 from core.types import DomainType
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,8 @@ class EquitySyncService:
         Returns True if sync succeeded, False otherwise.
         """
         if asset.asset_type != DomainType.EQUITY:
-            logger.warning(f"Asset {asset.symbol} is not an equity, skipping sync")
+            logger.warning(
+                f"Asset {asset.symbol} is not an equity, skipping sync")
             return False
 
         # Fetch external data
@@ -59,11 +60,16 @@ class EquitySyncService:
             detail.is_mutual_fund = bool(profile.get("isFund", False))
 
             # --- Quote fields ---
-            detail.last_price = EquitySyncService._to_decimal(quote.get("price"))
-            detail.open_price = EquitySyncService._to_decimal(quote.get("open"))
-            detail.high_price = EquitySyncService._to_decimal(quote.get("dayHigh"))
-            detail.low_price = EquitySyncService._to_decimal(quote.get("dayLow"))
-            detail.previous_close_price = EquitySyncService._to_decimal(quote.get("previousClose"))
+            detail.last_price = EquitySyncService._to_decimal(
+                quote.get("price"))
+            detail.open_price = EquitySyncService._to_decimal(
+                quote.get("open"))
+            detail.high_price = EquitySyncService._to_decimal(
+                quote.get("dayHigh"))
+            detail.low_price = EquitySyncService._to_decimal(
+                quote.get("dayLow"))
+            detail.previous_close_price = EquitySyncService._to_decimal(
+                quote.get("previousClose"))
 
             detail.volume = quote.get("volume")
             detail.average_volume = quote.get("avgVolume")
@@ -74,35 +80,46 @@ class EquitySyncService:
             # --- Valuation ratios ---
             detail.eps = EquitySyncService._to_decimal(quote.get("eps"))
             detail.pe_ratio = EquitySyncService._to_decimal(quote.get("pe"))
-            detail.pb_ratio = EquitySyncService._to_decimal(quote.get("priceToBook"))
-            detail.ps_ratio = EquitySyncService._to_decimal(quote.get("priceToSales"))
-            detail.peg_ratio = EquitySyncService._to_decimal(quote.get("pegRatio"))
+            detail.pb_ratio = EquitySyncService._to_decimal(
+                quote.get("priceToBook"))
+            detail.ps_ratio = EquitySyncService._to_decimal(
+                quote.get("priceToSales"))
+            detail.peg_ratio = EquitySyncService._to_decimal(
+                quote.get("pegRatio"))
 
             # --- Dividend info ---
-            detail.dividend_per_share = EquitySyncService._to_decimal(profile.get("lastDiv"))
-            detail.dividend_yield = EquitySyncService._to_decimal(quote.get("yield"))
+            detail.dividend_per_share = EquitySyncService._to_decimal(
+                profile.get("lastDiv"))
+            detail.dividend_yield = EquitySyncService._to_decimal(
+                quote.get("yield"))
             detail.dividend_frequency = profile.get("dividendFrequency")
             detail.ex_dividend_date = profile.get("exDividendDate")
-            detail.dividend_payout_ratio = EquitySyncService._to_decimal(profile.get("payoutRatio"))
+            detail.dividend_payout_ratio = EquitySyncService._to_decimal(
+                profile.get("payoutRatio"))
 
             # --- Mutual fund specifics ---
             detail.nav = EquitySyncService._to_decimal(profile.get("nav"))
-            detail.expense_ratio = EquitySyncService._to_decimal(profile.get("expenseRatio"))
+            detail.expense_ratio = EquitySyncService._to_decimal(
+                profile.get("expenseRatio"))
             detail.fund_family = profile.get("fundFamily")
             detail.fund_category = profile.get("category")
             detail.inception_date = profile.get("inceptionDate")
             detail.total_assets = profile.get("totalAssets")
-            detail.turnover_ratio = EquitySyncService._to_decimal(profile.get("turnover"))
+            detail.turnover_ratio = EquitySyncService._to_decimal(
+                profile.get("turnover"))
 
             # --- ETF specifics ---
             detail.underlying_index = profile.get("underlyingIndex")
             detail.aum = profile.get("aum")
             detail.holdings_count = profile.get("holdingsCount")
-            detail.tracking_error = EquitySyncService._to_decimal(profile.get("trackingError"))
+            detail.tracking_error = EquitySyncService._to_decimal(
+                profile.get("trackingError"))
 
             # --- Optional ESG ---
-            detail.esg_score = EquitySyncService._to_decimal(profile.get("esgScore"))
-            detail.carbon_intensity = EquitySyncService._to_decimal(profile.get("carbonIntensity"))
+            detail.esg_score = EquitySyncService._to_decimal(
+                profile.get("esgScore"))
+            detail.carbon_intensity = EquitySyncService._to_decimal(
+                profile.get("carbonIntensity"))
 
             # Mark as synced
             detail.is_custom = False
@@ -112,5 +129,6 @@ class EquitySyncService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to sync equity {asset.symbol}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to sync equity {asset.symbol}: {e}", exc_info=True)
             return False

@@ -1,5 +1,5 @@
 import logging
-from external_data.fmp.stocks import fetch_stock_quote, fetch_stock_profile
+from apps.external_data.fmp.equity import fetch_stock_quote, fetch_stock_profile
 from external_data.fmp.metals import fetch_precious_metal_quote
 
 logger = logging.getLogger(__name__)
