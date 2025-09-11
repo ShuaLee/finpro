@@ -1,10 +1,20 @@
 from django.db import models
+from assets.models.asset import Asset
 from core.types import DomainType
 
+
 class CustomDetail(models.Model):
-    asset = models.OneToOneField("assets.Asset", on_delete=models.CASCADE, related_name="custom_detail", limit_choices_to={"asset_type": DomainType.CUSTOM})
-    description = models.TextField()
-    origin = models.CharField(max_length=200, blank=True)
-    purchase_price = models.DecimalField(...)
-    last_price = models.DecimalField(...)
-    unit = models.CharField(max_length=50, default="unit")
+    asset = models.OneToOneField(
+        Asset,
+        on_delete=models.CASCADE,
+        related_name="custom_detail",
+        limit_choices_to={"asset_type": DomainType.CUSTOM},
+    )
+
+    description = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.asset.name

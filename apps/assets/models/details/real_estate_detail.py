@@ -50,12 +50,6 @@ class RealEstateDetail(models.Model):
         help_text="Outstanding mortgage balance if applicable"
     )
 
-    # --- Custom / System ---
-    is_custom = models.BooleanField(
-        default=True,  # Real estate is always user-defined
-        help_text="Always true for real estate"
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
 

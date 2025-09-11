@@ -13,6 +13,7 @@ def schema_field(
     source: str = None,
     formula_key: str = None,
     display_order: int = None,
+    subtype_labels: list[str] = None,
 ) -> dict:
     """
     Helper for defining schema field configuration blocks.
@@ -38,4 +39,5 @@ def schema_field(
         "source": source,
         "formula_key": formula_key,
         "display_order": display_order if is_default else None,
+        "subtype_labels": subtype_labels or [],
     }

@@ -21,6 +21,12 @@ CUSTOM_SCHEMA_CONFIG = {
             constraints={"character_limit": 200},
             display_order=2,
         ),
+        "description": schema_field(
+            title="Description",
+            data_type="string",
+            is_editable=True,
+            is_default=False,
+        ),
     },
     "holding": {
         "quantity": schema_field(

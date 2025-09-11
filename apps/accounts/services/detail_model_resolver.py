@@ -10,7 +10,7 @@ from accounts.models.details import (
 
 
 ACCOUNT_DETAILS_MODELS = {
-    DomainType.STOCK: [StockSelfManagedDetails, StockManagedDetails],
+    DomainType.EQUITY: [StockSelfManagedDetails, StockManagedDetails],
     DomainType.CRYPTO: [],
     DomainType.METAL: [],
     DomainType.CUSTOM: [CustomAccountDetails],
