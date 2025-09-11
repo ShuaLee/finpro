@@ -1,9 +1,7 @@
 import logging
-from decimal import Decimal
-
 from assets.models.asset import Asset
-from assets.models.bond_detail import BondDetail
-from external_data.fmp.bonds import fetch_bond_quote, fetch_bond_profile
+from assets.models.details.bond_detail import BondDetail
+from external_data.fmp.bonds import fetch_bond_profile, fetch_bond_quote
 from core.types import DomainType
 
 logger = logging.getLogger(__name__)
@@ -17,37 +15,24 @@ class BondSyncService:
         Returns True if sync succeeded, False otherwise.
         """
         if asset.asset_type != DomainType.BOND:
-            logger.warning(f"Asset {asset.symbol} is not a bond, skipping sync")
+            logger.warning(
+                f"Asset {asset.symbol} is not a bond, skipping sync")
             return False
 
-        # Fetch external data
-        quote = fetch_bond_quote(asset.symbol)
-        profile = fetch_bond_profile(asset.symbol)
+        profile = fetch_bond_profile(asset.symbol) or {}
+        quote = fetch_bond_quote(asset.symbol) or {}
 
-        if not quote or not profile:
-            logger.warning(f"Missing bond data for {asset.symbol}")
+        if not profile and not quote:
+            logger.warning(f"No bond data returned for {asset.symbol}")
             return False
 
-        # Ensure detail exists
         detail, _ = BondDetail.objects.get_or_create(asset=asset)
 
         try:
-            # Map profile fields
-            detail.issuer = profile.get("issuer")
-            detail.currency = profile.get("currency")
-            detail.coupon_rate = (
-                Decimal(str(profile.get("couponRate")))
-                if profile.get("couponRate") is not None
-                else None
-            )
-            detail.maturity_date = profile.get("maturityDate")
-            detail.rating = profile.get("rating")
-
-            # Map quote fields
-            price_val = quote.get("price")
-            detail.last_price = (
-                Decimal(str(price_val)) if price_val is not None else None
-            )
+            # Merge profile + quote
+            merged = {**profile, **quote}
+            for field, value in merged.items():
+                setattr(detail, field, value)
 
             detail.is_custom = False
             detail.save()
@@ -55,5 +40,6 @@ class BondSyncService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to sync bond {asset.symbol}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to sync bond {asset.symbol}: {e}", exc_info=True)
             return False

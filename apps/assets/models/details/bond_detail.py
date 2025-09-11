@@ -14,7 +14,9 @@ class BondDetail(models.Model):
     issuer = models.CharField(max_length=200, blank=True, null=True)
     cusip = models.CharField(max_length=12, blank=True, null=True)
     isin = models.CharField(max_length=12, blank=True, null=True)
+    # Govt, corporate, muni...
     bond_type = models.CharField(max_length=50, blank=True, null=True)
+    country = models.CharField(max_length=100, blank=True, null=True)
 
     # Coupon & cash flows
     coupon_rate = models.DecimalField(

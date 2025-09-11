@@ -20,6 +20,7 @@ BOND_SCHEMA_CONFIG = {
         "cusip": schema_field("CUSIP", "string", is_editable=False, is_default=False),
         "isin": schema_field("ISIN", "string", is_editable=False, is_default=False),
         "bond_type": schema_field("Bond Type", "string", is_editable=False, is_default=False),
+        "country": schema_field("Country", "string", is_editable=False, is_default=False),
 
         # --- Coupon & Dates ---
         "coupon_rate": schema_field(
