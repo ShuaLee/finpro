@@ -5,7 +5,7 @@ from assets.services.crypto_sync import CryptoSyncService
 from assets.services.metal_sync import MetalSyncService
 from assets.services.bond_sync import BondSyncService
 from core.types import DomainType
-from apps.external_data.fmp.dispatch import detect_asset_type, fetch_asset_data  # ✅ new helpers
+from apps.external_data.fmp.dispatch import detect_asset_type
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,8 @@ class AssetSyncService:
         # ✅ Step 2: Get sync service
         service = SYNC_REGISTRY.get(asset.asset_type)
         if not service:
-            logger.info(f"No sync service for asset type {asset.asset_type}, skipping")
+            logger.info(
+                f"No sync service for asset type {asset.asset_type}, skipping")
             return False
 
         # ✅ Step 3: Execute sync
@@ -58,15 +59,41 @@ class AssetSyncService:
             return False
 
     @staticmethod
-    def sync_many(assets: list[Asset]) -> dict:
+    def sync_many(assets: list[Asset], mode: str = "quotes") -> dict:
         """
-        Sync multiple assets.
-        Returns a dict with counts of successes and failures.
+        Sync multiple assets efficiently.
+        For equities: batch sync using bulk API.
+        For others: fallback to per-asset sync.
+
+        mode: "profiles" (daily full update) or "quotes" (intraday price update)
         """
         results = {"success": 0, "fail": 0}
-        for asset in assets:
+
+        # ✅ Group assets by type
+        equities = [a for a in assets if a.asset_type == DomainType.EQUITY]
+        others = [a for a in assets if a.asset_type != DomainType.EQUITY]
+
+        # ------------------------------
+        # Equities (bulk sync)
+        # ------------------------------
+        if equities:
+            symbols = [a.symbol for a in equities if a.symbol]
+            if mode == "profiles":
+                count = EquitySyncService.sync_profiles_bulk(symbols)
+                results["success"] += count
+                results["fail"] += len(symbols) - count
+            else:  # default to quotes
+                count = EquitySyncService.sync_quotes_bulk(symbols)
+                results["success"] += count
+                results["fail"] += len(symbols) - count
+
+        # ------------------------------
+        # Other asset types (loop)
+        # ------------------------------
+        for asset in others:
             if AssetSyncService.sync(asset):
                 results["success"] += 1
             else:
                 results["fail"] += 1
+
         return results
