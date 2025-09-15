@@ -3,15 +3,13 @@ import logging
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
-
 FMP_API_KEY = settings.FMP_API_KEY
 FMP_BASE = "https://financialmodelingprep.com/api/v4"
 
-
-def fetch_by_isin(isin: str) -> dict | None:
+def search_by_isin(isin: str) -> dict | None:
     """
-    Fallback reconciliation: fetch security data by ISIN.
-    Returns latest ticker + company name + identifiers.
+    Search for a security by ISIN via FMP.
+    Returns dict with symbol + metadata if found, else None.
     """
     url = f"{FMP_BASE}/search/isin?isin={isin}&apikey={FMP_API_KEY}"
     try:

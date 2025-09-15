@@ -1,89 +1,87 @@
 import logging
-from apps.external_data.fmp.equity import fetch_equity_quote, fetch_equity_profile
-from apps.external_data.fmp.bonds import fetch_bond_profile, fetch_bond_quote
-from apps.external_data.fmp.crypto import fetch_crypto_profile, fetch_crypto_quote
-from apps.external_data.fmp.metals import fetch_metal_quote
-import requests
-from django.conf import settings
+
+from core.types import DomainType
+
+# Import fetchers
+from external_data.fmp.equities.fetchers import (
+    fetch_equity_profile,
+    fetch_equity_quote,
+    fetch_equity_quotes_bulk,
+)
+from external_data.fmp.crypto.fetchers import (
+    fetch_crypto_profile,
+    fetch_crypto_quote,
+    bulk_fetch_crypto_quotes,
+)
+from external_data.fmp.metals.fetchers import (
+    fetch_metal_quote,
+    bulk_fetch_metal_quotes,
+)
+from external_data.fmp.bonds.fetchers import (
+    fetch_bond_profile,
+    fetch_bond_quote,
+    bulk_fetch_bond_quotes,
+)
 
 logger = logging.getLogger(__name__)
 
-FMP_API_KEY = settings.FMP_API_KEY
-FMP_BASE_URL = "https://financialmodelingprep.com/api/v3"
 
-
+# ------------------------------
+# Single fetch wrapper
+# ------------------------------
 def fetch_asset_data(symbol: str, asset_type: str) -> dict | None:
     """
-    Centralized fetcher for any asset type.
-    Returns JSON/dict, leaves DB updates to sync services.
+    Fetch both profile + quote for a given asset type.
+    Returns a dict that can be merged into Detail models.
     """
-    if asset_type == "equity":
-        quote = fetch_equity_quote(symbol)
-        profile = fetch_equity_profile(symbol)
-        if not quote or not profile:
+    try:
+        if asset_type == DomainType.EQUITY:
+            profile = fetch_equity_profile(symbol) or {}
+            quote = fetch_equity_quote(symbol) or {}
+            return {**profile, **quote} if profile or quote else None
+
+        elif asset_type == DomainType.CRYPTO:
+            profile = fetch_crypto_profile(symbol) or {}
+            quote = fetch_crypto_quote(symbol) or {}
+            return {**profile, **quote} if profile or quote else None
+
+        elif asset_type == DomainType.METAL:
+            return fetch_metal_quote(symbol)
+
+        elif asset_type == DomainType.BOND:
+            profile = fetch_bond_profile(symbol) or {}
+            quote = fetch_bond_quote(symbol) or {}
+            return {**profile, **quote} if profile or quote else None
+
+        else:
+            logger.warning(f"Unsupported asset type: {asset_type}")
             return None
-        return {"quote": quote, "profile": profile}
 
-    elif asset_type == "bond":
-        quote = fetch_bond_quote(symbol)
-        profile = fetch_bond_profile(symbol)
-        if not quote or not profile:
-            return None
-        return {"quote": quote, "profile": profile}
-
-    elif asset_type == "crypto":
-        quote = fetch_crypto_quote(symbol)
-        profile = fetch_crypto_profile(symbol)
-        if not quote or not profile:
-            return None
-        return {"quote": quote, "profile": profile}
-
-    elif asset_type == "metal":
-        return fetch_metal_quote(symbol)
-
-    elif asset_type in {"real_estate", "custom"}:
-        # User-entered assets, no external sync
+    except Exception as e:
+        logger.error(f"Failed to fetch {asset_type} {symbol}: {e}", exc_info=True)
         return None
 
-    else:
-        raise NotImplementedError(f"Unsupported asset type: {asset_type}")
 
-
-
-def detect_asset_type(symbol: str) -> str | None:
+# ------------------------------
+# Bulk fetch wrapper
+# ------------------------------
+def bulk_fetch_asset_quotes(symbols: list[str], asset_type: str) -> dict[str, dict]:
     """
-    Detect the asset type of a symbol.
-    Priority:
-      1. FMP /search (cheap + fast)
-      2. Fallback to direct profile/quote fetchers
+    Bulk fetch quotes for multiple symbols of a given type.
+    Returns {symbol: normalized_data}.
     """
-    # --- 1. Try /search ---
     try:
-        url = f"{FMP_BASE_URL}/search?query={symbol}&limit=1&apikey={FMP_API_KEY}"
-        resp = requests.get(url, timeout=5)
-        resp.raise_for_status()
-        data = resp.json()
-        if data:
-            raw_type = data[0].get("type", "").lower()
-            if raw_type in {"stock", "etf", "mutual fund", "fund"}:
-                return "equity"
-            if raw_type in {"crypto", "cryptocurrency"}:
-                return "crypto"
-            if raw_type in {"bond"}:
-                return "bond"
-            if raw_type in {"commodity", "metal"}:
-                return "metal"
+        if asset_type == DomainType.EQUITY:
+            return fetch_equity_quotes_bulk(symbols)
+        elif asset_type == DomainType.CRYPTO:
+            return bulk_fetch_crypto_quotes(symbols)
+        elif asset_type == DomainType.METAL:
+            return bulk_fetch_metal_quotes(symbols)
+        elif asset_type == DomainType.BOND:
+            return bulk_fetch_bond_quotes(symbols)
+        else:
+            logger.warning(f"Unsupported asset type for bulk fetch: {asset_type}")
+            return {}
     except Exception as e:
-        logger.warning(f"Search detection failed for {symbol}: {e}")
-
-    # --- 2. Fallbacks ---
-    if fetch_equity_profile(symbol):
-        return "equity"
-    if fetch_bond_profile(symbol):
-        return "bond"
-    if fetch_crypto_profile(symbol):
-        return "crypto"
-    if fetch_metal_quote(symbol):
-        return "metal"
-
-    return None
+        logger.error(f"Bulk fetch failed for {asset_type} symbols {symbols}: {e}", exc_info=True)
+        return {}

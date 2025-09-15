@@ -1,0 +1,76 @@
+# external_data/fmp/equities/fetchers.py
+
+import requests
+import logging
+from django.conf import settings
+
+from external_data.fmp.shared.normalize import normalize_fmp_data
+from external_data.fmp.equities.mappings import EQUITY_PROFILE_MAP, EQUITY_QUOTE_MAP
+
+logger = logging.getLogger(__name__)
+
+FMP_API_KEY = settings.FMP_API_KEY
+FMP_BASE = "https://financialmodelingprep.com/api/v3"
+
+
+# ------------------------------
+# Single Fetchers
+# ------------------------------
+def fetch_equity_profile(symbol: str) -> dict | None:
+    url = f"{FMP_BASE}/profile/{symbol}?apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
+        return normalize_fmp_data(data[0], EQUITY_PROFILE_MAP)
+    except Exception as e:
+        logger.warning(f"Failed to fetch equity profile for {symbol}: {e}")
+        return None
+
+
+def fetch_equity_quote(symbol: str) -> dict | None:
+    url = f"{FMP_BASE}/quote/{symbol}?apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
+        return normalize_fmp_data(data[0], EQUITY_QUOTE_MAP)
+    except Exception as e:
+        logger.warning(f"Failed to fetch equity quote for {symbol}: {e}")
+        return None
+
+
+# ------------------------------
+# Bulk Fetchers
+# ------------------------------
+def fetch_equity_quotes_bulk(symbols: list[str]) -> list[dict]:
+    if not symbols:
+        return []
+    url = f"{FMP_BASE}/quote/{','.join(symbols)}?apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        return [normalize_fmp_data(d, EQUITY_QUOTE_MAP) for d in data if d]
+    except Exception as e:
+        logger.warning(f"Failed bulk equity quote fetch: {e}")
+        return []
+
+
+# ------------------------------
+# Universe (for seeding database)
+# ------------------------------
+def fetch_equity_universe() -> list[dict]:
+    url = f"{FMP_BASE}/stock/list?apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        return data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch equity universe: {e}")
+        return []

@@ -154,6 +154,23 @@ class EquityDetail(models.Model):
             models.Index(fields=["is_etf"]),
             models.Index(fields=["is_mutual_fund"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["isin"],
+                name="uniq_equity_isin",
+                condition=~models.Q(isin=None)
+            ),
+            models.UniqueConstraint(
+                fields=["cusip"],
+                name="uniq_equity_cusip",
+                condition=~models.Q(cusip=None)
+            ),
+            models.UniqueConstraint(
+                fields=["cik"],
+                name="uniq_equity_cik",
+                condition=~models.Q(cik=None)
+            ),
+        ]
 
     def __str__(self):
         return f"{self.asset.symbol} ({self.exchange})"

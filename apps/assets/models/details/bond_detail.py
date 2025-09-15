@@ -59,3 +59,17 @@ class BondDetail(models.Model):
 
     def __str__(self):
         return f"{self.asset.symbol or self.cusip} ({self.issuer})"
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["isin"],
+                name="uniq_bond_isin",
+                condition=~models.Q(isin=None)
+            ),
+            models.UniqueConstraint(
+                fields=["cusip"],
+                name="uniq_bond_cusip",
+                condition=~models.Q(cusip=None)
+            ),
+        ]
