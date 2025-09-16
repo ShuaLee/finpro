@@ -144,6 +144,22 @@ class EquityDetail(models.Model):
         help_text="True if user-defined (not synced from provider)"
     )
 
+    # --- Listing Status ----
+    LISTING_STATUS_CHOICES = [
+        ("ACTIVE", "Active"),
+        ("DELISTED", "Delisted"),
+        ("SUSPENDED", "Suspended"),
+        ("IPO", "IPO Pending"),
+    ]
+
+    listing_status = models.CharField(
+        max_length=20,
+        choices=LISTING_STATUS_CHOICES,
+        default="ACTIVE",
+        db_index=True,
+        help_text="Tracks whether the equity is currently listed and tradable."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
 

@@ -10,7 +10,6 @@ djangorestframework = "*"
 drf-nested-routers = "*"
 yfinance = "*"
 djoser = "*"
-celery = "*"
 redis = "*"
 pycountry = "*"
 retrying = "*"
@@ -20,6 +19,7 @@ djangorestframework-simplejwt = "*"
 django-cors-headers = "*"
 simpleeval = "*"
 asteval = "*"
+celery = {extras = ["redis"], version = "*"}
 
 [dev-packages]
 pytest = "*"

@@ -9,7 +9,6 @@ from external_data.fmp.equities.fetchers import (
     fetch_equity_profile,
     fetch_equity_quote,
     fetch_equity_quotes_bulk,
-    fetch_equity_quotes_bulk,
 )
 from external_data.fmp.shared.isin import search_by_isin
 
@@ -20,10 +19,9 @@ class EquitySyncService:
     @staticmethod
     def sync(asset: Asset) -> bool:
         """Full sync (profile + quote)."""
-        return (
-            EquitySyncService.sync_profile(asset)
-            and EquitySyncService.sync_quote(asset)
-        )
+        profile_ok = EquitySyncService.sync_profile(asset)
+        quote_ok = EquitySyncService.sync_quote(asset)
+        return profile_ok and quote_ok
 
     @staticmethod
     def sync_profile(asset: Asset) -> bool:
@@ -38,14 +36,19 @@ class EquitySyncService:
             if detail and detail.isin:
                 profile = search_by_isin(detail.isin)
 
+        detail, _ = EquityDetail.objects.get_or_create(asset=asset)
+
         if not profile:
             logger.warning(f"No profile for {asset.symbol}")
+            detail.listing_status = "DELISTED"
+            detail.save()
             return False
 
-        detail, _ = EquityDetail.objects.get_or_create(asset=asset)
         for field, value in profile.items():
             setattr(detail, field, value)
+
         detail.is_custom = False
+        detail.listing_status = "ACTIVE"
         detail.save()
         return True
 
@@ -55,12 +58,18 @@ class EquitySyncService:
             return False
 
         quote = fetch_equity_quote(asset.symbol)
+        detail, _ = EquityDetail.objects.get_or_create(asset=asset)
+
         if not quote:
+            logger.warning(f"No quote for {asset.symbol}")
+            detail.listing_status = "DELISTED"
+            detail.save()
             return False
 
-        detail, _ = EquityDetail.objects.get_or_create(asset=asset)
         for field, value in quote.items():
             setattr(detail, field, value)
+
+        detail.listing_status = "ACTIVE"
         detail.save()
         return True
 
@@ -90,9 +99,14 @@ class EquitySyncService:
                 quote = data.get(asset.symbol)
                 if not quote:
                     results["fail"] += 1
+                    detail.listing_status = "DELISTED"
+                    detail.save()
                     continue
+
                 for field, value in quote.items():
                     setattr(detail, field, value)
+
+                detail.listing_status = "ACTIVE"
                 detail.save()
                 results["success"] += 1
 
