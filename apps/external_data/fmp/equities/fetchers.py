@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 FMP_API_KEY = settings.FMP_API_KEY
 FMP_BASE = "https://financialmodelingprep.com/api/v3"
+FMP_BULK_PROFILE = "https://financialmodelingprep.com/stable/profile-bulk"
 
 
 # ------------------------------
@@ -58,6 +59,26 @@ def fetch_equity_quotes_bulk(symbols: list[str]) -> list[dict]:
         return [normalize_fmp_data(d, EQUITY_QUOTE_MAP) for d in data if d]
     except Exception as e:
         logger.warning(f"Failed bulk equity quote fetch: {e}")
+        return []
+
+def fetch_equity_profiles_bulk(part: int = 0) -> list[dict]:
+    """
+    Fetch a bulk chunk of equity profiles from FMP.
+    FMP splits the universe into parts (0, 1, 2, ...).
+    Returns a list of normalized dicts.
+    """
+    url = f"{FMP_BULK_PROFILE}?part={part}&apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        return [
+            normalize_fmp_data(d, EQUITY_PROFILE_MAP)
+            for d in data
+            if d
+        ]
+    except Exception as e:
+        logger.warning(f"Failed bulk equity profile fetch for part {part}: {e}")
         return []
 
 
