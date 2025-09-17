@@ -3,8 +3,8 @@ from django.core.exceptions import ValidationError
 from django.contrib import admin, messages
 from assets.models.proxies import MetalAsset
 from assets.models.details.metal_detail import MetalDetail
-from assets.services.asset_sync import AssetSyncService
-from apps.external_data.fmp.dispatch import detect_asset_type
+from assets.services.syncs.asset_sync import AssetSyncService
+from apps.external_data.fmp.dispatch import fetch_asset_data
 
 
 class MetalAddForm(forms.ModelForm):
@@ -14,7 +14,7 @@ class MetalAddForm(forms.ModelForm):
 
     def clean_symbol(self):
         symbol = self.cleaned_data["symbol"].upper()
-        detected_type = detect_asset_type(symbol)
+        detected_type = fetch_asset_data(symbol)
         if detected_type != "metal":
             raise ValidationError(
                 f"❌ {symbol} is not a Metal (detected type: {detected_type})."
@@ -42,6 +42,8 @@ class MetalAssetAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if AssetSyncService.sync(obj):
-            self.message_user(request, f"✅ Synced {obj.symbol} successfully.", messages.SUCCESS)
+            self.message_user(
+                request, f"✅ Synced {obj.symbol} successfully.", messages.SUCCESS)
         else:
-            self.message_user(request, f"⚠️ Added {obj.symbol}, but sync failed/custom.", messages.WARNING)
+            self.message_user(
+                request, f"⚠️ Added {obj.symbol}, but sync failed/custom.", messages.WARNING)

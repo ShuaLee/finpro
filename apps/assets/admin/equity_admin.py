@@ -3,8 +3,8 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from assets.models.proxies import EquityAsset
 from assets.models.details.equity_detail import EquityDetail
-from assets.services.asset_sync import AssetSyncService
-from external_data.fmp.dispatch import detect_asset_type
+from assets.services.syncs.asset_sync import AssetSyncService
+from external_data.fmp.dispatch import fetch_asset_data
 
 
 class EquityAddForm(forms.ModelForm):
@@ -14,7 +14,7 @@ class EquityAddForm(forms.ModelForm):
 
     def clean_symbol(self):
         symbol = self.cleaned_data["symbol"].upper()
-        detected_type = detect_asset_type(symbol)
+        detected_type = fetch_asset_data(symbol)
         if detected_type != "equity":
             raise ValidationError(
                 f"Symbol {symbol} is not an Equity (detected type: {detected_type})."
@@ -32,7 +32,8 @@ class EquityDetailInline(admin.StackedInline):
 class EquityAssetAdmin(admin.ModelAdmin):
     form = EquityAddForm
     list_display = ("id", "symbol", "name", "created_at")
-    search_fields = ("symbol", "name", "equity_detail__isin", "equity_detail__cusip")
+    search_fields = ("symbol", "name", "equity_detail__isin",
+                     "equity_detail__cusip")
     list_filter = ("equity_detail__exchange", "equity_detail__sector")
     inlines = [EquityDetailInline]
 
@@ -42,6 +43,8 @@ class EquityAssetAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if AssetSyncService.sync(obj):
-            self.message_user(request, f"✅ Synced {obj.symbol} successfully.", messages.SUCCESS)
+            self.message_user(
+                request, f"✅ Synced {obj.symbol} successfully.", messages.SUCCESS)
         else:
-            self.message_user(request, f"⚠️ Added {obj.symbol}, but sync failed/custom.", messages.WARNING)
+            self.message_user(
+                request, f"⚠️ Added {obj.symbol}, but sync failed/custom.", messages.WARNING)

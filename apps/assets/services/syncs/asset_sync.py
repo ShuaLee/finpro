@@ -3,10 +3,10 @@ from collections import defaultdict
 from assets.models.asset import Asset
 from core.types import DomainType
 
-from services.syncs.equity_sync import EquitySyncService
-from services.syncs.crypto_sync import CryptoSyncService
-from services.syncs.metal_sync import MetalSyncService
-from services.syncs.bond_sync import BondSyncService
+from assets.services.syncs.equity_sync import EquitySyncService
+from assets.services.syncs.crypto_sync import CryptoSyncService
+from assets.services.syncs.metal_sync import MetalSyncService
+from assets.services.syncs.bond_sync import BondSyncService
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ class AssetSyncService:
                 return service.sync_profile(asset)
             return service.sync_quote(asset)
         except Exception as e:
-            logger.error(f"Error syncing {asset.asset_type} {asset.symbol}: {e}", exc_info=True)
+            logger.error(
+                f"Error syncing {asset.asset_type} {asset.symbol}: {e}", exc_info=True)
             return False
 
     @staticmethod
@@ -58,7 +59,8 @@ class AssetSyncService:
         for asset_type, group in grouped.items():
             service = SYNC_REGISTRY.get(asset_type)
             if not service:
-                logger.info(f"No sync service for {asset_type}, skipping {len(group)} assets")
+                logger.info(
+                    f"No sync service for {asset_type}, skipping {len(group)} assets")
                 results["fail"] += len(group)
                 continue
 
@@ -81,7 +83,8 @@ class AssetSyncService:
                 # --- Bonds: only bulk quotes, profiles must loop ---
                 elif asset_type == DomainType.BOND:
                     if profile:
-                        bulk_results = service.sync_profiles_bulk(group)  # loops internally
+                        bulk_results = service.sync_profiles_bulk(
+                            group)  # loops internally
                     else:
                         bulk_results = service.sync_quotes_bulk(group)
 
@@ -89,7 +92,8 @@ class AssetSyncService:
                 results["fail"] += bulk_results.get("fail", 0)
 
             except Exception as e:
-                logger.error(f"Bulk sync failed for {asset_type}: {e}", exc_info=True)
+                logger.error(
+                    f"Bulk sync failed for {asset_type}: {e}", exc_info=True)
                 results["fail"] += len(group)
 
         return dict(results)
