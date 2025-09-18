@@ -26,20 +26,25 @@ class Portfolio(models.Model):
         created_at (DateTime): Timestamp when the portfolio is created.
     """
 
-    profile = models.OneToOneField(
+    profile = models.ForeignKey(
         Profile, on_delete=models.CASCADE, related_name='portfolio'
     )
+    name = models.CharField(max_length=100, default="Main Portfolio")
+    is_main = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = 'portfolios'
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile"],
+                condition=models.Q(is_main=True),
+                name="unique_main_portfolio_per_profile",
+            ),
+            models.UniqueConstraint(
+                fields=["profile", "name"],
+                name="unique_portfolio_name_prt_profile",
+            )
+        ]
 
     def __str__(self):
-        return f"{self.profile} - {self.created_at}"
-
-    def get_total_value_pfx(self):
-        """
-        Should be implemented by subclass (e.g. StockPortfolio, MetalPortfolio)
-        """
-        raise NotImplementedError(
-            "Subclasses must implement get_total_value()")
+        return f"{self.profile.user.email} - {self.name}"

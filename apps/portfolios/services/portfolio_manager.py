@@ -6,41 +6,49 @@ from portfolios.models.portfolio import Portfolio
 
 class PortfolioManager:
     """
-    Service class to handle lifecycle operations for user portfolios
-    and their sub-portfolios.
+    Service class to handle lifecycle operations for user portfolios.
     """
 
     # -------------------------------
     # Main Portfolio Methods
     # -------------------------------
     @staticmethod
-    def create_portfolio(profile: Profile) -> Portfolio:
+    def create_main_portfolio(profile: Profile, name: str = "Main Portfolio") -> Portfolio:
         """
-        Creates a new Portfolio for the given profile.
+        Creates the main Portfolio for the given profile.
         Raises ValidationError if one already exists.
         """
-        if hasattr(profile, "portfolio"):
-            raise ValueError(f"Profile {profile.id} already has a portfolio.")
-        
+        if Portfolio.objects.filter(profile=profile, is_main=True).exists():
+            raise ValidationError(
+                f"Profile {profile.id} already has a main portfolio.")
         with transaction.atomic():
-            return Portfolio.objects.create(profile=profile)
-        
-    @staticmethod    
-    def ensure_portfolio_for_profile(profile: Profile) -> Portfolio:
-        """
-        Ensures the profile has a portfolio (idempotent).
-        Returns existing or newly created portfolio.
-        """
-        portfolio, _ = Portfolio.objects.get_or_create(profile=profile)
-        return portfolio
-    
+            return Portfolio.objects.create(
+                profile=profile,
+                name=name,
+                is_main=True,
+            )
+
     @staticmethod
-    def get_portfolio(profile: Profile) -> Portfolio:
+    def ensure_main_portfolio(profile: Profile) -> Portfolio:
+        """
+        Ensures the profile has a main portfolio (idempotent).
+        Returns existing or newly created main portfolio.
+        """
+        portfolio, _ = Portfolio.objects.get_or_create(
+            profile=profile,
+            is_main=True,
+            defaults={"name": "Main Portfolio"}
+        )
+        return portfolio
+
+    @staticmethod
+    def get_main_portfolio(profile: Profile) -> Portfolio:
         """
         Fetch the main Portfolio for a profile.
         Raises ValidationError if not found.
         """
-        if not hasattr(profile, "portfolio"):
-            raise ValidationError("No portfolio exists for this profile.")
-        return profile.portfolio
-    
+        try:
+            return Portfolio.objects.get(profile=profile, is_main=True)
+        except Portfolio.DoesNotExist:
+            raise ValidationError(
+                f"No main portfolio exists for profile {profile.id}")

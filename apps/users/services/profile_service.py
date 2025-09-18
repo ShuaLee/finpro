@@ -18,7 +18,7 @@ class ProfileService:
         Initialize a Profile for a new user with sane defaults:
           - Default Free plan
           - Default AccountType: Individual Investor
-          - Ensures Portfolio exists for this profile
+          - Ensures Main Portfolio exists for this profile
         """
         profile, _ = Profile.objects.get_or_create(user=user)
 
@@ -33,7 +33,8 @@ class ProfileService:
 
         # Assign Individual Investor account type if none exists
         if not profile.account_type:
-            individual_type = AccountType.objects.filter(slug="individual").first()
+            individual_type = AccountType.objects.filter(
+                slug="individual").first()
             if not individual_type:
                 raise ValidationError(
                     {"detail": "Default AccountType 'individual' not found."}
@@ -41,7 +42,7 @@ class ProfileService:
             profile.account_type = individual_type
 
         # Ensure Portfolio exists for this Profile
-        PortfolioManager.ensure_portfolio_for_profile(profile)
+        PortfolioManager.ensure_main_portfolio(profile)
 
         profile.save(update_fields=["plan", "account_type"])
         return profile
