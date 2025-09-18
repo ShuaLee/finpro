@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from accounts.models.account import Account
 from assets.models.asset import Asset
+from core.types import get_domain_meta
 
 
 class Holding(models.Model):
@@ -46,15 +47,11 @@ class Holding(models.Model):
     # Validation
     # ----------------------------
     def clean(self):
-        """
-        Ensure the asset type matches the account's domain type.
-        """
-        if self.asset.asset_type != self.account.domain_type:
+        allowed = get_domain_meta(self.account.domain_type)["allowed_assets"]
+        if self.asset.asset_type not in allowed:
             raise ValidationError(
-                f"Asset domain '{self.asset.asset_type}' does not match "
-                f"account domain '{self.account.domain_type}'."
+                f"{self.account.domain_type} accounts cannot hold {self.asset.asset_type} assets."
             )
-        super().clean()
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
