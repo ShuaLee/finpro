@@ -40,8 +40,8 @@ class Account(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["portfolio", "name"],
-                name="uniq_account_name_in_portfolio",
+                fields=["portfolio", "account_type", "name"],
+                name="uniq_account_name_in_portfolio_per_type",
             )
         ]
         ordering = ["portfolio", "name"]
