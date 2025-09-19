@@ -3,6 +3,7 @@ from django.db import models
 from core.countries import validate_country_code
 
 
+
 class ClassificationDefinition(models.Model):
     """
     Global system-level account classification definitions.
@@ -19,14 +20,17 @@ class ClassificationDefinition(models.Model):
         ],
         default="taxable",
     )
+
+    all_countries = models.BooleanField(
+        default=False,
+        help_text="If true, this classification applies globally (all countries)."
+    )
     jurisdictions = models.JSONField(
         default=list,
         blank=True,
-        help_text=(
-            "List of jurisdictions where this classification applies. "
-            "Use ISO country codes (e.g., ['US'], ['CA'], ['GB']) or ['*'] for global."
-        ),
+        help_text="List of ISO country codes (e.g., ['US'], ['CA'], ['GB'])."
     )
+
     is_system = models.BooleanField(
         default=True,
         help_text="True if this is a built-in classification available globally."
@@ -37,15 +41,23 @@ class ClassificationDefinition(models.Model):
         ordering = ["name"]
 
     def __str__(self):
+        if self.all_countries:
+            return f"{self.name} ({self.tax_status}, All Countries)"
         countries = ", ".join(self.jurisdictions) if self.jurisdictions else "N/A"
         return f"{self.name} ({self.tax_status}, {countries})"
-    
+
     def clean(self):
-        for code in self.jurisdictions:
-            try:
-                validate_country_code(code)
-            except ValueError as e:
-                raise ValidationError(str(e))
+        """
+        Validation: either all_countries is true OR jurisdictions must be valid.
+        """
+        if self.all_countries:
+            self.jurisdictions = []  # clear it to avoid conflicts
+        else:
+            for code in self.jurisdictions:
+                try:
+                    validate_country_code(code)
+                except ValueError as e:
+                    raise ValidationError(str(e))
 
 
 class AccountClassification(models.Model):

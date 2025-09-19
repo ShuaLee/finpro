@@ -3,7 +3,7 @@ from django import forms
 from accounts.models.account import Account
 from accounts.models.account_classification import ClassificationDefinition, AccountClassification
 from accounts.services.account_service import AccountService
-from core.countries import COUNTRY_CHOICES
+from core.countries import COUNTRY_CHOICES, validate_country_code
 
 
 class ClassificationDefinitionForm(forms.ModelForm):
@@ -11,26 +11,42 @@ class ClassificationDefinitionForm(forms.ModelForm):
         choices=COUNTRY_CHOICES,
         required=False,
         widget=forms.SelectMultiple(attrs={"size": 12}),
-        help_text="Hold CTRL (or CMD on Mac) to select multiple countries.",
+    )
+    all_countries = forms.BooleanField(
+        required=False,
+        help_text="If checked, applies to all countries and ignores jurisdictions."
     )
 
     class Meta:
         model = ClassificationDefinition
         fields = "__all__"
 
+    def clean(self):
+        cleaned = super().clean()
+
+        # if "all countries" is selected → clear jurisdictions
+        if cleaned.get("all_countries"):
+            cleaned["jurisdictions"] = []
+        else:
+            # validate each selected country code
+            for code in cleaned.get("jurisdictions", []):
+                validate_country_code(code)
+
+        return cleaned
+
 
 # ----------------------------
-# Admin Registrations
+# Admin
 # ----------------------------
 @admin.register(ClassificationDefinition)
 class ClassificationDefinitionAdmin(admin.ModelAdmin):
-    form = ClassificationDefinitionForm  # ✅ link the custom form
+    form = ClassificationDefinitionForm
 
     list_display = (
         "id",
         "name",
         "tax_status",
-        "display_jurisdictions",
+        "display_scope",
         "is_system",
         "created_at",
     )
@@ -39,10 +55,12 @@ class ClassificationDefinitionAdmin(admin.ModelAdmin):
     ordering = ("name",)
     readonly_fields = ("created_at",)
 
-    def display_jurisdictions(self, obj):
-        """Show jurisdictions nicely in the admin list."""
+    def display_scope(self, obj):
+        """Show either 'All Countries' or specific jurisdictions."""
+        if obj.all_countries:
+            return "All Countries"
         return ", ".join(obj.jurisdictions or [])
-    display_jurisdictions.short_description = "Jurisdictions"
+    display_scope.short_description = "Jurisdictions"
 
 
 @admin.register(AccountClassification)
