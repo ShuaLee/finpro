@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
+from schemas.models.schema import Schema
 import re
 
 
@@ -18,7 +19,7 @@ class Formula(models.Model):
     description = models.TextField(blank=True)
 
     schema = models.ForeignKey(
-        "schemas.Schema",
+        Schema,
         on_delete=models.CASCADE,
         null=True,
         blank=True,

@@ -44,10 +44,10 @@ class Account(models.Model):
                 name="uniq_account_name_in_portfolio",
             )
         ]
+        ordering = ["portfolio", "name"]
 
     def __str__(self):
         return f"{self.name} ({self.account_type})"
-
 
     # ----------------------------
     # Domain Helpers
@@ -70,8 +70,9 @@ class Account(models.Model):
     # ----------------------------
     def clean(self):
         """
-        Ensure account_type is valid for the domain and enforce
-        domain-specific restrictions (crypto, metals, real estate).
+        Ensure account_type is valid for the domain,
+        enforce domain-specific restrictions,
+        and validate classification ownership.
         """
         domain = self.domain_type
         domain_meta = get_domain_meta(domain)
@@ -87,9 +88,15 @@ class Account(models.Model):
         # 2. Domain-specific restrictions
         if domain == "crypto" and self.broker:
             raise ValidationError("Crypto wallets should not have a broker.")
-
         if domain == "real_estate" and self.broker:
-            raise ValidationError("Real estate accounts should not have a broker.")
+            raise ValidationError(
+                "Real estate accounts should not have a broker.")
+
+        # 3. Classification must belong to same profile
+        if self.classification and self.classification.profile != self.profile:
+            raise ValidationError(
+                f"Classification '{self.classification}' does not belong to this account's profile."
+            )
 
         super().clean()
 
@@ -100,6 +107,9 @@ class Account(models.Model):
     def active_schema(self):
         from schemas.models import Schema
         try:
-            return Schema.objects.get(account_type=self.account_type)
+            return Schema.objects.get(
+                portfolio=self.portfolio,
+                account_type=self.account_type
+            )
         except Schema.DoesNotExist:
             return None

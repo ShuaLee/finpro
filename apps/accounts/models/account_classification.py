@@ -53,12 +53,6 @@ class AccountClassification(models.Model):
         on_delete=models.CASCADE,
         related_name="instances",
     )
-    nickname = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Optional nickname for this classification (e.g., 'Vacation TFSA')."
-    )
 
     # User-specific tax contribution tracking
     contribution_limit = models.DecimalField(
@@ -80,8 +74,7 @@ class AccountClassification(models.Model):
 
     class Meta:
         unique_together = ("profile", "definition")
-        ordering = ["nickname", "definition__name"]
+        ordering = ["definition__name",]
 
     def __str__(self):
-        label = self.nickname or self.definition.name
-        return f"{label} ({self.profile.user.email})"
+        return f"{self.definition.name} ({self.profile.user.email})"

@@ -19,7 +19,6 @@ class Schema(models.Model):
 
     account_type = models.CharField(
         max_length=50,
-        unique=True,
         db_index=True,
         choices=get_account_type_choices(),
         help_text="Specific account type this schema applies to (e.g., equity_self, crypto_wallet)."
