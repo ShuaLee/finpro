@@ -3,6 +3,20 @@ from django import forms
 from accounts.models.account import Account
 from accounts.models.account_classification import ClassificationDefinition, AccountClassification
 from accounts.services.account_service import AccountService
+from core.countries import COUNTRY_CHOICES
+
+
+class ClassificationDefinitionForm(forms.ModelForm):
+    jurisdictions = forms.MultipleChoiceField(
+        choices=COUNTRY_CHOICES,
+        required=False,
+        widget=forms.SelectMultiple(attrs={"size": 12}),
+        help_text="Hold CTRL (or CMD on Mac) to select multiple countries.",
+    )
+
+    class Meta:
+        model = ClassificationDefinition
+        fields = "__all__"
 
 
 # ----------------------------
@@ -10,22 +24,43 @@ from accounts.services.account_service import AccountService
 # ----------------------------
 @admin.register(ClassificationDefinition)
 class ClassificationDefinitionAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "tax_status",
-                    "jurisdiction", "is_system", "created_at")
-    list_filter = ("tax_status", "jurisdiction", "is_system")
+    form = ClassificationDefinitionForm  # ✅ link the custom form
+
+    list_display = (
+        "id",
+        "name",
+        "tax_status",
+        "display_jurisdictions",
+        "is_system",
+        "created_at",
+    )
+    list_filter = ("tax_status", "is_system")
     search_fields = ("name",)
     ordering = ("name",)
     readonly_fields = ("created_at",)
+
+    def display_jurisdictions(self, obj):
+        """Show jurisdictions nicely in the admin list."""
+        return ", ".join(obj.jurisdictions or [])
+    display_jurisdictions.short_description = "Jurisdictions"
 
 
 @admin.register(AccountClassification)
 class AccountClassificationAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "profile", "definition", "contribution_limit", "carry_forward_room", "created_at",
+        "id",
+        "profile",
+        "definition",
+        "contribution_limit",
+        "carry_forward_room",
+        "created_at",
     )
-    list_filter = ("definition__tax_status", "definition__jurisdiction")
-    search_fields = ("definition__name",
-                     "profile__user__username", "profile__user__email")
+    list_filter = ("definition__tax_status",)  # ✅ removed JSONField filter
+    search_fields = (
+        "definition__name",
+        "profile__user__username",
+        "profile__user__email",
+    )
     ordering = ("profile", "definition__name")
     readonly_fields = ("created_at",)
 
@@ -33,7 +68,8 @@ class AccountClassificationAdmin(admin.ModelAdmin):
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "portfolio", "name", "account_type", "classification",
+        "id", "portfolio", "name", "account_type",
+        "classification",  # still shown in list, just not editable
         "broker", "created_at", "last_synced",
     )
     list_filter = ("account_type", "broker", "created_at")
@@ -46,27 +82,37 @@ class AccountAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "last_synced")
 
     def get_form(self, request, obj=None, **kwargs):
-        from django import forms  # lazy import
-        from accounts.models.account import Account  # ensure model is loaded
+        from django import forms
 
         class AccountForm(forms.ModelForm):
             definition = forms.ModelChoiceField(
                 queryset=ClassificationDefinition.objects.all(),
-                required=False,
-                help_text="Pick a definition (e.g., TFSA, RRSP). The system will attach/create the classification."
+                required=True,
+                help_text="Pick a definition (e.g., TFSA, RRSP, 401k)."
             )
 
             class Meta:
                 model = Account
-                fields = "__all__"  # let Django resolve lazily
+                fields = [
+                    "portfolio",
+                    "name",
+                    "account_type",
+                    "broker",
+                    "definition",  # 🔑 instead of classification
+                ]
 
             def save(self, commit=True):
                 account = super().save(commit=False)
                 definition = self.cleaned_data.get("definition")
-                if definition:
-                    account = AccountService.assign_classification(
-                        account, definition, account.portfolio.profile
-                    )
+
+                if not definition:
+                    raise forms.ValidationError("Definition is required.")
+
+                # Automatically resolve/create the classification
+                account = AccountService.assign_classification(
+                    account, definition, account.portfolio.profile
+                )
+
                 if commit:
                     account.save()
                     self.save_m2m()

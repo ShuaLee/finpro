@@ -1,4 +1,6 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from core.countries import validate_country_code
 
 
 class ClassificationDefinition(models.Model):
@@ -17,11 +19,13 @@ class ClassificationDefinition(models.Model):
         ],
         default="taxable",
     )
-    jurisdiction = models.CharField(
-        max_length=50,
+    jurisdictions = models.JSONField(
+        default=list,
         blank=True,
-        null=True,
-        help_text="Jurisdiction where this classification applies (e.g., Canada, US, UK)."
+        help_text=(
+            "List of jurisdictions where this classification applies. "
+            "Use ISO country codes (e.g., ['US'], ['CA'], ['GB']) or ['*'] for global."
+        ),
     )
     is_system = models.BooleanField(
         default=True,
@@ -33,7 +37,15 @@ class ClassificationDefinition(models.Model):
         ordering = ["name"]
 
     def __str__(self):
-        return f"{self.name} ({self.tax_status})"
+        countries = ", ".join(self.jurisdictions) if self.jurisdictions else "N/A"
+        return f"{self.name} ({self.tax_status}, {countries})"
+    
+    def clean(self):
+        for code in self.jurisdictions:
+            try:
+                validate_country_code(code)
+            except ValueError as e:
+                raise ValidationError(str(e))
 
 
 class AccountClassification(models.Model):
