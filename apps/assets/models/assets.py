@@ -25,6 +25,11 @@ class Asset(models.Model):
         help_text="Human-readable name (filled by enrichment for tradables, user-supplied for custom/real estate)."
     )
 
+    is_custom = models.BooleanField(
+        default=False,
+        help_text="True if this asset was manually created (not from external data)."
+    )
+
     currency = models.CharField(
         max_length=10,
         blank=True,

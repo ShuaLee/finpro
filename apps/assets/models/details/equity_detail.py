@@ -102,6 +102,7 @@ class EquityDetail(models.Model):
         ("DELISTED", "Delisted"),
         ("SUSPENDED", "Suspended"),
         ("IPO", "IPO Pending"),
+        ("CUSTOM", "Custom/Unverified"),
     ]
     listing_status = models.CharField(
         max_length=20,

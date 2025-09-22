@@ -218,67 +218,102 @@ class EquitySyncService:
     def sync_universe() -> dict:
         """
         Sync universe with FMP feed:
-        - Add new tickers
-        - Mark missing ones as DELISTED
+        - Add new tickers from FMP
+        - Mark missing ones as DELISTED (except custom)
+        - Upgrade custom assets if they now exist in FMP
         """
         records = fetch_equity_universe()
         seen_symbols = {r["symbol"] for r in records if r.get("symbol")}
 
-        # Mark missing assets as DELISTED
         existing_ids = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER
         ).select_related("asset")
 
+        created, delisted, upgraded = 0, 0, 0
+
+        # --- Mark delisted ---
         for identifier in existing_ids:
+            asset = identifier.asset
+            if asset.is_custom:
+                continue  # handled in upgrade step
             if identifier.value not in seen_symbols:
-                detail = getattr(identifier.asset, "equity_detail", None)
+                detail = getattr(asset, "equity_detail", None)
                 if detail and detail.listing_status != "DELISTED":
                     detail.listing_status = "DELISTED"
                     detail.save()
+                    delisted += 1
 
-        # Add new assets
-        created = 0
+        # --- Add new & upgrade custom ---
         for record in records:
             symbol = record.get("symbol")
             if not symbol:
                 continue
 
-            if not AssetIdentifier.objects.filter(
-                id_type=AssetIdentifier.IdentifierType.TICKER, value=symbol
-            ).exists():
-                asset = Asset.objects.create(
-                    asset_type=DomainType.EQUITY,
-                    name=record.get("name"),
-                    currency=record.get("currency"),
-                )
-                AssetIdentifier.objects.create(
-                    asset=asset,
-                    id_type=AssetIdentifier.IdentifierType.TICKER,
-                    value=symbol,
-                    is_primary=True,
-                )
-                EquityDetail.objects.create(
-                    asset=asset,
-                    exchange=record.get("exchangeShortName"),
-                    country=record.get("country"),
-                    listing_status="ACTIVE",
-                )
-                created += 1
+            identifier = AssetIdentifier.objects.filter(
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol,
+            ).select_related("asset").first()
 
-        logger.info(f"Synced equity universe. Added {created} new equities.")
-        return {"created": created}
+            if identifier:
+                asset = identifier.asset
+                if asset.is_custom:
+                    # Upgrade custom → real FMP asset
+                    asset.is_custom = False
+                    asset.name = record.get("name") or record.get("companyName") or symbol
+                    asset.currency = record.get("currency") or asset.currency or "USD"
+                    asset.save()
+
+                    detail = getattr(asset, "equity_detail", None)
+                    if detail:
+                        detail.exchange = record.get("exchangeShortName") or record.get("exchange")
+                        detail.country = record.get("country")
+                        detail.listing_status = "ACTIVE"
+                        detail.save()
+
+                    upgraded += 1
+                # else: already exists as real → skip
+                continue
+
+            # --- Create new asset ---
+            asset = Asset.objects.create(
+                asset_type=DomainType.EQUITY,
+                name=record.get("name") or record.get("companyName") or symbol,
+                currency=record.get("currency"),
+                is_custom=False,
+            )
+            AssetIdentifier.objects.create(
+                asset=asset,
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol,
+                is_primary=True,
+            )
+            EquityDetail.objects.create(
+                asset=asset,
+                exchange=record.get("exchangeShortName") or record.get("exchange"),
+                country=record.get("country"),
+                listing_status="ACTIVE",
+            )
+            created += 1
+
+        logger.info(
+            f"Synced equity universe. Added {created}, upgraded {upgraded} custom, delisted {delisted}."
+        )
+        return {"created": created, "upgraded": upgraded, "delisted": delisted}
+
+
     
     @staticmethod
     def create_from_symbol(symbol: str) -> Asset:
         """
         Create a new equity asset (Asset + Identifiers + EquityDetail)
         from a ticker symbol. Enriches with profile and quote if available.
+        Falls back to a custom/unverified asset if FMP has no data.
         """
         from django.db import transaction
 
         symbol = symbol.upper().strip()
 
-        # Check if it already exists
+        # --- Check if it already exists ---
         try:
             identifier = AssetIdentifier.objects.get(
                 id_type=AssetIdentifier.IdentifierType.TICKER,
@@ -292,13 +327,37 @@ class EquitySyncService:
         quote = fetch_equity_quote(symbol) or {}
 
         with transaction.atomic():
-            # --- Create Asset ---
+            # --- Case 1: Custom / Not found in FMP ---
+            if not profile and not quote:
+                asset = Asset.objects.create(
+                    asset_type=DomainType.EQUITY,
+                    name=symbol,            # user can edit later if needed
+                    currency="USD",         # default for custom equities
+                    is_custom=True,         # <-- requires is_custom BooleanField on Asset
+                )
+
+                AssetIdentifier.objects.create(
+                    asset=asset,
+                    id_type=AssetIdentifier.IdentifierType.TICKER,
+                    value=symbol,
+                    is_primary=True,
+                )
+
+                EquityDetail.objects.create(
+                    asset=asset,
+                    listing_status="CUSTOM",   # <-- add CUSTOM to LISTING_STATUS_CHOICES
+                )
+                return asset
+
+            # --- Case 2: Normal equity via FMP ---
             asset = Asset.objects.create(
                 asset_type=DomainType.EQUITY,
-                name=profile.get("asset__name") or profile.get("companyName") or symbol,
+                name=profile.get("asset__name")
+                     or profile.get("companyName")
+                     or symbol,
                 currency=profile.get("currency"),
+                is_custom=False,
             )
-
 
             # --- Primary Identifier (Ticker) ---
             AssetIdentifier.objects.create(
@@ -313,7 +372,7 @@ class EquitySyncService:
                 AssetIdentifier.IdentifierType.ISIN: profile.get("isin"),
                 AssetIdentifier.IdentifierType.CUSIP: profile.get("cusip"),
                 AssetIdentifier.IdentifierType.CIK: profile.get("cik"),
-                # add FIGI or others if your API returns them
+                # add FIGI etc if API supports
             }
             for id_type, value in extra_ids.items():
                 if value:
@@ -329,7 +388,7 @@ class EquitySyncService:
                 asset=asset,
                 exchange=profile.get("exchange") or profile.get("exchangeShortName"),
                 country=profile.get("country"),
-                listing_status="ACTIVE" if profile else "IPO",
+                listing_status="ACTIVE",
             )
 
             # Apply profile fields
