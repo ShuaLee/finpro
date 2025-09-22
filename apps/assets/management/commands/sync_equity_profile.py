@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from assets.models.asset import Asset
+from assets.models.assets import Asset
 from assets.services.syncs.equity_sync import EquitySyncService
 from core.types import DomainType
 

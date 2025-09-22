@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from accounts.models.account import Account
-from assets.models.asset import Asset
+from assets.models.assets import Asset
 from core.types import get_domain_meta
 
 

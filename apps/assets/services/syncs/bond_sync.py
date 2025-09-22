@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from django.db import transaction
 
-from assets.models.asset import Asset
+from assets.models.assets import Asset
 from assets.models.details.bond_detail import BondDetail
 from core.types import DomainType
 from external_data.fmp.bonds.fetchers import (

@@ -20,7 +20,9 @@ class Asset(models.Model):
 
     name = models.CharField(
         max_length=200,
-        help_text="Human-readable name (company, property, or custom asset)."
+        blank=True,
+        null=True,
+        help_text="Human-readable name (filled by enrichment for tradables, user-supplied for custom/real estate)."
     )
 
     currency = models.CharField(
@@ -30,26 +32,12 @@ class Asset(models.Model):
         help_text="Default currency in which this asset is quoted or valued (if applicable)."
     )
 
-    status = models.CharField(
-        max_length=20,
-        choices=[
-            ("ACTIVE", "Active"),
-            ("INACTIVE", "Inactive"),
-            ("DELISTED", "Delisted"),
-            ("PENDING", "Pending/IPO"),
-        ],
-        default="ACTIVE",
-        db_index=True,
-        help_text="Listing/availability status of the asset."
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["asset_type"]),
-            models.Index(fields=["status"]),
         ]
 
     def clean(self):

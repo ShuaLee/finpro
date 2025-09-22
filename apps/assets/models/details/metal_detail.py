@@ -1,5 +1,5 @@
 from django.db import models
-from assets.models.asset import Asset
+from assets.models.assets import Asset
 from core.types import DomainType
 
 
