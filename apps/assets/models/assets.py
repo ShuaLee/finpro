@@ -80,6 +80,7 @@ class AssetIdentifier(models.Model):
         TICKER = "TICKER", "Ticker"
         ISIN = "ISIN", "ISIN"
         CUSIP = "CUSIP", "CUSIP"
+        CIK = "CIK", "CIK"
         FIGI = "FIGI", "FIGI"
         INTERNAL = "INTERNAL", "Internal Code"
         OTHER = "OTHER", "Other"
