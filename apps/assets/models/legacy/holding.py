@@ -71,7 +71,7 @@ class Holding(models.Model):
     # -----------------------
     @property
     def profile_currency(self):
-        return self.account.subportfolio.portfolio.profile.currency
+        return self.account.portfolio.profile.currency
 
     @property
     def active_schema(self):
