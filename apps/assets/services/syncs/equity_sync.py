@@ -267,3 +267,81 @@ class EquitySyncService:
 
         logger.info(f"Synced equity universe. Added {created} new equities.")
         return {"created": created}
+    
+    @staticmethod
+    def create_from_symbol(symbol: str) -> Asset:
+        """
+        Create a new equity asset (Asset + Identifiers + EquityDetail)
+        from a ticker symbol. Enriches with profile and quote if available.
+        """
+        from django.db import transaction
+
+        symbol = symbol.upper().strip()
+
+        # Check if it already exists
+        try:
+            identifier = AssetIdentifier.objects.get(
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol,
+            )
+            return identifier.asset
+        except AssetIdentifier.DoesNotExist:
+            pass
+
+        profile = fetch_equity_profile(symbol) or {}
+        quote = fetch_equity_quote(symbol) or {}
+
+        with transaction.atomic():
+            # --- Create Asset ---
+            asset = Asset.objects.create(
+                asset_type=DomainType.EQUITY,
+                name=profile.get("asset__name") or profile.get("companyName") or symbol,
+                currency=profile.get("currency"),
+            )
+
+
+            # --- Primary Identifier (Ticker) ---
+            AssetIdentifier.objects.create(
+                asset=asset,
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol,
+                is_primary=True,
+            )
+
+            # --- Additional Identifiers (if available) ---
+            extra_ids = {
+                AssetIdentifier.IdentifierType.ISIN: profile.get("isin"),
+                AssetIdentifier.IdentifierType.CUSIP: profile.get("cusip"),
+                AssetIdentifier.IdentifierType.CIK: profile.get("cik"),
+                # add FIGI or others if your API returns them
+            }
+            for id_type, value in extra_ids.items():
+                if value:
+                    AssetIdentifier.objects.get_or_create(
+                        asset=asset,
+                        id_type=id_type,
+                        value=value,
+                        defaults={"is_primary": False},
+                    )
+
+            # --- Equity Detail ---
+            detail = EquityDetail.objects.create(
+                asset=asset,
+                exchange=profile.get("exchange") or profile.get("exchangeShortName"),
+                country=profile.get("country"),
+                listing_status="ACTIVE" if profile else "IPO",
+            )
+
+            # Apply profile fields
+            for field, value in profile.items():
+                if hasattr(detail, field):
+                    setattr(detail, field, value)
+
+            # Apply quote fields
+            for field, value in quote.items():
+                if hasattr(detail, field):
+                    setattr(detail, field, value)
+
+            detail.save()
+
+        return asset

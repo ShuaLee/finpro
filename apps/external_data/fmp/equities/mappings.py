@@ -29,7 +29,7 @@ EQUITY_PROFILE_MAP = {
     "carbonIntensity": "carbon_intensity",
     "nav": "nav",
     "expenseRatio": "expense_ratio",
-    "name": "asset__name",  # goes on Asset, not EquityDetail
+    "companyName": "asset__name",  # goes on Asset, not EquityDetail
     "symbol": "asset__symbol",
 }
 

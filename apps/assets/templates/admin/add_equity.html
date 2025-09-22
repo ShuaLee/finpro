@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <table>
+      {{ form.as_table }}
+    </table>
+    <input type="submit" value="Add Equity" class="default">
+  </form>
+
+  <p>
+    <a href="{% url 'admin:assets_equitydetail_changelist' %}">Back to equity list</a>
+  </p>
+{% endblock %}
