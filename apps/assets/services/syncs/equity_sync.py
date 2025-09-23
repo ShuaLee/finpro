@@ -65,39 +65,30 @@ class EquitySyncService:
 
         profile = fetch_equity_profile(symbol)
         if not profile:
-            isin = asset.identifiers.filter(
-                id_type=AssetIdentifier.IdentifierType.ISIN).first()
-            if isin:
-                profile = search_by_isin(isin.value)
+            isin_id = asset.identifiers.filter(
+                id_type=AssetIdentifier.IdentifierType.ISIN
+            ).first()
+            if isin_id:
+                profile = search_by_isin(isin_id.value)
 
-        detail = _get_or_create_detail(asset)
+        detail, _ = EquityDetail.objects.get_or_create(asset=asset)
+
         if not profile:
             logger.warning(f"No profile for {symbol}")
-            detail.listing_status = "DELISTED"
-            detail.save()
+            if not asset.is_custom:  # don't overwrite customs
+                detail.listing_status = "DELISTED"
+                detail.save()
             return False
 
-        # Ticker drift
-        profile_symbol = profile.get("symbol")
-        if profile_symbol and profile_symbol != symbol:
-            logger.info(
-                f"Ticker change {symbol} → {profile_symbol} for {asset}")
-            AssetIdentifier.objects.filter(
-                asset=asset, id_type=AssetIdentifier.IdentifierType.TICKER,
-                value=symbol, is_primary=True
-            ).update(is_primary=False)
-            _upsert_identifier(
-                asset, AssetIdentifier.IdentifierType.TICKER, profile_symbol, True)
+        # Apply profile data
+        for field, value in profile.items():
+            if hasattr(detail, field):
+                setattr(detail, field, value)
 
-        # Company name drift
-        if profile.get("companyName") and profile["companyName"] != asset.name:
-            asset.name = profile["companyName"]
-            asset.is_custom = False
-            asset.save()
+        # Promote from PENDING → ACTIVE
+        if detail.listing_status == "PENDING":
+            detail.listing_status = "ACTIVE"
 
-        _apply_fields(detail, profile)
-        detail.is_custom = False
-        detail.listing_status = "ACTIVE"
         detail.save()
         return True
 
@@ -124,28 +115,51 @@ class EquitySyncService:
     # --- Bulk Sync ---
     @staticmethod
     def sync_profiles_bulk(assets: list[Asset]) -> dict:
+        """
+        Bulk sync equity profiles from FMP.
+        - Updates fundamentals for all provided assets.
+        - Promotes assets from PENDING → ACTIVE if hydration succeeds.
+        - Skips custom assets (is_custom=True).
+        """
         results = defaultdict(int)
         part = 0
+
         while True:
             profiles = fetch_equity_profiles_bulk(part)
             if not profiles:
                 break
+
             with transaction.atomic():
                 for record in profiles:
                     symbol = record.get("symbol")
                     if not symbol:
                         continue
+
                     identifier = AssetIdentifier.objects.filter(
-                        id_type=AssetIdentifier.IdentifierType.TICKER, value=symbol
+                        id_type=AssetIdentifier.IdentifierType.TICKER,
+                        value=symbol,
                     ).select_related("asset").first()
+
                     if not identifier:
                         continue
-                    detail = _get_or_create_detail(identifier.asset)
+
+                    asset = identifier.asset
+                    if asset.is_custom:
+                        # Don't overwrite customs with bulk FMP data
+                        continue
+
+                    detail = _get_or_create_detail(asset)
                     _apply_fields(detail, record)
-                    detail.is_custom = False
+
+                    # Promote lifecycle if needed
+                    if detail.listing_status == "PENDING":
+                        detail.listing_status = "ACTIVE"
+
                     detail.save()
                     results["success"] += 1
+
             part += 1
+
         return dict(results)
 
     @staticmethod
@@ -172,54 +186,81 @@ class EquitySyncService:
     # --- Universe ---
     @staticmethod
     @transaction.atomic
-    def sync_universe() -> dict:
-        records = fetch_equity_universe()
+    def sync_universe(exchange: str | None = None) -> dict:
+        """
+        Synchronize the equity universe with FMP.
+
+        - Nightly (exchange=None): full reconciliation
+        - Morning (exchange="NASDAQ"): exchange-specific pre-open sync
+
+        Rules:
+        - Real assets missing from feed → DELISTED
+        - Custom assets preserved, but if ticker collides with new FMP ticker,
+            they are flagged as COLLISION (not auto-upgraded)
+        - New FMP tickers → created as PENDING, then hydrated into ACTIVE
+        """
+        records = fetch_equity_universe(exchange=exchange)
         seen = {r["symbol"] for r in records if r.get("symbol")}
         existing = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER
         ).select_related("asset")
 
-        created, delisted, upgraded = 0, 0, 0
+        created, delisted, collisions = 0, 0, 0
+        new_assets: list[Asset] = []
 
-        # Delist missing
+        # --- Delist missing ---
         for identifier in existing:
-            if identifier.asset.is_custom:
-                continue
+            asset = identifier.asset
+            if asset.is_custom:
+                continue  # customs never delisted automatically
             if identifier.value not in seen:
-                detail = getattr(identifier.asset, "equity_detail", None)
+                detail = getattr(asset, "equity_detail", None)
                 if detail and detail.listing_status != "DELISTED":
                     detail.listing_status = "DELISTED"
                     detail.save()
                     delisted += 1
 
-        # Add / Upgrade
+        # --- Add new & handle collisions ---
         for r in records:
             symbol = r.get("symbol")
             if not symbol:
                 continue
+
             identifier = AssetIdentifier.objects.filter(
-                id_type=AssetIdentifier.IdentifierType.TICKER, value=symbol
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol,
             ).select_related("asset").first()
 
             if identifier:
                 asset = identifier.asset
                 if asset.is_custom:
-                    asset.is_custom = False
-                    asset.name = r.get("name") or r.get(
-                        "companyName") or symbol
-                    asset.currency = r.get(
-                        "currency") or asset.currency or "USD"
-                    asset.save()
+                    # Collision: preserve custom, flag it, and create new real asset
                     detail = _get_or_create_detail(asset)
-                    detail.exchange = r.get(
-                        "exchangeShortName") or r.get("exchange")
-                    detail.country = r.get("country")
-                    detail.listing_status = "ACTIVE"
+                    detail.listing_status = "COLLISION"
                     detail.save()
-                    upgraded += 1
+                    collisions += 1
+
+                    # Create the new FMP-backed asset separately
+                    real_asset = Asset.objects.create(
+                        asset_type=DomainType.EQUITY,
+                        name=r.get("name") or r.get("companyName") or symbol,
+                        currency=r.get("currency") or "USD",
+                        is_custom=False,
+                    )
+                    _upsert_identifier(
+                        real_asset, AssetIdentifier.IdentifierType.TICKER, symbol, True
+                    )
+                    EquityDetail.objects.create(
+                        asset=real_asset,
+                        exchange=r.get("exchangeShortName") or r.get(
+                            "exchange"),
+                        country=r.get("country"),
+                        listing_status="PENDING",  # hydrated below
+                    )
+                    new_assets.append(real_asset)
                 continue
 
-            # Create new
+            # --- Brand new IPO ---
             asset = Asset.objects.create(
                 asset_type=DomainType.EQUITY,
                 name=r.get("name") or r.get("companyName") or symbol,
@@ -227,20 +268,50 @@ class EquitySyncService:
                 is_custom=False,
             )
             _upsert_identifier(
-                asset, AssetIdentifier.IdentifierType.TICKER, symbol, True)
+                asset, AssetIdentifier.IdentifierType.TICKER, symbol, True
+            )
             EquityDetail.objects.create(
                 asset=asset,
                 exchange=r.get("exchangeShortName") or r.get("exchange"),
                 country=r.get("country"),
-                listing_status="ACTIVE",
+                listing_status="PENDING",  # hydrated below
             )
             created += 1
+            new_assets.append(asset)
+
+        # --- Hydrate new assets ---
+        hydrated_profiles, hydrated_quotes = 0, 0
+        if new_assets:
+            hydrated_profiles = EquitySyncService.sync_profiles_bulk(
+                new_assets).get("success", 0)
+            hydrated_quotes = EquitySyncService.sync_quotes_bulk(
+                new_assets).get("success", 0)
+
+            # Mark as ACTIVE if hydration succeeded
+            for asset in new_assets:
+                detail = getattr(asset, "equity_detail", None)
+                if detail and detail.listing_status == "PENDING":
+                    if hydrated_profiles > 0 or hydrated_quotes > 0:
+                        detail.listing_status = "ACTIVE"
+                        detail.save()
 
         logger.info(
-            f"Universe sync: +{created}, upgraded {upgraded}, delisted {delisted}")
-        return {"created": created, "upgraded": upgraded, "delisted": delisted}
+            f"Universe sync ({exchange or 'ALL'}): "
+            f"+{created}, collisions={collisions}, delisted={delisted}, "
+            f"hydrated profiles={hydrated_profiles}, quotes={hydrated_quotes}"
+        )
+
+        return {
+            "created": created,
+            "collisions": collisions,
+            "delisted": delisted,
+            "hydrated_profiles": hydrated_profiles,
+            "hydrated_quotes": hydrated_quotes,
+            "new_assets": new_assets,
+        }
 
     # --- Create new ---
+
     @staticmethod
     def create_from_symbol(symbol: str) -> Asset:
         symbol = symbol.upper().strip()

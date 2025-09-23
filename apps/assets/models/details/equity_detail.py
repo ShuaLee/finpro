@@ -44,65 +44,92 @@ class EquityDetail(models.Model):
     is_mutual_fund = models.BooleanField(default=False)
 
     # --- Market Data (latest snapshot) ---
-    last_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    open_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    high_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    low_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    previous_close_price = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    last_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    open_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    high_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    low_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    previous_close_price = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
     volume = models.BigIntegerField(null=True, blank=True)
     average_volume = models.BigIntegerField(null=True, blank=True)
     market_cap = models.BigIntegerField(null=True, blank=True)
     shares_outstanding = models.BigIntegerField(null=True, blank=True)
-    beta = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    beta = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
 
     # --- Valuation Ratios (point-in-time) ---
-    eps = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    pe_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    pb_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    ps_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    peg_ratio = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    eps = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    pe_ratio = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    pb_ratio = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    ps_ratio = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    peg_ratio = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
 
     # --- Dividend Info (latest only) ---
-    dividend_per_share = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    dividend_yield = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    dividend_per_share = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    dividend_yield = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
     dividend_frequency = models.CharField(max_length=20, blank=True, null=True)
     ex_dividend_date = models.DateField(blank=True, null=True)
-    dividend_payout_ratio = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    dividend_payout_ratio = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
 
     # --- Fund Specific (Mutual Fund / ETF / CEF) ---
-    nav = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
-    expense_ratio = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    nav = models.DecimalField(
+        max_digits=20, decimal_places=4, null=True, blank=True)
+    expense_ratio = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
     fund_family = models.CharField(max_length=100, blank=True, null=True)
     fund_category = models.CharField(max_length=100, blank=True, null=True)
     inception_date = models.DateField(blank=True, null=True)
     total_assets = models.BigIntegerField(null=True, blank=True)
-    turnover_ratio = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    turnover_ratio = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True)
 
     # ETF-specific
     underlying_index = models.CharField(max_length=100, blank=True, null=True)
-    aum = models.BigIntegerField(null=True, blank=True, help_text="Assets under management")
+    aum = models.BigIntegerField(
+        null=True, blank=True, help_text="Assets under management")
     holdings_count = models.IntegerField(null=True, blank=True)
-    tracking_error = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    tracking_error = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
 
     # Closed-End Fund specific
-    premium_discount = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    premium_discount = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
 
     # Preferred Shares specific
-    preferred_par_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    preferred_coupon_rate = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    preferred_par_value = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True)
+    preferred_coupon_rate = models.DecimalField(
+        max_digits=6, decimal_places=4, null=True, blank=True)
     call_date = models.DateField(blank=True, null=True)
 
     # --- ESG / Optional ---
-    esg_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    carbon_intensity = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    esg_score = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True)
+    carbon_intensity = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True)
 
     # --- Listing Status ---
     LISTING_STATUS_CHOICES = [
-        ("ACTIVE", "Active"),
-        ("DELISTED", "Delisted"),
-        ("SUSPENDED", "Suspended"),
-        ("IPO", "IPO Pending"),
-        ("CUSTOM", "Custom/Unverified"),
+        ("ACTIVE", "Active"),                # Normal tradable equity
+        ("DELISTED", "Delisted"),            # Removed from market
+        ("SUSPENDED", "Suspended"),          # Trading halted/paused
+        ("IPO", "IPO Pending"),              # Known IPO, not yet active
+        # Exists, but not yet hydrated (profile/quote missing)
+        ("PENDING", "Pending Data"),
+        # Custom ticker conflicts with new real asset
+        ("COLLISION", "Collision"),
     ]
     listing_status = models.CharField(
         max_length=20,
