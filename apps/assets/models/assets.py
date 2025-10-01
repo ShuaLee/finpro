@@ -74,9 +74,6 @@ class AssetIdentifier(models.Model):
         ISIN = "ISIN", "ISIN"
         CUSIP = "CUSIP", "CUSIP"
         CIK = "CIK", "CIK"
-        FIGI = "FIGI", "FIGI"
-        INTERNAL = "INTERNAL", "Internal Code"
-        OTHER = "OTHER", "Other"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset = models.ForeignKey(

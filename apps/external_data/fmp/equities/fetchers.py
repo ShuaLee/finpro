@@ -61,6 +61,7 @@ def fetch_equity_quotes_bulk(symbols: list[str]) -> list[dict]:
         logger.warning(f"Failed bulk equity quote fetch: {e}")
         return []
 
+
 def fetch_equity_profiles_bulk(part: int = 0) -> list[dict]:
     """
     Fetch a bulk chunk of equity profiles from FMP.
@@ -78,7 +79,8 @@ def fetch_equity_profiles_bulk(part: int = 0) -> list[dict]:
             if d
         ]
     except Exception as e:
-        logger.warning(f"Failed bulk equity profile fetch for part {part}: {e}")
+        logger.warning(
+            f"Failed bulk equity profile fetch for part {part}: {e}")
         return []
 
 
@@ -95,3 +97,58 @@ def fetch_equity_universe() -> list[dict]:
     except Exception as e:
         logger.error(f"Failed to fetch equity universe: {e}")
         return []
+
+
+# ------------------------------
+# Identifier-based Fetchers
+# ------------------------------
+
+def fetch_equity_by_isin(isin: str) -> dict | None:
+    """
+    Fetch equity profile by ISIN using FMP.
+    """
+    url = f"{FMP_BASE}/stable/search-isin?isin={isin}&apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
+        return normalize_fmp_data(data[0], EQUITY_PROFILE_MAP)
+    except Exception as e:
+        logger.warning(f"Failed ISIN lookup for {isin}: {e}")
+        return None
+
+
+def fetch_equity_by_cusip(cusip: str) -> dict | None:
+    """
+    Fetch equity profile by CUSIP using FMP.
+    """
+    url = f"{FMP_BASE}/stable/search-cusip?cusip={cusip}&apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
+        return normalize_fmp_data(data[0], EQUITY_PROFILE_MAP)
+    except Exception as e:
+        logger.warning(f"Failed CUSIP lookup for {cusip}: {e}")
+        return None
+
+
+def fetch_equity_by_cik(cik: str) -> dict | None:
+    """
+    Fetch equity profile by CIK using FMP.
+    """
+    url = f"{FMP_BASE}/stable/profile-cik?cik={cik}&apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
+        return normalize_fmp_data(data[0], EQUITY_PROFILE_MAP)
+    except Exception as e:
+        logger.warning(f"Failed CIK lookup for {cik}: {e}")
+        return None
