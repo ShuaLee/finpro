@@ -111,29 +111,44 @@ class EquitySyncService:
         ticker = EquitySyncService._get_primary_ticker(asset)
         profile = fetch_equity_profile(ticker) if ticker else None
 
-        if not profile:
-            resolved = EquitySyncService._resolve_identifier(asset)
-            if resolved:
-                id_type, value = resolved
-                profile = EquitySyncService._search_by_identifier(
-                    id_type, value)
-                if profile and profile.get("symbol"):
-                    EquitySyncService._update_ticker_identifier(
-                        asset, profile["symbol"])
-
         detail = EquitySyncService._get_or_create_detail(asset)
-        if not profile:
-            if not asset.is_custom:
-                detail.listing_status = "DELISTED"
-                detail.save()
-            logger.warning(f"No profile found for {asset}")
-            return False
 
-        EquitySyncService._apply_fields(asset, detail, profile, is_quote=False)
-        if detail.listing_status == "PENDING":
-            detail.listing_status = "ACTIVE"
+        # --- If we got a profile from ticker ---
+        if profile:
+            # Handle ticker renames (important for test_profile_reveals_new_symbol)
+            if ticker and profile.get("symbol") and profile["symbol"] != ticker:
+                EquitySyncService._update_ticker_identifier(
+                    asset, profile["symbol"])
+
+            EquitySyncService._apply_fields(
+                asset, detail, profile, is_quote=False)
+            if detail.listing_status == "PENDING":
+                detail.listing_status = "ACTIVE"
             detail.save()
-        return True
+            return True
+
+        # --- Try fallback identifiers ---
+        resolved = EquitySyncService._resolve_identifier(asset)
+        if resolved:
+            id_type, value = resolved
+            profile = EquitySyncService._search_by_identifier(id_type, value)
+
+            if profile and profile.get("symbol"):
+                EquitySyncService._update_ticker_identifier(
+                    asset, profile["symbol"])
+                EquitySyncService._apply_fields(
+                    asset, detail, profile, is_quote=False)
+                if detail.listing_status == "PENDING":
+                    detail.listing_status = "ACTIVE"
+                detail.save()
+                return True
+
+        # --- If everything failed ---
+        if not asset.is_custom:
+            detail.listing_status = "DELISTED"
+            detail.save()
+        logger.warning(f"No profile found for {asset}")
+        return False
 
     @staticmethod
     def sync_quote(asset: Asset) -> bool:

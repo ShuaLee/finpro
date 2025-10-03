@@ -1,7 +1,7 @@
 EQUITY_PROFILE_MAP = {
     "exchangeShortName": "exchange",
     "exchange": "exchange_full_name",
-    "currency": "currency",
+    "currency": "asset__currency",
     "country": "country",
     "isin": "isin",
     "cusip": "cusip",
