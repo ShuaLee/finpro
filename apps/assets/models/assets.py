@@ -40,6 +40,10 @@ class Asset(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def primary_identifier(self):
+        return self.identifiers.filter(is_primary=True).first()
+
     class Meta:
         indexes = [
             models.Index(fields=["asset_type"]),
@@ -110,6 +114,12 @@ class AssetIdentifier(models.Model):
             if qs.exists():
                 raise ValidationError(
                     "An asset can only have one primary identifier.")
+
+    def save(self, *args, **kwargs):
+        # auto-mark first identifier as primary if none exists
+        if not self.asset.identifiers.exists():
+            self.is_primary = True
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.id_type}: {self.value}"

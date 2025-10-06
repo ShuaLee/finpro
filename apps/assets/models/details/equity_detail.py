@@ -30,10 +30,7 @@ class EquityDetail(models.Model):
         max_length=100, blank=True, null=True,
         help_text="Country of primary listing"
     )
-    currency = models.CharField(
-        max_length=3, blank=True, null=True,
-        help_text="Trading currency (usually matches Asset.currency)"
-    )
+
     ipo_date = models.DateField(blank=True, null=True)
 
     # --- Classification ---
@@ -43,34 +40,12 @@ class EquityDetail(models.Model):
     is_adr = models.BooleanField(default=False)
     is_mutual_fund = models.BooleanField(default=False)
 
-    # --- Market Data (latest snapshot) ---
-    last_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    open_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    high_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    low_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    previous_close_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    volume = models.BigIntegerField(null=True, blank=True)
-    average_volume = models.BigIntegerField(null=True, blank=True)
-    market_cap = models.BigIntegerField(null=True, blank=True)
-    shares_outstanding = models.BigIntegerField(null=True, blank=True)
-    beta = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-
     # --- Valuation Ratios (point-in-time) ---
     eps = models.DecimalField(
         max_digits=10, decimal_places=4, null=True, blank=True)
     pe_ratio = models.DecimalField(
         max_digits=10, decimal_places=4, null=True, blank=True)
     pb_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    ps_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    peg_ratio = models.DecimalField(
         max_digits=10, decimal_places=4, null=True, blank=True)
 
     # --- Dividend Info (latest only) ---
@@ -80,45 +55,6 @@ class EquityDetail(models.Model):
         max_digits=6, decimal_places=4, null=True, blank=True)
     dividend_frequency = models.CharField(max_length=20, blank=True, null=True)
     ex_dividend_date = models.DateField(blank=True, null=True)
-    dividend_payout_ratio = models.DecimalField(
-        max_digits=6, decimal_places=4, null=True, blank=True)
-
-    # --- Fund Specific (Mutual Fund / ETF / CEF) ---
-    nav = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    expense_ratio = models.DecimalField(
-        max_digits=6, decimal_places=4, null=True, blank=True)
-    fund_family = models.CharField(max_length=100, blank=True, null=True)
-    fund_category = models.CharField(max_length=100, blank=True, null=True)
-    inception_date = models.DateField(blank=True, null=True)
-    total_assets = models.BigIntegerField(null=True, blank=True)
-    turnover_ratio = models.DecimalField(
-        max_digits=6, decimal_places=2, null=True, blank=True)
-
-    # ETF-specific
-    underlying_index = models.CharField(max_length=100, blank=True, null=True)
-    aum = models.BigIntegerField(
-        null=True, blank=True, help_text="Assets under management")
-    holdings_count = models.IntegerField(null=True, blank=True)
-    tracking_error = models.DecimalField(
-        max_digits=6, decimal_places=4, null=True, blank=True)
-
-    # Closed-End Fund specific
-    premium_discount = models.DecimalField(
-        max_digits=6, decimal_places=4, null=True, blank=True)
-
-    # Preferred Shares specific
-    preferred_par_value = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True)
-    preferred_coupon_rate = models.DecimalField(
-        max_digits=6, decimal_places=4, null=True, blank=True)
-    call_date = models.DateField(blank=True, null=True)
-
-    # --- ESG / Optional ---
-    esg_score = models.DecimalField(
-        max_digits=6, decimal_places=2, null=True, blank=True)
-    carbon_intensity = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True)
 
     # --- Listing Status ---
     LISTING_STATUS_CHOICES = [
@@ -142,6 +78,10 @@ class EquityDetail(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["asset"], name="unique_equity_detail_asset")
+        ]
         indexes = [
             models.Index(fields=["exchange"]),
             models.Index(fields=["is_etf"]),
@@ -150,4 +90,5 @@ class EquityDetail(models.Model):
 
     def __str__(self):
         primary_id = self.asset.identifiers.filter(is_primary=True).first()
-        return f"{primary_id.value if primary_id else self.asset.name} ({self.exchange})"
+        exch = self.exchange or "N/A"
+        return f"{primary_id.value if primary_id else self.asset.name} ({exch})"
