@@ -1,20 +1,31 @@
+import logging
 from collections import defaultdict
 from django.db import transaction
+
 from assets.models.assets import Asset, AssetIdentifier
 from assets.models.details.equity_detail import EquityDetail
+from assets.models.market_data_cache import MarketDataCache
 from core.types import DomainType
+
 from external_data.fmp.equities.fetchers import (
-    fetch_equity_profile, fetch_equity_by_isin, fetch_equity_by_cusip, fetch_equity_by_cik,
-    fetch_equity_quote, fetch_equity_profiles_bulk, fetch_equity_quotes_bulk, fetch_equity_universe
+    fetch_equity_profile,
+    fetch_equity_by_isin,
+    fetch_equity_by_cusip,
+    fetch_equity_by_cik,
+    fetch_equity_quote,
+    fetch_equity_profiles_bulk,
+    fetch_equity_quotes_bulk,
+    fetch_equity_universe,
 )
 from external_data.fmp.equities.mappings import EQUITY_PROFILE_MAP, EQUITY_QUOTE_MAP
-import logging
 
 logger = logging.getLogger(__name__)
 
 
 class EquitySyncService:
-    # -------- Helpers --------
+    # -------------------------------------------------------------------------
+    # Helpers
+    # -------------------------------------------------------------------------
     @staticmethod
     def _get_primary_ticker(asset: Asset) -> str | None:
         primary = asset.identifiers.filter(
@@ -77,11 +88,29 @@ class EquitySyncService:
             ident.is_primary = True
             ident.save()
 
+    # -------------------------------------------------------------------------
+    # Core Field Application Logic
+    # -------------------------------------------------------------------------
     @staticmethod
-    def _apply_fields(asset: Asset, detail: EquityDetail, data: dict, is_quote: bool = False):
-        """Apply normalized fields from provider → Asset + EquityDetail."""
+    def _apply_fields(asset: Asset, detail: EquityDetail | None, data: dict, is_quote: bool = False):
+        """
+        Apply normalized fields from provider → Asset + EquityDetail + MarketDataCache.
+        """
         mapping = EQUITY_QUOTE_MAP if is_quote else EQUITY_PROFILE_MAP
 
+        # Quote data → MarketDataCache
+        if is_quote:
+            cache, _ = MarketDataCache.objects.get_or_create(asset=asset)
+            for src_key, dest_field in mapping.items():
+                if src_key not in data:
+                    continue
+                value = data[src_key]
+                if hasattr(cache, dest_field):
+                    setattr(cache, dest_field, value)
+            cache.save()
+            return cache
+
+        # Profile data → Asset + EquityDetail
         for src_key, dest_field in mapping.items():
             if src_key not in data:
                 continue
@@ -91,17 +120,23 @@ class EquitySyncService:
                 field = dest_field.split("__", 1)[1]
                 if hasattr(asset, field):
                     setattr(asset, field, value)
-            else:
-                if hasattr(detail, dest_field):
-                    setattr(detail, dest_field, value)
+            elif detail and hasattr(detail, dest_field):
+                setattr(detail, dest_field, value)
 
         asset.save()
-        detail.save()
+        if detail:
+            detail.save()
+        return detail
 
-    # -------- Single Asset --------
+    # -------------------------------------------------------------------------
+    # Single Asset Sync
+    # -------------------------------------------------------------------------
     @staticmethod
     def sync(asset: Asset) -> bool:
-        return EquitySyncService.sync_profile(asset) and EquitySyncService.sync_quote(asset)
+        return (
+            EquitySyncService.sync_profile(asset)
+            and EquitySyncService.sync_quote(asset)
+        )
 
     @staticmethod
     def sync_profile(asset: Asset) -> bool:
@@ -110,12 +145,9 @@ class EquitySyncService:
 
         ticker = EquitySyncService._get_primary_ticker(asset)
         profile = fetch_equity_profile(ticker) if ticker else None
-
         detail = EquitySyncService._get_or_create_detail(asset)
 
-        # --- If we got a profile from ticker ---
         if profile:
-            # Handle ticker renames (important for test_profile_reveals_new_symbol)
             if ticker and profile.get("symbol") and profile["symbol"] != ticker:
                 EquitySyncService._update_ticker_identifier(
                     asset, profile["symbol"])
@@ -127,7 +159,6 @@ class EquitySyncService:
             detail.save()
             return True
 
-        # --- Try fallback identifiers ---
         resolved = EquitySyncService._resolve_identifier(asset)
         if resolved:
             id_type, value = resolved
@@ -143,7 +174,6 @@ class EquitySyncService:
                 detail.save()
                 return True
 
-        # --- If everything failed ---
         if not asset.is_custom:
             detail.listing_status = "DELISTED"
             detail.save()
@@ -155,7 +185,6 @@ class EquitySyncService:
         if asset.asset_type != DomainType.EQUITY:
             return False
 
-        detail = EquitySyncService._get_or_create_detail(asset)
         ticker = EquitySyncService._get_primary_ticker(asset)
         quote = fetch_equity_quote(ticker) if ticker else None
 
@@ -172,16 +201,23 @@ class EquitySyncService:
                     quote = fetch_equity_quote(new_symbol)
 
         if not quote:
-            detail.listing_status = "DELISTED"
-            detail.save()
+            detail = getattr(asset, "equity_detail", None)
+            if detail:
+                detail.listing_status = "DELISTED"
+                detail.save()
             return False
 
-        EquitySyncService._apply_fields(asset, detail, quote, is_quote=True)
-        detail.listing_status = "ACTIVE"
-        detail.save()
+        EquitySyncService._apply_fields(asset, None, quote, is_quote=True)
+
+        detail = getattr(asset, "equity_detail", None)
+        if detail and detail.listing_status in ("PENDING", "DELISTED"):
+            detail.listing_status = "ACTIVE"
+            detail.save()
         return True
 
-    # -------- Bulk Sync --------
+    # -------------------------------------------------------------------------
+    # Bulk Sync
+    # -------------------------------------------------------------------------
     @staticmethod
     def sync_profiles_bulk(assets: list[Asset]) -> dict:
         results = defaultdict(int)
@@ -237,7 +273,6 @@ class EquitySyncService:
 
         with transaction.atomic():
             for asset, symbol in symbols.items():
-                detail = EquitySyncService._get_or_create_detail(asset)
                 quote = data_map.get(symbol)
 
                 if not quote:
@@ -253,23 +288,36 @@ class EquitySyncService:
                             quote = data_map.get(new_symbol)
 
                 if not quote:
-                    detail.listing_status = "DELISTED"
-                    detail.save()
+                    detail = getattr(asset, "equity_detail", None)
+                    if detail:
+                        detail.listing_status = "DELISTED"
+                        detail.save()
                     results["fail"] += 1
                     continue
 
                 EquitySyncService._apply_fields(
-                    asset, detail, quote, is_quote=True)
-                detail.listing_status = "ACTIVE"
-                detail.save()
+                    asset, None, quote, is_quote=True)
+                detail = getattr(asset, "equity_detail", None)
+                if detail and detail.listing_status in ("PENDING", "DELISTED"):
+                    detail.listing_status = "ACTIVE"
+                    detail.save()
                 results["success"] += 1
 
         return dict(results)
 
-    # -------- Universe Sync --------
+    # -------------------------------------------------------------------------
+    # Universe Sync + Seed
+    # -------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
     def sync_universe(exchange: str | None = None, dry_run: bool = False) -> dict:
+        """
+        Synchronize the local DB equity universe with FMP:
+        - Adds new symbols (IPOs)
+        - Marks missing ones as delisted
+        - Handles ticker renames & custom collisions
+        - Hydrates profiles for new assets (no quotes)
+        """
         records = fetch_equity_universe(exchange=exchange)
         seen = {r["symbol"] for r in records if r.get("symbol")}
         existing = AssetIdentifier.objects.filter(
@@ -344,7 +392,7 @@ class EquitySyncService:
                 asset = Asset.objects.create(
                     asset_type=DomainType.EQUITY,
                     name=r.get("name") or r.get("companyName") or symbol,
-                    currency=r.get("currency"),
+                    currency=r.get("currency") or "USD",
                     is_custom=False,
                 )
                 EquitySyncService._update_ticker_identifier(asset, symbol)
@@ -358,25 +406,26 @@ class EquitySyncService:
                     asset, detail, r, is_quote=False)
                 new_assets.append(asset)
 
-        # --- Hydrate new assets ---
-        hydrated_profiles, hydrated_quotes = 0, 0
+        # --- Hydrate profiles for new assets (NO QUOTES) ---
+        hydrated_profiles = 0
         if new_assets and not dry_run:
-            hydrated_profiles = EquitySyncService.sync_profiles_bulk(
-                new_assets).get("success", 0)
-            hydrated_quotes = EquitySyncService.sync_quotes_bulk(
-                new_assets).get("success", 0)
-
-            for asset in new_assets:
-                detail = getattr(asset, "equity_detail", None)
-                if detail and detail.listing_status == "PENDING":
-                    if hydrated_profiles > 0 or hydrated_quotes > 0:
+            try:
+                hydrated_profiles = EquitySyncService.sync_profiles_bulk(
+                    new_assets).get("success", 0)
+                for asset in new_assets:
+                    detail = getattr(asset, "equity_detail", None)
+                    if detail and detail.listing_status == "PENDING" and hydrated_profiles > 0:
                         detail.listing_status = "ACTIVE"
                         detail.save()
+            except Exception as e:
+                logger.error(
+                    f"Bulk profile hydration failed: {e}", exc_info=True)
 
+        # --- Logging Summary ---
         logger.info(
             f"Universe sync ({exchange or 'ALL'}){' [dry run]' if dry_run else ''}: "
             f"+{created}, collisions={collisions}, delisted={delisted}, "
-            f"hydrated profiles={hydrated_profiles}, quotes={hydrated_quotes}"
+            f"hydrated profiles={hydrated_profiles}"
         )
 
         return {
@@ -384,41 +433,40 @@ class EquitySyncService:
             "collisions": collisions,
             "delisted": delisted,
             "hydrated_profiles": hydrated_profiles,
-            "hydrated_quotes": hydrated_quotes,
+            "hydrated_quotes": 0,  # Explicitly no quote hydration here
             "new_assets": new_assets if not dry_run else [],
         }
 
-    # -------- Seeding --------
     @staticmethod
     def seed_universe() -> dict:
         """
         Initial seeding of the entire equity universe into the DB.
-        Equivalent to a full nightly sync (exchange=None, dry_run=False).
+        Fetches and stores profile data (no quote data).
+        Equivalent to a full nightly universe sync with dry_run=False.
         """
-        logger.info("Starting initial equity universe seed")
+        logger.info(
+            "Starting initial equity universe seed (profiles only, no quotes)")
+
         results = EquitySyncService.sync_universe(exchange=None, dry_run=False)
+
+        # Sanity log
         logger.info(
             f"Seed completed: +{results['created']} new, "
             f"collisions={results['collisions']}, delisted={results['delisted']}, "
             f"hydrated profiles={results['hydrated_profiles']}, "
-            f"hydrated quotes={results['hydrated_quotes']}"
+            f"(no quotes fetched)"
         )
+
         return results
 
-    # -------- Create from Symbol --------
+    # -------------------------------------------------------------------------
+    # Create from Symbol
+    # -------------------------------------------------------------------------
     @staticmethod
     @transaction.atomic
     def create_from_symbol(symbol: str) -> Asset:
-        """
-        Create or fetch an equity asset by ticker.
-        - If exists → return it.
-        - Else fetch profile + quote from FMP.
-        - If no data → create as custom.
-        - Else → create real asset + identifiers + hydrate detail.
-        """
         symbol = symbol.upper().strip()
 
-        # Already exists
         identifier = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
             value=symbol,
@@ -426,11 +474,9 @@ class EquitySyncService:
         if identifier:
             return identifier.asset
 
-        # Fetch from provider
         profile = fetch_equity_profile(symbol) or {}
         quote = fetch_equity_quote(symbol) or {}
 
-        # Custom fallback
         if not profile and not quote:
             asset = Asset.objects.create(
                 asset_type=DomainType.EQUITY,
@@ -442,7 +488,6 @@ class EquitySyncService:
             EquityDetail.objects.create(asset=asset, listing_status="CUSTOM")
             return asset
 
-        # Real asset
         asset = Asset.objects.create(
             asset_type=DomainType.EQUITY,
             name=profile.get("companyName") or profile.get("name") or symbol,
@@ -451,7 +496,7 @@ class EquitySyncService:
         )
         EquitySyncService._update_ticker_identifier(asset, symbol)
 
-        # Secondary identifiers
+        # Secondary IDs
         for id_type, key in {
             AssetIdentifier.IdentifierType.ISIN: "isin",
             AssetIdentifier.IdentifierType.CUSIP: "cusip",
@@ -465,7 +510,6 @@ class EquitySyncService:
                     value=value,
                 )
 
-        # Hydrate detail
         detail = EquityDetail.objects.create(
             asset=asset,
             exchange=profile.get("exchange") or profile.get(
@@ -473,7 +517,10 @@ class EquitySyncService:
             country=profile.get("country"),
             listing_status="ACTIVE",
         )
-        EquitySyncService._apply_fields(asset, detail, {**profile, **quote})
-        detail.save()
+        EquitySyncService._apply_fields(asset, detail, profile, is_quote=False)
 
+        if quote:
+            EquitySyncService._apply_fields(asset, None, quote, is_quote=True)
+
+        detail.save()
         return asset

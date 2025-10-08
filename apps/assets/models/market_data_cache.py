@@ -1,4 +1,6 @@
+from datetime import timedelta
 from django.db import models
+from django.utils import timezone
 from assets.models.assets import Asset
 from core.types import DomainType
 
@@ -42,13 +44,20 @@ class MarketDataCache(models.Model):
     market_cap = models.BigIntegerField(null=True, blank=True)
 
     # --- Refresh Tracking ---
-    last_synced = models.DateTimeField(auto_now_add=True)
+    last_synced = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         pid = self.asset.primary_identifier
         return f"{pid.value if pid else self.asset.name}: {self.last_price or 'N/A'}"
 
     class Meta:
-        indexed = [
-            models.Index(fields=["last_synced"])
+        indexes = [
+            models.Index(fields=["last_synced"]),
+            models.Index(fields=["asset"]),
         ]
+
+    def is_stale(self, ttl_minutes: int = 5) -> bool:
+        """Return True if data is older than given minutes."""
+        if not self.last_synced:
+            return True
+        return timezone.now() - self.last_synced > timedelta(minutes=ttl_minutes)
