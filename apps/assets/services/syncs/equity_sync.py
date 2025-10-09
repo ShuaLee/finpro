@@ -318,7 +318,10 @@ class EquitySyncService:
         - Handles ticker renames & custom collisions
         - Hydrates profiles for new assets (no quotes)
         """
-        records = fetch_equity_universe(exchange=exchange)
+        records = fetch_equity_universe()
+        if exchange:
+            records = [r for r in records if r.get(
+                "exchangeShortName") == exchange]
         seen = {r["symbol"] for r in records if r.get("symbol")}
         existing = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER
@@ -465,8 +468,16 @@ class EquitySyncService:
     @staticmethod
     @transaction.atomic
     def create_from_symbol(symbol: str) -> Asset:
+        """
+        Create or fetch an equity asset by ticker.
+        - If exists → return it.
+        - Else fetch profile (and optionally quote) from FMP.
+        - If no data → create as custom.
+        - Else → create real asset + identifiers + hydrate detail.
+        """
         symbol = symbol.upper().strip()
 
+        # --- Already exists ---
         identifier = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
             value=symbol,
@@ -474,10 +485,14 @@ class EquitySyncService:
         if identifier:
             return identifier.asset
 
+        # --- Fetch from provider ---
         profile = fetch_equity_profile(symbol) or {}
-        quote = fetch_equity_quote(symbol) or {}
+        quote = fetch_equity_quote(symbol) or None  # Optional, may skip
 
-        if not profile and not quote:
+        # --- Handle missing profile (custom asset) ---
+        if not profile:
+            logger.warning(
+                f"No profile found for {symbol}, creating as custom asset.")
             asset = Asset.objects.create(
                 asset_type=DomainType.EQUITY,
                 name=symbol,
@@ -488,6 +503,7 @@ class EquitySyncService:
             EquityDetail.objects.create(asset=asset, listing_status="CUSTOM")
             return asset
 
+        # --- Create the real asset ---
         asset = Asset.objects.create(
             asset_type=DomainType.EQUITY,
             name=profile.get("companyName") or profile.get("name") or symbol,
@@ -496,7 +512,7 @@ class EquitySyncService:
         )
         EquitySyncService._update_ticker_identifier(asset, symbol)
 
-        # Secondary IDs
+        # --- Secondary Identifiers ---
         for id_type, key in {
             AssetIdentifier.IdentifierType.ISIN: "isin",
             AssetIdentifier.IdentifierType.CUSIP: "cusip",
@@ -510,6 +526,7 @@ class EquitySyncService:
                     value=value,
                 )
 
+        # --- Detail (profile enrichment) ---
         detail = EquityDetail.objects.create(
             asset=asset,
             exchange=profile.get("exchange") or profile.get(
@@ -518,9 +535,13 @@ class EquitySyncService:
             listing_status="ACTIVE",
         )
         EquitySyncService._apply_fields(asset, detail, profile, is_quote=False)
-
-        if quote:
-            EquitySyncService._apply_fields(asset, None, quote, is_quote=True)
-
         detail.save()
+
+        # --- MarketDataCache (optional quote) ---
+        if quote:
+            cache = EquitySyncService._apply_fields(
+                asset, None, quote, is_quote=True)
+            logger.info(f"Cached quote for {symbol}: {cache.last_price}")
+
+        logger.info(f"Created new equity asset {symbol} ({asset.name})")
         return asset
