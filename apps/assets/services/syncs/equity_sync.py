@@ -96,9 +96,14 @@ class EquitySyncService:
         """
         Apply normalized fields from provider → Asset + EquityDetail + MarketDataCache.
         """
+        if not isinstance(data, dict):
+            logger.warning(
+                f"_apply_fields received non-dict data for {asset}: {type(data)}")
+            return None
+
         mapping = EQUITY_QUOTE_MAP if is_quote else EQUITY_PROFILE_MAP
 
-        # Quote data → MarketDataCache
+        # --- Quote data → MarketDataCache ---
         if is_quote:
             cache, _ = MarketDataCache.objects.get_or_create(asset=asset)
             for src_key, dest_field in mapping.items():
@@ -110,7 +115,7 @@ class EquitySyncService:
             cache.save()
             return cache
 
-        # Profile data → Asset + EquityDetail
+        # --- Profile data → Asset + EquityDetail ---
         for src_key, dest_field in mapping.items():
             if src_key not in data:
                 continue
@@ -126,11 +131,13 @@ class EquitySyncService:
         asset.save()
         if detail:
             detail.save()
+
         return detail
 
     # -------------------------------------------------------------------------
     # Single Asset Sync
     # -------------------------------------------------------------------------
+
     @staticmethod
     def sync(asset: Asset) -> bool:
         return (
@@ -140,6 +147,10 @@ class EquitySyncService:
 
     @staticmethod
     def sync_profile(asset: Asset) -> bool:
+        """
+        Sync an equity's profile from FMP (by ticker or fallback identifier).
+        Also hydrates ISIN / CUSIP / CIK automatically if found in response.
+        """
         if asset.asset_type != DomainType.EQUITY:
             return False
 
@@ -147,6 +158,7 @@ class EquitySyncService:
         profile = fetch_equity_profile(ticker) if ticker else None
         detail = EquitySyncService._get_or_create_detail(asset)
 
+        # --- Case 1: Direct ticker profile found ---
         if profile:
             if ticker and profile.get("symbol") and profile["symbol"] != ticker:
                 EquitySyncService._update_ticker_identifier(
@@ -154,11 +166,16 @@ class EquitySyncService:
 
             EquitySyncService._apply_fields(
                 asset, detail, profile, is_quote=False)
+
+            # ✅ Auto-hydrate identifiers (ISIN, CUSIP, CIK)
+            EquitySyncService.hydrate_identifiers(asset, profile)
+
             if detail.listing_status == "PENDING":
                 detail.listing_status = "ACTIVE"
             detail.save()
             return True
 
+        # --- Case 2: Try identifier-based lookup ---
         resolved = EquitySyncService._resolve_identifier(asset)
         if resolved:
             id_type, value = resolved
@@ -169,11 +186,14 @@ class EquitySyncService:
                     asset, profile["symbol"])
                 EquitySyncService._apply_fields(
                     asset, detail, profile, is_quote=False)
+                EquitySyncService.hydrate_identifiers(asset, profile)
+
                 if detail.listing_status == "PENDING":
                     detail.listing_status = "ACTIVE"
                 detail.save()
                 return True
 
+        # --- Case 3: Fallback (mark as delisted) ---
         if not asset.is_custom:
             detail.listing_status = "DELISTED"
             detail.save()
@@ -220,13 +240,22 @@ class EquitySyncService:
     # -------------------------------------------------------------------------
     @staticmethod
     def sync_profiles_bulk(assets: list[Asset]) -> dict:
+        """
+        Bulk hydrate profiles for a list of assets.
+        Handles pagination safely and auto-hydrates identifiers where possible.
+        """
         results = defaultdict(int)
         part = 0
+        empty_count = 0
 
         while True:
             profiles = fetch_equity_profiles_bulk(part)
             if not profiles:
-                break
+                empty_count += 1
+                if empty_count >= 2:  # stop if two consecutive empty pages
+                    break
+                part += 1
+                continue
 
             with transaction.atomic():
                 for record in profiles:
@@ -253,9 +282,12 @@ class EquitySyncService:
 
                     EquitySyncService._apply_fields(
                         asset, detail, record, is_quote=False)
+                    EquitySyncService.hydrate_identifiers(asset, record)
+
                     if detail.listing_status == "PENDING":
                         detail.listing_status = "ACTIVE"
                         detail.save()
+
                     results["success"] += 1
 
             part += 1
@@ -545,3 +577,20 @@ class EquitySyncService:
 
         logger.info(f"Created new equity asset {symbol} ({asset.name})")
         return asset
+
+    @staticmethod
+    def hydrate_identifiers(asset: Asset, data: dict):
+        """Attach ISIN, CUSIP, CIK to Asset if available in data."""
+        identifier_map = {
+            "isin": AssetIdentifier.IdentifierType.ISIN,
+            "cusip": AssetIdentifier.IdentifierType.CUSIP,
+            "cik": AssetIdentifier.IdentifierType.CIK,
+        }
+
+        for key, id_type in identifier_map.items():
+            if key in data and data[key]:
+                AssetIdentifier.objects.get_or_create(
+                    asset=asset,
+                    id_type=id_type,
+                    value=data[key],
+                )

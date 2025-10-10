@@ -17,6 +17,27 @@ FMP_BULK_PROFILE = "https://financialmodelingprep.com/stable/profile-bulk"
 # ------------------------------
 # Single Fetchers
 # ------------------------------
+def fetch_equity_profile_raw(symbol: str) -> dict | None:
+    """
+    Fetch the raw equity profile from FMP without normalization.
+    Returns the unmodified JSON dict (useful for identifier hydration).
+    """
+    url = f"{FMP_BASE}/profile/{symbol}?apikey={FMP_API_KEY}"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            return None
+        return data[0]  # Return the first element of the list
+    except Exception as e:
+        logger.warning(f"Failed to fetch raw profile for {symbol}: {e}")
+        return None
+
+
+# ------------------------------
+# Single Fetchers
+# ------------------------------
 def fetch_equity_profile(symbol: str) -> dict | None:
     url = f"{FMP_BASE}/profile/{symbol}?apikey={FMP_API_KEY}"
     try:
