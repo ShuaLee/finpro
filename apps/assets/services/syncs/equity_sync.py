@@ -347,49 +347,70 @@ class EquitySyncService:
         Synchronize the local DB equity universe with FMP:
         - Adds new symbols (IPOs)
         - Marks missing ones as delisted
-        - Handles ticker renames via identifier match (ISIN/CUSIP/CIK)
-        - Handles custom ticker collisions
+        - Detects ticker renames
+        - Refreshes core profile fields (name, sector, industry, exchange, country)
         - Hydrates profiles for new assets (no quotes)
         """
-        logger.info("🌍 Starting equity universe sync...")
-
-        # --- Fetch current universe ---
         records = fetch_equity_universe()
-        if not records:
-            logger.warning(
-                "⚠️ No records returned from FMP universe endpoint.")
-            return {}
-
         if exchange:
             records = [r for r in records if r.get(
                 "exchangeShortName") == exchange]
 
         seen = {r["symbol"] for r in records if r.get("symbol")}
         existing = AssetIdentifier.objects.filter(
-            id_type=AssetIdentifier.IdentifierType.TICKER
+            id_type=AssetIdentifier.IdentifierType.TICKER,
+            asset__asset_type=DomainType.EQUITY  # ✅ Only equities
         ).select_related("asset")
 
-        created, delisted, renamed, collisions = 0, 0, 0, 0
+        created, delisted, collisions, renamed, refreshed = 0, 0, 0, 0, 0
         new_assets: list[Asset] = []
 
-        # ----------------------------------------------------------------------
-        # STEP 1: Detect delistings and handle renames by ISIN/CUSIP/CIK
-        # ----------------------------------------------------------------------
+        # --- Delist missing or renamed ---
         for identifier in existing:
             asset = identifier.asset
             if asset.is_custom:
                 continue
 
             ticker = identifier.value
+
+            # --- Case 1: Still present → refresh profile fields ---
             if ticker in seen:
-                continue  # still present, skip
+                profile = fetch_equity_profile(ticker)
+                if not profile:
+                    continue
 
+                detail = getattr(asset, "equity_detail", None)
+                updated = False
+
+                new_name = profile.get("companyName") or profile.get("name")
+                if new_name and new_name != asset.name:
+                    logger.info(
+                        f"🏢 Name changed for {ticker}: {asset.name} → {new_name}")
+                    asset.name = new_name
+                    updated = True
+
+                for field in ["sector", "industry", "exchangeShortName", "country"]:
+                    new_val = profile.get(field)
+                    if detail and new_val and getattr(detail, field, None) != new_val:
+                        logger.info(f"🔄 {field} changed for {ticker}: "
+                                    f"{getattr(detail, field, None)} → {new_val}")
+                        setattr(detail, field, new_val)
+                        updated = True
+
+                if updated and not dry_run:
+                    asset.save()
+                    if detail:
+                        detail.save()
+                    refreshed += 1
+
+                continue  # done with this ticker
+
+            # --- Case 2: Missing from universe → check for rename or delist ---
             logger.debug(
-                f"Ticker {ticker} missing from universe; checking for rename...")
-
+                f"Ticker {ticker} missing from universe; checking identifiers...")
             resolved = EquitySyncService._resolve_identifier(asset)
+
             if not resolved:
-                # No known identifiers → mark as delisted
                 delisted += 1
                 if not dry_run:
                     detail = getattr(asset, "equity_detail", None)
@@ -402,7 +423,6 @@ class EquitySyncService:
             alt_profile = EquitySyncService._search_by_identifier(
                 id_type, id_value)
             if not alt_profile:
-                # No match found by identifier → delist
                 delisted += 1
                 if not dry_run:
                     detail = getattr(asset, "equity_detail", None)
@@ -413,11 +433,10 @@ class EquitySyncService:
 
             new_symbol = alt_profile.get("symbol")
             if not new_symbol or new_symbol == ticker:
-                # Identifier returned same or invalid symbol → delist
                 delisted += 1
                 continue
 
-            # --- Rename detected! ---
+            # --- Rename detected ---
             renamed += 1
             logger.info(f"🔄 Ticker rename detected: {ticker} → {new_symbol}")
             if not dry_run:
@@ -425,18 +444,14 @@ class EquitySyncService:
                 detail = getattr(asset, "equity_detail", None)
                 EquitySyncService._apply_fields(
                     asset, detail, alt_profile, is_quote=False)
-                asset.name = (
-                    alt_profile.get("companyName") or alt_profile.get(
-                        "name") or asset.name
-                )
+                asset.name = alt_profile.get(
+                    "companyName") or alt_profile.get("name") or asset.name
                 asset.save()
                 if detail and detail.listing_status == "DELISTED":
                     detail.listing_status = "ACTIVE"
                     detail.save()
 
-        # ----------------------------------------------------------------------
-        # STEP 2: Add new symbols (IPOs) and handle collisions
-        # ----------------------------------------------------------------------
+        # --- Add new IPOs ---
         for r in records:
             symbol = r.get("symbol")
             if not symbol:
@@ -448,40 +463,10 @@ class EquitySyncService:
             ).select_related("asset").first()
 
             if identifier:  # already exists
-                asset = identifier.asset
-                if asset.is_custom:
-                    collisions += 1
-                    logger.info(f"Collision: custom {asset} vs {symbol}")
-
-                    if not dry_run:
-                        detail = EquitySyncService._get_or_create_detail(asset)
-                        detail.listing_status = "COLLISION"
-                        detail.save()
-
-                        real_asset = Asset.objects.create(
-                            asset_type=DomainType.EQUITY,
-                            name=r.get("name") or r.get(
-                                "companyName") or symbol,
-                            currency=r.get("currency") or "USD",
-                            is_custom=False,
-                        )
-                        EquitySyncService._update_ticker_identifier(
-                            real_asset, symbol)
-                        real_detail = EquityDetail.objects.create(
-                            asset=real_asset,
-                            exchange=r.get("exchangeShortName") or r.get(
-                                "exchange"),
-                            country=r.get("country"),
-                            listing_status="PENDING",
-                        )
-                        EquitySyncService._apply_fields(
-                            real_asset, real_detail, r, is_quote=False)
-                        new_assets.append(real_asset)
                 continue
 
-            # --- New IPO detected ---
             created += 1
-            logger.info(f"🆕 New IPO detected: {symbol}")
+            logger.info(f"New IPO detected: {symbol}")
             if not dry_run:
                 asset = Asset.objects.create(
                     asset_type=DomainType.EQUITY,
@@ -500,9 +485,7 @@ class EquitySyncService:
                     asset, detail, r, is_quote=False)
                 new_assets.append(asset)
 
-        # ----------------------------------------------------------------------
-        # STEP 3: Hydrate profiles for new assets (NO QUOTES)
-        # ----------------------------------------------------------------------
+        # --- Hydrate profiles for new assets (NO QUOTES) ---
         hydrated_profiles = 0
         if new_assets and not dry_run:
             try:
@@ -517,18 +500,18 @@ class EquitySyncService:
                 logger.error(
                     f"Bulk profile hydration failed: {e}", exc_info=True)
 
-        # ----------------------------------------------------------------------
-        # STEP 4: Summary
-        # ----------------------------------------------------------------------
+        # --- Logging Summary ---
         logger.info(
-            f"✅ Universe sync ({exchange or 'ALL'}){' [dry run]' if dry_run else ''}: "
-            f"+{created} created, {renamed} renamed, {collisions} collisions, "
-            f"{delisted} delisted, hydrated profiles={hydrated_profiles}"
+            f"Universe sync ({exchange or 'ALL'}){' [dry run]' if dry_run else ''}: "
+            f"+{created}, renamed={renamed}, refreshed={refreshed}, "
+            f"collisions={collisions}, delisted={delisted}, "
+            f"hydrated profiles={hydrated_profiles}"
         )
 
         return {
             "created": created,
             "renamed": renamed,
+            "refreshed": refreshed,
             "collisions": collisions,
             "delisted": delisted,
             "hydrated_profiles": hydrated_profiles,
