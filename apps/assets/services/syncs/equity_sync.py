@@ -101,32 +101,24 @@ class EquitySyncService:
                 f"_apply_fields received non-dict data for {asset}: {type(data)}")
             return None
 
-        mapping = EQUITY_QUOTE_MAP if is_quote else EQUITY_PROFILE_MAP
-
         # --- Quote data → MarketDataCache ---
         if is_quote:
             cache, _ = MarketDataCache.objects.get_or_create(asset=asset)
-            for src_key, dest_field in mapping.items():
-                if src_key not in data:
-                    continue
-                value = data[src_key]
-                if hasattr(cache, dest_field):
-                    setattr(cache, dest_field, value)
+            for field, value in data.items():
+                if hasattr(cache, field):
+                    setattr(cache, field, value)
             cache.save()
             return cache
 
         # --- Profile data → Asset + EquityDetail ---
-        for src_key, dest_field in mapping.items():
-            if src_key not in data:
-                continue
-            value = data[src_key]
-
-            if dest_field.startswith("asset__"):
-                field = dest_field.split("__", 1)[1]
-                if hasattr(asset, field):
-                    setattr(asset, field, value)
-            elif detail and hasattr(detail, dest_field):
-                setattr(detail, dest_field, value)
+        for field, value in data.items():
+            # Handle nested "asset__" keys
+            if field.startswith("asset__"):
+                target_field = field.split("__", 1)[1]
+                if hasattr(asset, target_field):
+                    setattr(asset, target_field, value)
+            elif detail and hasattr(detail, field):
+                setattr(detail, field, value)
 
         asset.save()
         if detail:
@@ -375,6 +367,7 @@ class EquitySyncService:
 
             # --- Case 1: Still present → refresh profile fields ---
             if ticker in seen:
+                # Should be changed to bulk when available.
                 profile = fetch_equity_profile(ticker)
                 if not profile:
                     continue

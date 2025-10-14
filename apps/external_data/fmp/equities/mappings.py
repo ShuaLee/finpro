@@ -10,6 +10,9 @@ EQUITY_PROFILE_MAP = {
     "isAdr": "is_adr",
     "isFund": "is_mutual_fund",
     "companyName": "asset__name",
+    "isin": "isin",
+    "cusip": "cusip",
+    "cik": "cik",
 }
 
 EQUITY_QUOTE_MAP = {
