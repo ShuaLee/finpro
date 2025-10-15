@@ -1,11 +1,11 @@
 from django.core.management.base import BaseCommand, CommandError
-from assets.models.assets import Asset
+from assets.models.assets import Asset, AssetIdentifier
 from assets.services.syncs.equity_sync import EquitySyncService
 from core.types import DomainType
 
 
 class Command(BaseCommand):
-    help = "Sync the latest quote for a single equity (by symbol)."
+    help = "Sync the latest quote for a single equity (by ticker symbol)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -15,16 +15,32 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        symbol = options["symbol"].upper()
+        symbol = options["symbol"].upper().strip()
 
-        try:
-            asset = Asset.objects.get(symbol=symbol, asset_type=DomainType.EQUITY)
-        except Asset.DoesNotExist:
-            raise CommandError(f"Equity with symbol {symbol} not found in DB. Seed first!")
+        # ✅ Correct way: find asset via TICKER identifier
+        asset = (
+            Asset.objects.filter(
+                identifiers__value=symbol,
+                identifiers__id_type=AssetIdentifier.IdentifierType.TICKER,
+                asset_type=DomainType.EQUITY,
+            )
+            .distinct()
+            .first()
+        )
+
+        if not asset:
+            raise CommandError(
+                f"❌ No equity found in DB with ticker '{symbol}'. "
+                "Seed the universe first or create it manually."
+            )
+
+        self.stdout.write(f"🔄 Syncing quote for {symbol} ({asset.name})...")
 
         success = EquitySyncService.sync_quote(asset)
 
         if success:
-            self.stdout.write(self.style.SUCCESS(f"✅ Synced quote for {symbol}"))
+            self.stdout.write(self.style.SUCCESS(
+                f"✅ Synced quote for {symbol}"))
         else:
-            self.stdout.write(self.style.WARNING(f"⚠️ Failed to sync quote for {symbol}"))
+            self.stdout.write(self.style.WARNING(
+                f"⚠️ Failed to sync quote for {symbol}"))
