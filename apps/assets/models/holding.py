@@ -41,7 +41,9 @@ class Holding(models.Model):
         ordering = ["account", "asset"]
 
     def __str__(self):
-        return f"{self.quantity} {self.asset.symbol} in {self.account.name}"
+        primary_id = getattr(self.asset.primary_identifier, "value", None)
+        symbol = primary_id or getattr(self.asset, "name", "Unknown")
+        return f"{self.quantity.normalize()} {symbol} in {self.account.name}"
 
     # ----------------------------
     # Validation
@@ -54,9 +56,11 @@ class Holding(models.Model):
             )
 
     def save(self, *args, **kwargs):
-        is_new = self._state.adding
+        self.full_clean()
         super().save(*args, **kwargs)
 
+        """
+        is_new = self._state.adding
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
         if is_new:
@@ -65,6 +69,7 @@ class Holding(models.Model):
         else:
             # 🔄 On update → refresh values for all SCVs
             SchemaColumnValueManager.refresh_for_holding(self)
+        """
 
     # -----------------------
     # Convenience properties
