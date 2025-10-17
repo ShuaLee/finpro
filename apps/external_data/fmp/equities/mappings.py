@@ -16,19 +16,23 @@ EQUITY_PROFILE_MAP = {
 }
 
 EQUITY_QUOTE_MAP = {
+    # --- Core Quote Fields ---
     "price": "last_price",
+    "change": "change",
+    "changesPercentage": "change_percent",
+    "previousClose": "previous_close",
     "open": "open_price",
     "dayHigh": "high_price",
     "dayLow": "low_price",
-    "previousClose": "previous_close_price",
     "volume": "volume",
-    "avgVolume": "average_volume",
+    "avgVolume": "avg_volume",
     "marketCap": "market_cap",
+
+    # --- Extended Metrics ---
+    "yearHigh": "year_high",
+    "yearLow": "year_low",
     "eps": "eps",
     "pe": "pe_ratio",
-    "pb": "pb_ratio",
     "lastDiv": "dividend_per_share",
     "yield": "dividend_yield",
-    "dividendFrequency": "dividend_frequency",
-    "exDividendDate": "ex_dividend_date",
 }

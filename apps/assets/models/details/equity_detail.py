@@ -40,22 +40,6 @@ class EquityDetail(models.Model):
     is_adr = models.BooleanField(default=False)
     is_mutual_fund = models.BooleanField(default=False)
 
-    # --- Valuation Ratios (point-in-time) ---
-    eps = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    pe_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    pb_ratio = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-
-    # --- Dividend Info (latest only) ---
-    dividend_per_share = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    dividend_yield = models.DecimalField(
-        max_digits=6, decimal_places=4, null=True, blank=True)
-    dividend_frequency = models.CharField(max_length=20, blank=True, null=True)
-    ex_dividend_date = models.DateField(blank=True, null=True)
-
     # --- Listing Status ---
     LISTING_STATUS_CHOICES = [
         ("ACTIVE", "Active"),                # Normal tradable equity

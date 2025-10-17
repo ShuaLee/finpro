@@ -8,13 +8,17 @@ def normalize_fmp_data(raw: dict, field_map: dict) -> dict:
     """
     result = {}
     for fmp_key, model_field in field_map.items():
-        value = raw.get(fmp_key)
-
-        # Skip empty/null
-        if value in ("", None):
+        # Skip missing keys
+        if fmp_key not in raw:
             continue
 
-        # ✅ Handle booleans explicitly
+        value = raw.get(fmp_key)
+
+        # ✅ Explicitly handle None and empty strings
+        if value is None or value == "":
+            continue
+
+        # ✅ Keep booleans intact (don’t drop False)
         if isinstance(value, bool):
             result[model_field] = value
             continue
