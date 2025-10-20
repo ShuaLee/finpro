@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django import forms
 from accounts.models.account import Account
 from accounts.models.account_classification import ClassificationDefinition, AccountClassification
@@ -85,10 +85,15 @@ class AccountClassificationAdmin(admin.ModelAdmin):
 
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
+    """
+    Custom admin for Account:
+    - Dynamically defines AccountForm to avoid circular model loading
+    - Enforces classification assignment via AccountService
+    """
+
     list_display = (
         "id", "portfolio", "name", "account_type",
-        "classification",  # still shown in list, just not editable
-        "broker", "created_at", "last_synced",
+        "classification", "broker", "created_at", "last_synced",
     )
     list_filter = ("account_type", "broker", "created_at")
     search_fields = (
@@ -97,16 +102,23 @@ class AccountAdmin(admin.ModelAdmin):
         "portfolio__profile__user__email",
     )
     ordering = ("portfolio", "name")
-    readonly_fields = ("created_at", "last_synced")
+    readonly_fields = ("created_at", "classification", "last_synced")
 
+    # ----------------------------
+    # Dynamic form definition
+    # ----------------------------
     def get_form(self, request, obj=None, **kwargs):
-        from django import forms
+        """
+        Define AccountForm dynamically so it's loaded only
+        after all related models (like Portfolio) are ready.
+        """
 
         class AccountForm(forms.ModelForm):
             definition = forms.ModelChoiceField(
                 queryset=ClassificationDefinition.objects.all(),
                 required=True,
-                help_text="Pick a definition (e.g., TFSA, RRSP, 401k)."
+                help_text="Select a classification definition (e.g., TFSA, RRSP, 401k).",
+                label="Account Definition",
             )
 
             class Meta:
@@ -116,25 +128,51 @@ class AccountAdmin(admin.ModelAdmin):
                     "name",
                     "account_type",
                     "broker",
-                    "definition",  # 🔑 instead of classification
+                    "definition",
                 ]
-
-            def save(self, commit=True):
-                account = super().save(commit=False)
-                definition = self.cleaned_data.get("definition")
-
-                if not definition:
-                    raise forms.ValidationError("Definition is required.")
-
-                # Automatically resolve/create the classification
-                account = AccountService.assign_classification(
-                    account, definition, account.portfolio.profile
-                )
-
-                if commit:
-                    account.save()
-                    self.save_m2m()
-                return account
 
         kwargs["form"] = AccountForm
         return super().get_form(request, obj, **kwargs)
+
+    # ----------------------------
+    # Save logic
+    # ----------------------------
+    def save_model(self, request, obj, form, change):
+        """
+        Ensure every Account has a valid classification.
+        Uses AccountService.assign_classification() for consistency.
+        """
+
+        definition = form.cleaned_data.get("definition")
+
+        if not definition:
+            self.message_user(
+                request,
+                "A definition is required to create an account.",
+                level=messages.ERROR,
+            )
+            return
+
+        try:
+            # Save the base account first
+            obj.save()
+
+            # Assign classification atomically
+            AccountService.assign_classification(
+                account=obj,
+                definition=definition,
+                profile=obj.portfolio.profile,
+            )
+
+            self.message_user(
+                request,
+                f"Account '{obj.name}' created and linked to '{definition.name}'.",
+                level=messages.SUCCESS,
+            )
+
+        except Exception as e:
+            self.message_user(
+                request,
+                f"Error assigning classification: {e}",
+                level=messages.ERROR,
+            )
