@@ -81,7 +81,7 @@ class SchemaColumn(models.Model):
 
     # Meta flags
     is_editable = models.BooleanField(default=True)
-    is_editable = models.BooleanField(default=True)
+    is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(default=False)
 
     # Constraints (JSON, normalized is clean())

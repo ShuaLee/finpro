@@ -65,7 +65,7 @@ class SchemaGenerator:
                     f"No schema config found for domain {self.domain_type}")
 
             for account_type in account_types:
-                user_email = self.portfolio.portfolio.profile.user.email
+                user_email = self.portfolio.profile.user.email
                 schema_name = (
                     custom_schema_namer(self.portfolio, account_type)
                     if custom_schema_namer
@@ -76,14 +76,13 @@ class SchemaGenerator:
                     f"📄 Creating/updating schema for account_type={account_type}, name={schema_name}")
 
                 # 🚀 Ensure one schema per (portfolio, account_type)
+                schema_name = f"{self.portfolio.profile.user.email}'s {self.domain_type.title()} ({account_type}) Schema"
+                logger.debug(f"📄 Preparing schema: {schema_name}")
+
                 self.schema, created = Schema.objects.update_or_create(
                     portfolio=self.portfolio,
                     account_type=account_type,
-                    defaults={
-                        "domain_type": self.domain_type,
-                        "name": schema_name,
-                        "schema_type": "default",
-                    },
+                    defaults={},  # no invalid fields
                 )
                 logger.debug(
                     f"✅ {'Created' if created else 'Updated'} schema: {self.schema.id}")

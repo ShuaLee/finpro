@@ -118,8 +118,7 @@ def get_domain_meta(domain_type: str) -> dict:
     Return full domain metadata composed from all account types in that domain.
     Includes aggregated allowed assets and schema configs.
     """
-    metas = [cfg for cfg in ACCOUNT_TYPE_REGISTRY.values() if cfg["domain"]
-             == domain_type]
+    metas = [cfg for cfg in ACCOUNT_TYPE_REGISTRY.values() if cfg["domain"] == domain_type]
     if not metas:
         raise ValueError(f"Unknown domain type: {domain_type}")
 
@@ -129,10 +128,12 @@ def get_domain_meta(domain_type: str) -> dict:
         allowed_assets.update(m.get("allowed_assets", []))
         schema_configs.append(m.get("schema_config", {}))
 
+    # ✅ add a representative config (first one)
     return {
         "domain": domain_type,
         "allowed_assets": list(allowed_assets),
         "schema_configs": schema_configs,
+        "schema_config": schema_configs[0] if schema_configs else None,  # <-- added
         "account_types": [k for k, v in ACCOUNT_TYPE_REGISTRY.items() if v["domain"] == domain_type],
     }
 

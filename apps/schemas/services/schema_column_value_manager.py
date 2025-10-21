@@ -5,7 +5,7 @@ from schemas.validators import validate_constraints
 class SchemaColumnValueManager:
     def __init__(self, scv):
         # Lazy import to avoid circulars
-        from schemas.models import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue  
 
         if not isinstance(scv, SchemaColumnValue):
             raise TypeError("Expected a SchemaColumnValue instance")
@@ -19,7 +19,7 @@ class SchemaColumnValueManager:
     @classmethod
     def ensure_for_holding(cls, holding):
         """Create SCVs for all columns in the holding’s active schema."""
-        from schemas.models import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue  
 
         schema = holding.active_schema
         if not schema:
@@ -31,11 +31,13 @@ class SchemaColumnValueManager:
     @classmethod
     def ensure_for_column(cls, column):
         """Create SCVs for all holdings when a new column is added."""
-        from schemas.models import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue  
 
         schema = column.schema
-        for holding in schema.subportfolio.accounts.all().values_list("holdings", flat=True):
-            cls.get_or_create(holding, column)
+        # Only apply to accounts with this schema's account_type in this portfolio
+        for account in schema.portfolio.accounts.filter(account_type=schema.account_type):
+            for holding in account.holdings.all():
+                cls.get_or_create(holding, column)
 
     @classmethod
     def refresh_for_holding(cls, holding):
@@ -51,7 +53,7 @@ class SchemaColumnValueManager:
 
     @classmethod
     def get_or_create(cls, holding, column):
-        from schemas.models import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue  
 
         scv, created = SchemaColumnValue.objects.get_or_create(
             column=column,
