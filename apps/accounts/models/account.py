@@ -100,16 +100,48 @@ class Account(models.Model):
 
         super().clean()
 
+    def save(self, *args, **kwargs):
+        """
+        Override save to ensure that when a new Account is created,
+        it is properly initialized with its classification and schema.
+        Initialization only runs once classification is already linked.
+        """
+        is_new = self._state.adding
+
+        # Run model validation before saving
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+        # 🧩 Only initialize if classification already exists (prevents admin race)
+        if is_new and self.classification and getattr(self.classification, "definition", None):
+            from accounts.services.account_service import AccountService
+
+            AccountService.initialize_account(
+                self,
+                self.classification.definition,
+                self.portfolio.profile
+            )
+
     # ----------------------------
     # Schema Binding
     # ----------------------------
+
     @property
     def active_schema(self):
-        from schemas.models import Schema
-        try:
-            return Schema.objects.get(
-                portfolio=self.portfolio,
-                account_type=self.account_type
-            )
-        except Schema.DoesNotExist:
+        """
+        Return the schema associated with this account’s portfolio and account_type.
+        Each portfolio has one schema per account type.
+        """
+        from schemas.models.schema import Schema
+
+        schema = Schema.objects.filter(
+            portfolio=self.portfolio,
+            account_type=self.account_type
+        ).first()
+
+        if not schema:
+            # You can choose to raise instead if missing schemas are always a bug
+            # raise RuntimeError(f"No schema found for account type '{self.account_type}' in portfolio {self.portfolio.id}.")
             return None
+
+        return schema

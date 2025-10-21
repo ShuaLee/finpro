@@ -158,7 +158,7 @@ class AccountAdmin(admin.ModelAdmin):
             obj.save()
 
             # Assign classification atomically
-            AccountService.assign_classification(
+            AccountService.initialize_account(
                 account=obj,
                 definition=definition,
                 profile=obj.portfolio.profile,

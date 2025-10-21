@@ -5,34 +5,40 @@ from django.db import transaction
 class AccountService:
     @staticmethod
     @transaction.atomic
-    def assign_classification(account, definition, profile):
+    def initialize_account(account, definition, profile):
         """
-        Ensure the account is linked to the correct AccountClassification.
-        Creates one if it doesn't exist for this profile/definition.
+        Fully initialize an account after creation:
+        - Ensure the proper AccountClassification exists and is linked
+        - Validate account consistency
+        - Ensure schema exists for the account’s (portfolio, account_type)
         """
 
         from accounts.models.account_classification import AccountClassification
+        from schemas.services.schema_manager import SchemaManager
 
-        # Get or create the user's classification instance
+        # ✅ 1. Get or create classification
         classification, _ = AccountClassification.objects.get_or_create(
             profile=profile,
-            definition=definition
+            definition=definition,
         )
 
-        # Only update if it's different
+        # ✅ 2. Update classification if needed
         if account.classification_id != classification.id:
             account.classification = classification
 
-            # Validate before saving (but avoid double full_clean on get_or_create)
-            try:
-                account.full_clean()
-            except ValidationError as e:
-                raise ValidationError(
-                    f"Failed to assign classification '{definition.name}' "
-                    f"to account '{account.name}': {e}"
-                )
+        # ✅ 3. Validate full account before saving
+        try:
+            account.full_clean()
+        except ValidationError as e:
+            raise ValidationError(
+                f"Failed to initialize account '{account.name}' "
+                f"with classification '{definition.name}': {e}"
+            )
 
-            # Save only the changed field
-            account.save(update_fields=["classification"])
+        # ✅ 4. Save safely (only changed fields)
+        account.save()
+
+        # ✅ 5. Ensure schema exists for this account’s type
+        SchemaManager.ensure_for_account(account)
 
         return account

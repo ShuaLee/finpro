@@ -21,12 +21,12 @@ ACCOUNT_TYPE_REGISTRY = {
     "equity_self": {
         "domain": DomainType.EQUITY,
         "schema_config": EQUITY_SCHEMA_CONFIG,
-        "allowed_assets": [DomainType.EQUITY, DomainType.BOND],
+        "allowed_assets": [DomainType.EQUITY],
     },
     "equity_managed": {
         "domain": DomainType.EQUITY,
         "schema_config": EQUITY_SCHEMA_CONFIG,
-        "allowed_assets": [DomainType.EQUITY, DomainType.BOND],
+        "allowed_assets": [DomainType.EQUITY],
     },
     "crypto_wallet": {
         "domain": DomainType.CRYPTO,

@@ -1,5 +1,5 @@
 from django.db import transaction, models
-from schemas.models import Schema, SchemaColumn
+from schemas.models.schema import Schema, SchemaColumn
 from schemas.utils import normalize_constraints
 from core.types import get_domain_meta
 import re
@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class SchemaGenerator:
-    def __init__(self, subportfolio, domain_type: str):
-        self.subportfolio = subportfolio
+    def __init__(self, portfolio, domain_type: str):
+        self.portfolio = portfolio
         self.domain_type = domain_type
         self.schema = None
 
@@ -38,11 +38,11 @@ class SchemaGenerator:
     @transaction.atomic
     def initialize(self, custom_schema_namer=None):
         """
-        Build one schema per account_type in this subportfolio’s domain.
-        Example: stock subportfolio → [self-managed schema, managed schema].
+        Build one schema per account_type in this portfolio’s domain.
+        Example: stock portfolio → [self-managed schema, managed schema].
         """
         logger.debug(
-            f"🛠 Initializing schema for subportfolio={self.subportfolio.id}, domain={self.domain_type}")
+            f"🛠 Initializing schema for portfolio={self.portfolio.id}, domain={self.domain_type}")
 
         try:
             domain_meta = get_domain_meta(self.domain_type)
@@ -65,9 +65,9 @@ class SchemaGenerator:
                     f"No schema config found for domain {self.domain_type}")
 
             for account_type in account_types:
-                user_email = self.subportfolio.portfolio.profile.user.email
+                user_email = self.portfolio.portfolio.profile.user.email
                 schema_name = (
-                    custom_schema_namer(self.subportfolio, account_type)
+                    custom_schema_namer(self.portfolio, account_type)
                     if custom_schema_namer
                     else f"{user_email}'s {self.domain_type.title()} ({account_type}) Schema"
                 )
@@ -75,9 +75,9 @@ class SchemaGenerator:
                 logger.debug(
                     f"📄 Creating/updating schema for account_type={account_type}, name={schema_name}")
 
-                # 🚀 Ensure one schema per (subportfolio, account_type)
+                # 🚀 Ensure one schema per (portfolio, account_type)
                 self.schema, created = Schema.objects.update_or_create(
-                    subportfolio=self.subportfolio,
+                    portfolio=self.portfolio,
                     account_type=account_type,
                     defaults={
                         "domain_type": self.domain_type,
@@ -108,12 +108,12 @@ class SchemaGenerator:
                             )
 
             logger.debug(
-                f"🎉 Finished initializing schema(s) for subportfolio={self.subportfolio.id}")
+                f"🎉 Finished initializing schema(s) for portfolio={self.portfolio.id}")
             return self.schema
 
         except Exception as e:
             logger.exception(
-                f"🔥 Schema initialization failed for subportfolio={self.subportfolio.id}: {e}")
+                f"🔥 Schema initialization failed for portfolio={self.portfolio.id}: {e}")
             raise
 
     # -------------------------------
