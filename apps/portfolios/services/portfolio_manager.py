@@ -12,21 +12,21 @@ class PortfolioManager:
     # -------------------------------
     # Main Portfolio Methods
     # -------------------------------
-    @staticmethod
-    def create_main_portfolio(profile: Profile, name: str = "Main Portfolio") -> Portfolio:
-        """
-        Creates the main Portfolio for the given profile.
-        Raises ValidationError if one already exists.
-        """
-        if Portfolio.objects.filter(profile=profile, is_main=True).exists():
-            raise ValidationError(
-                f"Profile {profile.id} already has a main portfolio.")
-        with transaction.atomic():
-            return Portfolio.objects.create(
-                profile=profile,
-                name=name,
-                is_main=True,
-            )
+    # @staticmethod
+    # def create_main_portfolio(profile: Profile, name: str = "Main Portfolio") -> Portfolio:
+    #     """
+    #     Creates the main Portfolio for the given profile.
+    #     Raises ValidationError if one already exists.
+    #     """
+    #     if Portfolio.objects.filter(profile=profile, is_main=True).exists():
+    #         raise ValidationError(
+    #             f"Profile {profile.id} already has a main portfolio.")
+    #     with transaction.atomic():
+    #         return Portfolio.objects.create(
+    #             profile=profile,
+    #             name=name,
+    #             is_main=True,
+    #         )
 
     @staticmethod
     def ensure_main_portfolio(profile: Profile) -> Portfolio:
