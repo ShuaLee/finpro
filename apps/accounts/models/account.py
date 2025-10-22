@@ -33,7 +33,6 @@ class Account(models.Model):
         help_text="User-specific classification (e.g., TFSA, RRSP, 401k)."
     )
 
-    broker = models.CharField(max_length=100, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_synced = models.DateTimeField(null=True, blank=True)
 

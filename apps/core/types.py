@@ -31,7 +31,7 @@ DOMAIN_REGISTRY = {
                 ),
             },
         },
-        "allowed_assets": [DomainType.EQUITY, DomainType.BOND, DomainType.METAL],
+        "allowed_assets": [DomainType.EQUITY],
     },
     DomainType.CRYPTO: {
         "label": "Cryptocurrency",
@@ -130,6 +130,7 @@ DOMAIN_REGISTRY = {
 # 1️⃣ Domain & Account Lookup Helpers
 # ------------------------------------------------------
 
+
 def get_domain_for_account_type(account_type: str) -> str:
     """Return the domain type for a given account type."""
     for domain, meta in DOMAIN_REGISTRY.items():
@@ -144,7 +145,8 @@ def get_schema_config_for_account_type(account_type: str) -> dict:
         atypes = meta.get("account_types", {})
         if account_type in atypes:
             return atypes[account_type].get("schema_config", {})
-    raise ValueError(f"No schema config found for account type: {account_type}")
+    raise ValueError(
+        f"No schema config found for account type: {account_type}")
 
 
 def get_schema_config_for_domain(domain_type: str) -> dict:
@@ -158,7 +160,8 @@ def get_schema_config_for_domain(domain_type: str) -> dict:
 
     account_types = list(domain_meta.get("account_types", {}).values())
     if not account_types:
-        raise ValueError(f"No account types registered under domain '{domain_type}'.")
+        raise ValueError(
+            f"No account types registered under domain '{domain_type}'.")
 
     # Return first schema_config found
     return account_types[0].get("schema_config", {})
