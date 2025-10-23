@@ -93,9 +93,9 @@ class AccountAdmin(admin.ModelAdmin):
 
     list_display = (
         "id", "portfolio", "name", "account_type",
-        "classification", "broker", "created_at", "last_synced",
+        "classification", "created_at", "last_synced",
     )
-    list_filter = ("account_type", "broker", "created_at")
+    list_filter = ("account_type", "created_at")
     search_fields = (
         "name", "portfolio__name",
         "portfolio__profile__user__username",
