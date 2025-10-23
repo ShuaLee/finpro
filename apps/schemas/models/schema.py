@@ -1,9 +1,13 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from core.types import get_account_type_choices
 from assets.models.holding import Holding
+from schemas.constraints import CONSTRAINT_TEMPLATES
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from schemas.utils import normalize_constraints
+
+from decimal import Decimal
 
 
 class Schema(models.Model):
@@ -144,59 +148,9 @@ class SchemaColumnValue(models.Model):
 
 class SchemaConstraint(models.Model):
     """
-    Defines a validation rule for a schema column.
+    Defines a validation rule for a SchemaColumn.
+    Each constraint stores its own allowed range (min/max).
     """
-    column = models.ForeignKey(
-        SchemaColumn,
-        on_delete=models.CASCADE,
-        related_name="constraints_set",
-    )
-
-    # Name of the constraint (e.g., 'max_value', 'min_value', 'max_length')
-    name = models.CharField(max_length=50)
-
-    # Generic value (can store int, decimal, or string)
-    value = models.CharField(max_length=100)
-
-    # Optional: Limit which data_type this applies to
-    applies_to = models.CharField(
-        max_length=20,
-        choices=[
-            ("string", "String"),
-            ("decimal", "Decimal"),
-            ("integer", "Integer"),
-            ("date", "Date"),
-            ("boolean", "Boolean"),
-            ("url", "URL"),
-        ],
-        blank=True,
-        null=True,
-    )
-
-    is_system = models.BooleanField(default=False)
-    is_editable = models.BooleanField(default=True)
-
-    class Meta:
-        unique_together = ("column", "name")
-
-    def __str__(self):
-        return f"{self.column.identifier}.{self.name} = {self.value}"
-    
-
-"""
-🧱 2️⃣ The Professional Upgrade — Structured Constraints
-🧠 Core Concept
-
-Introduce a Constraint model that defines per-data-type, per-column rules,
-and link it to your SchemaColumn.
-
-This becomes metadata about metadata — just like Django model field attributes (max_length, decimal_places, etc.) but dynamic and database-driven.
-
-🧩 3️⃣ Proposed Models
-SchemaConstraint
-class SchemaConstraint(models.Model):
-
-    Defines a validation rule for a schema column.
 
     column = models.ForeignKey(
         "SchemaColumn",
@@ -204,13 +158,20 @@ class SchemaConstraint(models.Model):
         related_name="constraints_set",
     )
 
-    # Name of the constraint (e.g., 'max_value', 'min_value', 'max_length')
+    # Machine-readable key (e.g., "max_length", "decimal_places")
     name = models.CharField(max_length=50)
 
-    # Generic value (can store int, decimal, or string)
-    value = models.CharField(max_length=100)
+    # Human-friendly name (e.g., "Max Length", "Decimal Places")
+    label = models.CharField(max_length=100)
 
-    # Optional: Limit which data_type this applies to
+    # Constraint value (e.g., 255, 4, or None)
+    value = models.CharField(max_length=100, null=True, blank=True)
+
+    # Optional range limits for numeric/date constraints
+    min_limit = models.CharField(max_length=100, null=True, blank=True)
+    max_limit = models.CharField(max_length=100, null=True, blank=True)
+
+    # Data type that this constraint applies to
     applies_to = models.CharField(
         max_length=20,
         choices=[
@@ -225,67 +186,54 @@ class SchemaConstraint(models.Model):
         null=True,
     )
 
-    is_system = models.BooleanField(default=False)
+    # Whether this constraint can be adjusted by users
     is_editable = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ("column", "name")
 
     def __str__(self):
-        return f"{self.column.identifier}.{self.name} = {self.value}"
+        return f"{self.column.identifier}.{self.label} = {self.value}"
 
-💡 Example Constraints
-data_type	name	value	behavior
-decimal	decimal_places	4	Rounds/truncates at 4
-decimal	max_value	1000000	Value cap
-string	max_length	100	Enforces char limit
-date	min_date	2000-01-01	Enforces lower bound
-integer	max_value	1000	Cap for integer fields
-⚙️ 4️⃣ Enforcing Type-Specific Rules
+    # -----------------------------------------
+    # Validation Logic
+    # -----------------------------------------
+    def clean(self):
+        # Enforce unique constraint per column
+        if (
+            SchemaConstraint.objects.exclude(id=self.id)
+            .filter(column=self.column, name=self.name)
+            .exists()
+        ):
+            raise ValidationError(
+                f"Constraint '{self.name}' already exists for this column."
+            )
 
-When a value is created or updated (e.g., through SchemaColumnValueManager),
-you can automatically enforce constraint logic based on data type:
+        # If value is blank, skip validation
+        if self.value in [None, "", "None"]:
+            return super().clean()
 
-def enforce_constraints(column, value):
-    for c in column.constraints_set.all():
-        if c.name == "max_length" and len(str(value)) > int(c.value):
-            raise ValidationError(f"{column.title} exceeds max length {c.value}.")
-        if c.name == "max_value" and Decimal(value) > Decimal(c.value):
-            raise ValidationError(f"{column.title} exceeds max value {c.value}.")
-        if c.name == "decimal_places":
-            q = Decimal(value).quantize(Decimal("1." + "0" * int(c.value)))
-            value = q
-    return value
+        # Validate numeric constraints
+        try:
+            numeric_value = Decimal(self.value)
+        except Exception:
+            # Only check numeric validity for numeric constraints
+            if self.applies_to in ("integer", "decimal"):
+                raise ValidationError(
+                    f"{self.label} must be a numeric value, got '{self.value}'."
+                )
+            return super().clean()
 
+        # Enforce min/max range if applicable
+        if self.min_limit not in [None, "", "None"]:
+            if numeric_value < Decimal(self.min_limit):
+                raise ValidationError(
+                    f"{self.label} cannot be below {self.min_limit}."
+                )
+        if self.max_limit not in [None, "", "None"]:
+            if numeric_value > Decimal(self.max_limit):
+                raise ValidationError(
+                    f"{self.label} cannot exceed {self.max_limit}."
+                )
 
-💡 And you can enforce “meta-constraints” — e.g.,
-System columns’ constraints are read-only:
-
-if c.is_system and not user.is_admin:
-    raise PermissionDenied("Cannot modify system constraint.")
-
-🧠 5️⃣ Constraint Templates per Data Type
-
-You can predefine allowed constraint types for each data_type
-so new columns get the right set automatically:
-
-DATA_TYPE_CONSTRAINTS = {
-    "string": ["max_length"],
-    "decimal": ["max_value", "min_value", "decimal_places"],
-    "integer": ["max_value", "min_value"],
-    "date": ["min_date", "max_date"],
-    "boolean": [],
-    "url": ["max_length"],
-}
-
-
-During schema generation:
-
-for constraint_name in DATA_TYPE_CONSTRAINTS.get(column.data_type, []):
-    SchemaConstraint.objects.create(
-        column=column,
-        name=constraint_name,
-        value=default_for(constraint_name),
-        is_system=column.is_system,
-    )
-"""
+        super().clean()
