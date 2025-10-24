@@ -11,7 +11,7 @@ class MasterConstraint(models.Model):
     """
 
     # Core metadata
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50)
     label = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
 
@@ -46,7 +46,7 @@ class MasterConstraint(models.Model):
 
     def __str__(self):
         return f"[{self.applies_to}] {self.label} ({self.name})"
-    
+
 
 class SchemaConstraint(models.Model):
     """
