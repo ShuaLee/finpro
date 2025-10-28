@@ -34,19 +34,19 @@ class MarketDataCache(models.Model):
 
     last_price = models.DecimalField(
         max_digits=20, decimal_places=4, null=True, blank=True)
-    change = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    change_percent = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True)
-    previous_close = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    open_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    high_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    low_price = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    volume = models.BigIntegerField(null=True, blank=True)
+    # change = models.DecimalField(
+    #     max_digits=10, decimal_places=4, null=True, blank=True)
+    # change_percent = models.DecimalField(
+    #     max_digits=10, decimal_places=4, null=True, blank=True)
+    # previous_close = models.DecimalField(
+    #     max_digits=20, decimal_places=4, null=True, blank=True)
+    # open_price = models.DecimalField(
+    #     max_digits=20, decimal_places=4, null=True, blank=True)
+    # high_price = models.DecimalField(
+    #     max_digits=20, decimal_places=4, null=True, blank=True)
+    # low_price = models.DecimalField(
+    #     max_digits=20, decimal_places=4, null=True, blank=True)
+    # volume = models.BigIntegerField(null=True, blank=True)
     market_cap = models.BigIntegerField(null=True, blank=True)
 
     # -------------------------------------------------------------------------
@@ -64,11 +64,11 @@ class MarketDataCache(models.Model):
     # -------------------------------------------------------------------------
     # Optional/extended metrics (can be used by any type, if supported)
     # -------------------------------------------------------------------------
-    avg_volume = models.BigIntegerField(null=True, blank=True)
-    year_high = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
-    year_low = models.DecimalField(
-        max_digits=20, decimal_places=4, null=True, blank=True)
+    # avg_volume = models.BigIntegerField(null=True, blank=True)
+    # year_high = models.DecimalField(
+    #     max_digits=20, decimal_places=4, null=True, blank=True)
+    # year_low = models.DecimalField(
+    #     max_digits=20, decimal_places=4, null=True, blank=True)
 
     # -------------------------------------------------------------------------
     # Future-reserved metrics (for bonds, commodities, etc.)

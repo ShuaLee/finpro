@@ -1,9 +1,9 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from core.types import get_account_type_choices
 from assets.models.holding import Holding
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-from schemas.utils import normalize_constraints
 
 
 class Schema(models.Model):
@@ -88,7 +88,6 @@ class SchemaColumn(models.Model):
     is_system = models.BooleanField(default=False)
 
     # Constraints (JSON, normalized is clean())
-    constraints = models.JSONField(default=dict, blank=True)
     display_order = models.PositiveBigIntegerField(default=0)
 
     class Meta:
@@ -96,21 +95,31 @@ class SchemaColumn(models.Model):
         ordering = ["display_order", "id"]
 
     def __str__(self):
-        return f"{self.title} ({self.schema.name})"
+        return f"{self.title} ({self.schema.account_type})"
 
     # -------------------------------
     # Normalization
     # -------------------------------
     def clean(self):
-        if self.constraints:
-            self.constraints = normalize_constraints(self.constraints)
         super().clean()
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
+
+        # 🧩 Prevent changes to immutable fields after creation
+        if not is_new:
+            old = SchemaColumn.objects.get(pk=self.pk)
+            immutable_fields = ["data_type",
+                                "source", "source_field", "formula"]
+            for field in immutable_fields:
+                if getattr(old, field) != getattr(self, field):
+                    raise ValidationError(
+                        f"Field '{field}' cannot be changed after creation."
+                    )
+
         super().save(*args, **kwargs)
 
-        # 🔑 Create SCVs automatically for all existing holdings when new column is added
+        # 🔑 On creation only: create constraints and holding values
         if is_new:
             from schemas.services.schema_constraint_manager import SchemaConstraintManager
             SchemaConstraintManager.create_from_master(self)
