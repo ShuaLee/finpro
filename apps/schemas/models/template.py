@@ -69,6 +69,12 @@ class SchemaTemplateColumn(models.Model):
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(default=False)
 
+    # Defines if columns are auto-included in new schemas
+    is_default = models.BooleanField(
+        default=False,
+        help_text="If True, this column will appear automatically when a schema is generated."
+    )
+
     # Default constraint definitions (copied to SchemaColumn)
     default_constraints = models.JSONField(default=dict, blank=True)
 

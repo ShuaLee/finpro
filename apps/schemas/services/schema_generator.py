@@ -1,6 +1,10 @@
 from django.db import transaction
-from schemas.models.schema import Schema
-from schemas.services.schema_template_manager import SchemaTemplateManager
+from django.db.models import Prefetch
+from django.utils.text import slugify
+from schemas.models.schema import Schema, SchemaColumn
+from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
+from schemas.services.schema_constraint_manager import SchemaConstraintManager
+from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from core.types import get_domain_meta
 import logging
 
@@ -9,14 +13,13 @@ logger = logging.getLogger(__name__)
 
 class SchemaGenerator:
     """
-    High-level orchestrator that builds portfolio schemas based on available
-    SchemaTemplates. Falls back to domain_meta configs if no templates exist.
+    🔧 High-level orchestrator that builds sportfolio schemas.
+    Prefers SchemaTemplates but falls back to legacy config if not found.
     """
 
     def __init__(self, portfolio, domain_type: str):
         self.portfolio = portfolio
         self.domain_type = domain_type
-        self.schema = None
 
     # -------------------------------
     # Main Initialization
@@ -24,13 +27,13 @@ class SchemaGenerator:
     @transaction.atomic
     def initialize(self, custom_schema_namer=None):
         """
-        Build one schema per account_type for this portfolio’s domain.
+        Build one schema per account_type in this portfolio’s domain.
 
-        ✅ Uses SchemaTemplate if available (preferred)
-        ⚙️  Falls back to domain_meta if no templates are found.
+        ✅ Primary path: Use SchemaTemplate + SchemaTemplateColumns
+        ⚙️ Fallback path: Use legacy domain_meta config (if no template found)
         """
-        logger.debug(
-            f"🧱 Initializing schema for portfolio={self.portfolio.id}, domain={self.domain_type}")
+        logger.info(
+            f"🧱 Initializing schemas for portfolio={self.portfolio.id}, domain={self.domain_type}")
 
         domain_meta = get_domain_meta(self.domain_type)
         account_types = domain_meta.get("account_types", [])
@@ -38,74 +41,141 @@ class SchemaGenerator:
 
         if not account_types:
             raise ValueError(
-                f"No account types registered for domain {self.domain_type}")
+                f"No account types registered for domain '{self.domain_type}'")
+
+        schemas = []
 
         for account_type in account_types:
-            user_email = self.portfolio.profile.user.email
             schema_name = (
                 custom_schema_namer(self.portfolio, account_type)
                 if custom_schema_namer
-                else f"{user_email}'s {self.domain_type.title()} ({account_type}) Schema"
+                else f"{self.portfolio.profile.user.email}'s {self.domain_type.title()} ({account_type}) Schema"
             )
 
-            logger.info(
-                f"📄 Generating schema for {account_type}: {schema_name}")
+            logger.info(f"📄 Generating schema for account_type={account_type}")
 
-            # Try to build from SchemaTemplate first
-            try:
-                self.schema = SchemaTemplateManager.apply_template(
-                    self.portfolio, account_type)
+            # Try template-based creation first
+            template = SchemaTemplate.objects.filter(
+                account_type=account_type, is_active=True
+            ).prefetch_related(
+                Prefetch("columns", queryset=SchemaTemplateColumn.objects.order_by(
+                    "display_order", "id"))
+            ).first()
+
+            if template:
+                schema = self._create_from_template(template)
+                schemas.append(schema)
                 logger.info(
                     f"✅ Created schema from template for {account_type}")
-                continue  # Template found — skip fallback logic
+                continue
 
-            except ValueError:
-                logger.warning(
-                    f"⚠️ No template found for {account_type}, falling back to domain_meta config")
-
-            # --- FALLBACK TO OLD CONFIG ---
-            self.schema, _ = Schema.objects.update_or_create(
-                portfolio=self.portfolio,
-                account_type=account_type,
-                defaults={},
-            )
-
-            for source, field_defs in schema_config.items():
-                for source_field, col_def in field_defs.items():
-                    if not col_def.get("is_default"):
-                        continue
-                    self._add_column_from_config(source, source_field, col_def)
+            # Fall back to domain_meta config if no template exists
+            logger.warning(
+                f"⚠️ No SchemaTemplate found for {account_type}, falling back to legacy schema config.")
+            schema = self._create_from_legacy_config(
+                account_type, schema_config)
+            schemas.append(schema)
 
         logger.info(
-            f"🎉 Finished schema initialization for portfolio={self.portfolio.id}")
-        return self.schema
+            f"🎉 Schema initialization complete for portfolio={self.portfolio.id}")
+        return schemas
 
     # -------------------------------
-    # Legacy Config Fallback
+    # Template-Based Creation
     # -------------------------------
-    def _add_column_from_config(self, source, source_field, col_def):
+    def _create_from_template(self, template: SchemaTemplate):
         """
-        Only used when SchemaTemplate is unavailable.
+        Create a Schema and its SchemaColumns from a SchemaTemplate.
+        Only copies columns marked as is_default=True.
         """
-        from schemas.models.schema import SchemaColumn
-        from schemas.utils import normalize_constraints
-        from schemas.services.schema_constraint_manager import SchemaConstraintManager
-        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-
-        col = SchemaColumn.objects.create(
-            schema=self.schema,
-            title=col_def["title"],
-            identifier=f"{source}_{source_field}".lower(),
-            data_type=col_def["data_type"],
-            source=source,
-            source_field=source_field,
-            is_editable=col_def.get("is_editable", True),
-            is_deletable=col_def.get("is_deletable", True),
-            is_system=col_def.get("is_system", False),
-            constraints=normalize_constraints(col_def.get("constraints", {})),
-            display_order=col_def.get("display_order", 0),
+        schema, created = Schema.objects.update_or_create(
+            portfolio=self.portfolio,
+            account_type=template.account_type,
+            defaults={},
         )
 
-        SchemaConstraintManager.create_from_master(col)
-        SchemaColumnValueManager.ensure_for_column(col)
-        logger.debug(f"➕ Added fallback column: {col.title}")
+        # Only include default template columns
+        template_columns = template.columns.filter(
+            is_default=True).order_by("display_order", "id")
+
+        logger.debug(
+            f"🧩 Creating {template_columns.count()} columns for schema {schema.account_type}")
+
+        for tcol in template_columns:
+            column = SchemaColumn.objects.create(
+                schema=schema,
+                title=tcol.title,
+                identifier=self._safe_identifier(tcol.identifier, schema),
+                data_type=tcol.data_type,
+                source=tcol.source,
+                source_field=tcol.source_field,
+                is_editable=tcol.is_editable,
+                is_deletable=tcol.is_deletable,
+                is_system=tcol.is_system,
+                display_order=tcol.display_order,
+            )
+
+            # Automatically attach constraints + holding values
+            SchemaConstraintManager.create_from_master(column)
+            SchemaColumnValueManager.ensure_for_column(column)
+
+            logger.debug(
+                f"➕ Added column '{column.title}' (order {column.display_order})")
+
+        return schema
+
+    # -------------------------------
+    # Fallback Creation (Legacy)
+    # -------------------------------
+    def _create_from_legacy_config(self, account_type: str, schema_config: dict):
+        """
+        Legacy fallback path: builds schema using old domain_meta config.
+        """
+        schema, _ = Schema.objects.update_or_create(
+            portfolio=self.portfolio,
+            account_type=account_type,
+            defaults={},
+        )
+
+        for source, field_defs in schema_config.items():
+            for source_field, col_def in field_defs.items():
+                if not col_def.get("is_default"):
+                    continue
+
+                col = SchemaColumn.objects.create(
+                    schema=schema,
+                    title=col_def["title"],
+                    identifier=self._safe_identifier(
+                        f"{source}_{source_field}", schema),
+                    data_type=col_def["data_type"],
+                    source=source,
+                    source_field=source_field,
+                    is_editable=col_def.get("is_editable", True),
+                    is_deletable=col_def.get("is_deletable", True),
+                    is_system=col_def.get("is_system", False),
+                    display_order=col_def.get("display_order", 0),
+                )
+
+                SchemaConstraintManager.create_from_master(col)
+                SchemaColumnValueManager.ensure_for_column(col)
+                logger.debug(f"➕ Added fallback column '{col.title}'")
+
+        return schema
+
+    # -------------------------------
+    # Utility
+    # -------------------------------
+    def _safe_identifier(self, base_identifier: str, schema: Schema) -> str:
+        """
+        Ensures uniqueness of identifiers per schema.
+        """
+        identifier = slugify(base_identifier)
+        existing_ids = set(schema.columns.values_list("identifier", flat=True))
+        counter = 1
+        original = identifier
+
+        while identifier in existing_ids:
+            counter += 1
+            identifier = f"{original}_{counter}"
+
+        return identifier

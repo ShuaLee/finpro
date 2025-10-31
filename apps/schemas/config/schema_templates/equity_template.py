@@ -1,12 +1,10 @@
-# schemas/config/schema_templates/equity_template.py
-
 EQUITY_TEMPLATE_CONFIG = {
     "account_type": "equity_self",
     "name": "Equity Schema Template",
     "description": "Default schema template for equity portfolios, covering tradable stock assets and holdings.",
 
     "columns": [
-        # --- Identification ---
+        # --- Identification (Default Columns) ---
         {
             "title": "Symbol",
             "identifier": "symbol",
@@ -15,6 +13,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "primary_identifier__value",
             "is_system": True,
             "is_editable": False,
+            "is_default": True,
             "display_order": 1,
         },
         {
@@ -25,6 +24,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "name",
             "is_system": True,
             "is_editable": False,
+            "is_default": True,
             "display_order": 2,
         },
         {
@@ -35,10 +35,35 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "currency",
             "is_system": True,
             "is_editable": False,
+            "is_default": True,
             "display_order": 3,
         },
 
-        # --- Market Data ---
+        # --- Holding Data (Default Columns) ---
+        {
+            "title": "Purchase Price",
+            "identifier": "purchase_price",
+            "data_type": "decimal",
+            "source": "holding",
+            "source_field": "purchase_price",
+            "is_system": True,
+            "is_editable": True,
+            "is_default": True,
+            "display_order": 4,
+        },
+        {
+            "title": "Quantity",
+            "identifier": "quantity",
+            "data_type": "decimal",
+            "source": "holding",
+            "source_field": "quantity",
+            "is_system": True,
+            "is_editable": True,
+            "is_default": True,
+            "display_order": 5,
+        },
+
+        # --- Market Data (Default Column) ---
         {
             "title": "Last Price",
             "identifier": "last_price",
@@ -47,8 +72,11 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "market_data__last_price",
             "is_system": True,
             "is_editable": False,
-            "display_order": 4,
+            "is_default": True,
+            "display_order": 6,
         },
+
+        # --- Non-Default Available Columns (for “Add Column” UI) ---
         {
             "title": "Market Cap",
             "identifier": "market_cap",
@@ -57,7 +85,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "market_data__market_cap",
             "is_system": True,
             "is_editable": False,
-            "display_order": 5,
+            "is_default": False,
         },
         {
             "title": "P/E Ratio",
@@ -67,7 +95,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "market_data__pe_ratio",
             "is_system": True,
             "is_editable": False,
-            "display_order": 6,
+            "is_default": False,
         },
         {
             "title": "EPS",
@@ -77,7 +105,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "market_data__eps",
             "is_system": True,
             "is_editable": False,
-            "display_order": 7,
+            "is_default": False,
         },
         {
             "title": "Dividend Yield",
@@ -87,7 +115,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "market_data__dividend_yield",
             "is_system": True,
             "is_editable": False,
-            "display_order": 8,
+            "is_default": False,
         },
         {
             "title": "Dividend Per Share",
@@ -97,29 +125,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "market_data__dividend_per_share",
             "is_system": True,
             "is_editable": False,
-            "display_order": 9,
-        },
-
-        # --- Holding Data ---
-        {
-            "title": "Quantity",
-            "identifier": "quantity",
-            "data_type": "decimal",
-            "source": "holding",
-            "source_field": "quantity",
-            "is_system": True,
-            "is_editable": True,
-            "display_order": 10,
-        },
-        {
-            "title": "Purchase Price",
-            "identifier": "purchase_price",
-            "data_type": "decimal",
-            "source": "holding",
-            "source_field": "purchase_price",
-            "is_system": True,
-            "is_editable": True,
-            "display_order": 11,
+            "is_default": False,
         },
         {
             "title": "Purchase Date",
@@ -129,7 +135,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "source_field": "purchase_date",
             "is_system": True,
             "is_editable": True,
-            "display_order": 12,
+            "is_default": False,
         },
     ],
 }
