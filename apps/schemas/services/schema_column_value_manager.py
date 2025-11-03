@@ -1,11 +1,10 @@
 from decimal import Decimal
-from schemas.validators import validate_constraints
 
 
 class SchemaColumnValueManager:
     def __init__(self, scv):
         # Lazy import to avoid circulars
-        from schemas.models.schema import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue
 
         if not isinstance(scv, SchemaColumnValue):
             raise TypeError("Expected a SchemaColumnValue instance")
@@ -19,7 +18,7 @@ class SchemaColumnValueManager:
     @classmethod
     def ensure_for_holding(cls, holding):
         """Create SCVs for all columns in the holding’s active schema."""
-        from schemas.models.schema import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue
 
         schema = holding.active_schema
         if not schema:
@@ -31,7 +30,7 @@ class SchemaColumnValueManager:
     @classmethod
     def ensure_for_column(cls, column):
         """Create SCVs for all holdings when a new column is added."""
-        from schemas.models.schema import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue
 
         schema = column.schema
         # Only apply to accounts with this schema's account_type in this portfolio
@@ -53,7 +52,7 @@ class SchemaColumnValueManager:
 
     @classmethod
     def get_or_create(cls, holding, column):
-        from schemas.models.schema import SchemaColumnValue  
+        from schemas.models.schema import SchemaColumnValue
 
         scv, created = SchemaColumnValue.objects.get_or_create(
             column=column,
@@ -71,7 +70,7 @@ class SchemaColumnValueManager:
     def save_value(self, raw_value, is_edited: bool):
         if self.column.source == "holding":
             casted = self._cast_value(raw_value)
-            validate_constraints(self.column.data_type, self.column.constraints)
+            self._validate_against_constraints(casted)
             setattr(self.holding, self.column.source_field, casted)
             self.holding.save(update_fields=[self.column.source_field])
 
@@ -82,7 +81,7 @@ class SchemaColumnValueManager:
         self.scv.is_edited = is_edited
         if is_edited:
             casted = self._cast_value(raw_value)
-            validate_constraints(self.column.data_type, self.column.constraints)
+            self._validate_against_constraints(casted)
             self.scv.value = str(casted)
         else:
             self.reset_to_source()
@@ -115,7 +114,7 @@ class SchemaColumnValueManager:
             return None
         dt = self.column.data_type
         if dt == "decimal":
-            dp = int(self.column.constraints.get("decimal_places", 2))
+            dp = self._decimal_places()
             q = Decimal("1." + "0" * dp)
             return Decimal(str(raw_value)).quantize(q)
         if dt == "integer":
@@ -140,7 +139,8 @@ class SchemaColumnValueManager:
     @staticmethod
     def _static_default(column):
         if column.data_type == "decimal":
-            dp = int(column.constraints.get("decimal_places", 2))
+            c = column.constraints_set.filter(name="decimal_places").first()
+            dp = int(c.value or c.default_value or 2) if c else 2
             return str(Decimal("0").quantize(Decimal(f"1.{'0'*dp}")))
         elif column.data_type == "string":
             return "-"
@@ -155,3 +155,41 @@ class SchemaColumnValueManager:
             self.save_value(self.scv.value, is_edited=True)
         else:
             self.reset_to_source()
+
+    def _decimal_places(self):
+        """Helper to get decimal_places constraint value."""
+        c = self.column.constraints_set.filter(name="decimal_places").first()
+        return int(c.value or c.default_value or 2) if c else 2
+
+    def _validate_against_constraints(self, value):
+        """Validate a value against this column’s active SchemaConstraints."""
+
+        constraints = self.column.constraints_set.all()
+
+        for c in constraints:
+            if c.applies_to in ("integer", "decimal") and value is not None:
+                try:
+                    numeric = Decimal(value)
+                except Exception:
+                    raise ValueError(
+                        f"Value for '{self.column.title}' must be numeric (constraint: {c.label})"
+                    )
+
+                if c.min_limit not in [None, "", "None"]:
+                    if numeric < Decimal(c.min_limit):
+                        raise ValueError(
+                            f"{self.column.title}: value {numeric} is below minimum {c.min_limit}"
+                        )
+                if c.max_limit not in [None, "", "None"]:
+                    if numeric > Decimal(c.max_limit):
+                        raise ValueError(
+                            f"{self.column.title}: value {numeric} exceeds maximum {c.max_limit}"
+                        )
+
+            # String constraints
+            elif c.applies_to == "string" and isinstance(value, str):
+                if c.name == "max_length" and c.value:
+                    if len(value) > int(c.value):
+                        raise ValueError(
+                            f"{self.column.title}: string exceeds max length {c.value}"
+                        )

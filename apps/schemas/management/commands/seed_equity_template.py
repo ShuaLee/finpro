@@ -1,5 +1,3 @@
-# schemas/management/commands/seed_equity_template.py
-
 from django.core.management.base import BaseCommand
 from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
 from schemas.config.schema_templates.equity_template import EQUITY_TEMPLATE_CONFIG

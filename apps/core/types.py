@@ -1,11 +1,10 @@
 from django.db import models
 
-from core.schema_config.equity import EQUITY_SCHEMA_CONFIG
-from core.schema_config.crypto import CRYPTO_SCHEMA_CONFIG
-from core.schema_config.metal import METAL_SCHEMA_CONFIG
-from core.schema_config.bond import BOND_SCHEMA_CONFIG
-from core.schema_config.real_estate import REAL_ESTATE_SCHEMA_CONFIG
-from core.schema_config.custom import CUSTOM_SCHEMA_CONFIG
+# from core.schema_config.crypto import CRYPTO_SCHEMA_CONFIG
+# from core.schema_config.metal import METAL_SCHEMA_CONFIG
+# from core.schema_config.bond import BOND_SCHEMA_CONFIG
+# from core.schema_config.real_estate import REAL_ESTATE_SCHEMA_CONFIG
+# from core.schema_config.custom import CUSTOM_SCHEMA_CONFIG
 
 
 class DomainType(models.TextChoices):
@@ -21,7 +20,6 @@ class DomainType(models.TextChoices):
 DOMAIN_REGISTRY = {
     DomainType.EQUITY: {
         "label": "Equities",
-        "schema_config": EQUITY_SCHEMA_CONFIG,
         "account_types": {
             "equity_self": {
                 "label": "Brokerage Account",
@@ -35,7 +33,7 @@ DOMAIN_REGISTRY = {
     },
     DomainType.CRYPTO: {
         "label": "Cryptocurrency",
-        "schema_config": CRYPTO_SCHEMA_CONFIG,
+        # "schema_config": CRYPTO_SCHEMA_CONFIG,
         "account_types": {
             "crypto_wallet": {
                 "label": "Crypto Wallet",
@@ -49,7 +47,7 @@ DOMAIN_REGISTRY = {
     },
     DomainType.METAL: {
         "label": "Metals",
-        "schema_config": METAL_SCHEMA_CONFIG,
+        # "schema_config": METAL_SCHEMA_CONFIG,
         "account_types": {
             "metal_storage": {
                 "label": "Precious Metals Account",
@@ -63,7 +61,7 @@ DOMAIN_REGISTRY = {
     },
     DomainType.BOND: {
         "label": "Fixed Income",
-        "schema_config": BOND_SCHEMA_CONFIG,
+        # "schema_config": BOND_SCHEMA_CONFIG,
         "account_types": {
             "bond_broker": {
                 "label": "Bond Brokerage Account",
@@ -84,7 +82,7 @@ DOMAIN_REGISTRY = {
     },
     DomainType.REAL_ESTATE: {
         "label": "Real Estate",
-        "schema_config": REAL_ESTATE_SCHEMA_CONFIG,
+        # "schema_config": REAL_ESTATE_SCHEMA_CONFIG,
         "account_types": {
             "real_estate": {
                 "label": "Real Estate Holding",
@@ -112,7 +110,7 @@ DOMAIN_REGISTRY = {
     # },
     DomainType.CUSTOM: {
         "label": "Custom",
-        "schema_config": CUSTOM_SCHEMA_CONFIG,
+        # "schema_config": CUSTOM_SCHEMA_CONFIG,
         "account_types": {
             "custom": {
                 "label": "Custom Account",
