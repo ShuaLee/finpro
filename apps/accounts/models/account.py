@@ -24,6 +24,13 @@ class Account(models.Model):
         choices=get_account_type_choices(),
     )
 
+    broker = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Broker name (only used for brokered accounts such as equity or crypto)."
+    )
+
     classification = models.ForeignKey(
         AccountClassification,
         on_delete=models.SET_NULL,
