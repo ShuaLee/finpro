@@ -29,7 +29,9 @@ class Command(BaseCommand):
                     "source_field": col["source_field"],
                     "is_editable": col["is_editable"],
                     "is_system": col["is_system"],
-                    "display_order": col["display_order"],
+                    # make sure this is saved too
+                    "is_default": col.get("is_default", False),
+                    "display_order": col.get("display_order", None),
                 },
             )
             self.stdout.write(

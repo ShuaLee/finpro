@@ -75,10 +75,7 @@ class SchemaTemplateColumn(models.Model):
         help_text="If True, this column will appear automatically when a schema is generated."
     )
 
-    # Default constraint definitions (copied to SchemaColumn)
-    default_constraints = models.JSONField(default=dict, blank=True)
-
-    display_order = models.PositiveIntegerField(default=0)
+    display_order = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         unique_together = ("template", "identifier")
