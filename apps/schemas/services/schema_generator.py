@@ -125,46 +125,9 @@ class SchemaGenerator:
         return schema
 
     # -------------------------------
-    # Fallback Creation (Legacy)
-    # -------------------------------
-    def _create_from_legacy_config(self, account_type: str, schema_config: dict):
-        """
-        Legacy fallback path: builds schema using old domain_meta config.
-        """
-        schema, _ = Schema.objects.update_or_create(
-            portfolio=self.portfolio,
-            account_type=account_type,
-            defaults={},
-        )
-
-        for source, field_defs in schema_config.items():
-            for source_field, col_def in field_defs.items():
-                if not col_def.get("is_default"):
-                    continue
-
-                col = SchemaColumn.objects.create(
-                    schema=schema,
-                    title=col_def["title"],
-                    identifier=self._safe_identifier(
-                        f"{source}_{source_field}", schema),
-                    data_type=col_def["data_type"],
-                    source=source,
-                    source_field=source_field,
-                    is_editable=col_def.get("is_editable", True),
-                    is_deletable=col_def.get("is_deletable", True),
-                    is_system=col_def.get("is_system", False),
-                    display_order=col_def.get("display_order", 0),
-                )
-
-                SchemaConstraintManager.create_from_master(col)
-                SchemaColumnValueManager.ensure_for_column(col)
-                logger.debug(f"➕ Added fallback column '{col.title}'")
-
-        return schema
-
-    # -------------------------------
     # Utility
     # -------------------------------
+
     def _safe_identifier(self, base_identifier: str, schema: Schema) -> str:
         """
         Ensures uniqueness of identifiers per schema.
