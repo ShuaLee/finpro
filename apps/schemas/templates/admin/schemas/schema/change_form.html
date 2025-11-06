@@ -1,12 +1,6 @@
-{% extends "admin/change_form.html" %} {% block object-tools-items %} {{
-block.super }}
-<li>
-  <a href="{{ add_from_template_url }}" class="addlink">➕ Add from Template</a>
-</li>
-<li>
-  <a href="{{ add_custom_url }}" class="addlink">➕ Add Custom Column</a>
-</li>
-<li>
-  <a href="{{ add_calculated_url }}" class="addlink">➕ Add Calculated Column</a>
-</li>
-{% endblock %}
+{% extends "admin/change_form.html" %} {% load i18n %} {% block object-tools %}
+{{ block.super }} {% if add_from_template_url %}
+<li><a href="{{ add_from_template_url }}">➕ Add from Template</a></li>
+{% endif %} {% if add_custom_column_url %}
+<li><a href="{{ add_custom_column_url }}">🧩 Add Custom Column</a></li>
+{% endif %} {% endblock %}

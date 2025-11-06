@@ -9,38 +9,37 @@ from schemas.services.schema_column_value_manager import SchemaColumnValueManage
 
 
 class SchemaColumnFactory:
-    """
-    Handles creation of SchemaColumns from:
-      - SchemaTemplateColumns (predefined)
-      - User-defined custom definitions
-    """
+    """Handles creation of SchemaColumns from templates or user-defined definitions."""
 
     @staticmethod
     def _finalize_column(column):
-        """Attach constraints and holding values after column creation."""
         SchemaConstraintManager.create_from_master(column)
         SchemaColumnValueManager.ensure_for_column(column)
         return column
 
+    # ---------------------------
+    # From Template
+    # ---------------------------
     @staticmethod
     def add_from_template(schema, template_column_id):
-        """
-        Copy a SchemaTemplateColumn into the given Schema.
-        """
         template_col = SchemaTemplateColumn.objects.get(id=template_column_id)
 
-        # ensure account_type alignment
+        # Ensure account type alignment
         if schema.account_type != template_col.template.account_type:
-            raise ValueError(
+            raise ValidationError(
                 f"Template column belongs to '{template_col.template.account_type}', "
                 f"but schema is '{schema.account_type}'."
             )
 
-        # determine next display order
-        max_order = schema.columns.aggregate(
-            max_order=models.Max("display_order")).get("max_order") or 0
+        # Prevent duplicates
+        if schema.columns.filter(identifier=template_col.identifier).exists():
+            raise ValidationError(
+                f"The column '{template_col.title}' already exists in this schema."
+            )
 
-        # create SchemaColumn
+        max_order = schema.columns.aggregate(models.Max("display_order"))[
+            "display_order__max"] or 0
+
         column = SchemaColumn.objects.create(
             schema=schema,
             title=template_col.title,
@@ -56,23 +55,28 @@ class SchemaColumnFactory:
 
         return SchemaColumnFactory._finalize_column(column)
 
-    # -------------------------------------
-    # Custom User-Defined Columns
-    # -------------------------------------
+    # ---------------------------
+    # Custom Column
+    # ---------------------------
     @staticmethod
     def add_custom_column(schema, title: str, data_type: str):
-        """
-        Create a user-defined (custom) column in a schema.
-        Automatically generates a safe identifier and attaches default constraints.
-        """
         if not title or not data_type:
             raise ValidationError("Both 'title' and 'data_type' are required.")
 
-        identifier = slugify(title)
+        base_identifier = slugify(title)
         existing_ids = set(schema.columns.values_list("identifier", flat=True))
-        if identifier in existing_ids:
+
+        # Ensure identifier uniqueness
+        identifier = base_identifier
+        counter = 1
+        while identifier in existing_ids:
+            counter += 1
+            identifier = f"{base_identifier}_{counter}"
+
+        # Optional: warn if duplicate title
+        if counter > 1:
             raise ValidationError(
-                f"A column with identifier '{identifier}' already exists in this schema."
+                f"A column with the title '{title}' already exists. Please choose a unique name."
             )
 
         next_order = (schema.columns.aggregate(models.Max(

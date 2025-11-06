@@ -106,7 +106,6 @@ class SchemaColumn(models.Model):
     def save(self, *args, **kwargs):
         is_new = self._state.adding
 
-        # 🧩 Prevent changes to immutable fields after creation
         if not is_new:
             old = SchemaColumn.objects.get(pk=self.pk)
             immutable_fields = ["data_type",
@@ -117,11 +116,15 @@ class SchemaColumn(models.Model):
                         f"Field '{field}' cannot be changed after creation."
                     )
 
+        # ✅ Validate before writing to DB
+        self.full_clean()
+
         super().save(*args, **kwargs)
 
         # 🔑 On creation only: create constraints and holding values
         if is_new:
             from schemas.services.schema_constraint_manager import SchemaConstraintManager
+            from schemas.services.schema_column_value_manager import SchemaColumnValueManager
             SchemaConstraintManager.create_from_master(self)
             SchemaColumnValueManager.ensure_for_column(self)
 
