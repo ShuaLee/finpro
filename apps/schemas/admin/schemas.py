@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect, render, get_object_or_404
-from django.urls import path
+from django.urls import path, reverse
 
 from schemas.models.schema import Schema, SchemaColumn, SchemaColumnValue
 from schemas.models.template import SchemaTemplateColumn
@@ -77,8 +77,12 @@ class SchemaAdmin(admin.ModelAdmin):
     def change_view(self, request, object_id, form_url="", extra_context=None):
         extra_context = extra_context or {}
         schema = Schema.objects.get(pk=object_id)
-        extra_context["add_from_template_url"] = f"{object_id}/add-from-template/"
-        extra_context["add_custom_column_url"] = f"{object_id}/add-custom-column/"
+        extra_context["add_from_template_url"] = reverse(
+            "admin:schemas_schema_add_from_template", args=[schema.id]
+        )
+        extra_context["add_custom_column_url"] = reverse(
+            "admin:schemas_schema_add_custom_column", args=[schema.id]
+        )
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     # ------------------------------------------------------------
@@ -181,6 +185,16 @@ class SchemaColumnAdmin(admin.ModelAdmin):
     search_fields = ("title", "identifier", "source_field")
     ordering = ("schema", "display_order")
     readonly_fields = ("identifier", "schema")
+
+    def delete_queryset(self, request, queryset):
+        from schemas.services.schema_column_factory import SchemaColumnFactory
+        deleted_count = 0
+        for column in queryset:
+            SchemaColumnFactory.delete_column(column)
+            deleted_count += 1
+        if deleted_count:
+            self.message_user(
+                request, f"Deleted {deleted_count} column(s) and resequenced.", level=messages.SUCCESS)
 
 
 # -------------------------------------------------------------------

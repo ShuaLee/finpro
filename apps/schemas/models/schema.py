@@ -128,6 +128,22 @@ class SchemaColumn(models.Model):
             SchemaConstraintManager.create_from_master(self)
             SchemaColumnValueManager.ensure_for_column(self)
 
+    def delete(self, *args, **kwargs):
+        """
+        Override delete to automatically resequence display_order
+        of remaining columns in the same schema.
+        """
+        schema = self.schema
+        deleted_order = self.display_order
+
+        # Delete this column first
+        super().delete(*args, **kwargs)
+
+        # Shift down the remaining columns
+        schema.columns.filter(display_order__gt=deleted_order).update(
+            display_order=models.F("display_order") - 1
+        )
+
 
 class SchemaColumnValue(models.Model):
     """

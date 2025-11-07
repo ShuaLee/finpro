@@ -152,3 +152,10 @@ class SchemaManager:
     def on_column_deleted(self, column):
         """Delete all SCVs linked to a deleted column."""
         SchemaColumnValue.objects.filter(column=column).delete()
+
+    def resequence_for_schema(self, schema):
+        columns = schema.columns.order_by("display_order", "id")
+        for index, col in enumerate(columns, start=1):
+            if col.display_order != index:
+                col.display_order = index
+                col.save(update_fields=["display_order"])

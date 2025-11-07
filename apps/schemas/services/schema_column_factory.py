@@ -96,3 +96,11 @@ class SchemaColumnFactory:
         )
 
         return SchemaColumnFactory._finalize_column(column)
+
+    @staticmethod
+    def delete_column(column):
+        """
+        Deletes a SchemaColumn safely.
+        Resequencing is handled automatically by the model's delete().
+        """
+        column.delete()
