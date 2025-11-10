@@ -48,7 +48,7 @@ class SchemaColumnFactory:
             source=template_col.source,
             source_field=template_col.source_field,
             is_editable=template_col.is_editable,
-            is_deletable=True,
+            is_deletable=template_col.is_deletable,
             is_system=template_col.is_system,
             display_order=max_order + 1,
         )

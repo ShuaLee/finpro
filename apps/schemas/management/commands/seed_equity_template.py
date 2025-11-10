@@ -29,7 +29,7 @@ class Command(BaseCommand):
                     "source_field": col["source_field"],
                     "is_editable": col["is_editable"],
                     "is_system": col["is_system"],
-                    # make sure this is saved too
+                    "is_deletable": col.get("is_deletable", True),
                     "is_default": col.get("is_default", False),
                     "display_order": col.get("display_order", None),
                 },

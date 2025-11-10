@@ -187,14 +187,39 @@ class SchemaColumnAdmin(admin.ModelAdmin):
     readonly_fields = ("identifier", "schema")
 
     def delete_queryset(self, request, queryset):
+        """
+        Override bulk delete to use the factory for consistency.
+        Resequence only once per schema after all deletions.
+        """
         from schemas.services.schema_column_factory import SchemaColumnFactory
-        deleted_count = 0
+        from schemas.services.schema_manager import SchemaManager
+
+        # Track affected schemas
+        affected_schemas = set()
+
         for column in queryset:
-            SchemaColumnFactory.delete_column(column)
-            deleted_count += 1
-        if deleted_count:
-            self.message_user(
-                request, f"Deleted {deleted_count} column(s) and resequenced.", level=messages.SUCCESS)
+            try:
+                schema = column.schema
+                affected_schemas.add(schema.id)
+                SchemaColumnFactory.delete_column(column)
+            except Exception as e:
+                self.message_user(
+                    request,
+                    f"Error deleting column '{column.title}': {e}",
+                    level=messages.ERROR,
+                )
+
+        # ✅ Resequence each affected schema *once*
+        for schema_id in affected_schemas:
+            from schemas.models.schema import Schema
+            schema = Schema.objects.get(id=schema_id)
+            SchemaManager(schema).resequence_for_schema(schema)
+
+        self.message_user(
+            request,
+            f"Successfully deleted {queryset.count()} column(s) and resequenced affected schemas.",
+            level=messages.SUCCESS,
+        )
 
 
 # -------------------------------------------------------------------

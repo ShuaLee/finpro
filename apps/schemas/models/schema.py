@@ -133,6 +133,10 @@ class SchemaColumn(models.Model):
         Override delete to automatically resequence display_order
         of remaining columns in the same schema.
         """
+        if not self.is_deletable:
+            raise ValidationError(
+                f"Column '{self.title}' cannot be deleted — it's system-protected."
+            )
         schema = self.schema
         deleted_order = self.display_order
 
