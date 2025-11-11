@@ -1,34 +1,32 @@
 """
 Field mappings for FMP → CryptoDetail model.
-Keeps fetchers clean and allows easy provider swaps.
+The FMP /quote endpoint contains both identity and quote data for crypto,
+so we unify everything into a single map.
 """
 
-# ------------------------------
-# Profile mapping
-# ------------------------------
-CRYPTO_PROFILE_MAP = {
-    "description": "description",
-    "website": "website",
-    "image": "logo_url",
-    "exchange": "exchange",
-}
+# Most of these are not used as of right now, only the ones from quote short.
 
-# ------------------------------
-# Quote mapping
-# ------------------------------
-CRYPTO_QUOTE_MAP = {
+CRYPTO_MAP = {
+    # --- Identification ---
+    "symbol": "asset__symbol",       # handled indirectly via AssetIdentifier
+    "name": "asset__name",
+    "exchange": "exchange",
+
+    # --- Market data ---
     "price": "last_price",
-    "currency": "currency",
     "marketCap": "market_cap",
     "volume": "volume_24h",
-    "circulatingSupply": "circulating_supply",
-    "sharesOutstanding": "total_supply",
     "dayHigh": "day_high",
     "dayLow": "day_low",
     "yearHigh": "year_high",
     "yearLow": "year_low",
     "open": "open_price",
     "previousClose": "previous_close",
-    "changesPercentage": "changes_percentage",
-    # Decimals not provided by FMP → default handled in fetchers
+    "change": "change",  # optional — not all CryptoDetail models have this yet
+    "changePercentage": "changes_percentage",
+    "priceAvg50": "price_avg_50",
+    "priceAvg200": "price_avg_200",
+
+    # --- Extended / misc ---
+    "timestamp": "last_updated_ts",
 }

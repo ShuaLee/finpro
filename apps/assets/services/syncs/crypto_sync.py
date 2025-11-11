@@ -5,7 +5,7 @@ from django.db import transaction
 from assets.models.assets import Asset
 from assets.models.details.crypto_detail import CryptoDetail
 from core.types import DomainType
-from external_data.fmp.crypto.fetchers import (
+from apps.external_data.fmp.crypto.fetchers import (
     fetch_crypto_profile,
     fetch_crypto_quote,
     bulk_fetch_crypto_quotes,

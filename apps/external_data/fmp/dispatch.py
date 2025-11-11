@@ -8,7 +8,7 @@ from external_data.fmp.equities.fetchers import (
     fetch_equity_quote,
     fetch_equity_quotes_bulk,
 )
-from external_data.fmp.crypto.fetchers import (
+from apps.external_data.fmp.crypto.fetchers import (
     fetch_crypto_profile,
     fetch_crypto_quote,
     bulk_fetch_crypto_quotes,
@@ -58,7 +58,8 @@ def fetch_asset_data(symbol: str, asset_type: str) -> dict | None:
             return None
 
     except Exception as e:
-        logger.error(f"Failed to fetch {asset_type} {symbol}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to fetch {asset_type} {symbol}: {e}", exc_info=True)
         return None
 
 
@@ -80,8 +81,10 @@ def bulk_fetch_asset_quotes(symbols: list[str], asset_type: str) -> dict[str, di
         elif asset_type == DomainType.BOND:
             return bulk_fetch_bond_quotes(symbols)
         else:
-            logger.warning(f"Unsupported asset type for bulk fetch: {asset_type}")
+            logger.warning(
+                f"Unsupported asset type for bulk fetch: {asset_type}")
             return {}
     except Exception as e:
-        logger.error(f"Bulk fetch failed for {asset_type} symbols {symbols}: {e}", exc_info=True)
+        logger.error(
+            f"Bulk fetch failed for {asset_type} symbols {symbols}: {e}", exc_info=True)
         return {}
