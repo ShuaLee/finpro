@@ -16,6 +16,30 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 1,
-        }
+        },
+        {
+            "title": "Name",
+            "identifier": "name",
+            "data_type": "string",
+            "source": "asset",
+            "source_field": "name",
+            "is_system": True,
+            "is_editable": False,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 2,
+        },
+        {
+            "title": "Currency",
+            "identifier": "currency",
+            "data_type": "string",
+            "source": "asset",
+            "source_field": "currency",
+            "is_system": True,
+            "is_editable": False,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 3,
+        },
     ]
 }
