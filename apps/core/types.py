@@ -30,6 +30,7 @@ DOMAIN_REGISTRY = {
             },
         },
         "allowed_assets": [DomainType.EQUITY],
+        "identifier_rules": {"TICKER", "ISIN", "CUSIP", "CIK"},
     },
     DomainType.CRYPTO: {
         "label": "Cryptocurrency",
@@ -44,6 +45,7 @@ DOMAIN_REGISTRY = {
             },
         },
         "allowed_assets": [DomainType.CRYPTO],
+        "identifier_rules": {"BASE_SYMBOL", "PAIR_SYMBOL"},
     },
     DomainType.METAL: {
         "label": "Metals",
@@ -58,6 +60,7 @@ DOMAIN_REGISTRY = {
             },
         },
         "allowed_assets": [DomainType.METAL],
+        "identifier_rules": {"TICKER", "BASE_SYMBOL"},
     },
     DomainType.BOND: {
         "label": "Fixed Income",
@@ -79,6 +82,7 @@ DOMAIN_REGISTRY = {
             },
         },
         "allowed_assets": [DomainType.BOND],
+        "identifier_rules": {"ISIN", "CUSIP"},
     },
     DomainType.REAL_ESTATE: {
         "label": "Real Estate",
@@ -93,6 +97,7 @@ DOMAIN_REGISTRY = {
             },
         },
         "allowed_assets": [DomainType.REAL_ESTATE],
+        "identifier_rules": set(),
     },
     # DomainType.MANAGED: {
     #     "label": "Managed Accounts",
@@ -121,6 +126,7 @@ DOMAIN_REGISTRY = {
             },
         },
         "allowed_assets": [DomainType.CUSTOM],
+        "identifier_rules": set(),
     },
 }
 
@@ -250,3 +256,13 @@ def get_all_schema_configs() -> dict[str, dict]:
         except ValueError:
             continue
     return result
+
+# --- Identifier Rules ---
+
+
+def get_identifier_rules_for_domain(domain_type: str) -> set[str]:
+    """Return the allowed identifier types for a given domain."""
+    meta = DOMAIN_REGISTRY.get(domain_type)
+    if not meta:
+        raise ValueError(f"Unknown domain type: {domain_type}")
+    return meta.get("identifier_rules", set())

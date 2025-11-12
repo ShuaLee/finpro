@@ -27,38 +27,6 @@ class CryptoDetail(models.Model):
         help_text="Number of decimal places supported (BTC=8, ETH=18, etc.)"
     )
 
-    # Market data
-    last_price = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True,
-        help_text="Last synced market price"
-    )
-    market_cap = models.BigIntegerField(null=True, blank=True)
-    volume_24h = models.BigIntegerField(null=True, blank=True)
-    circulating_supply = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True
-    )
-    total_supply = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True
-    )
-
-    day_high = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True)
-    day_low = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True)
-    year_high = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True)
-    year_low = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True)
-
-    open_price = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True)
-    previous_close = models.DecimalField(
-        max_digits=30, decimal_places=12, null=True, blank=True)
-    changes_percentage = models.DecimalField(
-        max_digits=10, decimal_places=4, null=True, blank=True,
-        help_text="24h change percentage"
-    )
-
     # Project metadata
     description = models.TextField(blank=True, null=True)
     website = models.URLField(blank=True, null=True)

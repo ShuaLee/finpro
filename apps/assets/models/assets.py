@@ -1,7 +1,7 @@
 import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
-from core.types import DomainType
+from core.types import DomainType, get_identifier_rules_for_domain
 
 
 class Asset(models.Model):
@@ -71,26 +71,32 @@ class Asset(models.Model):
 class AssetIdentifier(models.Model):
     """
     Cross-reference identifiers for an asset.
-    An asset can have multiple identifiers (Ticker, ISIN, CUSIP, InternalCode).
+    An asset can have multiple identifiers (Ticker, ISIN, CUSIP, etc.).
+    Domain-specific validation ensures only valid identifiers per asset type.
     """
     class IdentifierType(models.TextChoices):
+        # --- Equities ---
         TICKER = "TICKER", "Ticker"
         ISIN = "ISIN", "ISIN"
         CUSIP = "CUSIP", "CUSIP"
         CIK = "CIK", "CIK"
 
+        # --- Crypto ---
+        BASE_SYMBOL = "BASE_SYMBOL", "Base Symbol"
+        PAIR_SYMBOL = "PAIR_SYMBOL", "Pair Symbol"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset = models.ForeignKey(
         Asset,
         on_delete=models.CASCADE,
-        related_name="identifiers"
+        related_name="identifiers",
     )
     id_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=IdentifierType.choices,
         db_index=True,
     )
-    value = models.CharField(max_length=50, db_index=True)
+    value = models.CharField(max_length=100, db_index=True)
     is_primary = models.BooleanField(
         default=False,
         help_text="Marks the main identifier to display/use in trading.",
@@ -103,22 +109,37 @@ class AssetIdentifier(models.Model):
             models.Index(fields=["asset", "is_primary"]),
         ]
 
+    # ---------------------------------------------------------------
+    # Validation rules: enforce one primary + domain-specific id types
+    # ---------------------------------------------------------------
     def clean(self):
         super().clean()
-        # Ensure only one primary identifier per asset
+
+        # --- Ensure only one primary identifier per asset ---
         if self.is_primary:
-            qs = AssetIdentifier.objects.filter(
-                asset=self.asset, is_primary=True)
+            existing_primary = self.asset.identifiers.filter(is_primary=True)
             if self.pk:
-                qs = qs.exclude(pk=self.pk)
-            if qs.exists():
+                existing_primary = existing_primary.exclude(pk=self.pk)
+            if existing_primary.exists():
                 raise ValidationError(
                     "An asset can only have one primary identifier.")
 
+        # --- Domain-based identifier validation ---
+        allowed = get_identifier_rules_for_domain(self.asset.asset_type)
+
+        if self.id_type not in allowed:
+            raise ValidationError(
+                f"Identifier type '{self.id_type}' is not valid for asset type '{self.asset.asset_type}'."
+            )
+
     def save(self, *args, **kwargs):
-        # auto-mark first identifier as primary if none exists
+        # Validate before saving
+        self.clean()
+
+        # Auto-mark first identifier as primary if none exist
         if not self.asset.identifiers.exists():
             self.is_primary = True
+
         super().save(*args, **kwargs)
 
     def __str__(self):
