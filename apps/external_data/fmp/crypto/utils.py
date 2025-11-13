@@ -1,17 +1,14 @@
-def split_crypto_pair(symbol: str) -> tuple[str, str]:
+def split_crypto_pair(symbol: str) -> tuple[str, str | None]:
     """
-    Split a crypto pair (BTCUSD -> ('BTC', 'USD')).
-    FMP currently only uses USD pairs, but we keep this generic.
-
-    Rules:
-    - Last 3 letters = quote if alphabetic (USD, EUR, GBP, etc.)
-    - Else: treat whole symbol as base
+    Split only symbols ending in 'USD'.
+    Everything else is a standalone crypto symbol.
     """
     symbol = symbol.upper().strip()
 
-    if len(symbol) > 3 and symbol[-3:].isalpha():
-        return symbol[:-3], symbol[-3:]
+    if symbol.endswith("USD") and len(symbol) > 3:
+        return symbol[:-3], "USD"
 
+    # Standalone token, no separate quote currency
     return symbol, None
 
 
