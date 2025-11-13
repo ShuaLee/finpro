@@ -103,7 +103,7 @@ class AssetIdentifier(models.Model):
     )
 
     class Meta:
-        unique_together = ("id_type", "value")
+        unique_together = ("asset", "id_type", "value")
         indexes = [
             models.Index(fields=["id_type", "value"]),
             models.Index(fields=["asset", "is_primary"]),

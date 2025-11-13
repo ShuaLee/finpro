@@ -17,7 +17,6 @@ from external_data.fmp.equities.fetchers import (
     fetch_equity_quotes_bulk,
     fetch_equity_universe,
 )
-from external_data.fmp.equities.mappings import EQUITY_PROFILE_MAP, EQUITY_QUOTE_MAP
 
 logger = logging.getLogger(__name__)
 
