@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+  <ul class="object-tools">
+      <li>
+          <a href="{% url 'admin:add_crypto' %}" class="addlink">
+            Add Crypto
+          </a>
+      </li>
+  </ul>
+{% endblock %}
