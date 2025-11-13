@@ -1,16 +1,16 @@
 CRYPTO_TEMPLATE_CONFIG = {
     "account_type": "crypto_wallet",
     "name": "Crypto Schema Template",
-    "description": "Default schema template for crypto portfolios, covering tradable stock assets and holdings.",
+    "description": "Default schema template for crypto portfolios.",
 
     "columns": [
-        # --- Identification (Default Columns) ---
+        # --- Default Columns ---
         {
             "title": "Symbol",
             "identifier": "symbol",
             "data_type": "string",
-            "source": "asset",
-            "source_field": "primary_identifier__value",
+            "source": "asset_detail",
+            "source_field": "crypto_detail.base_symbol",
             "is_system": True,
             "is_editable": False,
             "is_deletable": False,
@@ -41,5 +41,69 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_default": True,
             "display_order": 3,
         },
-    ]
+
+        # --- Holding ---
+        {
+            "title": "Purchase Price",
+            "identifier": "purchase_price",
+            "data_type": "decimal",
+            "source": "holding",
+            "source_field": "purchase_price",
+            "is_system": True,
+            "is_editable": True,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 4,
+        },
+        {
+            "title": "Quantity",
+            "identifier": "quantity",
+            "data_type": "decimal",
+            "source": "holding",
+            "source_field": "quantity",
+            "is_system": True,
+            "is_editable": True,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 5,
+        },
+
+        # --- Market Data ---
+        {
+            "title": "Last Price",
+            "identifier": "last_price",
+            "data_type": "decimal",
+            "source": "asset",
+            "source_field": "market_data.last_price",
+            "is_system": True,
+            "is_editable": False,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 6,
+        },
+        {
+            "title": "Market Cap",
+            "identifier": "market_cap",
+            "data_type": "integer",
+            "source": "asset",
+            "source_field": "market_data.market_cap",
+            "is_system": True,
+            "is_editable": False,
+            "is_deletable": True,
+            "is_default": False,
+        },
+
+        # --- Optional: Pair Symbol ---
+        {
+            "title": "Pair Symbol",
+            "identifier": "pair_symbol",
+            "data_type": "string",
+            "source": "asset_detail",
+            "source_field": "crypto_detail.pair_symbol",
+            "is_system": True,
+            "is_editable": False,
+            "is_deletable": True,
+            "is_default": False,
+        },
+    ],
 }
