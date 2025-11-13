@@ -16,10 +16,6 @@ class CryptoDetail(models.Model):
         limit_choices_to={"asset_type": DomainType.CRYPTO},
     )
 
-    # identity
-    base_symbol = models.CharField(max_length=20, null=True, blank=True)
-    quote_currency = models.CharField(max_length=10, null=True, blank=True)
-
     # project metadata (FMP doesn't supply, but room for expansion)
     description = models.TextField(blank=True, null=True)
     website = models.URLField(blank=True, null=True)
@@ -32,12 +28,6 @@ class CryptoDetail(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=["base_symbol"]),
-            models.Index(fields=["quote_currency"]),
-        ]
 
     def __str__(self):
         pid = self.asset.primary_identifier
