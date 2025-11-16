@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class SchemaColumnValueManager:
@@ -162,34 +162,67 @@ class SchemaColumnValueManager:
         return int(c.value or c.default_value or 2) if c else 2
 
     def _validate_against_constraints(self, value):
-        """Validate a value against this column’s active SchemaConstraints."""
-
+        """
+        Validate and normalize (round) a holding/SCV value according to schema constraints.
+        Decimal places → auto-quantized
+        Min/max → raise errors
+        """
         constraints = self.column.constraints_set.all()
 
+        # Prepare numeric form safely
+        is_numeric = False
+        numeric = None
+
+        if value is not None:
+            try:
+                numeric = Decimal(str(value))
+                is_numeric = True
+            except:
+                is_numeric = False
+
         for c in constraints:
-            if c.applies_to in ("integer", "decimal") and value is not None:
-                try:
-                    numeric = Decimal(value)
-                except Exception:
-                    raise ValueError(
-                        f"Value for '{self.column.title}' must be numeric (constraint: {c.label})"
-                    )
 
-                if c.min_limit not in [None, "", "None"]:
-                    if numeric < Decimal(c.min_limit):
+            # Skip empty/disabled constraints
+            if c.value in [None, "", "-", "None"]:
+                continue
+
+            # -----------------------------
+            # NUMERIC CONSTRAINTS
+            # -----------------------------
+            if is_numeric and c.applies_to in ("decimal", "integer"):
+
+                # 1. MINIMUM VALUE (error)
+                if c.name == "min_value":
+                    limit = Decimal(str(c.value))
+                    if numeric < limit:
                         raise ValueError(
-                            f"{self.column.title}: value {numeric} is below minimum {c.min_limit}"
-                        )
-                if c.max_limit not in [None, "", "None"]:
-                    if numeric > Decimal(c.max_limit):
-                        raise ValueError(
-                            f"{self.column.title}: value {numeric} exceeds maximum {c.max_limit}"
+                            f"{self.column.title}: value {numeric} is below minimum {limit}"
                         )
 
-            # String constraints
-            elif c.applies_to == "string" and isinstance(value, str):
-                if c.name == "max_length" and c.value:
+                # 2. MAXIMUM VALUE (error)
+                if c.name == "max_value":
+                    limit = Decimal(str(c.value))
+                    if numeric > limit:
+                        raise ValueError(
+                            f"{self.column.title}: value {numeric} exceeds maximum {limit}"
+                        )
+
+                # 3. DECIMAL PLACES (auto-round)
+                if c.name == "decimal_places":
+                    allowed_dp = int(c.value)
+                    quantizer = Decimal("1").scaleb(-allowed_dp)
+                    numeric = numeric.quantize(
+                        quantizer, rounding=ROUND_HALF_UP)
+                    value = numeric  # return this updated value
+
+            # -----------------------------
+            # STRING CONSTRAINTS
+            # -----------------------------
+            if c.applies_to == "string" and isinstance(value, str):
+                if c.name == "max_length":
                     if len(value) > int(c.value):
                         raise ValueError(
                             f"{self.column.title}: string exceeds max length {c.value}"
                         )
+
+        return value  # VERY IMPORTANT: return rounded/normalized value

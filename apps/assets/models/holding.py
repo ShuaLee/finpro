@@ -19,14 +19,14 @@ class Holding(models.Model):
 
     # Core ownership fields
     quantity = models.DecimalField(
-        max_digits=30,
-        decimal_places=12,
+        max_digits=50,
+        decimal_places=30,
         default=0,
         help_text="Number of units owned (shares, coins, ounces, etc.)",
     )
     purchase_price = models.DecimalField(
-        max_digits=30,
-        decimal_places=12,
+        max_digits=50,
+        decimal_places=30,
         null=True,
         blank=True,
         help_text="Purchase price per unit in account currency",
