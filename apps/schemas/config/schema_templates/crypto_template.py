@@ -16,6 +16,9 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 1,
+            "constraints": {
+                "max_length": 20,
+            }
         },
         {
             "title": "Name",
@@ -28,6 +31,9 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 2,
+            "constraints": {
+                "max_length": 20,
+            }
         },
         {
             "title": "Currency",
@@ -40,6 +46,9 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 3,
+            "constraints": {
+                "max_length": 10,
+            },
         },
 
         # --- Holding ---
@@ -54,6 +63,13 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 4,
+            # Crypto prices can be tiny (many zeros)
+            # 8 decimals matches Bitcoin price precision (0.00000001)
+            "constraints": {
+                "decimal_places": 8,
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "Quantity",
@@ -66,6 +82,12 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 5,
+            # Most crypto assets support up to 18 decimals (ERC20 standard)
+            "constraints": {
+                "decimal_places": 18,
+                "min_value": 0,
+                "max_value": None,
+            },
         },
 
         # --- Market Data ---
@@ -74,23 +96,33 @@ CRYPTO_TEMPLATE_CONFIG = {
             "identifier": "last_price",
             "data_type": "decimal",
             "source": "asset",
-            "source_field": "market_data.last_price",
+            "source_field": "market_data__last_price",
             "is_system": True,
             "is_editable": False,
             "is_deletable": False,
             "is_default": True,
             "display_order": 6,
+            # FMP crypto prices are normally 8 decimals max
+            "constraints": {
+                "decimal_places": 8,
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "Market Cap",
             "identifier": "market_cap",
             "data_type": "integer",
             "source": "asset",
-            "source_field": "market_data.market_cap",
+            "source_field": "market_data__market_cap",
             "is_system": True,
             "is_editable": False,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "min_value": 0,
+                "max_value": None,
+            },
         },
 
         # --- Optional: Pair Symbol ---
@@ -104,6 +136,9 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_editable": False,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "max_length": 20,
+            },
         },
     ],
 }

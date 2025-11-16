@@ -64,6 +64,8 @@ class SchemaTemplateColumn(models.Model):
     )
     source_field = models.CharField(max_length=100, null=True, blank=True)
 
+    constraints = models.JSONField(default=dict, blank=True)
+
     # UI & logic flags
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)

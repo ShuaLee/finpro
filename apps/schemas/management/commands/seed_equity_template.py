@@ -32,6 +32,7 @@ class Command(BaseCommand):
                     "is_deletable": col.get("is_deletable", True),
                     "is_default": col.get("is_default", False),
                     "display_order": col.get("display_order", None),
+                    "constraints": col.get("constraints", {}),
                 },
             )
             self.stdout.write(

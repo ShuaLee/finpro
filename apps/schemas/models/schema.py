@@ -121,13 +121,6 @@ class SchemaColumn(models.Model):
 
         super().save(*args, **kwargs)
 
-        # 🔑 On creation only: create constraints and holding values
-        if is_new:
-            from schemas.services.schema_constraint_manager import SchemaConstraintManager
-            from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-            SchemaConstraintManager.create_from_master(self)
-            SchemaColumnValueManager.ensure_for_column(self)
-
     def delete(self, *args, **kwargs):
         """
         Override delete to automatically resequence display_order
