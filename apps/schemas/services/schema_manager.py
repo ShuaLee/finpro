@@ -1,3 +1,5 @@
+# schemas/services/schema_manager.py
+
 from schemas.models.schema import Schema, SchemaColumnValue
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from schemas.services.schema_generator import SchemaGenerator
@@ -5,157 +7,193 @@ from schemas.services.schema_generator import SchemaGenerator
 
 class SchemaManager:
     """
-    Manages a schema and its relationship to holdings + SchemaColumnValues (SCVs).
+    Manages a schema and keeps SCVs (SchemaColumnValues) in sync with the schema.
+    - Holding values remain RAW, untouched, unrounded.
+    - SCVs represent formatted display values derived from schema rules.
     """
 
     def __init__(self, schema):
         self.schema = schema
-        self._columns = None  # cache placeholder
+        self._columns_cache = None
 
-    # -------------------------------
-    # Cached access
-    # -------------------------------
+    # ============================================================
+    # Cached Columns
+    # ============================================================
     @property
     def columns(self):
-        """Cache schema columns for performance across multiple operations."""
-        if self._columns is None:
-            self._columns = list(self.schema.columns.all())
-        return self._columns
+        if self._columns_cache is None:
+            self._columns_cache = list(self.schema.columns.all())
+        return self._columns_cache
 
-    # -------------------------------
-    # Schema ensuring
-    # -------------------------------
+    # ============================================================
+    # Ensure Schema Exists
+    # ============================================================
     @staticmethod
     def ensure_for_account(account):
-        """
-        Ensure a schema exists for this account's (portfolio, account_type).
-        If not, build it from the domain’s schema config.
-        """
-        portfolio = account.portfolio
-        domain_type = account.domain_type
-
-        existing = Schema.objects.filter(
-            portfolio=portfolio,
+        schema = Schema.objects.filter(
+            portfolio=account.portfolio,
             account_type=account.account_type
         ).first()
 
-        if existing:
-            return existing
+        if schema:
+            return schema
 
-        # Generate a new schema for this domain/account_type
-        generator = SchemaGenerator(portfolio, domain_type)
-        return generator.initialize()
+        generator = SchemaGenerator(account.portfolio, account.domain_type)
+        schemas = generator.initialize()
+        return next(
+            (s for s in schemas if s.account_type == account.account_type),
+            None
+        )
 
     @classmethod
     def for_account(cls, account):
         schema = account.active_schema
         if not schema:
             raise ValueError(
-                f"No active schema for account {account.name} "
+                f"No active schema for account '{account.name}' "
                 f"(portfolio={account.portfolio.id}, account_type={account.account_type})"
             )
         return cls(schema)
 
-    # -------------------------------
-    # SCV creation / ensuring
-    # -------------------------------
+    # ============================================================
+    # Ensure SCVs Exist for Holding
+    # ============================================================
     def ensure_for_holding(self, holding):
         """
-        Ensure all SCVs exist for this holding.
-        Optimized to bulk-create missing SCVs in one go.
+        Ensures every SchemaColumn has an SCV for this holding.
+        SCVs created from raw holding values → formatted using schema rules.
         """
-        existing_ids = SchemaColumnValue.objects.filter(
-            holding=holding
-        ).values_list("column_id", flat=True)
 
-        # Find missing columns for this holding
-        missing_cols = [
-            col for col in self.columns if col.id not in existing_ids]
+        existing = set(
+            SchemaColumnValue.objects.filter(holding=holding)
+            .values_list("column_id", flat=True)
+        )
 
-        # Bulk create all missing SCVs
-        to_create = [
-            SchemaColumnValue(
-                column=col,
-                holding=holding,
-                value=SchemaColumnValueManager.default_for_column(
-                    col, holding),
-                is_edited=False,
+        missing = [col for col in self.columns if col.id not in existing]
+
+        # Create missing SCVs
+        new_scvs = []
+        for col in missing:
+            display_value = SchemaColumnValueManager.display_for_column(
+                col, holding)
+
+            new_scvs.append(
+                SchemaColumnValue(
+                    column=col,
+                    holding=holding,
+                    value=display_value,
+                    is_edited=False,
+                )
             )
-            for col in missing_cols
-        ]
-        if to_create:
-            SchemaColumnValue.objects.bulk_create(to_create)
 
-        # Refresh all non-edited SCVs to reflect updated defaults
-        editable_scvs = SchemaColumnValue.objects.filter(
-            holding=holding, is_edited=False
+        if new_scvs:
+            SchemaColumnValue.objects.bulk_create(new_scvs)
+
+        # Refresh all unedited SCVs (editable ones left alone)
+        scvs = SchemaColumnValue.objects.filter(
+            holding=holding,
+            is_edited=False
         ).select_related("column")
 
-        for scv in editable_scvs:
-            new_val = SchemaColumnValueManager.default_for_column(
+        for scv in scvs:
+            new_val = SchemaColumnValueManager.display_for_column(
                 scv.column, holding)
             if scv.value != new_val:
                 scv.value = new_val
                 scv.save(update_fields=["value"])
 
+    # ============================================================
+    # Ensure SCVs for all holdings in an account
+    # ============================================================
+
     def ensure_for_all_holdings(self, account):
-        """Ensure SCVs for every holding in this account."""
         for holding in account.holdings.all():
             self.ensure_for_holding(holding)
 
-    # -------------------------------
-    # SCV syncing
-    # -------------------------------
+    # ============================================================
+    # Sync SCVs — Refreshes display values only
+    # ============================================================
     def sync_for_holding(self, holding):
+        """
+        Recompute SCV display values. 
+        Does NOT override edited SCVs.
+        """
         for col in self.columns:
             scv = SchemaColumnValue.objects.filter(
                 column=col, holding=holding).first()
             if scv:
-                SchemaColumnValueManager(scv).reset_to_source()
+                if not scv.is_edited:
+                    manager = SchemaColumnValueManager(scv)
+                    manager.refresh_display_value()
+                    scv.save(update_fields=["value", "is_edited"])
             else:
+                # If missing, ensure it
                 self.ensure_for_holding(holding)
 
     def sync_for_all_holdings(self, account):
         for holding in account.holdings.all():
             self.sync_for_holding(holding)
 
+    # ============================================================
+    # FULL REFRESH (Force-resync everything including edited SCVs)
+    # ============================================================
     def refresh_all(self, account):
-        """Force-resync all SCVs (ignoring edit flags)."""
+        """
+        Force recompute of all SCV display values using raw holding values.
+        All SCVs become unedited.
+        """
         for holding in account.holdings.all():
             for col in self.columns:
                 scv = SchemaColumnValue.objects.filter(
                     column=col, holding=holding).first()
-                if scv:
-                    SchemaColumnValueManager(scv).reset_to_source()
+                if not scv:
+                    continue
 
-    # -------------------------------
-    # Column-level operations
-    # -------------------------------
+                manager = SchemaColumnValueManager(scv)
+                manager.refresh_display_value()
+                scv.save(update_fields=["value", "is_edited"])
+
+    # ============================================================
+    # Column-level management
+    # ============================================================
     def on_column_added(self, column, account):
-        """Ensure all holdings have a new SCV for a newly added column."""
+        """Ensure all holdings receive a new SCV when a column is added."""
         holdings = account.holdings.all()
-        to_create = []
+        new_scvs = []
+
         for holding in holdings:
-            if not SchemaColumnValue.objects.filter(column=column, holding=holding).exists():
-                to_create.append(
+            exists = SchemaColumnValue.objects.filter(
+                column=column, holding=holding
+            ).exists()
+
+            if not exists:
+                new_scvs.append(
                     SchemaColumnValue(
                         column=column,
                         holding=holding,
-                        value=SchemaColumnValueManager.default_for_column(
+                        value=SchemaColumnValueManager.display_for_column(
                             column, holding),
                         is_edited=False,
                     )
                 )
-        if to_create:
-            SchemaColumnValue.objects.bulk_create(to_create)
+
+        if new_scvs:
+            SchemaColumnValue.objects.bulk_create(new_scvs)
 
     def on_column_deleted(self, column):
-        """Delete all SCVs linked to a deleted column."""
+        """Remove all SCVs for a deleted column."""
         SchemaColumnValue.objects.filter(column=column).delete()
 
+    # ============================================================
+    # Resequencing columns
+    # ============================================================
     def resequence_for_schema(self, schema):
+        """
+        Reassign display_order to be sequential without gaps.
+        """
         columns = schema.columns.order_by("display_order", "id")
-        for index, col in enumerate(columns, start=1):
-            if col.display_order != index:
-                col.display_order = index
+
+        for i, col in enumerate(columns, start=1):
+            if col.display_order != i:
+                col.display_order = i
                 col.save(update_fields=["display_order"])

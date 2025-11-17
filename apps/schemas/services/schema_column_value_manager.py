@@ -2,24 +2,31 @@ from decimal import Decimal, ROUND_HALF_UP
 
 
 class SchemaColumnValueManager:
-    def __init__(self, scv):
-        # Lazy import to avoid circulars
-        from schemas.models.schema import SchemaColumnValue
+    """
+    SCV Manager:
+      - Holds display (formatted) values derived from Holding/raw values
+      - Never mutates Holding values except when the user explicitly edits through SCV
+      - Applies decimal_places, max_length, etc. to SCV display
+      - Holding = raw truth (no rounding)
+    """
 
+    # ============================================================
+    # INITIALIZATION
+    # ============================================================
+    def __init__(self, scv):
+        from schemas.models.schema import SchemaColumnValue
         if not isinstance(scv, SchemaColumnValue):
-            raise TypeError("Expected a SchemaColumnValue instance")
+            raise TypeError("Expected SchemaColumnValue instance")
+
         self.scv = scv
         self.column = scv.column
         self.holding = scv.holding
 
-    # -----------------------------
-    # Core lifecycle methods
-    # -----------------------------
+    # ============================================================
+    # CREATE SCVs FOR HOLDING OR FOR COLUMN
+    # ============================================================
     @classmethod
     def ensure_for_holding(cls, holding):
-        """Create SCVs for all columns in the holding’s active schema."""
-        from schemas.models.schema import SchemaColumnValue
-
         schema = holding.active_schema
         if not schema:
             return
@@ -29,200 +36,207 @@ class SchemaColumnValueManager:
 
     @classmethod
     def ensure_for_column(cls, column):
-        """Create SCVs for all holdings when a new column is added."""
-        from schemas.models.schema import SchemaColumnValue
+        """
+        Every holding for accounts of this schema must get an SCV for this column.
+        """
 
         schema = column.schema
-        # Only apply to accounts with this schema's account_type in this portfolio
-        for account in schema.portfolio.accounts.filter(account_type=schema.account_type):
+        accounts = schema.portfolio.accounts.filter(
+            account_type=schema.account_type)
+
+        for account in accounts:
             for holding in account.holdings.all():
                 cls.get_or_create(holding, column)
 
     @classmethod
     def refresh_for_holding(cls, holding):
-        """Refresh all SCVs for a given holding."""
         schema = holding.active_schema
         if not schema:
             return
 
         for column in schema.columns.all():
             manager = cls.get_or_create(holding, column)
-            manager.apply_rules()
-            manager.scv.save()
+            manager.refresh_display_value()
+            manager.scv.save(update_fields=["value", "is_edited"])
 
     @classmethod
     def get_or_create(cls, holding, column):
         from schemas.models.schema import SchemaColumnValue
 
+        # Compute initial display value from holding/raw
+        initial_value = cls.display_for_column(column, holding)
+
         scv, created = SchemaColumnValue.objects.get_or_create(
             column=column,
             holding=holding,
             defaults={
-                "value": cls.default_for_column(column, holding),
+                "value": initial_value,
                 "is_edited": False,
             },
         )
         return cls(scv)
 
-    # -----------------------------
-    # Value resolution
-    # -----------------------------
-    def save_value(self, raw_value, is_edited: bool):
+    # ============================================================
+    # SCV DISPLAY LOGIC
+    # ============================================================
+    @staticmethod
+    def display_for_column(column, holding):
+        """Compute the display value for a column using SCHEMA constraints."""
+
+        raw_value = None
+
+        # Resolve raw value from holding/asset
+        if column.source == "holding" and column.source_field:
+            raw_value = getattr(holding, column.source_field, None)
+        elif column.source == "asset" and column.source_field:
+            asset = getattr(holding, "asset", None)
+            if asset:
+                raw_value = getattr(asset, column.source_field, None)
+
+        # Static default (0.00, "-", etc.)
+        if raw_value is None:
+            return SchemaColumnValueManager._static_default(column)
+
+        # Format using constraints (decimal_places, max_length, etc.)
+        return SchemaColumnValueManager._apply_display_constraints(
+            column, raw_value
+        )
+
+    def refresh_display_value(self):
+        """Recompute SCV value from raw holding value + schema constraints"""
+        self.scv.value = self.display_for_column(self.column, self.holding)
+        self.scv.is_edited = False
+
+    # ============================================================
+    # APPLY CONSTRAINTS (DISPLAY ONLY)
+    # ============================================================
+    @staticmethod
+    def _apply_display_constraints(column, raw_value):
+        """
+        Applies SCHEMA constraints to raw value **for display only**.
+        Does NOT change the raw value stored on Holding.
+        """
+
+        dt = column.data_type
+
+        # -------------------------
+        # DECIMAL DISPLAY
+        # -------------------------
+        if dt == "decimal":
+            try:
+                numeric = Decimal(str(raw_value))
+            except:
+                return raw_value
+
+            dp = SchemaColumnValueManager._decimal_places_for_column(column)
+            quant = Decimal("1").scaleb(-dp)
+
+            return str(numeric.quantize(quant, rounding=ROUND_HALF_UP))
+
+        # -------------------------
+        # STRING DISPLAY
+        # -------------------------
+        if dt == "string":
+            try:
+                s = str(raw_value)
+            except:
+                return raw_value
+
+            max_len = SchemaColumnValueManager._max_length_for_column(column)
+            return s[:max_len] if max_len and len(s) > max_len else s
+
+        # -------------------------
+        # INTEGER DISPLAY
+        # -------------------------
+        if dt == "integer":
+            try:
+                return str(int(raw_value))
+            except:
+                return raw_value
+
+        return raw_value
+
+    @staticmethod
+    def _decimal_places_for_column(column):
+        c = column.constraints_set.filter(name="decimal_places").first()
+        return int(c.value or c.default_value or 2) if c else 2
+
+    @staticmethod
+    def _max_length_for_column(column):
+        c = column.constraints_set.filter(name="max_length").first()
+        return int(c.value or c.default_value or 255) if c else None
+
+    # ============================================================
+    # EDITING VALUES (user manually edits SCV)
+    # ============================================================
+    def save_value(self, new_raw_value, is_edited: bool):
+        """
+        Saving SCV:
+          - If editable and user edits value: apply constraints, store in SCV
+          - If based on holding source: write raw_value directly to holding
+        """
+
+        # -------------------------
+        # HOLDING-SOURCE COLUMN
+        # -------------------------
         if self.column.source == "holding":
-            casted = self._cast_value(raw_value)
-            self._validate_against_constraints(casted)
+            casted = self._cast_raw_value(new_raw_value)
             setattr(self.holding, self.column.source_field, casted)
             self.holding.save(update_fields=[self.column.source_field])
 
-            self.scv.value = str(casted)
-            self.scv.is_edited = False
+            # SCV mirrors the new display value
+            self.refresh_display_value()
+            self.scv.save(update_fields=["value", "is_edited"])
             return self.scv
 
+        # -------------------------
+        # EDITABLE SCV (no holding field)
+        # -------------------------
         self.scv.is_edited = is_edited
+
         if is_edited:
-            casted = self._cast_value(raw_value)
-            self._validate_against_constraints(casted)
-            self.scv.value = str(casted)
+            casted = self._cast_raw_value(new_raw_value)
+            self.scv.value = str(
+                self._apply_display_constraints(self.column, casted)
+            )
         else:
-            self.reset_to_source()
+            # Reset to auto-format-from-holding
+            self.refresh_display_value()
 
+        self.scv.save(update_fields=["value", "is_edited"])
         return self.scv
 
-    def reset_to_source(self):
-        self.scv.is_edited = False
-        self.scv.value = self.resolve()
-        return self.scv
-
-    def resolve(self):
-        if self.column.formula:
-            # TODO: add formula evaluation
-            return None
-
-        if self.column.source_field:
-            if hasattr(self.holding, self.column.source_field):
-                return getattr(self.holding, self.column.source_field, None)
-
-            if hasattr(self.holding, "asset"):
-                asset = self.holding.asset
-                if asset and hasattr(asset, self.column.source_field):
-                    return getattr(asset, self.column.source_field, None)
-
-        return self._static_default(self.column)
-
-    def _cast_value(self, raw_value):
+    # ============================================================
+    # CAST RAW VALUE (no rounding!)
+    # ============================================================
+    def _cast_raw_value(self, raw_value):
+        """
+        Convert user raw input to proper Python type.
+        ❗ DO NOT ROUND HERE — raw values must remain intact.
+        """
         if raw_value in [None, ""]:
             return None
+
         dt = self.column.data_type
         if dt == "decimal":
-            dp = self._decimal_places()
-            q = Decimal("1." + "0" * dp)
-            return Decimal(str(raw_value)).quantize(q)
+            return Decimal(str(raw_value))   # NO quantize here
         if dt == "integer":
             return int(raw_value)
         if dt == "string":
             return str(raw_value)
+
         return raw_value
 
-    @staticmethod
-    def default_for_column(column, holding):
-        value = None
-        if column.source == "holding" and column.source_field:
-            value = getattr(holding, column.source_field, None)
-        elif column.source == "asset" and column.source_field:
-            asset = getattr(holding, "asset", None)
-            if asset:
-                value = getattr(asset, column.source_field, None)
-        if value is None:
-            value = SchemaColumnValueManager._static_default(column)
-        return value
-
+    # ============================================================
+    # STATIC DEFAULTS
+    # ============================================================
     @staticmethod
     def _static_default(column):
         if column.data_type == "decimal":
-            c = column.constraints_set.filter(name="decimal_places").first()
-            dp = int(c.value or c.default_value or 2) if c else 2
-            return str(Decimal("0").quantize(Decimal(f"1.{'0'*dp}")))
-        elif column.data_type == "string":
+            dp = SchemaColumnValueManager._decimal_places_for_column(column)
+            return str(Decimal("0").scaleb(-dp))
+        if column.data_type == "string":
             return "-"
-        elif column.data_type == "integer":
+        if column.data_type == "integer":
             return "0"
         return None
-
-    def apply_rules(self):
-        if self.column.source == "holding":
-            self.save_value(self.scv.value, is_edited=False)
-        elif self.scv.is_edited:
-            self.save_value(self.scv.value, is_edited=True)
-        else:
-            self.reset_to_source()
-
-    def _decimal_places(self):
-        """Helper to get decimal_places constraint value."""
-        c = self.column.constraints_set.filter(name="decimal_places").first()
-        return int(c.value or c.default_value or 2) if c else 2
-
-    def _validate_against_constraints(self, value):
-        """
-        Validate and normalize (round) a holding/SCV value according to schema constraints.
-        Decimal places → auto-quantized
-        Min/max → raise errors
-        """
-        constraints = self.column.constraints_set.all()
-
-        # Prepare numeric form safely
-        is_numeric = False
-        numeric = None
-
-        if value is not None:
-            try:
-                numeric = Decimal(str(value))
-                is_numeric = True
-            except:
-                is_numeric = False
-
-        for c in constraints:
-
-            # Skip empty/disabled constraints
-            if c.value in [None, "", "-", "None"]:
-                continue
-
-            # -----------------------------
-            # NUMERIC CONSTRAINTS
-            # -----------------------------
-            if is_numeric and c.applies_to in ("decimal", "integer"):
-
-                # 1. MINIMUM VALUE (error)
-                if c.name == "min_value":
-                    limit = Decimal(str(c.value))
-                    if numeric < limit:
-                        raise ValueError(
-                            f"{self.column.title}: value {numeric} is below minimum {limit}"
-                        )
-
-                # 2. MAXIMUM VALUE (error)
-                if c.name == "max_value":
-                    limit = Decimal(str(c.value))
-                    if numeric > limit:
-                        raise ValueError(
-                            f"{self.column.title}: value {numeric} exceeds maximum {limit}"
-                        )
-
-                # 3. DECIMAL PLACES (auto-round)
-                if c.name == "decimal_places":
-                    allowed_dp = int(c.value)
-                    quantizer = Decimal("1").scaleb(-allowed_dp)
-                    numeric = numeric.quantize(
-                        quantizer, rounding=ROUND_HALF_UP)
-                    value = numeric  # return this updated value
-
-            # -----------------------------
-            # STRING CONSTRAINTS
-            # -----------------------------
-            if c.applies_to == "string" and isinstance(value, str):
-                if c.name == "max_length":
-                    if len(value) > int(c.value):
-                        raise ValueError(
-                            f"{self.column.title}: string exceeds max length {c.value}"
-                        )
-
-        return value  # VERY IMPORTANT: return rounded/normalized value

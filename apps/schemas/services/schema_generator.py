@@ -1,29 +1,37 @@
 from django.db import transaction
 from django.db.models import Prefetch
 from django.utils.text import slugify
+
 from schemas.models.schema import Schema, SchemaColumn
 from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-from core.types import get_domain_meta
-import logging
 
+from core.types import get_domain_meta
+
+import logging
 logger = logging.getLogger(__name__)
 
 
 class SchemaGenerator:
     """
     🔧 Builds schemas for a portfolio.
-    Uses SchemaTemplateColumns (preferred) or legacy config (fallback).
+
+    Flow:
+        SchemaTemplate → SchemaColumn → SchemaConstraint → SchemaColumnValue
+
+    - Holding stores RAW values (no rounding)
+    - SCV is the formatted display layer (rounded)
+    - Per-asset precision comes from CryptoDetail
     """
 
     def __init__(self, portfolio, domain_type: str):
         self.portfolio = portfolio
         self.domain_type = domain_type
 
-    # ------------------------------------------------
-    # Main Initialization
-    # ------------------------------------------------
+    # =====================================================================
+    # MAIN ENTRY
+    # =====================================================================
     @transaction.atomic
     def initialize(self, custom_schema_namer=None):
         logger.info(
@@ -32,7 +40,6 @@ class SchemaGenerator:
 
         domain_meta = get_domain_meta(self.domain_type)
         account_types = domain_meta.get("account_types", [])
-        schema_config = domain_meta.get("schema_config", {})
 
         if not account_types:
             raise ValueError(
@@ -42,6 +49,7 @@ class SchemaGenerator:
         schemas = []
 
         for account_type in account_types:
+
             schema_name = (
                 custom_schema_namer(self.portfolio, account_type)
                 if custom_schema_namer
@@ -52,7 +60,8 @@ class SchemaGenerator:
 
             template = (
                 SchemaTemplate.objects.filter(
-                    account_type=account_type, is_active=True
+                    account_type=account_type,
+                    is_active=True
                 )
                 .prefetch_related(
                     Prefetch(
@@ -70,24 +79,20 @@ class SchemaGenerator:
                 schemas.append(schema)
                 logger.info(
                     f"✅ Created schema from template for {account_type}")
-                continue
-
-            # fallback path
-            logger.warning(
-                f"⚠️ No SchemaTemplate for {account_type}, falling back to legacy schema config."
-            )
-            schema = self._create_from_legacy_config(
-                account_type, schema_config)
-            schemas.append(schema)
+            else:
+                raise ValueError(
+                    f"No active SchemaTemplate found for account type '{account_type}'."
+                )
 
         logger.info(
             f"🎉 Schema initialization complete for portfolio={self.portfolio.id}"
         )
+
         return schemas
 
-    # ------------------------------------------------
-    # Template-based schema creation
-    # ------------------------------------------------
+    # =====================================================================
+    # TEMPLATE → SCHEMA GENERATION
+    # =====================================================================
     def _create_from_template(self, template: SchemaTemplate):
 
         schema, created = Schema.objects.update_or_create(
@@ -119,21 +124,56 @@ class SchemaGenerator:
                 display_order=tcol.display_order,
             )
 
-            # 👇 This is the important line: send the JSON constraints into the constraint manager
+            # ---------------------------------------------------------
+            # SEND OVERRIDES TO CONSTRAINT MANAGER
+            # ---------------------------------------------------------
             overrides = tcol.constraints or {}
 
+            # ---------------------------------------------------------
+            # ❗ PASS ASSET CONTEXT FOR CRYPTO PRECISION
+            # ---------------------------------------------------------
+            asset_context = None
+            if tcol.source == "holding":
+                # Resolve asset context from portfolio holdings (if exists)
+                asset_context = self._resolve_asset_context(schema)
+
+            # Inject context into the column temporarily
+            column._asset_context = asset_context
+
             SchemaConstraintManager.create_from_master(column, overrides)
+
+            # Build initial SCV values
             SchemaColumnValueManager.ensure_for_column(column)
 
+            # Clean up
+            if hasattr(column, "_asset_context"):
+                del column._asset_context
+
             logger.debug(
-                f"➕ Added column '{column.title}' (order {column.display_order})"
-            )
+                f"➕ Added column '{column.title}' (order {column.display_order})")
 
         return schema
 
-    # ------------------------------------------------
-    # Identifier utility
-    # ------------------------------------------------
+    # =====================================================================
+    # RESOLVE ASSET CONTEXT FOR CRYPTO PRECISION
+    # =====================================================================
+    def _resolve_asset_context(self, schema):
+        """
+        Try to find *any* asset in this schema's accounts to determine crypto precision.
+        (This is only used for precision override.)
+        """
+        portfolio = schema.portfolio
+
+        for account in portfolio.accounts.prefetch_related("holdings__asset", "holdings"):
+            for h in account.holdings.all():
+                if h.asset:
+                    return h.asset
+
+        return None
+
+    # =====================================================================
+    # UNIQUE IDENTIFIER BUILDER
+    # =====================================================================
     def _safe_identifier(self, base_identifier: str, schema: Schema) -> str:
         identifier = slugify(base_identifier)
         existing = set(schema.columns.values_list("identifier", flat=True))
@@ -141,7 +181,6 @@ class SchemaGenerator:
         if identifier not in existing:
             return identifier
 
-        # ensure uniqueness by suffixing
         original = identifier
         counter = 1
         while identifier in existing:
