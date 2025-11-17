@@ -1,10 +1,29 @@
 from django.contrib import admin
+from django.contrib.admin.widgets import AdminTextareaWidget
+from django.forms import JSONField as DjangoJSONFormField
+
 from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
 
 
+# Pretty JSON widget (optional, but MUCH cleaner)
+class PrettyJSONWidget(AdminTextareaWidget):
+    def format_value(self, value):
+        import json
+        if not value:
+            return ""
+        try:
+            return json.dumps(value, indent=4, sort_keys=True)
+        except Exception:
+            return value
+
+
+# ===============================
+# INLINE FOR TEMPLATE COLUMNS
+# ===============================
 class SchemaTemplateColumnInline(admin.TabularInline):
     model = SchemaTemplateColumn
     extra = 0
+
     fields = (
         "title",
         "identifier",
@@ -15,9 +34,17 @@ class SchemaTemplateColumnInline(admin.TabularInline):
         "is_deletable",
         "is_system",
         "display_order",
+        "constraints",        # 👈 Add JSON field here
     )
 
+    formfield_overrides = {
+        DjangoJSONFormField: {"widget": PrettyJSONWidget},
+    }
 
+
+# ===============================
+# TEMPLATE ADMIN
+# ===============================
 @admin.register(SchemaTemplate)
 class SchemaTemplateAdmin(admin.ModelAdmin):
     list_display = ("name", "account_type", "is_active", "created_at")
@@ -26,6 +53,9 @@ class SchemaTemplateAdmin(admin.ModelAdmin):
     inlines = [SchemaTemplateColumnInline]
 
 
+# ===============================
+# TEMPLATE COLUMN ADMIN (Standalone)
+# ===============================
 @admin.register(SchemaTemplateColumn)
 class SchemaTemplateColumnAdmin(admin.ModelAdmin):
     list_display = (
@@ -44,6 +74,10 @@ class SchemaTemplateColumnAdmin(admin.ModelAdmin):
     search_fields = ("title", "identifier", "template__name", "source_field")
     ordering = ("template", "display_order", "title")
     autocomplete_fields = ("template",)
+
+    formfield_overrides = {
+        DjangoJSONFormField: {"widget": PrettyJSONWidget},
+    }
 
     fieldsets = (
         (None, {
@@ -64,5 +98,8 @@ class SchemaTemplateColumnAdmin(admin.ModelAdmin):
                 "is_system",
                 "display_order",
             ),
+        }),
+        ("Constraints (JSON)", {
+            "fields": ("constraints",),  # 👈 Add editable JSON here
         }),
     )

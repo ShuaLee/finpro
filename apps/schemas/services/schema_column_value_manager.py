@@ -36,13 +36,11 @@ class SchemaColumnValueManager:
 
     @classmethod
     def ensure_for_column(cls, column):
-        """
-        Every holding for accounts of this schema must get an SCV for this column.
-        """
-
+        """Every holding for accounts of this schema must get an SCV for this column."""
         schema = column.schema
         accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type)
+            account_type=schema.account_type
+        )
 
         for account in accounts:
             for holding in account.holdings.all():
@@ -55,87 +53,81 @@ class SchemaColumnValueManager:
             return
 
         for column in schema.columns.all():
-            manager = cls.get_or_create(holding, column)
-            manager.refresh_display_value()
-            manager.scv.save(update_fields=["value", "is_edited"])
+            mgr = cls.get_or_create(holding, column)
+            mgr.refresh_display_value()
+            mgr.scv.save(update_fields=["value", "is_edited"])
 
     @classmethod
     def get_or_create(cls, holding, column):
         from schemas.models.schema import SchemaColumnValue
 
-        # Compute initial display value from holding/raw
         initial_value = cls.display_for_column(column, holding)
 
         scv, created = SchemaColumnValue.objects.get_or_create(
             column=column,
             holding=holding,
-            defaults={
-                "value": initial_value,
-                "is_edited": False,
-            },
+            defaults={"value": initial_value, "is_edited": False},
         )
         return cls(scv)
 
     # ============================================================
-    # SCV DISPLAY LOGIC
+    # DISPLAY LOGIC
     # ============================================================
     @staticmethod
     def display_for_column(column, holding):
-        """Compute the display value for a column using SCHEMA constraints."""
+        """Compute display value using schema constraints."""
 
         raw_value = None
 
-        # Resolve raw value from holding/asset
+        # Holding field
         if column.source == "holding" and column.source_field:
-            raw_value = getattr(holding, column.source_field, None)
+            raw_value = SchemaColumnValueManager._resolve_path(
+                holding, column.source_field
+            )
+
+        # Asset field
         elif column.source == "asset" and column.source_field:
             asset = getattr(holding, "asset", None)
             if asset:
-                raw_value = getattr(asset, column.source_field, None)
+                raw_value = SchemaColumnValueManager._resolve_path(
+                    asset, column.source_field
+                )
 
-        # Static default (0.00, "-", etc.)
+        # Static default
         if raw_value is None:
             return SchemaColumnValueManager._static_default(column)
 
-        # Format using constraints (decimal_places, max_length, etc.)
+        # Apply decimal_places, max_length, etc.
         return SchemaColumnValueManager._apply_display_constraints(
-            column, raw_value
+            column, raw_value, holding
         )
 
     def refresh_display_value(self):
-        """Recompute SCV value from raw holding value + schema constraints"""
+        """Refresh formatted display value from raw value."""
         self.scv.value = self.display_for_column(self.column, self.holding)
         self.scv.is_edited = False
 
     # ============================================================
-    # APPLY CONSTRAINTS (DISPLAY ONLY)
+    # DISPLAY FORMATTING
     # ============================================================
     @staticmethod
-    def _apply_display_constraints(column, raw_value):
-        """
-        Applies SCHEMA constraints to raw value **for display only**.
-        Does NOT change the raw value stored on Holding.
-        """
-
+    def _apply_display_constraints(column, raw_value, holding):
         dt = column.data_type
 
-        # -------------------------
-        # DECIMAL DISPLAY
-        # -------------------------
+        # ---------- DECIMAL ----------
         if dt == "decimal":
             try:
                 numeric = Decimal(str(raw_value))
             except:
                 return raw_value
 
-            dp = SchemaColumnValueManager._decimal_places_for_column(column)
+            dp = SchemaColumnValueManager._decimal_places_for_column(
+                column, holding
+            )
             quant = Decimal("1").scaleb(-dp)
-
             return str(numeric.quantize(quant, rounding=ROUND_HALF_UP))
 
-        # -------------------------
-        # STRING DISPLAY
-        # -------------------------
+        # ---------- STRING ----------
         if dt == "string":
             try:
                 s = str(raw_value)
@@ -145,9 +137,7 @@ class SchemaColumnValueManager:
             max_len = SchemaColumnValueManager._max_length_for_column(column)
             return s[:max_len] if max_len and len(s) > max_len else s
 
-        # -------------------------
-        # INTEGER DISPLAY
-        # -------------------------
+        # ---------- INTEGER ----------
         if dt == "integer":
             try:
                 return str(int(raw_value))
@@ -156,8 +146,26 @@ class SchemaColumnValueManager:
 
         return raw_value
 
+    # ============================================================
+    # DECIMAL PLACES WITH CRYPTO OVERRIDE
+    # ============================================================
     @staticmethod
-    def _decimal_places_for_column(column):
+    def _decimal_places_for_column(column, holding=None):
+        """
+        Crypto quantity override:
+        If holding.asset.crypto_detail.quantity_precision exists → use that.
+        """
+        if (
+            holding is not None
+            and column.schema.account_type == "crypto_wallet"
+            and column.source == "holding"
+            and column.source_field == "quantity"
+        ):
+            asset = getattr(holding, "asset", None)
+            if asset and getattr(asset, "crypto_detail", None):
+                return asset.crypto_detail.quantity_precision
+
+        # Regular constraint fallback
         c = column.constraints_set.filter(name="decimal_places").first()
         return int(c.value or c.default_value or 2) if c else 2
 
@@ -167,76 +175,80 @@ class SchemaColumnValueManager:
         return int(c.value or c.default_value or 255) if c else None
 
     # ============================================================
-    # EDITING VALUES (user manually edits SCV)
+    # EDITING VALUES
     # ============================================================
     def save_value(self, new_raw_value, is_edited: bool):
-        """
-        Saving SCV:
-          - If editable and user edits value: apply constraints, store in SCV
-          - If based on holding source: write raw_value directly to holding
-        """
+        """Save raw value (holding) or edited SCV."""
 
-        # -------------------------
-        # HOLDING-SOURCE COLUMN
-        # -------------------------
+        # Holding-sourced column -> update the holding directly
         if self.column.source == "holding":
             casted = self._cast_raw_value(new_raw_value)
             setattr(self.holding, self.column.source_field, casted)
             self.holding.save(update_fields=[self.column.source_field])
 
-            # SCV mirrors the new display value
             self.refresh_display_value()
             self.scv.save(update_fields=["value", "is_edited"])
             return self.scv
 
-        # -------------------------
-        # EDITABLE SCV (no holding field)
-        # -------------------------
+        # SCV editable-only field
         self.scv.is_edited = is_edited
 
         if is_edited:
             casted = self._cast_raw_value(new_raw_value)
             self.scv.value = str(
-                self._apply_display_constraints(self.column, casted)
+                self._apply_display_constraints(
+                    self.column, casted, self.holding
+                )
             )
         else:
-            # Reset to auto-format-from-holding
             self.refresh_display_value()
 
         self.scv.save(update_fields=["value", "is_edited"])
         return self.scv
 
     # ============================================================
-    # CAST RAW VALUE (no rounding!)
+    # RAW CASTING (NO ROUNDING)
     # ============================================================
     def _cast_raw_value(self, raw_value):
-        """
-        Convert user raw input to proper Python type.
-        ❗ DO NOT ROUND HERE — raw values must remain intact.
-        """
         if raw_value in [None, ""]:
             return None
 
         dt = self.column.data_type
         if dt == "decimal":
-            return Decimal(str(raw_value))   # NO quantize here
+            return Decimal(str(raw_value))
         if dt == "integer":
             return int(raw_value)
         if dt == "string":
             return str(raw_value)
-
         return raw_value
 
     # ============================================================
-    # STATIC DEFAULTS
+    # STATIC DEFAULT VALUES
     # ============================================================
     @staticmethod
     def _static_default(column):
         if column.data_type == "decimal":
-            dp = SchemaColumnValueManager._decimal_places_for_column(column)
+            dp = SchemaColumnValueManager._decimal_places_for_column(
+                column, None
+            )
             return str(Decimal("0").scaleb(-dp))
+
         if column.data_type == "string":
             return "-"
+
         if column.data_type == "integer":
             return "0"
+
         return None
+
+    # ============================================================
+    # FIELD RESOLUTION (supports "crypto_detail__base_symbol")
+    # ============================================================
+    @staticmethod
+    def _resolve_path(obj, path):
+        parts = path.split("__")
+        for part in parts:
+            obj = getattr(obj, part, None)
+            if obj is None:
+                return None
+        return obj

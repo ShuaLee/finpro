@@ -17,7 +17,7 @@ class CryptoDetail(models.Model):
     )
 
     # Decimal place precision
-    precision = models.PositiveIntegerField(default=18)   # BTC=8, XRP=6, etc
+    quantity_precision = models.PositiveIntegerField(default=18)   # BTC=8, XRP=6, etc
 
     # project metadata (FMP doesn't supply, but room for expansion)
     description = models.TextField(blank=True, null=True)

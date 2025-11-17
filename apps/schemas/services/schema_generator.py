@@ -33,7 +33,7 @@ class SchemaGenerator:
     # MAIN ENTRY
     # =====================================================================
     @transaction.atomic
-    def initialize(self, custom_schema_namer=None):
+    def initialize(self, custom_schema_namer=None, asset=None):
         logger.info(
             f"🧱 Initializing schemas for portfolio={self.portfolio.id}, domain={self.domain_type}"
         )
@@ -94,7 +94,6 @@ class SchemaGenerator:
     # TEMPLATE → SCHEMA GENERATION
     # =====================================================================
     def _create_from_template(self, template: SchemaTemplate):
-
         schema, created = Schema.objects.update_or_create(
             portfolio=self.portfolio,
             account_type=template.account_type,
@@ -111,6 +110,9 @@ class SchemaGenerator:
 
         for tcol in template_columns:
 
+            # ----------------------------------------------------------
+            # Create SchemaColumn
+            # ----------------------------------------------------------
             column = SchemaColumn.objects.create(
                 schema=schema,
                 title=tcol.title,
@@ -124,35 +126,27 @@ class SchemaGenerator:
                 display_order=tcol.display_order,
             )
 
-            # ---------------------------------------------------------
-            # SEND OVERRIDES TO CONSTRAINT MANAGER
-            # ---------------------------------------------------------
-            overrides = tcol.constraints or {}
+            # ----------------------------------------------------------
+            # Template-level overrides
+            # ----------------------------------------------------------
+            overrides = dict(tcol.constraints or {})
 
-            # ---------------------------------------------------------
-            # ❗ PASS ASSET CONTEXT FOR CRYPTO PRECISION
-            # ---------------------------------------------------------
-            asset_context = None
-            if tcol.source == "holding":
-                # Resolve asset context from portfolio holdings (if exists)
-                asset_context = self._resolve_asset_context(schema)
-
-            # Inject context into the column temporarily
-            column._asset_context = asset_context
-
+            # ----------------------------------------------------------
+            # Create constraints using merged overrides
+            # ----------------------------------------------------------
             SchemaConstraintManager.create_from_master(column, overrides)
 
-            # Build initial SCV values
+            # ----------------------------------------------------------
+            # Ensure SCVs for all existing holdings under this account type
+            # ----------------------------------------------------------
             SchemaColumnValueManager.ensure_for_column(column)
 
-            # Clean up
-            if hasattr(column, "_asset_context"):
-                del column._asset_context
-
             logger.debug(
-                f"➕ Added column '{column.title}' (order {column.display_order})")
+                f"➕ Added column '{column.title}' (order {column.display_order})"
+            )
 
         return schema
+
 
     # =====================================================================
     # RESOLVE ASSET CONTEXT FOR CRYPTO PRECISION

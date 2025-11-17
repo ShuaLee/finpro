@@ -66,7 +66,7 @@ CRYPTO_TEMPLATE_CONFIG = {
             # Crypto prices can be tiny (many zeros)
             # 8 decimals matches Bitcoin price precision (0.00000001)
             "constraints": {
-                "decimal_places": 8,
+                "decimal_places": 2,
                 "min_value": 0,
                 "max_value": None,
             },
@@ -104,7 +104,7 @@ CRYPTO_TEMPLATE_CONFIG = {
             "display_order": 6,
             # FMP crypto prices are normally 8 decimals max
             "constraints": {
-                "decimal_places": 8,
+                "decimal_places": 2,
                 "min_value": 0,
                 "max_value": None,
             },
