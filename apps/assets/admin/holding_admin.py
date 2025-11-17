@@ -80,12 +80,28 @@ class HoldingAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """
-        Runs full model validation before save & shows proper UI error messages.
+        Run validation, save holding, and ensure SCVs get created.
         """
+        from schemas.services.schema_manager import SchemaManager
+
         try:
-            obj.full_clean()  # still important: model field-level validation
+            # Django-level validation (field types, nulls, etc.)
+            obj.full_clean()
+
+            # Save the holding first
             super().save_model(request, obj, form, change)
+
+            # 🔥 Create SCVs ONLY when the holding is first created
+            if not change:
+                schema = obj.active_schema
+                if schema:
+                    manager = SchemaManager(schema)
+                    manager.ensure_for_holding(obj)
+
             messages.success(
-                request, f"Holding saved successfully for {obj.account.name}.")
+                request,
+                f"Holding saved successfully for {obj.account.name}."
+            )
+
         except ValidationError as e:
             messages.error(request, f"Validation error: {e}")
