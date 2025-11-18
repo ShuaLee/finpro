@@ -1,10 +1,12 @@
 EQUITY_TEMPLATE_CONFIG = {
     "account_type": "equity_self",
     "name": "Equity Schema Template",
-    "description": "Default schema template for equity portfolios, covering tradable stock assets and holdings.",
+    "description": "Default schema template for equity portfolios.",
 
     "columns": [
-        # --- Identification (Default Columns) ---
+        # ==========================================================
+        # IDENTIFICATION FIELDS
+        # ==========================================================
         {
             "title": "Symbol",
             "identifier": "symbol",
@@ -16,6 +18,9 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 1,
+            "constraints": {
+                "max_length": 10,   # AAPL, MSFT, BRK.B etc.
+            },
         },
         {
             "title": "Name",
@@ -28,6 +33,9 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 2,
+            "constraints": {
+                "max_length": 80,   # 'Berkshire Hathaway Class B'
+            },
         },
         {
             "title": "Currency",
@@ -40,9 +48,14 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 3,
+            "constraints": {
+                "max_length": 10,   # USD, CAD, GBP...
+            },
         },
 
-        # --- Holding Data (Default Columns) ---
+        # ==========================================================
+        # HOLDING FIELDS
+        # ==========================================================
         {
             "title": "Purchase Price",
             "identifier": "purchase_price",
@@ -54,6 +67,11 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 4,
+            "constraints": {
+                "decimal_places": 2,   # USD prices → cents
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "Quantity",
@@ -66,9 +84,17 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 5,
+            "constraints": {
+                # Equities support fractional shares (0.000001)
+                "decimal_places": 6,
+                "min_value": 0,
+                "max_value": None,
+            },
         },
 
-        # --- Market Data (Default Column) ---
+        # ==========================================================
+        # MARKET DATA FIELDS
+        # ==========================================================
         {
             "title": "Last Price",
             "identifier": "last_price",
@@ -80,9 +106,16 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 6,
+            "constraints": {
+                "decimal_places": 2,    # USD/EUR stock prices → cents
+                "min_value": 0,
+                "max_value": None,
+            },
         },
 
-        # --- Non-Default Available Columns (for “Add Column” UI) ---
+        # ==========================================================
+        # OPTIONAL MARKET DATA
+        # ==========================================================
         {
             "title": "Market Cap",
             "identifier": "market_cap",
@@ -90,9 +123,13 @@ EQUITY_TEMPLATE_CONFIG = {
             "source": "asset",
             "source_field": "market_data__market_cap",
             "is_system": True,
-            "is_deletable": True,
             "is_editable": False,
+            "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "P/E Ratio",
@@ -104,6 +141,11 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_editable": False,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "decimal_places": 2,  # Typical financial formatting
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "EPS",
@@ -115,6 +157,11 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_editable": False,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "decimal_places": 2,  # EPS is money-like
+                "min_value": None,    # EPS can be negative
+                "max_value": None,
+            },
         },
         {
             "title": "Dividend Yield",
@@ -126,6 +173,11 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_editable": False,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "decimal_places": 4,  # 3.5213% etc.
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "Dividend Per Share",
@@ -137,6 +189,11 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_editable": False,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {
+                "decimal_places": 4,  # small dividend increments
+                "min_value": 0,
+                "max_value": None,
+            },
         },
         {
             "title": "Purchase Date",
@@ -148,6 +205,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_editable": True,
             "is_deletable": True,
             "is_default": False,
+            "constraints": {},  # dates don’t use numeric constraints
         },
     ],
 }
