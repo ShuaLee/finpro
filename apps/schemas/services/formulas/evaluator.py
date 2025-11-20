@@ -1,23 +1,20 @@
-from schemas.models.formula import Formula
-from schemas.services.formulas.resolver import FormulaDependencyResolver
-
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Dict
-
 import ast
 import operator
+
+from schemas.models.formula import Formula
+from schemas.services.formulas.precision import FormulaPrecisionResolver
+from schemas.services.formulas.resolver import FormulaDependencyResolver
 
 
 class FormulaEvaluator:
     """
-    Evaluates formulas safely using:
-      - SCV values (preferred)
-      - Raw backend values only if SCV missing
-      - Recursive formula evaluation for formula-based columns
+    Evaluates a formula expression using a SCV-first context.
 
-    Precision rules:
-      - system formulas → constraints
-      - user formulas → formula.decimal_places
+    - Uses SCV values when present (edited or auto)
+    - Uses recursive evaluation for formula columns
+    - Applies precision via FormulaPrecisionResolver
     """
 
     SAFE_OPERATORS = {
@@ -36,12 +33,30 @@ class FormulaEvaluator:
     # PUBLIC API
     # ==========================================================
     def evaluate(self) -> Decimal:
+        """
+        Parse and evaluate formula expression.
+        """
         expr_ast = ast.parse(self.formula.expression, mode="eval").body
         raw_result = self._eval_ast(expr_ast)
         return self._apply_precision(raw_result)
 
+    # Convenience helper for callers who don’t want to manually resolve precision
+    @classmethod
+    def evaluate_for_holding(cls, formula: Formula, holding, schema):
+        """
+        High-level evaluation:
+            - Builds SCV context
+            - Determines precision
+            - Returns formatted Decimal
+        """
+        ctx = FormulaDependencyResolver(formula).build_context(holding, schema)
+        precision = FormulaPrecisionResolver.get_precision(formula)
+
+        evaluator = cls(formula=formula, context=ctx, precision=precision)
+        return evaluator.evaluate()
+
     # ==========================================================
-    # AST WALKER
+    # AST EVALUATOR
     # ==========================================================
     def _eval_ast(self, node):
         if isinstance(node, ast.BinOp):
@@ -56,16 +71,14 @@ class FormulaEvaluator:
         elif isinstance(node, ast.Name):
             return self.context.get(node.id, Decimal("0"))
 
-        else:
-            raise ValueError(f"Unsupported AST node: {node}")
+        raise ValueError(f"Unsupported AST node: {node!r}")
 
     # ==========================================================
-    # PRECISION RULES
+    # PRECISION
     # ==========================================================
     def _apply_precision(self, value: Decimal) -> Decimal:
         if self.precision is None:
-            # Fallback safety net
             return value
 
-        quant = Decimal("1").scaleb(-self.precision)
+        quant = Decimal("1").scaleb(-self.precision)  # e.g. precision=2 → 0.01
         return value.quantize(quant)

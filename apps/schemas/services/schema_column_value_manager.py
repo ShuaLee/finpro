@@ -1,3 +1,5 @@
+from schemas.services.formulas.update_engine import FormulaUpdateEngine
+
 from decimal import Decimal, ROUND_HALF_UP
 
 
@@ -177,6 +179,14 @@ class SchemaColumnValueManager:
     # ============================================================
     # EDITING VALUES
     # ============================================================
+
+    def _trigger_formula_updates(self):
+        schema = self.scv.column.schema
+        holding = self.scv.holding
+
+        engine = FormulaUpdateEngine(holding, schema)
+        engine.update_dependent_formulas(self.scv.column.identifier)
+
     def save_value(self, new_raw_value, is_edited: bool):
         """Save raw value (holding) or edited SCV."""
 
@@ -204,6 +214,9 @@ class SchemaColumnValueManager:
             self.refresh_display_value()
 
         self.scv.save(update_fields=["value", "is_edited"])
+
+        self._trigger_formula_updates()
+
         return self.scv
 
     # ============================================================
