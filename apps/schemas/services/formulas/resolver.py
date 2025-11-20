@@ -5,8 +5,6 @@ import ast
 from django.core.exceptions import ValidationError
 
 from schemas.models.formula import Formula
-from schemas.models.schema import Schema, SchemaColumn
-from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
 
 class FormulaDependencyResolver:
@@ -37,7 +35,7 @@ class FormulaDependencyResolver:
     # ================================================================
     # VALIDATION — NO AUTOCREATION
     # ================================================================
-    def validate_schema_columns_exist(self, schema: Schema):
+    def validate_schema_columns_exist(self, schema):
         missing = []
         for ident in self.extract_identifiers():
             if not schema.columns.filter(identifier=ident).exists():
@@ -61,6 +59,8 @@ class FormulaDependencyResolver:
             3. Recursive formula evaluation
             4. Default = 0
         """
+        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+        
         self.validate_schema_columns_exist(schema)
 
         ctx: Dict[str, Decimal] = {}
@@ -116,11 +116,11 @@ class FormulaDependencyResolver:
     # ================================================================
     # CYCLE DETECTION
     # ================================================================
-    def detect_cycles(self, schema: Schema, start_identifier: str):
+    def detect_cycles(self, schema, start_identifier: str):
         visited = set()
         self._dfs_cycle(schema, start_identifier, visited)
 
-    def _dfs_cycle(self, schema: Schema, identifier: str, visited: set):
+    def _dfs_cycle(self, schema, identifier: str, visited: set):
         if identifier in visited:
             raise ValidationError(
                 f"Formula dependency cycle detected involving '{identifier}'."

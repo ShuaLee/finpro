@@ -1,5 +1,4 @@
 from schemas.models.formula import Formula
-from schemas.models.schema import SchemaColumn
 
 
 class FormulaPrecisionResolver:
@@ -19,7 +18,7 @@ class FormulaPrecisionResolver:
     """
 
     @staticmethod
-    def get_precision(formula: Formula, target_column: SchemaColumn = None) -> int:
+    def get_precision(formula: Formula, target_column=None) -> int:
         # -----------------------------------------------------
         # USER FORMULAS → user explicitly decides precision
         # -----------------------------------------------------

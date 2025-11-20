@@ -5,7 +5,6 @@ import operator
 
 from schemas.models.formula import Formula
 from schemas.services.formulas.precision import FormulaPrecisionResolver
-from schemas.services.formulas.resolver import FormulaDependencyResolver
 
 
 class FormulaEvaluator:
@@ -62,6 +61,7 @@ class FormulaEvaluator:
     # ==================================================================
     @classmethod
     def evaluate_for_holding(cls, formula: Formula, holding, schema, raw=False):
+        from schemas.services.formulas.resolver import FormulaDependencyResolver
         """
         Fast shortcut:
 

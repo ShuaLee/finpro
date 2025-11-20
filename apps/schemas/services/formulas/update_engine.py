@@ -1,4 +1,3 @@
-from schemas.services.formulas.evaluator import FormulaEvaluator
 from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.formulas.precision import FormulaPrecisionResolver
 
@@ -56,7 +55,8 @@ class FormulaUpdateEngine:
     # Recompute a formula column
     # ------------------------------------------------------------
     def _recompute_formula_column(self, column):
-        from schemas.models.schema import SchemaColumnValue  # lazy import here
+        from schemas.models.schema import SchemaColumnValue
+        from schemas.services.formulas.evaluator import FormulaEvaluator
 
         resolver = FormulaDependencyResolver(column.formula)
         context = resolver.build_context(self.holding, self.schema)
