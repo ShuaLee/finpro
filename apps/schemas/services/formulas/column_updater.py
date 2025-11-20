@@ -1,7 +1,6 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
-from schemas.models.schema import Schema, SchemaColumn
 from schemas.models.formula import Formula
 from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
@@ -13,38 +12,39 @@ class FormulaColumnUpdater:
     Attaches an existing formula to an existing SchemaColumn.
 
     Responsibilities:
-        ✔ Ensure all dependency columns already exist
-        ✔ Do NOT auto-create dependency columns
-        ✔ Create SCVs for target column
-        ✔ Trigger full formula recalculation across holdings
-
-    This service is used in UI workflows where:
-        - The user picked the target column
-        - The user picked the formula
-        - Dependencies already exist (template or custom)
+        ✔ Ensure dependency columns already exist (no auto-create)
+        ✔ Detect cycles before attaching
+        ✔ Attach formula cleanly
+        ✔ Ensure SCVs exist for all holdings
+        ✔ Trigger formula recalculation for all dependent formulas
     """
 
     def __init__(self, formula: Formula):
         self.formula = formula
 
-    # ============================================================
-    # MAIN ENTRYPOINT
-    # ============================================================
     @transaction.atomic
-    def attach(self, schema: Schema, target_column: SchemaColumn):
+    def attach(self, schema, target_column):
         """
-        Attach the formula to this column and trigger all downstream updates.
+        Attach a formula to an existing SchemaColumn.
+        Does NOT auto-create dependency columns.
         """
+        # Lazy imports (prevents circular import loops)
+        from schemas.models.schema import SchemaColumn
 
         resolver = FormulaDependencyResolver(self.formula)
 
         # --------------------------------------------------------
-        # 1. Dependencies must exist already
+        # 1. Validate dependency columns exist
         # --------------------------------------------------------
         resolver.validate_schema_columns_exist(schema)
 
         # --------------------------------------------------------
-        # 2. Attach formula to schema column
+        # 2. Detect cycles BEFORE applying formula
+        # --------------------------------------------------------
+        resolver.detect_cycles(schema, target_column.identifier)
+
+        # --------------------------------------------------------
+        # 3. Attach formula to the SchemaColumn
         # --------------------------------------------------------
         target_column.formula = self.formula
         target_column.source = "formula"
@@ -52,7 +52,7 @@ class FormulaColumnUpdater:
         target_column.save(update_fields=["formula", "source", "source_field"])
 
         # --------------------------------------------------------
-        # 3. Create SCVs for all holdings
+        # 4. Ensure SCVs exist for all holdings
         # --------------------------------------------------------
         accounts = schema.portfolio.accounts.filter(
             account_type=schema.account_type
@@ -62,10 +62,9 @@ class FormulaColumnUpdater:
                 SchemaColumnValueManager.get_or_create(holding, target_column)
 
         # --------------------------------------------------------
-        # 4. Recompute formula results using UpdateEngine
+        # 5. Run full recomputation through the UpdateEngine
         # --------------------------------------------------------
         for account in accounts:
             for holding in account.holdings.all():
-
                 engine = FormulaUpdateEngine(holding, schema)
                 engine.update_dependent_formulas(target_column.identifier)
