@@ -29,12 +29,29 @@ class SchemaColumnValueManager:
     # ============================================================
     @classmethod
     def ensure_for_holding(cls, holding):
+        """
+        Ensure SCVs exist for all columns AND refresh formula columns.
+        Called whenever holding loads or schema initializes.
+        """
+
         schema = holding.active_schema
         if not schema:
             return
 
+        # 1. Ensure SCVs exist
+        created_columns = []
         for column in schema.columns.all():
-            cls.get_or_create(holding, column)
+            mgr = cls.get_or_create(holding, column)
+            created_columns.append(column)
+
+        # 2. After all SCVs exist, recalc formulas
+        from schemas.services.formulas.update_engine import FormulaUpdateEngine
+
+        engine = FormulaUpdateEngine(holding, schema)
+
+        # Re-evaluate all formula columns from scratch
+        for column in schema.columns.filter(source="formula"):
+            engine.update_dependent_formulas(column.identifier)
 
     @classmethod
     def ensure_for_column(cls, column):
@@ -180,48 +197,79 @@ class SchemaColumnValueManager:
     # EDITING VALUES
     # ============================================================
 
-    def _trigger_formula_updates(self):
+    def _trigger_formula_updates(self, changed_identifier: str):
+        """
+        After any SCV or raw holding value changes, update formula columns
+        that depend on this identifier.
+        """
+
         schema = self.scv.column.schema
         holding = self.scv.holding
 
+        from schemas.services.formulas.update_engine import FormulaUpdateEngine
+
         engine = FormulaUpdateEngine(holding, schema)
-        engine.update_dependent_formulas(self.scv.column.identifier)
+        engine.update_dependent_formulas(changed_identifier)
 
     def save_value(self, new_raw_value, is_edited: bool):
-        """Save raw value (holding) or edited SCV."""
+        """
+        Save SCV edits OR propagate holding value edits.
+        After saving, trigger formula recalculations.
+        """
 
-        # Holding-sourced column -> update the holding directly
+        changed_identifier = self.column.identifier
+
+        # ============================================================
+        # CASE 1: Column derives from Holding -> raw model update
+        # ============================================================
         if self.column.source == "holding":
             casted = self._cast_raw_value(new_raw_value)
+
+            # Update Holding raw value
             setattr(self.holding, self.column.source_field, casted)
             self.holding.save(update_fields=[self.column.source_field])
 
+            # Refresh SCV display
             self.refresh_display_value()
             self.scv.save(update_fields=["value", "is_edited"])
+
+            # Trigger formula re-evaluation
+            self._trigger_formula_updates(changed_identifier)
+
             return self.scv
 
-        # SCV editable-only field
+        # ============================================================
+        # CASE 2: Editable SCV-only column (custom/manual override)
+        # ============================================================
         self.scv.is_edited = is_edited
 
         if is_edited:
+            # Normalize raw user input
             casted = self._cast_raw_value(new_raw_value)
+
+            # Apply display formatting (decimal_places only)
             self.scv.value = str(
                 self._apply_display_constraints(
                     self.column, casted, self.holding
                 )
             )
         else:
+            # Restore auto value → recompute from raw
             self.refresh_display_value()
 
         self.scv.save(update_fields=["value", "is_edited"])
 
-        self._trigger_formula_updates()
+        # ============================================================
+        # Trigger formula re-evaluation
+        # ============================================================
+        self._trigger_formula_updates(changed_identifier)
 
         return self.scv
 
     # ============================================================
     # RAW CASTING (NO ROUNDING)
     # ============================================================
+
     def _cast_raw_value(self, raw_value):
         if raw_value in [None, ""]:
             return None

@@ -5,90 +5,108 @@ from schemas.models.formula import Formula
 from schemas.models.schema import Schema, SchemaColumn
 from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-
-from typing import List
+from schemas.services.formulas.update_engine import FormulaUpdateEngine
 
 import ast
 
 
 class FormulaBuilder:
     """
-    Responsible for attaching a formula to a schema column AND ensuring:
+    Responsible for attaching a formula to a SchemaColumn AND ensuring:
 
-      ✔ All dependencies exist as SchemaColumns
-      ✔ Missing ones are created as computed columns
-      ✔ Every holding gets SCVs for those columns
-      ✔ Initial SCV values are populated
+      ✔ All dependency identifiers already exist (template OR custom)
+      ✔ Missing dependencies become computed columns
+      ✔ SCVs created for all holdings
+      ✔ Initial SCV values evaluated using SCV-first logic
+      ✔ Cycle detection before attach
 
-    Absolutely NEVER mutates Holdings.
-    SCVs only.
+    *Never* mutates Holdings — only SCVs & SchemaColumns.
     """
 
     def __init__(self, formula: Formula):
         self.formula = formula
 
-    # =====================================================================
-    # MAIN ENTRY POINT
-    # =====================================================================
+    # ============================================================
+    # MAIN ENTRYPOINT
+    # ============================================================
     @transaction.atomic
     def attach_to_column(self, schema: Schema, target_column: SchemaColumn):
         """
-        Assign this formula to the target SchemaColumn, build dependencies,
-        and populate SCVs.
+        Attach the formula to the target schema column.
+        Create missing dependency columns (computed only).
+        Seed SCVs.
+        Evaluate initial values.
         """
-        # -----------------------------
-        # 1. Create or verify dependency columns
-        # -----------------------------
-        dep_columns = self._ensure_dependency_columns(schema)
 
-        # -----------------------------
-        # 2. Attach the formula to target column
-        # -----------------------------
+        resolver = FormulaDependencyResolver(self.formula)
+
+        # -------------------------------------------------------
+        # 1. Create or reuse dependency columns
+        # -------------------------------------------------------
+        dependency_columns = self._ensure_dependency_columns(schema)
+
+        # -------------------------------------------------------
+        # 2. Detect circular reference BEFORE committing
+        # -------------------------------------------------------
+        resolver.detect_cycles(schema, target_column.identifier)
+
+        # -------------------------------------------------------
+        # 3. Attach formula to the schema column
+        # -------------------------------------------------------
         target_column.formula = self.formula
-        target_column.source = None
+        target_column.source = "formula"
         target_column.source_field = None
         target_column.save(update_fields=["formula", "source", "source_field"])
 
-        # -----------------------------
-        # 3. Ensure SCVs exist for all dependency columns + target
-        # -----------------------------
-        self._ensure_scvs_for_schema(schema, [target_column] + dep_columns)
+        # -------------------------------------------------------
+        # 4. SCVs for target + dependency columns
+        # -------------------------------------------------------
+        self._ensure_scvs(schema, [target_column] + dependency_columns)
 
-        # -----------------------------
-        # 4. Compute initial SCV values
-        # -----------------------------
+        # -------------------------------------------------------
+        # 5. Initial computation (populate SCVs)
+        # -------------------------------------------------------
         self._initial_compute(schema, target_column)
 
-    # =====================================================================
-    # DEPENDENCY COLUMN CREATION
-    # =====================================================================
+    # ============================================================
+    # DEPENDENCY COLUMNS
+    # ============================================================
+    def _ensure_dependency_columns(self, schema: Schema):
+        """
+        Ensures that identifiers referenced in the formula exist as SchemaColumns.
+        Missing ones are auto-created as computed formula columns.
 
-    def _ensure_dependency_columns(self, schema: Schema) -> List[SchemaColumn]:
-        identifiers = self._extract_identifiers()
-        dep_columns = []
+        NOTE:
+            Template columns can **never** be auto-created.
+        """
+        resolver = FormulaDependencyResolver(self.formula)
+        identifiers = resolver.extract_identifiers()
 
-        template_columns = {
+        # Look up portfolio template
+        template_cols = {
             tc.identifier: tc
             for tc in schema.portfolio.template.columns.all()
         }
 
-        for ident in identifiers:
-            existing = schema.columns.filter(identifier=ident).first()
+        created_or_existing = []
 
-            if existing:
-                dep_columns.append(existing)
+        for ident in identifiers:
+
+            # Already present?
+            col = schema.columns.filter(identifier=ident).first()
+            if col:
+                created_or_existing.append(col)
                 continue
 
-            # 🚫 Prevent duplicating template-defined columns
-            if ident in template_columns:
+            # A template-defined column missing in schema? → schema corruption
+            if ident in template_cols:
                 raise ValidationError(
-                    f"Formula references '{ident}', which is a template-defined column "
-                    f"but is missing in schema '{schema.account_type}'. "
-                    f"This indicates schema initialization failure. "
-                    f"Please reinitialize schema instead of creating a custom column."
+                    f"Formula references '{ident}', which is defined in the template "
+                    f"but missing from schema '{schema.account_type}'. "
+                    f"This indicates schema initialization failure."
                 )
 
-            # ✔ Safe to create computed column
+            # SAFE computed column
             col = SchemaColumn.objects.create(
                 schema=schema,
                 title=ident.replace("_", " ").title(),
@@ -102,70 +120,46 @@ class FormulaBuilder:
                 display_order=schema.columns.count() + 1,
             )
 
-            dep_columns.append(col)
+            created_or_existing.append(col)
 
-        return dep_columns
+        return created_or_existing
 
-    # =====================================================================
+    # ============================================================
     # SCV CREATION
-    # =====================================================================
-    def _ensure_scvs_for_schema(self, schema: Schema, columns: List[SchemaColumn]):
-        """
-        Ensure SCVs exist for all holdings for all columns.
-        """
+    # ============================================================
+    def _ensure_scvs(self, schema: Schema, columns):
         accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type)
-
+            account_type=schema.account_type
+        )
         for account in accounts:
             for holding in account.holdings.all():
                 for col in columns:
                     SchemaColumnValueManager.get_or_create(holding, col)
 
-    # =====================================================================
+    # ============================================================
     # INITIAL COMPUTATION
-    # =====================================================================
-    def _initial_compute(self, schema: Schema, target_col: SchemaColumn):
+    # ============================================================
+    def _initial_compute(self, schema: Schema, target_column: SchemaColumn):
         """
-        After attaching a formula, compute its value for all holdings and
-        store the result in SCVs.
+        Recompute the formula for every holding — using SCV-first logic.
         """
-        resolver = FormulaDependencyResolver()
-
         accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type)
+            account_type=schema.account_type
+        )
 
         for account in accounts:
             for holding in account.holdings.all():
-                scv = SchemaColumnValueManager.get_or_create(
-                    holding, target_col).scv
+                engine = FormulaUpdateEngine(holding, schema)
+                engine.update_dependent_formulas(target_column.identifier)
 
-                result = resolver.evaluate(
-                    formula=self.formula, holding=holding, schema=schema)
 
-                scv.value = str(result)
-                scv.is_edited = False
-                scv.save(update_fields=["value", "is_edited"])
-
-    # =====================================================================
-    # HELPER — IDENTIFIER EXTRACTION
-    # =====================================================================
-    def _extract_identifiers(self) -> List[str]:
-        """
-        Parse formula.expression and return identifiers (variable names).
-        """
-        tree = ast.parse(self.formula.expression, mode="eval")
-        visitor = _IdentifierVisitor()
-        visitor.visit(tree)
-        return visitor.identifiers
-
-# =====================================================================
-# Visitor to extract names from formula expressions
-# =====================================================================
-
+# ============================================================
+# HELPER — Extract identifiers
+# ============================================================
 
 class _IdentifierVisitor(ast.NodeVisitor):
     def __init__(self):
-        self.identifiers: List[str] = []
+        self.identifiers = []
 
     def visit_Name(self, node):
         self.identifiers.append(node.id)

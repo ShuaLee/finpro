@@ -6,14 +6,17 @@ from schemas.services.formulas.precision import FormulaPrecisionResolver
 
 class FormulaUpdateEngine:
     """
-    Recalculates all formula-based column values for a single holding
-    whenever **any SCV value or raw holding value** changes.
+    Recalculates ALL formula-based column values for a single holding whenever:
 
-    This engine handles:
-      ✔ dependency resolution
-      ✔ multi-step chained formulas
-      ✔ SCV-first logic
-      ✔ precision from formula or constraints
+        - a user edits an SCV
+        - a backend holding value changes
+        - a dependent formula changes
+
+    Features:
+        ✔ SCV-first evaluation
+        ✔ Cycle-safe dependency graph traversal
+        ✔ Chained formula propagation
+        ✔ Precision from constraints or formula settings
     """
 
     def __init__(self, holding, schema: Schema):
@@ -25,19 +28,23 @@ class FormulaUpdateEngine:
     # ============================================================
     def update_dependent_formulas(self, changed_identifier: str):
         """
-        Trigger recalculation of formula columns that depend on `changed_identifier`.
-        This naturally supports chained updates.
+        Trigger a recalculation of *all* formulas that depend on a column
+        identified by `changed_identifier`.
+
+        Automatically handles chained dependencies via DFS.
         """
         visited = set()
         self._recompute_recursive(changed_identifier, visited)
 
     # ============================================================
-    # INTERNAL — recursive recomputation
+    # INTERNAL — RECURSIVE UPDATE
     # ============================================================
     def _recompute_recursive(self, identifier: str, visited: set):
         """
-        Recompute all formulas that reference this identifier.
-        Prevents infinite loops via visited set.
+        DFS over formula dependency graph.
+
+        Example:
+            price change → value → total_portfolio_value → allocation_percentage
         """
         dependent_cols = self._find_formula_columns_depending_on(identifier)
 
@@ -47,24 +54,23 @@ class FormulaUpdateEngine:
 
             visited.add(col.identifier)
 
-            # --- recompute NOW ---
+            # --- Recompute this formula column ---
             self._recompute_formula_column(col)
 
-            # --- now propagate ---
+            # --- Then propagate to any formulas depending on it ---
             self._recompute_recursive(col.identifier, visited)
 
     # ============================================================
-    # INTERNAL — find formulas referencing an identifier
+    # INTERNAL — find formula columns referencing an identifier
     # ============================================================
     def _find_formula_columns_depending_on(self, identifier: str):
         result = []
 
         for col in self.schema.columns.filter(source="formula"):
-            formula = col.formula
-            if not formula:
+            if not col.formula:
                 continue
 
-            resolver = FormulaDependencyResolver(formula)
+            resolver = FormulaDependencyResolver(col.formula)
             deps = resolver.extract_identifiers()
 
             if identifier in deps:
@@ -73,22 +79,35 @@ class FormulaUpdateEngine:
         return result
 
     # ============================================================
-    # INTERNAL — recompute one formula column
+    # INTERNAL — recompute a single formula column
     # ============================================================
     def _recompute_formula_column(self, column):
+        """
+        Compute NEW value for a computed formula column using SCV-first logic.
+        Then store into SchemaColumnValue as formatted (rounded) string.
+        """
+        # Build SCV-first evaluation context
         resolver = FormulaDependencyResolver(column.formula)
-        context = resolver.build_context(self.holding, self.schema)
+        ctx = resolver.build_context(self.holding, self.schema)
 
-        precision = FormulaPrecisionResolver.get_precision(column.formula)
+        # Determine precision from constraints or formula
+        precision = FormulaPrecisionResolver.get_precision(
+            formula=column.formula,
+            target_column=column,
+        )
 
+        # Evaluate formula
         result = FormulaEvaluator(
             formula=column.formula,
-            context=context,
-            precision=precision
+            context=ctx,
+            precision=precision,
         ).evaluate()
 
+        # Write SCV
         scv = SchemaColumnValue.objects.get(
-            column=column, holding=self.holding)
+            column=column,
+            holding=self.holding
+        )
         scv.value = str(result)
-        scv.is_edited = False  # formulas cannot be “edited”
+        scv.is_edited = False  # formula columns can never be "edited"
         scv.save(update_fields=["value", "is_edited"])

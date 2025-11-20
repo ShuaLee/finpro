@@ -11,12 +11,14 @@ from schemas.services.schema_column_value_manager import SchemaColumnValueManage
 
 class FormulaDependencyResolver:
     """
-    READ-ONLY dependency resolver.
+    READ-ONLY resolver.
 
     Responsibilities:
-      ✔ Extract identifiers from formula expression
-      ✔ Ensure referenced schema columns already exist
-      ✔ Build a Decimal context using the SCV layer (not raw holding values)
+      ✔ Extract identifiers from the formula expression
+      ✔ Validate referenced schema columns exist
+      ✔ Build SCV-first Decimal context
+      ✔ Recursively evaluate formula columns
+      ✔ Detect cycles
     """
 
     def __init__(self, formula: Formula):
@@ -26,107 +28,122 @@ class FormulaDependencyResolver:
     # IDENTIFIER EXTRACTION
     # ================================================================
     def extract_identifiers(self) -> List[str]:
-        """
-        Parse AST and extract any variable names used in the expression.
-        """
+        """Parse AST & return identifiers."""
         tree = ast.parse(self.formula.expression, mode="eval")
         visitor = _IdentifierVisitor()
         visitor.visit(tree)
-        return visitor.visit(tree)
+        return visitor.identifiers
 
     # ================================================================
     # VALIDATION — NO AUTOCREATION
     # ================================================================
     def validate_schema_columns_exist(self, schema: Schema):
-        """
-        Ensure all identifiers used in formula are real schema columns.
-        If any are missing → formula cannot be evaluated.
-        """
         missing = []
-
         for ident in self.extract_identifiers():
             if not schema.columns.filter(identifier=ident).exists():
                 missing.append(ident)
 
         if missing:
             raise ValidationError(
-                f"Formula '{self.formula.key}' references missing schema columns: "
-                f"{missing}. Columns must be created first."
+                f"Formula '{self.formula.key}' references missing columns: {missing}. "
+                "These must exist before attaching a formula."
             )
 
     # ================================================================
-    # SCV-FIRST CONTEXT BUILDER
+    # SCV-FIRST CONTEXT
     # ================================================================
     def build_context(self, holding, schema) -> Dict[str, Decimal]:
         """
-        Build identifier → Decimal mapping using SCVs:
+        Build identifier → Decimal mapping:
 
-        Priority:
-            1. SCV.value if edited
-            2. SCV.refresh_display from raw holding/asset
-            3. If formula column, evaluate recursively
-            4. Else 0
+            1. SCV.value (edited)
+            2. SCV display-layer (auto-calculated)
+            3. Recursive formula evaluation
+            4. Default = 0
         """
         self.validate_schema_columns_exist(schema)
 
-        context: Dict[str, Decimal] = {}
+        ctx: Dict[str, Decimal] = {}
 
         for ident in self.extract_identifiers():
-            column: SchemaColumn = schema.columns.filter(
-                identifier=ident
-            ).first()
 
+            column = schema.columns.filter(identifier=ident).first()
             if not column:
-                context[ident] = Decimal("0")
+                ctx[ident] = Decimal("0")
                 continue
 
             scv_manager = SchemaColumnValueManager.get_or_create(
                 holding, column)
             scv = scv_manager.scv
 
-            # ---------------------------------------------
-            # 1. USER-EDITED SCV OVERRIDES EVERYTHING
-            # ---------------------------------------------
+            # ------------------------------------------------------
+            # 1. USER EDITED SCV
+            # ------------------------------------------------------
             if scv.is_edited:
                 try:
-                    context[ident] = Decimal(str(scv.value))
+                    ctx[ident] = Decimal(str(scv.value))
                 except:
-                    context[ident] = Decimal("0")
+                    ctx[ident] = Decimal("0")
                 continue
 
-            # ---------------------------------------------
-            # 2. RECURSIVE FORMULA COLUMN
-            # ---------------------------------------------
+            # ------------------------------------------------------
+            # 2. FORMULA COLUMN (recursive)
+            # ------------------------------------------------------
             if column.formula:
                 from schemas.services.formulas.evaluator import FormulaEvaluator
-                value = FormulaEvaluator(
-                    column.formula, holding, schema).evaluate_raw()
-                context[ident] = Decimal(str(value))
+
+                raw_val = FormulaEvaluator.evaluate_for_holding(
+                    formula=column.formula,
+                    holding=holding,
+                    schema=schema,
+                    raw=True,  # raw = no precision formatting here
+                )
+
+                ctx[ident] = Decimal(str(raw_val))
                 continue
 
-            # ---------------------------------------------
-            # 3. NORMAL BACKEND-DERIVED SCV (raw → display)
-            # ---------------------------------------------
+            # ------------------------------------------------------
+            # 3. NORMAL COLUMN — display value
+            # ------------------------------------------------------
             display_val = scv_manager.display_for_column(column, holding)
-
             try:
-                context[ident] = Decimal(str(display_val))
+                ctx[ident] = Decimal(str(display_val))
             except:
-                context[ident] = Decimal("0")
+                ctx[ident] = Decimal("0")
 
-        return context
+        return ctx
+
+    # ================================================================
+    # CYCLE DETECTION
+    # ================================================================
+    def detect_cycles(self, schema: Schema, start_identifier: str):
+        visited = set()
+        self._dfs_cycle(schema, start_identifier, visited)
+
+    def _dfs_cycle(self, schema: Schema, identifier: str, visited: set):
+        if identifier in visited:
+            raise ValidationError(
+                f"Formula dependency cycle detected involving '{identifier}'."
+            )
+
+        visited.add(identifier)
+
+        col = schema.columns.filter(identifier=identifier).first()
+        if not col or not col.formula:
+            return
+
+        deps = self.extract_identifiers()
+        for dep in deps:
+            self._dfs_cycle(schema, dep, visited.copy())
 
 
 # ===================================================================
-# AST Visitor — Extract identifiers safely
+# Identifier Visitor
 # ===================================================================
+
 class _IdentifierVisitor(ast.NodeVisitor):
     def __init__(self):
         self.identifiers: List[str] = []
 
     def visit_Name(self, node: ast.Name):
-        """
-        Called for every identifier in the expression.
-        Example: price * quantity → ["price", "quantity"]
-        """
         self.identifiers.append(node.id)

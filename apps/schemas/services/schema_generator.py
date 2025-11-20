@@ -127,17 +127,14 @@ class SchemaGenerator:
             )
 
             # ----------------------------------------------------------
-            # Template-level overrides
+            # Apply template-level constraint overrides
             # ----------------------------------------------------------
             overrides = dict(tcol.constraints or {})
 
-            # ----------------------------------------------------------
-            # Create constraints using merged overrides
-            # ----------------------------------------------------------
             SchemaConstraintManager.create_from_master(column, overrides)
 
             # ----------------------------------------------------------
-            # Ensure SCVs for all existing holdings under this account type
+            # Create SCVs for ALL existing holdings under the schema
             # ----------------------------------------------------------
             SchemaColumnValueManager.ensure_for_column(column)
 
@@ -145,12 +142,17 @@ class SchemaGenerator:
                 f"➕ Added column '{column.title}' (order {column.display_order})"
             )
 
-        return schema
+        # ----------------------------------------------------------
+        # NEW: After all columns created → refresh all formula SCVs
+        # ----------------------------------------------------------
+        self._refresh_formula_columns(schema)
 
+        return schema
 
     # =====================================================================
     # RESOLVE ASSET CONTEXT FOR CRYPTO PRECISION
     # =====================================================================
+
     def _resolve_asset_context(self, schema):
         """
         Try to find *any* asset in this schema's accounts to determine crypto precision.
@@ -182,3 +184,34 @@ class SchemaGenerator:
             identifier = f"{original}_{counter}"
 
         return identifier
+
+    # =====================================================================
+    # REFRESH FORMULAS
+    # =====================================================================
+    def _refresh_formula_columns(self, schema):
+        """
+        Recompute all formula-based SCVs in this schema.
+
+        Called after:
+        - schema creation
+        - template application
+        - column creation
+        """
+        formula_columns = schema.columns.filter(source="formula")
+
+        if not formula_columns.exists():
+            return
+
+        from schemas.services.formulas.update_engine import FormulaUpdateEngine
+
+        accounts = schema.portfolio.accounts.filter(
+            account_type=schema.account_type
+        )
+
+        for account in accounts:
+            for holding in account.holdings.all():
+                engine = FormulaUpdateEngine(holding, schema)
+
+                # Trigger update for each formula column independently
+                for col in formula_columns:
+                    engine.update_dependent_formulas(col.identifier)
