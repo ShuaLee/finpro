@@ -58,7 +58,6 @@ INSTALLED_APPS = [
     'core',
     'users',
     'subscriptions',
-    'formulas',
     'common',
     'portfolios',
     'schemas',

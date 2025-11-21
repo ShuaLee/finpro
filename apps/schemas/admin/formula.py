@@ -39,13 +39,13 @@ class FormulaAdmin(admin.ModelAdmin):
 
     list_display = (
         "title",
-        "key",
+        "identifier",
         "is_system",
         "created_at",
     )
 
     list_filter = ("is_system",)
-    search_fields = ("title", "key", "expression")
+    search_fields = ("title", "identifier", "expression")
 
     readonly_fields = (
         "created_at",
@@ -58,7 +58,7 @@ class FormulaAdmin(admin.ModelAdmin):
         (None, {
             "fields": (
                 "title",
-                "key",
+                "identifier",
                 "description",
                 "expression",
                 "dependencies_display",

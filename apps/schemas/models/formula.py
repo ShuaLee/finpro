@@ -27,7 +27,7 @@ class Formula(models.Model):
     description = models.TextField(blank=True)
 
     # Internal stable identifier (NOT required to match column.identifier)
-    key = models.SlugField(
+    identifier = models.SlugField(
         max_length=100,
         help_text="Stable formula key (auto-normalized to snake_case)."
     )
@@ -57,55 +57,42 @@ class Formula(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # =============================================
-    # Model Validation
-    # =============================================
+    # ======================================================
+    # Validation
+    # ======================================================
     def clean(self):
         super().clean()
 
-        if not self.key:
-            raise ValidationError("Formula must have a stable key.")
+        if not self.identifier:
+            raise ValidationError("Formula must have a stable identifier.")
 
         if not self.expression:
             raise ValidationError("Formula must define an expression.")
 
         if not isinstance(self.dependencies, list):
-            raise ValidationError("Formula dependencies must be a list.")
+            raise ValidationError(
+                "Formula dependencies must be a list of strings.")
 
         for dep in self.dependencies:
             if not isinstance(dep, str):
                 raise ValidationError(f"Invalid dependency entry: {dep}")
 
-        # System formulas cannot belong to portfolio schemas
-        if self.is_system and self.column.schema.portfolio_id is not None:
-            raise ValidationError(
-                "System formulas must not be tied to a portoflio schema."
-            )
+    # ======================================================
+    # Save
+    # ======================================================
 
-    # =============================================
-    # Save Handler
-    # =============================================
     def save(self, *args, **kwargs):
-        if not self.key:
-            self.key = to_snake_case(self.title)
-        else:
-            self.key = to_snake_case(self.key)
+        # Normalize key
+        self.identifier = to_snake_case(self.identifier or self.title)
         self.full_clean()
         super().save(*args, **kwargs)
 
-    # =============================================
-    # String repr
-    # =============================================
+    # ======================================================
+    # String Representation
+    # ======================================================
     def __str__(self):
-        return f"Formula({self.column.identifier} = {self.key})"
+        return f"Formula({self.identifier})"
 
     class Meta:
         verbose_name = "Schema Formula"
         verbose_name_plural = "Schema Formulas"
-        constraints = [
-            # each SchemaColumn may only have 1 formula
-            models.UniqueConstraint(
-                fields=["column"],
-                name="unique_formula_per_column",
-            ),
-        ]
