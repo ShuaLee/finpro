@@ -74,12 +74,12 @@ class SchemaColumn(models.Model):
 
     source_field = models.CharField(max_length=100, null=True, blank=True)
 
-    formula = models.ForeignKey(
+    formula = models.OneToOneField(
         "formulas.Formula",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="schema_columns",
+        related_name="column"
     )
 
     # Meta flags

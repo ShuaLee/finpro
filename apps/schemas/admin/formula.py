@@ -3,15 +3,8 @@ from django.core.exceptions import ValidationError
 from django import forms
 
 from schemas.models.formula import Formula
-from schemas.models.schema import Schema, SchemaColumn
 from schemas.services.formulas.resolver import FormulaDependencyResolver
-from schemas.services.formulas.builder import FormulaBuilder
-from schemas.services.formulas.column_updater import FormulaColumnUpdater
 
-
-# ================================================================
-# FORM — Extra validation BEFORE save
-# ================================================================
 
 class FormulaAdminForm(forms.ModelForm):
     class Meta:
@@ -27,81 +20,38 @@ class FormulaAdminForm(forms.ModelForm):
         if not expr:
             raise ValidationError("Formula expression cannot be empty.")
 
-        # Parse identifiers
         resolver = FormulaDependencyResolver(formula)
         try:
             deps = resolver.extract_identifiers()
         except Exception as e:
             raise ValidationError(f"Invalid formula expression: {e}")
 
-        if not deps:
-            raise ValidationError(
-                "Formula must reference at least one identifier (e.g., price, quantity)."
-            )
-
-        # Schema-scoped: ensure schema present
-        if not formula.is_system and not formula.schema:
-            raise ValidationError(
-                "Custom formulas must be associated with a schema."
-            )
+        if not isinstance(deps, list):
+            raise ValidationError("Dependencies must resolve to a list.")
 
         return cleaned
 
 
-# ================================================================
-# Inline showing which SchemaColumns use this formula
-# ================================================================
-
-class SchemaColumnInline(admin.TabularInline):
-    model = SchemaColumn
-    fk_name = "formula"
-    extra = 0
-    readonly_fields = ("title", "identifier", "schema", "data_type")
-    can_delete = False
-    verbose_name = "Column using this formula"
-    verbose_name_plural = "Columns using this formula"
-
-    fields = (
-        "title",
-        "identifier",
-        "schema",
-        "data_type",
-    )
-
-
-# ================================================================
-# ADMIN
-# ================================================================
-
 @admin.register(Formula)
 class FormulaAdmin(admin.ModelAdmin):
-    """
-    Formula admin:
-        ✔ Validate expression
-        ✔ Show dependencies
-        ✔ Attach formula to schema columns
-        ✔ Prevent editing system formulas except by dev
-    """
 
     form = FormulaAdminForm
-    inlines = [SchemaColumnInline]
 
     list_display = (
         "title",
         "key",
-        "schema",
         "is_system",
         "created_at",
     )
 
-    list_filter = ("is_system", "schema")
+    list_filter = ("is_system",)
     search_fields = ("title", "key", "expression")
 
     readonly_fields = (
         "created_at",
         "updated_at",
         "dependencies_display",
-        "attach_to_column_action",
+        "attached_columns_display",
     )
 
     fieldsets = (
@@ -117,71 +67,41 @@ class FormulaAdmin(admin.ModelAdmin):
         ("Precision", {
             "fields": ("decimal_places",)
         }),
-        ("Scope", {
-            "fields": ("schema", "is_system")
+        ("System metadata", {
+            "fields": ("is_system",)
         }),
-        ("Attach Formula", {
-            "fields": ("attach_to_column_action",),
+        ("Attached Columns", {
+            "fields": ("attached_columns_display",),
         }),
         ("Meta", {
             "fields": ("created_at", "updated_at")
         }),
     )
 
-    # ============================================================
-    # Display parsed dependencies
-    # ============================================================
     def dependencies_display(self, obj):
         if not obj.pk:
-            return "Save formula to view dependencies."
+            return "Save first to see dependencies."
 
         try:
             deps = FormulaDependencyResolver(obj).extract_identifiers()
+            return ", ".join(deps) if deps else "(none)"
         except Exception as e:
-            return f"❌ Error parsing: {e}"
+            return f"Error parsing: {e}"
 
-        if not deps:
-            return "⚠ No dependencies detected"
+    dependencies_display.short_description = "Dependencies"
 
-        return ", ".join(deps)
-
-    dependencies_display.short_description = "Dependencies (identifiers used)"
-
-    # ============================================================
-    # Action field for attaching formula to a SchemaColumn
-    # ============================================================
-    def attach_to_column_action(self, obj):
-        if not obj.pk:
-            return "Save formula to enable attachment."
-
-        # Build a dynamic list of schema columns
-        schema = obj.schema
-
-        if obj.is_system:
-            return "System formulas are not attached here."
-
-        if not schema:
-            return "Assign formula to a schema to enable attachment."
+    def attached_columns_display(self, obj):
+        """Show SchemaColumns using this formula."""
+        cols = obj.schema_columns.all()
+        if not cols:
+            return "No SchemaColumns attached."
 
         html = []
-        for col in schema.columns.filter(source__in=("holding", "asset", "custom")):
-            url = f"/admin/schemas/schemacolumn/{col.id}/change/?attach_formula={obj.id}"
+        for col in cols:
+            url = f"/admin/schemas/schemacolumn/{col.id}/change/"
             html.append(f"<a href='{url}'>{col.title}</a>")
 
-        return "<br>".join(html) if html else "No attachable columns."
+        return "<br>".join(html)
 
-    attach_to_column_action.allow_tags = True
-    attach_to_column_action.short_description = "Attach formula to column"
-
-    # ============================================================
-    # Prevent editing system formulas
-    # ============================================================
-    def has_change_permission(self, request, obj=None):
-        if obj and obj.is_system and not request.user.is_superuser:
-            return False
-        return super().has_change_permission(request, obj)
-
-    def has_delete_permission(self, request, obj=None):
-        if obj and obj.is_system:
-            return False
-        return super().has_delete_permission(request, obj)
+    attached_columns_display.allow_tags = True
+    attached_columns_display.short_description = "Attached Schema Columns"

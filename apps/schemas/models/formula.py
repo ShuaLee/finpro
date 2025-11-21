@@ -22,13 +22,6 @@ class Formula(models.Model):
     - Dependencies list must match other SchemaColumn.identifiers.
     """
 
-    column = models.OneToOneField(
-        "schemas.SchemaColumn",
-        on_delete=models.CASCADE,
-        related_name="formula",
-        help_text="The SchemaColumn whose value will be computed via this formula."
-    )
-
     # Human metadata
     title = models.CharField(max_length=100)
     description = models.TextField(blank=True)
