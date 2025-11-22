@@ -120,6 +120,7 @@ class SchemaGenerator:
                 data_type=tcol.data_type,
                 source=tcol.source,
                 source_field=tcol.source_field,
+                formula=tcol.formula,  # <-- ADD THIS
                 is_editable=tcol.is_editable,
                 is_deletable=tcol.is_deletable,
                 is_system=tcol.is_system,

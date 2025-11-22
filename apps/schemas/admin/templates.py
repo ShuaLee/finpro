@@ -45,12 +45,14 @@ class SchemaTemplateColumnInline(admin.TabularInline):
 # ===============================
 # TEMPLATE ADMIN
 # ===============================
+
+
 @admin.register(SchemaTemplate)
 class SchemaTemplateAdmin(admin.ModelAdmin):
     list_display = ("name", "account_type", "is_active", "created_at")
     list_filter = ("is_active",)
     search_fields = ("name", "account_type")
-    inlines = [SchemaTemplateColumnInline]
+    inlines = [SchemaTemplateColumnInline,]
 
 
 # ===============================
@@ -64,6 +66,7 @@ class SchemaTemplateColumnAdmin(admin.ModelAdmin):
         "template",
         "data_type",
         "source",
+        "formula",
         "is_default",
         "is_system",
         "is_editable",
@@ -73,7 +76,7 @@ class SchemaTemplateColumnAdmin(admin.ModelAdmin):
                    "is_system", "is_editable")
     search_fields = ("title", "identifier", "template__name", "source_field")
     ordering = ("template", "display_order", "title")
-    autocomplete_fields = ("template",)
+    autocomplete_fields = ("template", "formula",)
 
     formfield_overrides = {
         DjangoJSONFormField: {"widget": PrettyJSONWidget},

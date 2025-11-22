@@ -1,3 +1,5 @@
+from schemas.config.utils import lookup_formula
+
 EQUITY_TEMPLATE_CONFIG = {
     "account_type": "equity_self",
     "name": "Equity Schema Template",
@@ -112,6 +114,20 @@ EQUITY_TEMPLATE_CONFIG = {
                 "max_value": None,
             },
         },
+        {
+            "title": "Current Value",
+            "identifier": "current_value",
+            "data_type": "decimal",
+            "source": "formula",
+            "formula": lookup_formula("current_value_asset_fx"),
+            "is_system": True,
+            "is_default": True,
+            "display_order": 7,
+            "constraints": {
+                "decimal_places": 2,
+            }
+        },
+
 
         # ==========================================================
         # OPTIONAL MARKET DATA

@@ -27,10 +27,6 @@ class SchemaTemplate(models.Model):
 
 
 class SchemaTemplateColumn(models.Model):
-    """
-    Defines a column inside a SchemaTemplate.
-    These columns are copied into SchemaColumn instances when a schema is initialized.
-    """
     template = models.ForeignKey(
         SchemaTemplate,
         on_delete=models.CASCADE,
@@ -53,6 +49,15 @@ class SchemaTemplateColumn(models.Model):
         ],
     )
 
+    # NEW — formula FK (nullable)
+    formula = models.ForeignKey(
+        "schemas.Formula",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="template_columns"
+    )
+
     source = models.CharField(
         max_length=20,
         choices=[
@@ -62,20 +67,15 @@ class SchemaTemplateColumn(models.Model):
             ("custom", "Custom"),
         ],
     )
+
     source_field = models.CharField(max_length=100, null=True, blank=True)
 
     constraints = models.JSONField(default=dict, blank=True)
 
-    # UI & logic flags
     is_editable = models.BooleanField(default=True)
     is_deletable = models.BooleanField(default=True)
     is_system = models.BooleanField(default=False)
-
-    # Defines if columns are auto-included in new schemas
-    is_default = models.BooleanField(
-        default=False,
-        help_text="If True, this column will appear automatically when a schema is generated."
-    )
+    is_default = models.BooleanField(default=False)
 
     display_order = models.PositiveIntegerField(null=True, blank=True)
 
