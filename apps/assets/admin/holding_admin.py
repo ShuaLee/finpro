@@ -82,7 +82,6 @@ class HoldingAdmin(admin.ModelAdmin):
         """
         Run validation, save holding, and ensure SCVs get created.
         """
-        from schemas.services.schema_manager import SchemaManager
 
         try:
             # Django-level validation (field types, nulls, etc.)
@@ -90,13 +89,6 @@ class HoldingAdmin(admin.ModelAdmin):
 
             # Save the holding first
             super().save_model(request, obj, form, change)
-
-            # 🔥 Create SCVs ONLY when the holding is first created
-            if not change:
-                schema = obj.active_schema
-                if schema:
-                    manager = SchemaManager(schema)
-                    manager.ensure_for_holding(obj)
 
             messages.success(
                 request,

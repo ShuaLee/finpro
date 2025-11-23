@@ -56,24 +56,24 @@ class Holding(models.Model):
             )
 
     def save(self, *args, **kwargs):
+        is_new = self._state.adding
+
         self.full_clean()
         super().save(*args, **kwargs)
 
-        """
-        is_new = self._state.adding
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
         if is_new:
-            # 🔑 First time → generate SCVs for all schema columns
+            # Create SCVs and compute formula columns
             SchemaColumnValueManager.ensure_for_holding(self)
         else:
-            # 🔄 On update → refresh values for all SCVs
+            # Update ALL SCVs for normal columns + formulas
             SchemaColumnValueManager.refresh_for_holding(self)
-        """
 
     # -----------------------
     # Convenience properties
     # -----------------------
+
     @property
     def profile_currency(self):
         return self.account.portfolio.profile.currency
