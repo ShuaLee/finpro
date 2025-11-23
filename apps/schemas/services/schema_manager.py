@@ -61,46 +61,32 @@ class SchemaManager:
     def ensure_for_holding(self, holding):
         """
         Ensures every SchemaColumn has an SCV for this holding.
-        SCVs created from raw holding values → formatted using schema rules.
+        Idempotent — never inserts duplicates.
         """
 
-        existing = set(
-            SchemaColumnValue.objects.filter(holding=holding)
-            .values_list("column_id", flat=True)
-        )
+        from schemas.models.schema import SchemaColumnValue
 
-        missing = [col for col in self.columns if col.id not in existing]
-
-        # Create missing SCVs
-        new_scvs = []
-        for col in missing:
-            display_value = SchemaColumnValueManager.display_for_column(
-                col, holding)
-
-            new_scvs.append(
-                SchemaColumnValue(
-                    column=col,
-                    holding=holding,
-                    value=display_value,
-                    is_edited=False,
-                )
+        # Create missing SCVs safely using get_or_create
+        for col in self.columns:
+            scv, created = SchemaColumnValue.objects.get_or_create(
+                column=col,
+                holding=holding,
+                defaults={
+                    "value": SchemaColumnValueManager.display_for_column(col, holding),
+                    "is_edited": False,
+                },
             )
 
-        if new_scvs:
-            SchemaColumnValue.objects.bulk_create(new_scvs)
+            # If it already existed and is not edited → refresh the display value
+            if not created and not scv.is_edited:
+                new_val = SchemaColumnValueManager.display_for_column(
+                    col, holding)
+                if scv.value != new_val:
+                    scv.value = new_val
+                    scv.save(update_fields=["value"])
 
-        # Refresh all unedited SCVs (editable ones left alone)
-        scvs = SchemaColumnValue.objects.filter(
-            holding=holding,
-            is_edited=False
-        ).select_related("column")
-
-        for scv in scvs:
-            new_val = SchemaColumnValueManager.display_for_column(
-                scv.column, holding)
-            if scv.value != new_val:
-                scv.value = new_val
-                scv.save(update_fields=["value"])
+        # ⚠️ Do NOT recalculate formulas here.
+        # Formula recalculation is handled by SchemaColumnValueManager.ensure_for_holding
 
     # ============================================================
     # Ensure SCVs for all holdings in an account

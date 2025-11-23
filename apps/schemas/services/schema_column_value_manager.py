@@ -94,15 +94,43 @@ class SchemaColumnValueManager:
     def display_for_column(column, holding):
         """Compute display value using schema constraints."""
 
+        from schemas.services.formulas.resolver import FormulaDependencyResolver
+        from schemas.services.formulas.evaluator import FormulaEvaluator
+        from schemas.services.formulas.precision import FormulaPrecisionResolver
+
+        # ------------------------------------------------------
+        # 1. FORMULA COLUMN — evaluate with SCV-first context
+        # ------------------------------------------------------
+        if column.source == "formula" and getattr(column, "formula", None):
+            resolver = FormulaDependencyResolver(column.formula)
+            ctx = resolver.build_context(holding, column.schema)
+
+            precision = FormulaPrecisionResolver.get_precision(
+                formula=column.formula,
+                target_column=column,
+            )
+
+            return str(
+                FormulaEvaluator(
+                    formula=column.formula,
+                    context=ctx,
+                    precision=precision,
+                ).evaluate()
+            )
+
+        # ------------------------------------------------------
+        # 2. HOLDING-SOURCED COLUMN
+        # ------------------------------------------------------
         raw_value = None
 
-        # Holding field
         if column.source == "holding" and column.source_field:
             raw_value = SchemaColumnValueManager._resolve_path(
                 holding, column.source_field
             )
 
-        # Asset field
+        # ------------------------------------------------------
+        # 3. ASSET-SOURCED COLUMN
+        # ------------------------------------------------------
         elif column.source == "asset" and column.source_field:
             asset = getattr(holding, "asset", None)
             if asset:
@@ -110,11 +138,15 @@ class SchemaColumnValueManager:
                     asset, column.source_field
                 )
 
-        # Static default
+        # ------------------------------------------------------
+        # 4. NO RAW VALUE → RETURN STATIC DEFAULT
+        # ------------------------------------------------------
         if raw_value is None:
             return SchemaColumnValueManager._static_default(column)
 
-        # Apply decimal_places, max_length, etc.
+        # ------------------------------------------------------
+        # 5. APPLY DISPLAY FORMATTING (decimal places, lengths, etc.)
+        # ------------------------------------------------------
         return SchemaColumnValueManager._apply_display_constraints(
             column, raw_value, holding
         )

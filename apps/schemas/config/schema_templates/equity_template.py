@@ -109,7 +109,7 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_default": True,
             "display_order": 6,
             "constraints": {
-                "decimal_places": 2,    # USD/EUR stock prices → cents
+                "decimal_places": 2,
                 "min_value": 0,
                 "max_value": None,
             },
@@ -119,8 +119,10 @@ EQUITY_TEMPLATE_CONFIG = {
             "identifier": "current_value",
             "data_type": "decimal",
             "source": "formula",
-            "formula": lookup_formula("current_value_asset_fx"),
+            "source_field": "current_value_asset_fx",
             "is_system": True,
+            "is_editable": False,
+            "is_deletable": False,
             "is_default": True,
             "display_order": 7,
             "constraints": {

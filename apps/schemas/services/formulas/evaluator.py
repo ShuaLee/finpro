@@ -6,6 +6,10 @@ import operator
 from schemas.models.formula import Formula
 from schemas.services.formulas.precision import FormulaPrecisionResolver
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class FormulaEvaluator:
     """
@@ -44,6 +48,11 @@ class FormulaEvaluator:
         Evaluate without rounding — used when other formulas depend on this one.
         """
         expr_ast = ast.parse(self.formula.expression, mode="eval").body
+
+        logger.debug(
+            f"[FormulaEvaluator] RAW eval for {self.formula.identifier} "
+            f"with context={self.context}"
+        )
         return self._eval_ast(expr_ast)
 
     # ==================================================================
@@ -54,6 +63,12 @@ class FormulaEvaluator:
         Evaluate and apply decimal precision rules.
         """
         raw = self.evaluate_raw()
+
+        logger.debug(
+            f"[FormulaEvaluator] FORMATTED eval for {self.formula.identifier} "
+            f"precision={self.precision}"
+        )
+
         return self._apply_precision(raw)
 
     # ==================================================================

@@ -108,10 +108,34 @@ class SchemaGenerator:
             f"🧩 Creating {template_columns.count()} columns for schema {schema.account_type}"
         )
 
+        # import locally to avoid cyclic issues
+        from schemas.models.formula import Formula
+
         for tcol in template_columns:
 
             # ----------------------------------------------------------
-            # Create SchemaColumn
+            # Resolve formula FK if column uses a formula
+            # ----------------------------------------------------------
+            formula_obj = None
+            if tcol.source == "formula":
+                if not tcol.source_field:
+                    raise ValueError(
+                        f"Template column '{tcol.identifier}' is marked as formula "
+                        f"but has no source_field (formula identifier)."
+                    )
+
+                formula_obj = Formula.objects.filter(
+                    identifier=tcol.source_field
+                ).first()
+
+                if not formula_obj:
+                    raise ValueError(
+                        f"SchemaTemplateColumn '{tcol.identifier}' references "
+                        f"formula '{tcol.source_field}', but it does not exist."
+                    )
+
+            # ----------------------------------------------------------
+            # Create SchemaColumn with formula attached immediately
             # ----------------------------------------------------------
             column = SchemaColumn.objects.create(
                 schema=schema,
@@ -120,7 +144,7 @@ class SchemaGenerator:
                 data_type=tcol.data_type,
                 source=tcol.source,
                 source_field=tcol.source_field,
-                formula=tcol.formula,  # <-- ADD THIS
+                formula=formula_obj,
                 is_editable=tcol.is_editable,
                 is_deletable=tcol.is_deletable,
                 is_system=tcol.is_system,
@@ -131,20 +155,18 @@ class SchemaGenerator:
             # Apply template-level constraint overrides
             # ----------------------------------------------------------
             overrides = dict(tcol.constraints or {})
-
             SchemaConstraintManager.create_from_master(column, overrides)
 
             # ----------------------------------------------------------
-            # Create SCVs for ALL existing holdings under the schema
+            # Create SCVs for ALL existing holdings
             # ----------------------------------------------------------
             SchemaColumnValueManager.ensure_for_column(column)
 
             logger.debug(
-                f"➕ Added column '{column.title}' (order {column.display_order})"
-            )
+                f"➕ Added column '{column.title}' (order {column.display_order})")
 
         # ----------------------------------------------------------
-        # NEW: After all columns created → refresh all formula SCVs
+        # After all columns created → refresh all formula SCVs
         # ----------------------------------------------------------
         self._refresh_formula_columns(schema)
 
