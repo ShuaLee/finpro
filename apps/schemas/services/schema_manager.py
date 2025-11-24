@@ -60,33 +60,53 @@ class SchemaManager:
     # ============================================================
     def ensure_for_holding(self, holding):
         """
-        Ensures every SchemaColumn has an SCV for this holding.
-        Idempotent — never inserts duplicates.
+        Ensure every SchemaColumn has an SCV for this holding.
+        Rules:
+        - Holding-backed SCVs are ALWAYS recalculated (and never edited).
+        - Formula SCVs are ALWAYS recalculated (and never edited).
+        - Asset/custom SCVs only refresh if is_edited=False.
         """
 
         from schemas.models.schema import SchemaColumnValue
+        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
-        # Create missing SCVs safely using get_or_create
         for col in self.columns:
+
             scv, created = SchemaColumnValue.objects.get_or_create(
                 column=col,
                 holding=holding,
                 defaults={
                     "value": SchemaColumnValueManager.display_for_column(col, holding),
                     "is_edited": False,
-                },
+                }
             )
 
-            # If it already existed and is not edited → refresh the display value
-            if not created and not scv.is_edited:
-                new_val = SchemaColumnValueManager.display_for_column(
-                    col, holding)
-                if scv.value != new_val:
-                    scv.value = new_val
-                    scv.save(update_fields=["value"])
+            manager = SchemaColumnValueManager(scv)
 
-        # ⚠️ Do NOT recalculate formulas here.
-        # Formula recalculation is handled by SchemaColumnValueManager.ensure_for_holding
+            # -------------------------
+            # 1️⃣ Holding-backed columns
+            # -------------------------
+            if col.source == "holding":
+                manager.scv.is_edited = False
+                manager.refresh_display_value()
+                manager.scv.save(update_fields=["value", "is_edited"])
+                continue
+
+            # -------------------------
+            # 2️⃣ Formula columns
+            # -------------------------
+            if col.source == "formula":
+                manager.scv.is_edited = False
+                manager.refresh_display_value()
+                manager.scv.save(update_fields=["value", "is_edited"])
+                continue
+
+            # -------------------------
+            # 3️⃣ Asset / Custom columns
+            # -------------------------
+            if not scv.is_edited:
+                manager.refresh_display_value()
+                manager.scv.save(update_fields=["value", "is_edited"])
 
     # ============================================================
     # Ensure SCVs for all holdings in an account
@@ -101,20 +121,42 @@ class SchemaManager:
     # ============================================================
     def sync_for_holding(self, holding):
         """
-        Recompute SCV display values. 
-        Does NOT override edited SCVs.
+        Refresh SCV display values without corrupting user edits.
+        - Holding-backed SCVs always auto-sync and are never edited.
+        - Asset/custom editable SCVs only update if !is_edited.
+        - Formula SCVs always recompute.
         """
         for col in self.columns:
             scv = SchemaColumnValue.objects.filter(
-                column=col, holding=holding).first()
-            if scv:
-                if not scv.is_edited:
-                    manager = SchemaColumnValueManager(scv)
-                    manager.refresh_display_value()
-                    scv.save(update_fields=["value", "is_edited"])
-            else:
-                # If missing, ensure it
+                column=col,
+                holding=holding
+            ).first()
+
+            if not scv:
+                # ensure SCV exists
                 self.ensure_for_holding(holding)
+                continue
+
+            manager = SchemaColumnValueManager(scv)
+
+            # 1️⃣ Holding-backed columns → ALWAYS refresh, never edited
+            if col.source == "holding":
+                manager.scv.is_edited = False
+                manager.refresh_display_value()
+                manager.scv.save(update_fields=["value", "is_edited"])
+                continue
+
+            # 2️⃣ Formula columns → ALWAYS refresh
+            if col.source == "formula":
+                manager.scv.is_edited = False
+                manager.refresh_display_value()
+                manager.scv.save(update_fields=["value", "is_edited"])
+                continue
+
+            # 3️⃣ Asset/custom → refresh only if not edited
+            if not scv.is_edited:
+                manager.refresh_display_value()
+                manager.scv.save(update_fields=["value", "is_edited"])
 
     def sync_for_all_holdings(self, account):
         for holding in account.holdings.all():
