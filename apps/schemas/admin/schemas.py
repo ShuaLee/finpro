@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib import admin, messages
+from django.db import models
+from django.forms import TextInput
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import path, reverse
 
@@ -228,13 +230,74 @@ class SchemaColumnAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumnValue)
 class SchemaColumnValueAdmin(admin.ModelAdmin):
-    """View all column values per holding."""
+
+    class SCVForm(forms.ModelForm):
+        class Meta:
+            model = SchemaColumnValue
+            fields = ["holding", "column", "value", "is_edited"]
+            widgets = {
+                "value": TextInput(attrs={"size": 40}),
+            }
+
+    form = SCVForm
+
     list_display = ("id", "holding", "column", "value", "is_edited")
-    list_filter = ("is_edited",)
-    search_fields = (
-        "holding__asset__name",
-        "holding__asset__identifiers__value",
-        "column__title",
-    )
-    ordering = ("column", "holding")
-    readonly_fields = ("holding", "column", "value", "is_edited")
+    list_filter = ("is_edited", "column__is_editable")
+    ordering = ("holding", "column")
+    fields = ("holding", "column", "value", "is_edited")
+
+    # Ensure Django doesn't freeze the field early
+    def get_form(self, request, obj=None, **kwargs):
+        kwargs["form"] = self.form
+        return super().get_form(request, obj, **kwargs)
+
+    # ------------------------------
+    # READONLY LOGIC (fixed)
+    # ------------------------------
+    def get_readonly_fields(self, request, obj=None):
+
+        # NEW SCV creation should never happen in admin → readonly
+        if obj is None:
+            return ("holding", "column", "value", "is_edited")
+
+        col = obj.column
+
+        # 1️⃣ Formula columns → always readonly
+        if col.source == "formula":
+            return ("holding", "column", "value", "is_edited")
+
+        # 2️⃣ Explicitly non-editable columns → readonly
+        if not col.is_editable:
+            return ("holding", "column", "value", "is_edited")
+
+        # 3️⃣ Editable holding-sourced columns → value is editable
+        if col.source == "holding":
+            return ("holding", "column")
+
+        # 4️⃣ Editable asset-sourced columns → value is editable
+        if col.source == "asset":
+            return ("holding", "column")
+
+        # 5️⃣ Custom editable columns → value is editable
+        if col.source == "custom":
+            return ("holding", "column")
+
+        # Fallback: fully readonly
+        return ("holding", "column", "value", "is_edited")
+
+    # ------------------------------
+    # SAVE MODEL OVERRIDE (critical)
+    # ------------------------------
+    def save_model(self, request, obj, form, change):
+        """
+        Always delegate saving logic to SchemaColumnValueManager.
+        Django admin normally writes directly to obj.value,
+        which bypasses your business rules. We prevent that.
+        """
+        from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+
+        manager = SchemaColumnValueManager(obj)
+
+        new_val = form.cleaned_data["value"]
+        # Always treat admin edits as explicit manual edits
+        manager.save_value(new_raw_value=new_val, is_edited=True)

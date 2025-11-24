@@ -167,8 +167,3 @@ class SchemaColumnValue(models.Model):
 
     def __str__(self):
         return f"{self.column.title} = {self.value} ({self.holding})"
-
-
-"""
-CONSTRAINTS
-"""

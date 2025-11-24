@@ -242,59 +242,59 @@ class SchemaColumnValueManager:
         engine.update_dependent_formulas(changed_identifier)
 
     def save_value(self, new_raw_value, is_edited: bool):
-        """
-        Save SCV edits OR propagate holding value edits.
-        After saving, trigger formula recalculations.
-        """
-
-        changed_identifier = self.column.identifier
+        col = self.column
+        holding = self.holding
 
         # ============================================================
-        # CASE 1: Column derives from Holding -> raw model update
+        # CASE 1 — HOLDING-SOURCED COLUMN (quantity, purchase_price...)
         # ============================================================
-        if self.column.source == "holding":
+        if col.source == "holding" and col.source_field:
+
+            # Convert to correct Python type (Decimal, int, etc.)
             casted = self._cast_raw_value(new_raw_value)
 
-            # Update Holding raw value
-            setattr(self.holding, self.column.source_field, casted)
-            self.holding.save(update_fields=[self.column.source_field])
+            # Update the underlying Holding (truth source)
+            setattr(holding, col.source_field, casted)
+            holding.save(update_fields=[col.source_field])
 
-            # Refresh SCV display
-            self.refresh_display_value()
+            # Update SCV as an edited override
+            self.scv.is_edited = True
+            self.scv.value = str(
+                self._apply_display_constraints(col, casted, holding)
+            )
             self.scv.save(update_fields=["value", "is_edited"])
 
-            # Trigger formula re-evaluation
-            self._trigger_formula_updates(changed_identifier)
-
+            # Update dependent formula SCVs
+            self._trigger_formula_updates(col.identifier)
             return self.scv
 
         # ============================================================
-        # CASE 2: Editable SCV-only column (custom/manual override)
+        # CASE 2 — MANUALLY EDITABLE (ASSET or CUSTOM)
         # ============================================================
-        self.scv.is_edited = is_edited
+        if col.is_editable:
 
-        if is_edited:
-            # Normalize raw user input
-            casted = self._cast_raw_value(new_raw_value)
+            self.scv.is_edited = is_edited
 
-            # Apply display formatting (decimal_places only)
-            self.scv.value = str(
-                self._apply_display_constraints(
-                    self.column, casted, self.holding
+            if is_edited:
+                casted = self._cast_raw_value(new_raw_value)
+                self.scv.value = str(
+                    self._apply_display_constraints(col, casted, holding)
                 )
-            )
-        else:
-            # Restore auto value → recompute from raw
-            self.refresh_display_value()
+            else:
+                # revert to auto-computed
+                self.refresh_display_value()
 
-        self.scv.save(update_fields=["value", "is_edited"])
+            self.scv.save(update_fields=["value", "is_edited"])
+
+            self._trigger_formula_updates(col.identifier)
+            return self.scv
 
         # ============================================================
-        # Trigger formula re-evaluation
+        # CASE 3 — NON-EDITABLE OR FORMULA
         # ============================================================
-        self._trigger_formula_updates(changed_identifier)
-
-        return self.scv
+        raise ValueError(
+            f"Column '{col.identifier}' is not editable."
+        )
 
     # ============================================================
     # RAW CASTING (NO ROUNDING)

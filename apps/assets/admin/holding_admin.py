@@ -1,5 +1,3 @@
-# assets/admin/holding_admin.py
-
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
