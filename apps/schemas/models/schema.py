@@ -74,7 +74,7 @@ class SchemaColumn(models.Model):
 
     source_field = models.CharField(max_length=100, null=True, blank=True)
 
-    formula = models.OneToOneField(
+    formula = models.ForeignKey(
         "schemas.Formula",
         on_delete=models.SET_NULL,
         null=True,

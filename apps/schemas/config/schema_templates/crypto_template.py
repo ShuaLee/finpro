@@ -140,5 +140,22 @@ CRYPTO_TEMPLATE_CONFIG = {
                 "max_length": 20,
             },
         },
+
+        # --- Formulas ---
+        {
+            "title": "Current Value",
+            "identifier": "current_value",
+            "data_type": "decimal",
+            "source": "formula",
+            "source_field": "current_value_asset_fx",
+            "is_system": True,
+            "is_editable": True,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 7,
+            "constraints": {
+                "decimal_places": 2,
+            }
+        },
     ],
 }
