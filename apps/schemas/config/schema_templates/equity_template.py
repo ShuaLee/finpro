@@ -115,8 +115,8 @@ EQUITY_TEMPLATE_CONFIG = {
             },
         },
         {
-            "title": "Current Value",
-            "identifier": "current_value",
+            "title": "Current Value - Asset FX",
+            "identifier": "current_value_asset_fx",
             "data_type": "decimal",
             "source": "formula",
             "source_field": "current_value_asset_fx",
@@ -125,6 +125,21 @@ EQUITY_TEMPLATE_CONFIG = {
             "is_deletable": False,
             "is_default": True,
             "display_order": 7,
+            "constraints": {
+                "decimal_places": 2,
+            }
+        },
+        {
+            "title": "Current Value - Profile FX",
+            "identifier": "current_value_profile_fx",
+            "data_type": "decimal",
+            "source": "formula",
+            "source_field": "current_value_profile_fx",
+            "is_system": True,
+            "is_editable": True,
+            "is_deletable": False,
+            "is_default": True,
+            "display_order": 8,
             "constraints": {
                 "decimal_places": 2,
             }
