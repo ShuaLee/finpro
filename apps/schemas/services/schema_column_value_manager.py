@@ -258,20 +258,20 @@ class SchemaColumnValueManager:
         col = self.column
         holding = self.holding
 
-        # ============================================================
-        # CASE 1 — HOLDING-SOURCED COLUMN (quantity, purchase_price...)
-        # ============================================================
+        #
+        # ------------------------------------------------------------
+        # CASE 1 — HOLDING-SOURCED COLUMN (quantity / purchase_price)
+        # ------------------------------------------------------------
+        #
         if col.source == "holding" and col.source_field:
 
-            # Cast raw python type (Decimal, int, str)
             casted = self._cast_raw_value(new_raw_value)
 
-            # Apply display constraints first (rounding, length, etc.)
+            # Apply constraints before saving
             constrained_value = self._apply_display_constraints(
-                col, casted, holding
-            )
+                col, casted, holding)
 
-            # Convert constrained display string back to raw python type
+            # Convert constrained → raw python type
             if col.data_type == "decimal":
                 raw_final = Decimal(constrained_value)
             elif col.data_type == "integer":
@@ -279,45 +279,58 @@ class SchemaColumnValueManager:
             else:
                 raw_final = constrained_value
 
-            # Store constrained result in the Holding model
+            # ----- SAVE TO HOLDING -----
             setattr(holding, col.source_field, raw_final)
             holding.save(update_fields=[col.source_field])
 
-            # SCV mirrors holding — NEVER marked edited
+            # ----- SCV SHOULD *NEVER* BE EDITED FOR HOLDING COLUMNS -----
             self.scv.is_edited = False
             self.scv.value = constrained_value
             self.scv.save(update_fields=["value", "is_edited"])
 
-            # Trigger formula recalcs
+            # Formulas update normally
             self._trigger_formula_updates(col.identifier)
             return self.scv
 
-        # ============================================================
-        # CASE 2 — MANUAL OVERRIDE (asset/custom editable SCVs)
-        # ============================================================
+        #
+        # ------------------------------------------------------------
+        # CASE 2 — ASSET or CUSTOM COLUMN (edit OR revert)
+        # ------------------------------------------------------------
+        #
         if col.is_editable:
 
-            self.scv.is_edited = is_edited
+            #
+            # REVERT EDITED VALUE → is_edited=False
+            #
+            if not is_edited:
+                # revert back to automatic source or formula value
+                auto_value = self.display_for_column(col, holding)
+                self.scv.value = auto_value
+                self.scv.is_edited = False
+                self.scv.save(update_fields=["value", "is_edited"])
 
-            if is_edited:
-                casted = self._cast_raw_value(new_raw_value)
-                constrained_value = self._apply_display_constraints(
-                    col, casted, holding
-                )
-                self.scv.value = constrained_value
-            else:
-                # revert to auto-calculated (asset or formula source)
-                self.refresh_display_value()
+                self._trigger_formula_updates(col.identifier)
+                return self.scv
 
+            #
+            # APPLY MANUAL EDIT → is_edited=True
+            #
+            casted = self._cast_raw_value(new_raw_value)
+            constrained_display = self._apply_display_constraints(
+                col, casted, holding)
+
+            self.scv.value = constrained_display
+            self.scv.is_edited = True
             self.scv.save(update_fields=["value", "is_edited"])
 
-            # Update formulas
             self._trigger_formula_updates(col.identifier)
             return self.scv
 
-        # ============================================================
-        # CASE 3 — NON-EDITABLE OR FORMULA COLUMN
-        # ============================================================
+        #
+        # ------------------------------------------------------------
+        # CASE 3 — NON-EDITABLE or FORMULA COLUMN
+        # ------------------------------------------------------------
+        #
         raise ValueError(f"Column '{col.identifier}' is not editable.")
 
     # ============================================================

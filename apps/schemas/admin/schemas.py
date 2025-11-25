@@ -290,14 +290,18 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     # ------------------------------
     def save_model(self, request, obj, form, change):
         """
-        Always delegate saving logic to SchemaColumnValueManager.
-        Django admin normally writes directly to obj.value,
-        which bypasses your business rules. We prevent that.
+        Delegate saving to SCV Manager and ensure admin
+        correctly sends is_edited True/False based on checkbox.
         """
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
         manager = SchemaColumnValueManager(obj)
 
-        new_val = form.cleaned_data["value"]
-        # Always treat admin edits as explicit manual edits
-        manager.save_value(new_raw_value=new_val, is_edited=True)
+        new_value = form.cleaned_data.get("value")
+        # This is the key line:
+        new_is_edited = form.cleaned_data.get("is_edited")
+
+        manager.save_value(
+            new_raw_value=new_value,
+            is_edited=new_is_edited
+        )
