@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'portfolios',
     'schemas',
     'analytics',
+    'fx',
 ]
 
 MIDDLEWARE = [
