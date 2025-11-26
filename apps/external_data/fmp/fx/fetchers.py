@@ -8,7 +8,7 @@ from decimal import Decimal
 logger = logging.getLogger(__name__)
 
 FMP_API_KEY = settings.FMP_API_KEY
-FMP_BASE = "https://financialmodelingprep.com/api/stable"
+FMP_BASE = "https://financialmodelingprep.com/stable"
 
 
 def fetch_fx_universe() -> list[dict]:
@@ -60,7 +60,7 @@ def fetch_fx_quote(base: str, quote: str) -> dict | None:
     quote = quote.upper()
     symbol = f"{base}{quote}"
 
-    url = f"{FMP_BASE}/quote/{symbol}?apikey={FMP_API_KEY}"
+    url = f"{FMP_BASE}/quote-short?symbol={symbol}&apikey={FMP_API_KEY}"
 
     try:
         r = requests.get(url, timeout=10)
