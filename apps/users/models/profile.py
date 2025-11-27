@@ -6,7 +6,8 @@ Defines the Profile model, which extends user functionality with additional fiel
 
 from django.conf import settings
 from django.db import models, transaction
-from common.utils.country_currency_catalog import get_common_currency_choices, get_common_country_choices
+from common.utils.country_currency_catalog import get_common_country_choices
+from fx.models import FXCurrency
 
 
 class ProfileManager(models.Manager):
@@ -46,10 +47,12 @@ class Profile(models.Model):
         blank=True,  # ✅ optional for now
         null=True,
     )
-    currency = models.CharField(
-        max_length=3,
-        choices=get_common_currency_choices(),
-        default="USD"
+    currency = models.ForeignKey(
+        FXCurrency,
+        on_delete=models.PROTECT,
+        related_name="profiles",
+        null=True,
+        blank=False,     # required
     )
 
     # Subscriptions
@@ -90,10 +93,4 @@ class Profile(models.Model):
         return "there"
 
     def save(self, *args, **kwargs):
-        """
-        Override save to enforce uppercase currency codes.
-        """
-        if self.currency:
-            self.currency = self.currency.upper()
-
         super().save(*args, **kwargs)

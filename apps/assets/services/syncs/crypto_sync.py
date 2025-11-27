@@ -15,6 +15,8 @@ from external_data.fmp.crypto.fetchers import (
 )
 from external_data.fmp.crypto.utils import split_crypto_pair, clean_crypto_name
 
+from fx.services.utils import resolve_fx_currency
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,11 +76,24 @@ class CryptoSyncService:
     def _apply_profile(asset: Asset, detail: CryptoDetail, data: dict):
         for field, value in data.items():
 
+            # asset-level fields
             if field.startswith("asset__"):
                 _, attr = field.split("__", 1)
-                setattr(asset, attr, value)
 
-            elif hasattr(detail, field):
+                # Special case: currency  (FMP returns quote currency like "USD")
+                if attr == "currency" and value:
+                    try:
+                        asset.currency = resolve_fx_currency(value)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to resolve FXCurrency for {value}: {e}")
+                    continue
+
+                setattr(asset, attr, value)
+                continue
+
+            # detail-level fields
+            if hasattr(detail, field):
                 setattr(detail, field, value)
 
         asset.save()
@@ -114,18 +129,25 @@ class CryptoSyncService:
         if not pair:
             return False
 
-        # HERE: use full quote as profile+quote
         profile = fetch_crypto_quote(pair)
         if not profile:
             return False
 
         base, quote = split_crypto_pair(pair)
-        CryptoSyncService._update_identifiers(
-            asset, pair, base, quote or "USD")
+
+        # update identifiers
+        CryptoSyncService._update_identifiers(asset, pair, base, quote)
+
+        # update currency
+        if quote:
+            try:
+                asset.currency = resolve_fx_currency(quote)
+                asset.save()
+            except Exception:
+                pass
 
         detail = CryptoSyncService._get_or_create_detail(asset)
         CryptoSyncService._apply_profile(asset, detail, profile)
-
         return True
 
     @staticmethod
@@ -193,28 +215,29 @@ class CryptoSyncService:
             base, quote = split_crypto_pair(pair)
             name_clean = clean_crypto_name(name)
 
-            # Check if asset exists
             ident = AssetIdentifier.objects.filter(
                 id_type=AssetIdentifier.IdentifierType.PAIR_SYMBOL,
                 value=pair
             ).select_related("asset").first()
 
             # -----------------------------
-            # Existing → update
+            # Existing
             # -----------------------------
             if ident:
                 asset = ident.asset
                 detail = CryptoSyncService._get_or_create_detail(asset)
-
                 changed = False
 
                 if asset.name != name_clean:
                     asset.name = name_clean
                     changed = True
 
-                if asset.currency != quote:
-                    asset.currency = quote
-                    changed = True
+                # FIX: currency is now FK
+                if quote:
+                    fx = resolve_fx_currency(quote)
+                    if asset.currency != fx:
+                        asset.currency = fx
+                        changed = True
 
                 if detail.exchange != exchange:
                     detail.exchange = exchange
@@ -228,7 +251,7 @@ class CryptoSyncService:
                 continue
 
             # -----------------------------
-            # New → create
+            # New
             # -----------------------------
             created += 1
             if dry_run:
@@ -237,7 +260,7 @@ class CryptoSyncService:
             asset = Asset.objects.create(
                 asset_type=DomainType.CRYPTO,
                 name=name_clean,
-                currency=quote,
+                currency=resolve_fx_currency(quote),     # FIXED
                 is_custom=False,
             )
 
@@ -248,10 +271,7 @@ class CryptoSyncService:
                 exchange=exchange,
             )
 
-        return {
-            "created": created,
-            "updated": updated,
-        }
+        return {"created": created, "updated": updated}
 
     # ----------------------------------------------------------------------
     # Create From Symbol
@@ -274,12 +294,12 @@ class CryptoSyncService:
         symbol = symbol.upper().strip()
 
         # Normalize BTC → BTCUSD
-        if len(symbol) <= 4:  # Assume base symbol (BTC, ETH, SOL, etc)
+        if len(symbol) <= 4:
             pair_symbol = f"{symbol}USD"
         else:
             pair_symbol = symbol
 
-        # Check existing identifier
+        # Check for existing asset
         ident = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.PAIR_SYMBOL,
             value=pair_symbol
@@ -288,17 +308,20 @@ class CryptoSyncService:
         if ident:
             return ident.asset
 
-        # Fetch full quote
+        # Fetch full profile+quote
         profile = fetch_crypto_quote(pair_symbol)
+
+        # ----------------------------------------------------
+        # No provider data → create custom crypto asset
+        # ----------------------------------------------------
         if not profile:
             logger.warning(
                 f"No crypto data for {symbol}, creating as custom asset.")
 
-            # Create a custom asset (user-defined token)
             asset = Asset.objects.create(
                 asset_type=DomainType.CRYPTO,
                 name=symbol,
-                currency="USD",
+                currency=resolve_fx_currency("USD"),     # IMPORTANT FIX
                 is_custom=True,
             )
 
@@ -310,15 +333,21 @@ class CryptoSyncService:
             )
             return asset
 
-        # Create asset
+        # ----------------------------------------------------
+        # Provider returned valid data
+        # ----------------------------------------------------
+        base, quote = split_crypto_pair(pair_symbol)
+
+        # Resolve FXCurrency FK for asset currency
+        currency_fk = resolve_fx_currency(quote)
+
+        # Create the real asset
         asset = Asset.objects.create(
             asset_type=DomainType.CRYPTO,
-            name=profile.get("asset__name") or symbol,
-            currency=profile.get("quote_currency", "USD"),
+            name=profile.get("name") or symbol,   # FMP key is "name"
+            currency=currency_fk,
             is_custom=False,
         )
-
-        base, quote = split_crypto_pair(pair_symbol)
 
         # Identifiers
         CryptoSyncService._update_identifiers(asset, pair_symbol, base, quote)
@@ -328,9 +357,11 @@ class CryptoSyncService:
             asset=asset,
             exchange=profile.get("exchange"),
         )
+
+        # Apply profile fields onto asset + detail
         CryptoSyncService._apply_profile(asset, detail, profile)
 
-        # Cache market data
+        # Cache price data
         CryptoSyncService._apply_quote(asset, profile)
 
         logger.info(f"Created new crypto asset: {asset.name} ({pair_symbol})")

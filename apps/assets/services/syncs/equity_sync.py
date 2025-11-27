@@ -18,6 +18,8 @@ from external_data.fmp.equities.fetchers import (
     fetch_equity_universe,
 )
 
+from fx.services.utils import resolve_fx_currency
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,6 +116,16 @@ class EquitySyncService:
             # Handle nested "asset__" keys
             if field.startswith("asset__"):
                 target_field = field.split("__", 1)[1]
+
+                # SPECIAL CASE: currency
+                if target_field == "currency" and value:
+                    try:
+                        asset.currency = resolve_fx_currency(value)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to resolve FXCurrency for {value}: {e}")
+                    continue
+
                 if hasattr(asset, target_field):
                     setattr(asset, target_field, value)
             elif detail and hasattr(detail, field):
@@ -339,7 +351,7 @@ class EquitySyncService:
         - Adds new symbols (IPOs)
         - Marks missing ones as delisted
         - Detects ticker renames
-        - Refreshes core profile fields (name, sector, industry, exchange, country)
+        - Refreshes core profile fields (name, sector, industry, exchange, country, currency)
         - Hydrates profiles for new assets (no quotes)
         """
         records = fetch_equity_universe()
@@ -350,13 +362,15 @@ class EquitySyncService:
         seen = {r["symbol"] for r in records if r.get("symbol")}
         existing = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
-            asset__asset_type=DomainType.EQUITY  # ✅ Only equities
+            asset__asset_type=DomainType.EQUITY
         ).select_related("asset")
 
         created, delisted, collisions, renamed, refreshed = 0, 0, 0, 0, 0
         new_assets: list[Asset] = []
 
-        # --- Delist missing or renamed ---
+        # ----------------------------------------------------------------------
+        # Existing assets: check refresh, rename, or delist
+        # ----------------------------------------------------------------------
         for identifier in existing:
             asset = identifier.asset
             if asset.is_custom:
@@ -364,9 +378,10 @@ class EquitySyncService:
 
             ticker = identifier.value
 
-            # --- Case 1: Still present → refresh profile fields ---
+            # -----------------------------------------------------
+            # Case 1 — asset still in universe → refresh profile
+            # -----------------------------------------------------
             if ticker in seen:
-                # Should be changed to bulk when available.
                 profile = fetch_equity_profile(ticker)
                 if not profile:
                     continue
@@ -374,18 +389,22 @@ class EquitySyncService:
                 detail = getattr(asset, "equity_detail", None)
                 updated = False
 
+                # ---- Name ----
                 new_name = profile.get("companyName") or profile.get("name")
                 if new_name and new_name != asset.name:
-                    logger.info(
-                        f"🏢 Name changed for {ticker}: {asset.name} → {new_name}")
                     asset.name = new_name
                     updated = True
 
+                # ---- Currency (FX) ----   🔥 NEW
+                profile_currency = profile.get("currency")
+                if profile_currency:
+                    asset.currency = resolve_fx_currency(profile_currency)
+                    updated = True
+
+                # ---- Sector / Industry / Exchange / Country ----
                 for field in ["sector", "industry", "exchangeShortName", "country"]:
                     new_val = profile.get(field)
                     if detail and new_val and getattr(detail, field, None) != new_val:
-                        logger.info(f"🔄 {field} changed for {ticker}: "
-                                    f"{getattr(detail, field, None)} → {new_val}")
                         setattr(detail, field, new_val)
                         updated = True
 
@@ -395,13 +414,12 @@ class EquitySyncService:
                         detail.save()
                     refreshed += 1
 
-                continue  # done with this ticker
+                continue
 
-            # --- Case 2: Missing from universe → check for rename or delist ---
-            logger.debug(
-                f"Ticker {ticker} missing from universe; checking identifiers...")
+            # -----------------------------------------------------
+            # Case 2 — missing: check rename or delist
+            # -----------------------------------------------------
             resolved = EquitySyncService._resolve_identifier(asset)
-
             if not resolved:
                 delisted += 1
                 if not dry_run:
@@ -428,61 +446,83 @@ class EquitySyncService:
                 delisted += 1
                 continue
 
-            # --- Rename detected ---
+            # -----------------------------------------------------
+            # Rename detected
+            # -----------------------------------------------------
             renamed += 1
-            logger.info(f"🔄 Ticker rename detected: {ticker} → {new_symbol}")
             if not dry_run:
                 EquitySyncService._update_ticker_identifier(asset, new_symbol)
                 detail = getattr(asset, "equity_detail", None)
+
+                # Apply fields from profile response
                 EquitySyncService._apply_fields(
                     asset, detail, alt_profile, is_quote=False)
-                asset.name = alt_profile.get(
-                    "companyName") or alt_profile.get("name") or asset.name
+
+                # ---- Currency (FX) ----   🔥 NEW
+                profile_currency = alt_profile.get("currency")
+                if profile_currency:
+                    asset.currency = resolve_fx_currency(profile_currency)
+
+                asset.name = (
+                    alt_profile.get("companyName")
+                    or alt_profile.get("name")
+                    or asset.name
+                )
                 asset.save()
+
                 if detail and detail.listing_status == "DELISTED":
                     detail.listing_status = "ACTIVE"
                     detail.save()
 
-        # --- Add new IPOs ---
+        # ----------------------------------------------------------------------
+        # Add new IPOs
+        # ----------------------------------------------------------------------
         for r in records:
             symbol = r.get("symbol")
             if not symbol:
                 continue
 
-            identifier = AssetIdentifier.objects.filter(
+            exists = AssetIdentifier.objects.filter(
                 id_type=AssetIdentifier.IdentifierType.TICKER,
                 value=symbol,
-            ).select_related("asset").first()
+            ).exists()
 
-            if identifier:  # already exists
+            if exists:
                 continue
 
             created += 1
-            logger.info(f"New IPO detected: {symbol}")
             if not dry_run:
                 asset = Asset.objects.create(
                     asset_type=DomainType.EQUITY,
                     name=r.get("name") or r.get("companyName") or symbol,
-                    currency=r.get("currency") or "USD",
+                    currency=resolve_fx_currency(
+                        r.get("currency")),     # 🔥 NEW
                     is_custom=False,
                 )
+
                 EquitySyncService._update_ticker_identifier(asset, symbol)
+
                 detail = EquityDetail.objects.create(
                     asset=asset,
                     exchange=r.get("exchangeShortName") or r.get("exchange"),
                     country=r.get("country"),
                     listing_status="PENDING",
                 )
+
                 EquitySyncService._apply_fields(
                     asset, detail, r, is_quote=False)
                 new_assets.append(asset)
 
-        # --- Hydrate profiles for new assets (NO QUOTES) ---
+        # ----------------------------------------------------------------------
+        # Hydrate profiles for new assets
+        # ----------------------------------------------------------------------
         hydrated_profiles = 0
         if new_assets and not dry_run:
             try:
                 hydrated_profiles = EquitySyncService.sync_profiles_bulk(
-                    new_assets).get("success", 0)
+                    new_assets
+                ).get("success", 0)
+
                 for asset in new_assets:
                     detail = getattr(asset, "equity_detail", None)
                     if detail and detail.listing_status == "PENDING" and hydrated_profiles > 0:
@@ -492,12 +532,14 @@ class EquitySyncService:
                 logger.error(
                     f"Bulk profile hydration failed: {e}", exc_info=True)
 
-        # --- Logging Summary ---
+        # ----------------------------------------------------------------------
+        # Return
+        # ----------------------------------------------------------------------
         logger.info(
             f"Universe sync ({exchange or 'ALL'}){' [dry run]' if dry_run else ''}: "
             f"+{created}, renamed={renamed}, refreshed={refreshed}, "
             f"collisions={collisions}, delisted={delisted}, "
-            f"hydrated profiles={hydrated_profiles}"
+            f"hydrated_profiles={hydrated_profiles}"
         )
 
         return {
@@ -546,44 +588,62 @@ class EquitySyncService:
         - If no data → create as custom.
         - Else → create real asset + identifiers + hydrate detail.
         """
+
         symbol = symbol.upper().strip()
 
-        # --- Already exists ---
+        # ----------------------------------------------------
+        # Already exists → return the asset
+        # ----------------------------------------------------
         identifier = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
             value=symbol,
         ).select_related("asset").first()
+
         if identifier:
             return identifier.asset
 
-        # --- Fetch from provider ---
+        # ----------------------------------------------------
+        # Fetch from provider
+        # ----------------------------------------------------
         profile = fetch_equity_profile(symbol) or {}
-        quote = fetch_equity_quote(symbol) or None  # Optional, may skip
+        quote = fetch_equity_quote(symbol) or None   # optional
 
-        # --- Handle missing profile (custom asset) ---
+        # ----------------------------------------------------
+        # No profile → custom asset
+        # ----------------------------------------------------
         if not profile:
             logger.warning(
                 f"No profile found for {symbol}, creating as custom asset.")
+
             asset = Asset.objects.create(
                 asset_type=DomainType.EQUITY,
                 name=symbol,
-                currency="USD",
+                currency=resolve_fx_currency(
+                    "USD"),     # 🔥 NEW — FK, not string
                 is_custom=True,
             )
+
             EquitySyncService._update_ticker_identifier(asset, symbol)
             EquityDetail.objects.create(asset=asset, listing_status="CUSTOM")
             return asset
 
-        # --- Create the real asset ---
+        # ----------------------------------------------------
+        # Create real asset using provider data
+        # ----------------------------------------------------
+        asset_currency = resolve_fx_currency(profile.get("currency"))  # 🔥 NEW
+
         asset = Asset.objects.create(
             asset_type=DomainType.EQUITY,
             name=profile.get("companyName") or profile.get("name") or symbol,
-            currency=profile.get("currency") or "USD",
+            currency=asset_currency,                  # 🔥 NEW (FXCurrency FK)
             is_custom=False,
         )
+
         EquitySyncService._update_ticker_identifier(asset, symbol)
 
-        # --- Secondary Identifiers ---
+        # ----------------------------------------------------
+        # Add secondary identifiers (ISIN, CUSIP, CIK)
+        # ----------------------------------------------------
         for id_type, key in {
             AssetIdentifier.IdentifierType.ISIN: "isin",
             AssetIdentifier.IdentifierType.CUSIP: "cusip",
@@ -597,7 +657,9 @@ class EquitySyncService:
                     value=value,
                 )
 
-        # --- Detail (profile enrichment) ---
+        # ----------------------------------------------------
+        # Create Detail row and apply profile fields
+        # ----------------------------------------------------
         detail = EquityDetail.objects.create(
             asset=asset,
             exchange=profile.get("exchange") or profile.get(
@@ -605,10 +667,13 @@ class EquitySyncService:
             country=profile.get("country"),
             listing_status="ACTIVE",
         )
+
         EquitySyncService._apply_fields(asset, detail, profile, is_quote=False)
         detail.save()
 
-        # --- MarketDataCache (optional quote) ---
+        # ----------------------------------------------------
+        # Optional quote → MarketDataCache
+        # ----------------------------------------------------
         if quote:
             cache = EquitySyncService._apply_fields(
                 asset, None, quote, is_quote=True)

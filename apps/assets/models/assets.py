@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
 from core.types import DomainType, get_identifier_rules_for_domain
+from fx.models import FXCurrency
 
 
 class Asset(models.Model):
@@ -30,11 +31,14 @@ class Asset(models.Model):
         help_text="True if this asset was manually created (not from external data)."
     )
 
-    currency = models.CharField(
-        max_length=10,
-        blank=True,
+    currency = models.ForeignKey(
+        FXCurrency,
+        on_delete=models.PROTECT,
+        related_name="assets",
+        # some assets may not have a currency (real estate, custom, etc.)
         null=True,
-        help_text="Default currency in which this asset is quoted or valued (if applicable)."
+        blank=True,
+        help_text="Default currency in which this asset is quoted or valued."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

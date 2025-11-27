@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from users.models import Profile
 from subscriptions.models import Plan, AccountType
 from portfolios.services.portfolio_manager import PortfolioManager
+from fx.models import FXCurrency
 
 
 class ProfileService:
@@ -41,10 +42,19 @@ class ProfileService:
                 )
             profile.account_type = individual_type
 
+        # Assign Default Currency (USD) if missing
+        if not profile.currency:
+            usd = FXCurrency.objects.filter(code="USD").first()
+            if not usd:
+                raise ValidationError(
+                    {"detail": "FXCurrency 'USD' not found. Run: python manage.py sync_fx_universe"}
+                )
+            profile.currency = usd
+
         # Ensure Portfolio exists for this Profile
         PortfolioManager.ensure_main_portfolio(profile)
 
-        profile.save(update_fields=["plan", "account_type"])
+        profile.save(update_fields=["plan", "account_type", "currency"])
         return profile
 
     # ------------------------------
