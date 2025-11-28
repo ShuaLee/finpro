@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
 from core.types import DomainType, get_identifier_rules_for_domain
-from fx.models import FXCurrency
+from fx.models.fx import FXCurrency
 
 
 class Asset(models.Model):

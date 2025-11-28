@@ -142,3 +142,46 @@ def fetch_fx_quotes_bulk(symbols: list[str], short: bool = False) -> list[dict]:
     except Exception as e:
         logger.error(f"Failed to fetch bulk FX quotes: {e}")
         return []
+
+
+# --- Countries ---
+def fetch_available_countries() -> list[str]:
+    """
+    Fetch the list of country codes available from FMP.
+
+    Endpoint:
+        /available-countries
+
+    Response format:
+        [
+            {"country": "US"},
+            {"country": "JP"},
+            {"country": "AU"},
+            ...
+        ]
+
+    Returns:
+        ["US", "JP", "AU", ...]
+    """
+    url = f"{FMP_BASE}/available-countries?apikey={FMP_API_KEY}"
+
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+
+        if not isinstance(data, list):
+            logger.warning(f"Unexpected available-countries response: {data}")
+            return []
+
+        codes = []
+        for row in data:
+            code = row.get("country")
+            if code:
+                codes.append(code.upper())
+
+        return codes
+
+    except Exception as e:
+        logger.error(f"Failed to fetch available countries: {e}")
+        return []

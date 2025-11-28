@@ -1,4 +1,4 @@
-from fx.models import FXCurrency
+from fx.models.fx import FXCurrency
 
 
 def resolve_fx_currency(code: str | None) -> FXCurrency | None:

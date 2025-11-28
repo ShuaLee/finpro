@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from users.models import Profile
 from subscriptions.models import Plan, AccountType
 from portfolios.services.portfolio_manager import PortfolioManager
-from fx.models import FXCurrency
+from fx.models.fx import FXCurrency
 
 
 class ProfileService:
