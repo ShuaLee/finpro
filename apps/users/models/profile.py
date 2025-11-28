@@ -7,6 +7,7 @@ Defines the Profile model, which extends user functionality with additional fiel
 from django.conf import settings
 from django.db import models, transaction
 from common.utils.country_currency_catalog import get_common_country_choices
+from fx.models.country import Country
 from fx.models.fx import FXCurrency
 
 
@@ -41,11 +42,13 @@ class Profile(models.Model):
 
     # Preferences
     language = models.CharField(max_length=30, blank=False, default="en")
-    country = models.CharField(
-        max_length=2,
-        choices=get_common_country_choices(),
-        blank=True,  # ✅ optional for now
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.SET_NULL,
         null=True,
+        blank=True,
+        related_name="profiles",
+        help_text="User-selected country (from ISO-3166)"
     )
     currency = models.ForeignKey(
         FXCurrency,

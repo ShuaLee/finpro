@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from users.models import Profile
 from subscriptions.models import Plan, AccountType
 from portfolios.services.portfolio_manager import PortfolioManager
+from fx.models.country import Country
 from fx.models.fx import FXCurrency
 
 
@@ -51,6 +52,13 @@ class ProfileService:
                 )
             profile.currency = usd
 
+        if not profile.country:
+            us = Country.objects.filter(code="US").first()
+            if not us:
+                raise ValidationError(
+                    {"detail": "Country 'US' not found. Run sync."}
+                )
+
         # Ensure Portfolio exists for this Profile
         PortfolioManager.ensure_main_portfolio(profile)
 
@@ -72,12 +80,33 @@ class ProfileService:
         Raises:
             ValidationError: If required fields are missing.
         """
+        # -----------------------------------------
+    # REQUIRED FIELDS CHECK (currency only)
+    # -----------------------------------------
         if not partial:
             missing = []
+
+            # Currency is required for full updates
             if not data.get("currency"):
                 missing.append("currency")
-            # country and name not required until KYC/subscription
+
             if missing:
                 raise ValidationError(
                     {"detail": f"Missing required fields: {', '.join(missing)}"}
+                )
+
+        # -----------------------------------------
+        # COUNTRY VALIDATION (optional but strict)
+        # -----------------------------------------
+        if "country" in data:
+            country_val = data.get("country")
+
+            # Allow null explicitly (user removing country)
+            if country_val is None:
+                return
+
+            # Validate FK exists
+            if not Country.objects.filter(pk=country_val).exists():
+                raise ValidationError(
+                    {"country": "Invalid or unknown country code."}
                 )

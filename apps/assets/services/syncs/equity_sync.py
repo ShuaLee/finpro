@@ -18,7 +18,7 @@ from external_data.fmp.equities.fetchers import (
     fetch_equity_universe,
 )
 
-from fx.services.utils import resolve_fx_currency
+from fx.services.utils import resolve_fx_currency, resolve_country
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,9 @@ class EquitySyncService:
                 if hasattr(asset, target_field):
                     setattr(asset, target_field, value)
             elif detail and hasattr(detail, field):
+                if field == "country":
+                    detail.country = resolve_country(value)
+                    continue
                 setattr(detail, field, value)
 
         asset.save()
@@ -404,7 +407,17 @@ class EquitySyncService:
                 # ---- Sector / Industry / Exchange / Country ----
                 for field in ["sector", "industry", "exchangeShortName", "country"]:
                     new_val = profile.get(field)
-                    if detail and new_val and getattr(detail, field, None) != new_val:
+                    if not detail or not new_val:
+                        continue
+
+                    if field == "country":
+                        resolved = resolve_country(new_val)
+                        if resolved and detail.country != resolved:
+                            detail.country = resolved
+                            updated = True
+                        continue
+
+                    if getattr(detail, field, None) != new_val:
                         setattr(detail, field, new_val)
                         updated = True
 
@@ -505,7 +518,7 @@ class EquitySyncService:
                 detail = EquityDetail.objects.create(
                     asset=asset,
                     exchange=r.get("exchangeShortName") or r.get("exchange"),
-                    country=r.get("country"),
+                    country=resolve_country(r.get("country")),
                     listing_status="PENDING",
                 )
 
@@ -662,9 +675,8 @@ class EquitySyncService:
         # ----------------------------------------------------
         detail = EquityDetail.objects.create(
             asset=asset,
-            exchange=profile.get("exchange") or profile.get(
-                "exchangeShortName"),
-            country=profile.get("country"),
+            exchange=profile.get("exchange") or profile.get("exchangeShortName"),
+            country=resolve_country(profile.get("country")),
             listing_status="ACTIVE",
         )
 

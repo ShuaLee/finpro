@@ -1,6 +1,7 @@
 from django.db import models
 from assets.models.assets import Asset
 from core.types import DomainType
+from fx.models.country import Country
 
 
 class EquityDetail(models.Model):
@@ -26,9 +27,13 @@ class EquityDetail(models.Model):
         max_length=100, blank=True, null=True,
         help_text="Full name of the exchange"
     )
-    country = models.CharField(
-        max_length=100, blank=True, null=True,
-        help_text="Country of primary listing"
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="equity_listings",
+        help_text="Country of primary listing (ISO-3166)."
     )
 
     ipo_date = models.DateField(blank=True, null=True)
