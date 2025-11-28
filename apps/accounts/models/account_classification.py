@@ -1,6 +1,5 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from core.countries import validate_country_code
 
 
 
@@ -25,10 +24,11 @@ class ClassificationDefinition(models.Model):
         default=False,
         help_text="If true, this classification applies globally (all countries)."
     )
-    jurisdictions = models.JSONField(
-        default=list,
+    countries = models.ManyToManyField(
+        "fx.Country",
         blank=True,
-        help_text="List of ISO country codes (e.g., ['US'], ['CA'], ['GB'])."
+        related_name="classification_definitions",
+        help_text="Countries where this classification is applicable.",
     )
 
     is_system = models.BooleanField(
@@ -43,21 +43,18 @@ class ClassificationDefinition(models.Model):
     def __str__(self):
         if self.all_countries:
             return f"{self.name} ({self.tax_status}, All Countries)"
-        countries = ", ".join(self.jurisdictions) if self.jurisdictions else "N/A"
-        return f"{self.name} ({self.tax_status}, {countries})"
+
+        codes = list(self.countries.values_list("code", flat=True))
+        country_str = ", ".join(codes) if codes else "N/A"
+
+        return f"{self.name} ({self.tax_status}, {country_str})"
 
     def clean(self):
-        """
-        Validation: either all_countries is true OR jurisdictions must be valid.
-        """
-        if self.all_countries:
-            self.jurisdictions = []  # clear it to avoid conflicts
-        else:
-            for code in self.jurisdictions:
-                try:
-                    validate_country_code(code)
-                except ValueError as e:
-                    raise ValidationError(str(e))
+        if self.all_countries and self.pk:
+            if self.countries.exists():
+                raise ValidationError(
+                    "Cannot assign specific countries when all_countries=True."
+                )
 
 
 class AccountClassification(models.Model):

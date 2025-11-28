@@ -47,7 +47,7 @@ CRYPTO_TEMPLATE_CONFIG = {
             "is_default": True,
             "display_order": 3,
             "constraints": {
-                "max_length": 10,
+                "max_length": 50,
             },
         },
 

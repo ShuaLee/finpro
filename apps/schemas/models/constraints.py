@@ -139,3 +139,10 @@ class SchemaConstraint(models.Model):
                 )
 
         super().clean()
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        # After any constraint edit → refresh SCVs for this column
+        from schemas.services.schema_constraint_manager import SchemaConstraintManager
+        SchemaConstraintManager._refresh_scv_if_needed(self.column)

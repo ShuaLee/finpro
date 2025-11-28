@@ -10,87 +10,136 @@ from assets.services.syncs.asset_sync import AssetSyncService
 from core.types import DomainType
 
 
+# ================================================================
+# Inline: Asset Identifiers (always read-only)
+# ================================================================
 class AssetIdentifierInline(admin.TabularInline):
     model = AssetIdentifier
     extra = 0
     can_delete = False
     readonly_fields = ("id_type", "value", "is_primary")
 
+
+# ================================================================
+# Inline: Market Data Cache (always read-only)
+# ================================================================
 class MarketDataCacheInline(admin.StackedInline):
     model = MarketDataCache
     extra = 0
     can_delete = False
     max_num = 1
     readonly_fields = [
-        f.name for f in MarketDataCache._meta.fields if f.name not in ("id", "asset")
+        f.name for f in MarketDataCache._meta.fields
+        if f.name not in ("id", "asset")
     ]
 
+
+# ================================================================
+# Inline: Crypto Detail (quantity_precision editable)
+# ================================================================
 class CryptoDetailInline(admin.StackedInline):
     model = CryptoDetail
     extra = 0
     can_delete = False
     max_num = 1
+
+    # quantity_precision is editable → remove it from readonly_fields
     readonly_fields = [
-        f.name for f in CryptoDetail._meta.fields if f.name not in ("id", "asset")
+        f.name for f in CryptoDetail._meta.fields
+        if f.name not in ("id", "asset", "quantity_precision")
     ]
 
+    fields = [
+        "quantity_precision",
+        "exchange",
+        "description",
+        "website",
+        "logo_url",
+        "is_custom",
+        "created_at",
+        "last_updated",
+    ]
+
+    # Allow editing inside this inline
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# ================================================================
+# Inline: Equity Detail (fully read-only)
+# ================================================================
 class EquityDetailInline(admin.StackedInline):
     model = EquityDetail
     extra = 0
     can_delete = False
     max_num = 1
     readonly_fields = [
-        f.name for f in EquityDetail._meta.fields if f.name not in ("id", "asset")]
+        f.name for f in EquityDetail._meta.fields
+        if f.name not in ("id", "asset")
+    ]
 
 
+# ================================================================
+# Asset Admin (parent object read-only, inlines editable)
+# ================================================================
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    """Read-only asset viewer. Assets cannot be added/edited directly."""
+    """Read-only asset viewer — only inlines may be editable."""
 
     list_display = ("get_primary_identifier", "name", "asset_type", "created_at")
     list_filter = ("asset_type",)
     search_fields = ("name", "identifiers__value")
 
+    # Make all Asset fields read-only (disables editing Asset itself)
+    readonly_fields = [f.name for f in Asset._meta.fields]
+
     # Base inlines — always included
     base_inlines = [AssetIdentifierInline, MarketDataCacheInline]
 
-    # Dynamic inline injection
+    # Inject asset-specific detail inlines
     def get_inline_instances(self, request, obj=None):
         inline_instances = []
 
-        # Always show these
+        # Always show identifiers + market cache
         for inline_class in self.base_inlines:
             inline_instances.append(inline_class(self.model, self.admin_site))
 
+        # Conditionally show crypto/equity detail
         if obj:
             if obj.asset_type == DomainType.EQUITY:
                 inline_instances.append(EquityDetailInline(self.model, self.admin_site))
             elif obj.asset_type == DomainType.CRYPTO:
                 inline_instances.append(CryptoDetailInline(self.model, self.admin_site))
-            # If you ever add METAL/BOND, you plug their detail inline here.
 
         return inline_instances
 
-    # ------------------------------
+    # ------------------------------------------------------
     # Permissions
-    # ------------------------------
+    # ------------------------------------------------------
     def has_add_permission(self, request):
         return False
 
+    # MUST BE TRUE for inline editing to work
     def has_change_permission(self, request, obj=None):
-        return False
+        return True
 
-    # ------------------------------
+    # ------------------------------------------------------
     # Helpers
-    # ------------------------------
+    # ------------------------------------------------------
     def get_primary_identifier(self, obj):
         primary = obj.identifiers.filter(is_primary=True).first()
         return primary.value if primary else "-"
     get_primary_identifier.short_description = "Identifier"
 
-    # ------------------------------
+    # ------------------------------------------------------
     # Admin Actions
-    # ------------------------------
+    # ------------------------------------------------------
     actions = ["sync_profile", "sync_quote"]
 
     def sync_profile(self, request, queryset):
@@ -100,7 +149,6 @@ class AssetAdmin(admin.ModelAdmin):
                 success += 1
             else:
                 fail += 1
-
         self.message_user(
             request,
             f"Profile sync completed: {success} succeeded, {fail} failed.",
@@ -115,7 +163,6 @@ class AssetAdmin(admin.ModelAdmin):
                 success += 1
             else:
                 fail += 1
-
         self.message_user(
             request,
             f"Quote sync completed: {success} succeeded, {fail} failed.",

@@ -3,18 +3,16 @@ from django import forms
 from accounts.models.account import Account
 from accounts.models.account_classification import ClassificationDefinition, AccountClassification
 from accounts.services.account_service import AccountService
-from core.countries import COUNTRY_CHOICES, validate_country_code
+from fx.models.country import Country
 
 
 class ClassificationDefinitionForm(forms.ModelForm):
-    jurisdictions = forms.MultipleChoiceField(
-        choices=COUNTRY_CHOICES,
+
+    countries = forms.ModelMultipleChoiceField(
+        queryset=Country.objects.all(),
         required=False,
         widget=forms.SelectMultiple(attrs={"size": 12}),
-    )
-    all_countries = forms.BooleanField(
-        required=False,
-        help_text="If checked, applies to all countries and ignores jurisdictions."
+        help_text="Countries where this classification applies.",
     )
 
     class Meta:
@@ -24,13 +22,9 @@ class ClassificationDefinitionForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
 
-        # if "all countries" is selected → clear jurisdictions
         if cleaned.get("all_countries"):
-            cleaned["jurisdictions"] = []
-        else:
-            # validate each selected country code
-            for code in cleaned.get("jurisdictions", []):
-                validate_country_code(code)
+            # If all_countries=True → ignore any selected countries
+            cleaned["countries"] = Country.objects.none()
 
         return cleaned
 
@@ -38,6 +32,7 @@ class ClassificationDefinitionForm(forms.ModelForm):
 # ----------------------------
 # Admin
 # ----------------------------
+
 @admin.register(ClassificationDefinition)
 class ClassificationDefinitionAdmin(admin.ModelAdmin):
     form = ClassificationDefinitionForm
@@ -52,14 +47,17 @@ class ClassificationDefinitionAdmin(admin.ModelAdmin):
     )
     list_filter = ("tax_status", "is_system")
     search_fields = ("name",)
-    ordering = ("name",)
     readonly_fields = ("created_at",)
+    ordering = ("name",)
 
     def display_scope(self, obj):
-        """Show either 'All Countries' or specific jurisdictions."""
+        """Show either 'All Countries' or the country list."""
         if obj.all_countries:
             return "All Countries"
-        return ", ".join(obj.jurisdictions or [])
+
+        codes = list(obj.countries.values_list("code", flat=True))
+        return ", ".join(codes) if codes else "N/A"
+
     display_scope.short_description = "Jurisdictions"
 
 
@@ -73,7 +71,7 @@ class AccountClassificationAdmin(admin.ModelAdmin):
         "carry_forward_room",
         "created_at",
     )
-    list_filter = ("definition__tax_status",)  # ✅ removed JSONField filter
+    list_filter = ("definition__tax_status",)
     search_fields = (
         "definition__name",
         "profile__user__username",

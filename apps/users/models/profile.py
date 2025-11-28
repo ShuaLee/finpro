@@ -5,8 +5,7 @@ Defines the Profile model, which extends user functionality with additional fiel
 """
 
 from django.conf import settings
-from django.db import models, transaction
-from common.utils.country_currency_catalog import get_common_country_choices
+from django.db import models
 from fx.models.country import Country
 from fx.models.fx import FXCurrency
 
