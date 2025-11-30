@@ -1,26 +1,33 @@
 from django.db import transaction
-
-from analytics.models.analytics import Analytic, AnalyticDimension, AnalyticDimensionValue
-from schemas.models.schema import SchemaColumn, SchemaColumnValue
-from schemas.services.schema_manager import SchemaManager
-
-from collections import defaultdict
 from decimal import Decimal
+from collections import defaultdict
+
+from analytics.models.analytics import (
+    Analytic,
+    AnalyticDimension,
+    AnalyticDimensionValue,
+)
+from schemas.models.schema import SchemaColumnValue, SchemaColumn
+from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
 
 class AnalyticsEngine:
     """
     Computes analytics for a given Analytic.
-    1. Ensures all schemas contain required dimension columns
-    2. Reads SCV values for each holding
-    3. Aggregates totals
-    4. Writes AnalyticDimensionValues
+
+    Workflow:
+        1. For each dimension:
+            - Ensure grouping/value columns exist in all schemas
+            - Read SCVs from every holding
+            - Group + sum
+            - Calculate percentages
+            - Write AnalyticDimensionValue rows
     """
 
     def __init__(self, analytic: Analytic):
         self.analytic = analytic
-        self.profile = analytic.profile
-        self.portfolio = analytic.profile.portfolio
+        self.profile = analytic.portfolio.profile
+        self.portfolio = analytic.portfolio
 
     # ======================================================================
     # MAIN ENTRY
@@ -28,9 +35,11 @@ class AnalyticsEngine:
     @transaction.atomic
     def compute(self):
         """
-        Compute all dimensions of this analytic and write dimension values.
+        Computes the entire analytic and returns a Python dict for admin.
+        All previous AnalyticDimensionValues are deleted.
         """
-        # Clear old values
+
+        # Wipe previous computed values
         AnalyticDimensionValue.objects.filter(
             dimension__analytic=self.analytic
         ).delete()
@@ -38,8 +47,7 @@ class AnalyticsEngine:
         results = {}
 
         for dimension in self.analytic.dimensions.filter(is_active=True):
-            result = self._compute_dimension(dimension)
-            results[dimension.name] = result
+            results[dimension.name] = self._compute_dimension(dimension)
 
         return results
 
@@ -48,59 +56,58 @@ class AnalyticsEngine:
     # ======================================================================
     def _compute_dimension(self, dimension: AnalyticDimension):
         """
-        Compute a single dimension (e.g., "country").
+        Compute SUM + percentage for one dimension.
         """
-        dim_identifier = dimension.source_identifier
-        val_identifier = self.analytic.value_identifier
 
-        # Ensure required columns exists for ALL schemas
-        self._ensure_schema_column(dim_identifier)
-        self._ensure_schema_column(val_identifier)
+        group_identifier = dimension.source_identifier           # e.g. 'country'
+        # e.g. 'current_value_profile_fx'
+        value_identifier = self.analytic.value_identifier
 
-        # For summing value buckets
+        # Make sure all schemas contain the SCV columns we depend on
+        self._ensure_schema_column(group_identifier, data_type="string")
+        self._ensure_schema_column(value_identifier, data_type="decimal")
+
         totals = defaultdict(Decimal)
 
-        # All holdings in the user's portfolio
-        accounts = self.portfolio.accounts.all()
+        # All holdings for this portfolio
         holdings = [
-            h for a in accounts for h in a.holdings.all()
+            h
+            for acct in self.portfolio.accounts.all()
+            for h in acct.holdings.all()
         ]
 
-        # Compute dimension -> total_value mapping
         for holding in holdings:
-            dim_value = self._get_scv_value(holding, dim_identifier)
-            val_value = self._get_numeric_scv_value(holding, val_identifier)
+            group_value = self._get_scv_text(holding, group_identifier)
+            numeric_value = self._get_scv_decimal(holding, value_identifier)
 
-            if dim_value is None:
-                dim_value = "Unknown"
+            if not group_value:
+                group_value = "Unknown"
 
-            totals[dim_value] += val_value
+            totals[group_value] += numeric_value
 
         grand_total = sum(totals.values()) or Decimal("1")
 
-        # Save rows
-        dim_values = []
-        for bucket, total in totals.items():
+        # Build DB rows
+        rows = []
+        for grp, total in totals.items():
             pct = (total / grand_total) if grand_total else Decimal("0")
 
-            dim_values.append(
+            rows.append(
                 AnalyticDimensionValue(
                     dimension=dimension,
-                    dimension_value=bucket,
-                    total_value=total
+                    dimension_value=grp,
+                    total_value=total,
+                    percentage=pct,
                 )
             )
 
-        AnalyticDimensionValue.objects.bulk_create(dim_values)
-        return dim_values
+        AnalyticDimensionValue.objects.bulk_create(rows)
+        return rows
 
     # ======================================================================
-    # SCV ACCESS HELPERS
+    # SCV HELPERS
     # ======================================================================
-    def _get_scv_value(self, holding, identifier):
-        """
-        Returns SCV.value for the given identifier.
-        """
+    def _get_scv_text(self, holding, identifier):
         scv = SchemaColumnValue.objects.filter(
             holding=holding,
             column__identifier=identifier
@@ -108,51 +115,52 @@ class AnalyticsEngine:
 
         return scv.value if scv else None
 
-    def _get_numeric_scv_value(self, holding, identifier):
-        """
-        Fetch a decimal SCV value safely.
-        """
-        val = self._get_scv_value(holding, identifier)
+    def _get_scv_decimal(self, holding, identifier):
+        val = self._get_scv_text(holding, identifier)
         try:
             return Decimal(str(val or "0"))
         except:
             return Decimal("0")
 
     # ======================================================================
-    # SCHEMA COLUMN ENSURE LOGIC
+    # SCHEMA COLUMN ENSURE
     # ======================================================================
-    def _ensure_schema_column(self, identifier):
+    def _ensure_schema_column(self, identifier: str, data_type: str):
         """
-        Ensure that *every schema* in the user portfolio has a column with
-        the given identifier.
+        Ensures EVERY schema in the portfolio contains the column with the given identifier.
 
         Rules:
-            - If SchemaTemplate defines it → use template definition
-            - Otherwise create a custom string column
-            - SCVs automatically populated
+            - If the column exists → verify matching data_type
+            - If the identifier exists in the SchemaTemplate → use template definition
+            - Otherwise → create custom column
+            - Always refresh SCVs for all holdings
         """
+
         schemas = self.portfolio.schemas.all()
 
         for schema in schemas:
-            col = schema.columns.filter(identifier=identifier).first()
-            if col:
+            existing = schema.columns.filter(identifier=identifier).first()
+
+            if existing:
+                if existing.data_type != data_type:
+                    raise ValueError(
+                        f"SchemaColumn '{identifier}' in {schema.account_type} "
+                        f"is {existing.data_type}, expected {data_type}."
+                    )
                 continue
 
-            # Template lookup (if exists)
-            from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
+            # Try template match
+            from schemas.models.template import SchemaTemplateColumn
 
-            template = SchemaTemplate.objects.filter(
-                account_type=schema.account_type
-            ).first()
+            template_col = (
+                SchemaTemplateColumn.objects
+                .filter(template__account_type=schema.account_type,
+                        identifier=identifier)
+                .first()
+            )
 
-            template_col = None
-            if template:
-                template_col = template.columns.filter(
-                    identifier=identifier
-                ).first()
-
-            # If defined in template -> use template definition
             if template_col:
+                # Create from template
                 column = SchemaColumn.objects.create(
                     schema=schema,
                     title=template_col.title,
@@ -173,12 +181,12 @@ class AnalyticsEngine:
                     overrides=template_col.constraints or {}
                 )
             else:
-                # Otherwise create a CUSTOM column
+                # Create custom column
                 column = SchemaColumn.objects.create(
                     schema=schema,
                     title=identifier.replace("_", " ").title(),
                     identifier=identifier,
-                    data_type="string",
+                    data_type=data_type,
                     source="custom",
                     source_field=None,
                     is_editable=True,
@@ -187,14 +195,17 @@ class AnalyticsEngine:
                     display_order=schema.columns.count() + 1,
                 )
 
+                # Add safe default constraints
                 from schemas.services.schema_constraint_manager import SchemaConstraintManager
-                SchemaConstraintManager.create_from_master(column, overrides={
-                    "max_length": 255
-                })
-
-                # Create SCVs for all holdings
-                SchemaManager(schema).ensure_for_all_holdings(
-                    schema.portfolio.accounts.get(
-                        account_type=schema.account_type
-                    )
+                SchemaConstraintManager.create_from_master(
+                    column,
+                    overrides={
+                        "max_length": 255 if data_type == "string" else None,
+                        "decimal_places": 2 if data_type == "decimal" else None,
+                    }
                 )
+
+            # SCVs must exist after column creation
+            from schemas.services.schema_manager import SchemaManager
+            for acct in self.portfolio.accounts.filter(account_type=schema.account_type):
+                SchemaManager(schema).ensure_for_all_holdings(acct)

@@ -59,29 +59,39 @@ class SchemaColumnFactory:
     # Custom Column
     # ---------------------------
     @staticmethod
-    def add_custom_column(schema, title: str, data_type: str):
+    def add_custom_column(schema, title: str, data_type: str, identifier_override=None):
         if not title or not data_type:
             raise ValidationError("Both 'title' and 'data_type' are required.")
 
-        base_identifier = slugify(title)
+        # ---------------------------------------------------------
+        # 1. Determine final identifier
+        # ---------------------------------------------------------
+        base_identifier = identifier_override or slugify(title)
+        if not base_identifier:
+            raise ValidationError("Could not derive a valid identifier.")
+
         existing_ids = set(schema.columns.values_list("identifier", flat=True))
 
-        # Ensure identifier uniqueness
         identifier = base_identifier
         counter = 1
         while identifier in existing_ids:
-            counter += 1
+            # When override is given, we *must* preserve it.
+            # Only suffix when there is a collision in THIS schema.
             identifier = f"{base_identifier}_{counter}"
+            counter += 1
 
-        # Optional: warn if duplicate title
-        if counter > 1:
-            raise ValidationError(
-                f"A column with the title '{title}' already exists. Please choose a unique name."
-            )
+        # ---------------------------------------------------------
+        # 2. Determine display order
+        # ---------------------------------------------------------
+        next_order = (
+            schema.columns.aggregate(models.Max("display_order"))[
+                "display_order__max"]
+            or 0
+        ) + 1
 
-        next_order = (schema.columns.aggregate(models.Max(
-            "display_order"))["display_order__max"] or 0) + 1
-
+        # ---------------------------------------------------------
+        # 3. Create column
+        # ---------------------------------------------------------
         column = SchemaColumn.objects.create(
             schema=schema,
             title=title,
@@ -95,6 +105,7 @@ class SchemaColumnFactory:
             display_order=next_order,
         )
 
+        # Create constraints + SCVs
         return SchemaColumnFactory._finalize_column(column)
 
     @staticmethod
@@ -104,3 +115,29 @@ class SchemaColumnFactory:
         Resequencing is handled automatically by the model's delete().
         """
         column.delete()
+
+    @staticmethod
+    def ensure_column(schema, identifier: str, title: str, data_type: str):
+        """
+        Ensures a SchemaColumn exists with the given identifier.
+
+        - If it exists → validates its data_type
+        - If missing → creates a custom column
+        """
+        existing = schema.columns.filter(identifier=identifier).first()
+
+        if existing:
+            if existing.data_type != data_type:
+                raise ValidationError(
+                    f"Existing column '{identifier}' in schema {schema.account_type} "
+                    f"has data_type={existing.data_type}, expected {data_type}."
+                )
+            return existing
+
+        # Otherwise create a custom column
+        return SchemaColumnFactory.add_custom_column(
+            schema=schema,
+            title=title,
+            data_type=data_type,
+            identifier_override=identifier,  # NEW PARAM
+        )
