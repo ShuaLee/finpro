@@ -21,9 +21,6 @@ class AssetType(models.Model):
     # Whether user can delete it or not
     is_system = models.BooleanField(default=False)
 
-    # Whether users can create their own categories under `custom`
-    is_user_defined = models.BooleanField(default=False)
-
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -33,6 +30,11 @@ class AssetType(models.Model):
 
     def __str__(self):
         return self.name
+
+    def delete(self, *args, **kwargs):
+        if self.is_system:
+            raise ValidationError("System AssetTypes cannot be deleted.")
+        super().delete(*args, **kwargs)
 
 
 class Asset(models.Model):
