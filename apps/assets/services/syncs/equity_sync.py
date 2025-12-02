@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from django.db import transaction
 
-from assets.models.assets import Asset, AssetIdentifier
+from assets.models.assets import Asset, AssetIdentifier, AssetType
 from assets.models.details.equity_detail import EquityDetail
 from assets.models.market_data_cache import MarketDataCache
 from core.types import DomainType
@@ -22,6 +22,14 @@ from fx.services.utils import resolve_fx_currency, resolve_country
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------
+# Helper
+# ---------------------------
+def get_system_asset_type(domain: str) -> AssetType:
+    """
+    Returns the system-defined AssetType for a domain.
+    """
+    return AssetType.objects.get(domain=domain, is_system=True)
 
 class EquitySyncService:
     # -------------------------------------------------------------------------
@@ -146,6 +154,8 @@ class EquitySyncService:
 
     @staticmethod
     def sync(asset: Asset) -> bool:
+        if asset.asset_type.domain != DomainType.EQUITY:
+            return False
         return (
             EquitySyncService.sync_profile(asset)
             and EquitySyncService.sync_quote(asset)
@@ -157,7 +167,7 @@ class EquitySyncService:
         Sync an equity's profile from FMP (by ticker or fallback identifier).
         Also hydrates ISIN / CUSIP / CIK automatically if found in response.
         """
-        if asset.asset_type != DomainType.EQUITY:
+        if asset.asset_type.domain != DomainType.EQUITY:
             return False
 
         ticker = EquitySyncService._get_primary_ticker(asset)
@@ -199,47 +209,47 @@ class EquitySyncService:
                 detail.save()
                 return True
 
-        # --- Case 3: Fallback (mark as delisted) ---
-        if not asset.is_custom:
-            detail.listing_status = "DELISTED"
-            detail.save()
         logger.warning(f"No profile found for {asset}")
         return False
 
     @staticmethod
     def sync_quote(asset: Asset) -> bool:
-        if asset.asset_type != DomainType.EQUITY:
+        if asset.asset_type.domain != DomainType.EQUITY:
             return False
 
         ticker = EquitySyncService._get_primary_ticker(asset)
         quote = fetch_equity_quote(ticker) if ticker else None
 
+        # Fallback: try ISIN / CUSIP / CIK
         if not quote:
             resolved = EquitySyncService._resolve_identifier(asset)
             if resolved:
                 id_type, value = resolved
-                profile = EquitySyncService._search_by_identifier(
-                    id_type, value)
+                profile = EquitySyncService._search_by_identifier(id_type, value)
                 if profile and profile.get("symbol"):
                     new_symbol = profile["symbol"]
-                    EquitySyncService._update_ticker_identifier(
-                        asset, new_symbol)
+                    EquitySyncService._update_ticker_identifier(asset, new_symbol)
                     quote = fetch_equity_quote(new_symbol)
 
+        # No quote -> mark delisted (but never for custom assets)
         if not quote:
             detail = getattr(asset, "equity_detail", None)
-            if detail:
+            if detail and not asset.is_custom:
                 detail.listing_status = "DELISTED"
                 detail.save()
             return False
 
+        # Quote FOUND → write market data
         EquitySyncService._apply_fields(asset, None, quote, is_quote=True)
 
+        # Ensure active listing
         detail = getattr(asset, "equity_detail", None)
         if detail and detail.listing_status in ("PENDING", "DELISTED"):
             detail.listing_status = "ACTIVE"
             detail.save()
+
         return True
+
 
     # -------------------------------------------------------------------------
     # Bulk Sync
@@ -277,6 +287,10 @@ class EquitySyncService:
                         continue
 
                     asset = identifier.asset
+
+                    if asset.asset_type.domain != DomainType.EQUITY:
+                        continue
+
                     if asset.is_custom:
                         continue
 
@@ -303,7 +317,11 @@ class EquitySyncService:
     @staticmethod
     def sync_quotes_bulk(assets: list[Asset]) -> dict:
         results = defaultdict(int)
-        symbols = {a: EquitySyncService._get_primary_ticker(a) for a in assets}
+        symbols = {
+            a: EquitySyncService._get_primary_ticker(a)
+            for a in assets
+            if a.asset_type.domain == DomainType.EQUITY     # 🔥 NEW: skip non-equities immediately
+        }
         symbols = {a: s for a, s in symbols.items() if s}
 
         data = fetch_equity_quotes_bulk(list(symbols.values()))
@@ -311,6 +329,9 @@ class EquitySyncService:
 
         with transaction.atomic():
             for asset, symbol in symbols.items():
+                if asset.asset_type.domain != DomainType.EQUITY:
+                    continue
+
                 quote = data_map.get(symbol)
 
                 if not quote:
@@ -363,10 +384,16 @@ class EquitySyncService:
                 "exchangeShortName") == exchange]
 
         seen = {r["symbol"] for r in records if r.get("symbol")}
+
         existing = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
-            asset__asset_type=DomainType.EQUITY
+            asset__asset_type__domain=DomainType.EQUITY
         ).select_related("asset")
+
+        equity_type = AssetType.objects.get(
+            domain=DomainType.EQUITY,
+            is_system=True
+        )
 
         created, delisted, collisions, renamed, refreshed = 0, 0, 0, 0, 0
         new_assets: list[Asset] = []
@@ -376,6 +403,12 @@ class EquitySyncService:
         # ----------------------------------------------------------------------
         for identifier in existing:
             asset = identifier.asset
+
+            # skip non-equity assets (safety)
+            if asset.asset_type.domain != DomainType.EQUITY:
+                continue
+
+            # skip custom manual assets
             if asset.is_custom:
                 continue
 
@@ -398,13 +431,13 @@ class EquitySyncService:
                     asset.name = new_name
                     updated = True
 
-                # ---- Currency (FX) ----   🔥 NEW
+                # ---- Currency (FX) ----
                 profile_currency = profile.get("currency")
                 if profile_currency:
                     asset.currency = resolve_fx_currency(profile_currency)
                     updated = True
 
-                # ---- Sector / Industry / Exchange / Country ----
+                # --- Detail fields ---
                 for field in ["sector", "industry", "exchangeShortName", "country"]:
                     new_val = profile.get(field)
                     if not detail or not new_val:
@@ -445,6 +478,7 @@ class EquitySyncService:
             id_type, id_value = resolved
             alt_profile = EquitySyncService._search_by_identifier(
                 id_type, id_value)
+            
             if not alt_profile:
                 delisted += 1
                 if not dry_run:
@@ -506,10 +540,9 @@ class EquitySyncService:
             created += 1
             if not dry_run:
                 asset = Asset.objects.create(
-                    asset_type=DomainType.EQUITY,
+                    asset_type=equity_type,
                     name=r.get("name") or r.get("companyName") or symbol,
-                    currency=resolve_fx_currency(
-                        r.get("currency")),     # 🔥 NEW
+                    currency=resolve_fx_currency(r.get("currency")),
                     is_custom=False,
                 )
 
@@ -596,16 +629,12 @@ class EquitySyncService:
     def create_from_symbol(symbol: str) -> Asset:
         """
         Create or fetch an equity asset by ticker.
-        - If exists → return it.
-        - Else fetch profile (and optionally quote) from FMP.
-        - If no data → create as custom.
-        - Else → create real asset + identifiers + hydrate detail.
         """
 
         symbol = symbol.upper().strip()
 
         # ----------------------------------------------------
-        # Already exists → return the asset
+        # 1. Already exists → return it
         # ----------------------------------------------------
         identifier = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
@@ -616,51 +645,60 @@ class EquitySyncService:
             return identifier.asset
 
         # ----------------------------------------------------
-        # Fetch from provider
+        # 2. Fetch from provider
         # ----------------------------------------------------
         profile = fetch_equity_profile(symbol) or {}
-        quote = fetch_equity_quote(symbol) or None   # optional
+        quote = fetch_equity_quote(symbol) or None
+
+        # Load system AssetType for equities
+        equity_type = AssetType.objects.get(domain=DomainType.EQUITY, is_system=True)
 
         # ----------------------------------------------------
-        # No profile → custom asset
+        # 3. If no profile → create a *custom equity asset*
         # ----------------------------------------------------
         if not profile:
             logger.warning(
-                f"No profile found for {symbol}, creating as custom asset.")
+                f"No profile found for {symbol}, creating as custom equity asset."
+            )
 
             asset = Asset.objects.create(
-                asset_type=DomainType.EQUITY,
+                asset_type=equity_type,
                 name=symbol,
-                currency=resolve_fx_currency(
-                    "USD"),     # 🔥 NEW — FK, not string
+                currency=resolve_fx_currency("USD"),
                 is_custom=True,
             )
 
             EquitySyncService._update_ticker_identifier(asset, symbol)
-            EquityDetail.objects.create(asset=asset, listing_status="CUSTOM")
+
+            EquityDetail.objects.create(
+                asset=asset,
+                listing_status="CUSTOM",
+            )
+
             return asset
 
         # ----------------------------------------------------
-        # Create real asset using provider data
+        # 4. Create real asset using provider data
         # ----------------------------------------------------
-        asset_currency = resolve_fx_currency(profile.get("currency"))  # 🔥 NEW
+        asset_currency = resolve_fx_currency(profile.get("currency"))
 
         asset = Asset.objects.create(
-            asset_type=DomainType.EQUITY,
+            asset_type=equity_type,
             name=profile.get("companyName") or profile.get("name") or symbol,
-            currency=asset_currency,                  # 🔥 NEW (FXCurrency FK)
+            currency=asset_currency,
             is_custom=False,
         )
 
+        # Add ticker (primary identifier)
         EquitySyncService._update_ticker_identifier(asset, symbol)
 
         # ----------------------------------------------------
-        # Add secondary identifiers (ISIN, CUSIP, CIK)
+        # 5. Add secondary identifiers from provider
         # ----------------------------------------------------
         for id_type, key in {
             AssetIdentifier.IdentifierType.ISIN: "isin",
             AssetIdentifier.IdentifierType.CUSIP: "cusip",
-            AssetIdentifier.IdentifierType.CIK: "cik",
+            AssetIdentifier.IdentifierType.CIK:   "cik",
         }.items():
             value = profile.get(key)
             if value:
@@ -671,7 +709,7 @@ class EquitySyncService:
                 )
 
         # ----------------------------------------------------
-        # Create Detail row and apply profile fields
+        # 6. Create Detail row
         # ----------------------------------------------------
         detail = EquityDetail.objects.create(
             asset=asset,
@@ -684,15 +722,17 @@ class EquitySyncService:
         detail.save()
 
         # ----------------------------------------------------
-        # Optional quote → MarketDataCache
+        # 7. Optional: store quote into MarketDataCache
         # ----------------------------------------------------
         if quote:
             cache = EquitySyncService._apply_fields(
-                asset, None, quote, is_quote=True)
+                asset, None, quote, is_quote=True
+            )
             logger.info(f"Cached quote for {symbol}: {cache.last_price}")
 
         logger.info(f"Created new equity asset {symbol} ({asset.name})")
         return asset
+
 
     @staticmethod
     def hydrate_identifiers(asset: Asset, data: dict):
