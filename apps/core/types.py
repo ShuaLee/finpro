@@ -1,11 +1,5 @@
 from django.db import models
 
-# from core.schema_config.crypto import CRYPTO_SCHEMA_CONFIG
-# from core.schema_config.metal import METAL_SCHEMA_CONFIG
-# from core.schema_config.bond import BOND_SCHEMA_CONFIG
-# from core.schema_config.real_estate import REAL_ESTATE_SCHEMA_CONFIG
-# from core.schema_config.custom import CUSTOM_SCHEMA_CONFIG
-
 
 class DomainType(models.TextChoices):
     EQUITY = "equity", "Equities"
@@ -33,7 +27,7 @@ DOMAIN_REGISTRY = {
         "identifier_rules": {"TICKER", "ISIN", "CUSIP", "CIK"},
     },
     DomainType.CRYPTO: {
-        "label": "Cryptocurrency",
+        "label": "Cryptocurrencies",
         # "schema_config": CRYPTO_SCHEMA_CONFIG,
         "account_types": {
             "crypto_wallet": {

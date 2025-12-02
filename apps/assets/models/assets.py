@@ -1,8 +1,38 @@
 import uuid
 from django.db import models
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from core.types import DomainType, get_identifier_rules_for_domain
 from fx.models.fx import FXCurrency
+
+
+class AssetType(models.Model):
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+    )
+
+    # Internal domain mapping
+    domain = models.CharField(
+        max_length=20,
+        choices=DomainType.choices,
+    )
+
+    # Whether user can delete it or not
+    is_system = models.BooleanField(default=False)
+
+    # Whether users can create their own categories under `custom`
+    is_user_defined = models.BooleanField(default=False)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
+
+    def __str__(self):
+        return self.name
 
 
 class Asset(models.Model):
@@ -12,11 +42,10 @@ class Asset(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    asset_type = models.CharField(
-        max_length=20,
-        choices=DomainType.choices,
-        db_index=True,
-        help_text="General classification (Equity, Bond, Crypto, Metal, RealEstate, Custom, etc.)",
+    asset_type = models.ForeignKey(
+        AssetType,
+        on_delete=models.PROTECT,
+        related_name="assets",
     )
 
     name = models.CharField(
@@ -56,20 +85,24 @@ class Asset(models.Model):
     def clean(self):
         super().clean()
         # Example enforcement: Tradables must have identifiers
-        if self.asset_type in {
+        if self.asset_type.domain in {
             DomainType.EQUITY,
             DomainType.BOND,
             DomainType.CRYPTO,
             DomainType.METAL,
         } and not self.identifiers.exists():
             raise ValidationError(
-                f"{self.asset_type} assets must have at least one identifier (Ticker, ISIN, etc.)."
+                f"{self.asset_type.domain} assets must have at least one identifier (Ticker, ISIN, etc.)."
             )
 
     def __str__(self):
         # Prefer a primary identifier if available
         primary_id = self.identifiers.filter(is_primary=True).first()
-        return f"{primary_id.value if primary_id else self.name} ({self.asset_type})"
+        return f"{primary_id.value if primary_id else self.name} ({self.asset_type.name})"
+
+    @property
+    def domain(self):
+        return self.asset_type.domain
 
 
 class AssetIdentifier(models.Model):
@@ -129,11 +162,11 @@ class AssetIdentifier(models.Model):
                     "An asset can only have one primary identifier.")
 
         # --- Domain-based identifier validation ---
-        allowed = get_identifier_rules_for_domain(self.asset.asset_type)
+        allowed = get_identifier_rules_for_domain(self.asset.domain)
 
         if self.id_type not in allowed:
             raise ValidationError(
-                f"Identifier type '{self.id_type}' is not valid for asset type '{self.asset.asset_type}'."
+                f"Identifier type '{self.id_type}' is not valid for asset type '{self.asset.domain}'."
             )
 
     def save(self, *args, **kwargs):
