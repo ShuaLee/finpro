@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from assets.models.assets import Asset, AssetIdentifier
 from assets.models.details.crypto_detail import CryptoDetail
 from assets.models.details.equity_detail import EquityDetail
+from assets.models.details.real_estate_detail import RealEstateDetail
 from assets.models.market_data_cache import MarketDataCache
 from assets.services.syncs.asset_sync import AssetSyncService
 
@@ -84,15 +85,64 @@ class EquityDetailInline(admin.StackedInline):
         if f.name not in ("id", "asset")
     ]
 
+# ================================================================
+# Inline: Real Estate Detail (editable)
+# ================================================================
+
+
+class RealEstateDetailInline(admin.StackedInline):
+    model = RealEstateDetail
+    extra = 0
+    can_delete = False
+    max_num = 1
+
+    # All fields except pk + asset are editable
+    readonly_fields = ("created_at", "last_updated")
+
+    fieldsets = (
+        ("Location", {
+            "fields": ("country", "region", "city", "address")
+        }),
+        ("Property Type", {
+            "fields": ("property_type",)
+        }),
+        ("Valuation", {
+            "fields": ("purchase_price", "estimated_value", "appraisal_date")
+        }),
+        ("Income / Expenses", {
+            "fields": ("rental_income", "expenses")
+        }),
+        ("Mortgage", {
+            "fields": (
+                "is_mortgaged",
+                "mortgage_balance",
+                "interest_rate",
+                "monthly_mortgage_payment"
+            )
+        }),
+        ("System", {
+            "fields": ("created_at", "last_updated")
+        }),
+    )
+
+    def has_add_permission(self, request, obj=None):
+        # Only allow creation when the asset is first created
+        return False if obj else True
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 # ================================================================
 # Asset Admin (parent object read-only, inlines editable)
 # ================================================================
+
+
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
     """Read-only asset viewer — only inlines may be editable."""
 
-    list_display = ("get_primary_identifier", "name", "asset_type", "created_at")
+    list_display = ("get_primary_identifier", "name",
+                    "asset_type", "created_at")
     list_filter = ("asset_type",)
     search_fields = ("name", "identifiers__value")
 
@@ -113,9 +163,11 @@ class AssetAdmin(admin.ModelAdmin):
         # Conditionally show crypto/equity detail
         if obj:
             if obj.asset_type == DomainType.EQUITY:
-                inline_instances.append(EquityDetailInline(self.model, self.admin_site))
+                inline_instances.append(
+                    EquityDetailInline(self.model, self.admin_site))
             elif obj.asset_type == DomainType.CRYPTO:
-                inline_instances.append(CryptoDetailInline(self.model, self.admin_site))
+                inline_instances.append(
+                    CryptoDetailInline(self.model, self.admin_site))
 
         return inline_instances
 

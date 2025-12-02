@@ -1,6 +1,9 @@
 from django.db import models
+
 from assets.models.assets import Asset
+from assets.models import RealEstateType
 from core.types import DomainType
+from fx.models.country import Country
 
 
 class RealEstateDetail(models.Model):
@@ -11,43 +14,67 @@ class RealEstateDetail(models.Model):
         limit_choices_to={"asset_type": DomainType.REAL_ESTATE},
     )
 
-    # --- Core Info ---
-    location = models.CharField(
-        max_length=255,
-        help_text="City/region or address"
+    # --- Location ---
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="real_estate_properties",
     )
-    property_type = models.CharField(
+    region = models.CharField(
         max_length=100,
-        help_text="e.g., Residential, Commercial, Land, Mixed-use"
+        blank=True,
+        help_text="State/Province/Region",
     )
-    currency = models.CharField(max_length=10, default="USD")
+    city = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="City or locality",
+    )
+    address = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Full address (optional)",
+    )
+
+    # --- Property Type ---
+    property_type = models.ForeignKey(
+        RealEstateType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="properties",
+        help_text="Category of real estate asset (e.g. Single-Family, Duplex, Commercial).",
+    )
 
     # --- Valuation ---
     purchase_price = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True,
-        help_text="Price originally paid"
+        max_digits=20, decimal_places=2, null=True, blank=True
     )
     estimated_value = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True,
-        help_text="Latest estimated market value"
+        max_digits=20, decimal_places=2, null=True, blank=True
     )
-    appraisal_date = models.DateField(
-        null=True, blank=True,
-        help_text="Date of last valuation/appraisal"
-    )
+    appraisal_date = models.DateField(null=True, blank=True)
 
     # --- Income/Expenses ---
     rental_income = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True,
-        help_text="Monthly or annual rental income"
+        max_digits=20, decimal_places=2, null=True, blank=True
     )
     expenses = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True,
-        help_text="Annual expenses (taxes, maintenance, insurance, etc.)"
+        max_digits=20, decimal_places=2, null=True, blank=True
     )
+
+    # --- Mortgage ---
+    is_mortgaged = models.BooleanField(default=False)
     mortgage_balance = models.DecimalField(
-        max_digits=20, decimal_places=2, null=True, blank=True,
-        help_text="Outstanding mortgage balance if applicable"
+        max_digits=20, decimal_places=2, null=True, blank=True
+    )
+    interest_rate = models.DecimalField(
+        max_digits=5, decimal_places=3, null=True, blank=True
+    )
+    monthly_mortgage_payment = models.DecimalField(
+        max_digits=20, decimal_places=2, null=True, blank=True
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -55,9 +82,15 @@ class RealEstateDetail(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["location"]),
-            models.Index(fields=["property_type"]),
+            models.Index(fields=["city"]),
+            models.Index(fields=["region"]),
+            models.Index(fields=["country"]),
         ]
 
     def __str__(self):
-        return f"{self.asset.symbol} ({self.location})"
+        name = self.asset.name or "Real Estate"
+        loc = ", ".join(
+            filter(None, [self.city, self.region,
+                   getattr(self.country, "name", None)])
+        )
+        return f"{name} ({loc})" if loc else name
