@@ -20,6 +20,7 @@ django-cors-headers = "*"
 simpleeval = "*"
 asteval = "*"
 celery = {extras = ["redis"], version = "*"}
+django-nested-admin = "*"
 
 [dev-packages]
 pytest = "*"
