@@ -23,12 +23,12 @@ class HoldingForm(forms.ModelForm):
         # ------------------------------------------------------
         # 1. DOMAIN-BASED VALIDATION (asset allowed in account)
         # ------------------------------------------------------
-        if account and asset:
-            allowed = get_domain_meta(account.domain_type)["allowed_assets"]
-            if asset.asset_type not in allowed:
-                raise ValidationError(
-                    _(f"{account.domain_type} accounts cannot hold {asset.asset_type} assets.")
-                )
+        # if account and asset:
+        #     allowed = get_domain_meta(account.domain_type)["allowed_assets"]
+        #     if asset.asset_type.domain not in allowed:
+        #         raise ValidationError(
+        #             _(f"{account.domain_type} accounts cannot hold {asset.asset_type} assets.")
+        #         )
 
         # ------------------------------------------------------
         # 2. BUSINESS RULE VALIDATION (MIN/MAX ONLY)

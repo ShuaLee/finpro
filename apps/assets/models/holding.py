@@ -50,9 +50,9 @@ class Holding(models.Model):
     # ----------------------------
     def clean(self):
         allowed = get_domain_meta(self.account.domain_type)["allowed_assets"]
-        if self.asset.asset_type not in allowed:
+        if self.asset.asset_type.domain not in allowed:
             raise ValidationError(
-                f"{self.account.domain_type} accounts cannot hold {self.asset.asset_type} assets."
+                f"{self.account.domain_type} accounts cannot hold {self.asset.asset_type.domain} assets."
             )
 
     def save(self, *args, **kwargs):
