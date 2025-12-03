@@ -15,7 +15,7 @@ class EquityDetail(models.Model):
         Asset,
         on_delete=models.CASCADE,
         related_name="equity_detail",
-        limit_choices_to={"asset_type": DomainType.EQUITY},
+        limit_choices_to={"asset_type__domain": DomainType.EQUITY},
     )
 
     # --- Listing / Exchange Info ---

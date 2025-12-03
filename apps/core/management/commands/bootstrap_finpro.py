@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+# --- Assets ---
+from assets.services.seeds.seed_asset_types import _seed_asset_types
+
 # --- FX + Countries ---
 from fx.services.sync import FXSyncService
 from fx.services.country_sync import CountrySyncService
@@ -25,26 +28,41 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING("🚀 Starting FinPro system bootstrap...\n"))
+        self.stdout.write(self.style.WARNING(
+            "🚀 Starting FinPro system bootstrap...\n"))
+
+        self.stdout.write(self.style.WARNING(
+            "🚀 Starting FinPro system bootstrap...\n"))
+
+        # ============================================================
+        # 0. Sync AssetTypes
+        # ============================================================
+        self.stdout.write("🧩 Seeding system AssetTypes...")
+        count = _seed_asset_types()
+        self.stdout.write(self.style.SUCCESS(
+            f"   ✔ AssetTypes seeded ({count})\n"))
 
         # ============================================================
         # 1. Sync Countries
         # ============================================================
         self.stdout.write("🌍 Syncing countries...")
         country_count = CountrySyncService.sync_countries()
-        self.stdout.write(self.style.SUCCESS(f"   ✔ Countries synced ({country_count} updated)\n"))
+        self.stdout.write(self.style.SUCCESS(
+            f"   ✔ Countries synced ({country_count} updated)\n"))
 
         # ============================================================
         # 2. Sync FX Currencies
         # ============================================================
         self.stdout.write("💱 Syncing FX currencies...")
         fx_count = FXSyncService.sync_currencies()
-        self.stdout.write(self.style.SUCCESS(f"   ✔ FX currencies synced ({fx_count} new)\n"))
+        self.stdout.write(self.style.SUCCESS(
+            f"   ✔ FX currencies synced ({fx_count} new)\n"))
 
         # ============================================================
         # 3. (Removed) FX pairs – DO NOT SYNC HERE
         # ============================================================
-        self.stdout.write(self.style.WARNING("⚠ Skipping FX pair sync (lazy lookup used instead)\n"))
+        self.stdout.write(self.style.WARNING(
+            "⚠ Skipping FX pair sync (lazy lookup used instead)\n"))
 
         # ============================================================
         # 4. Schema Templates (Equity, Crypto, more later)
@@ -70,7 +88,8 @@ class Command(BaseCommand):
         # ============================================================
         self.stdout.write("📏 Seeding master constraints...")
         self._seed_constraints()
-        self.stdout.write(self.style.SUCCESS("   ✔ Master constraints seeded\n"))
+        self.stdout.write(self.style.SUCCESS(
+            "   ✔ Master constraints seeded\n"))
 
         # ============================================================
         # Done
@@ -120,7 +139,8 @@ class Command(BaseCommand):
 
             # Extract dependencies
             temp_formula = Formula(expression=expression)
-            deps = list(map(str, FormulaDependencyResolver(temp_formula).extract_identifiers()))
+            deps = list(map(str, FormulaDependencyResolver(
+                temp_formula).extract_identifiers()))
 
             formula, was_created = Formula.objects.get_or_create(
                 identifier=identifier,
@@ -166,7 +186,6 @@ class Command(BaseCommand):
                 updated += 1
 
         return created, updated
-
 
     def _seed_constraints(self):
         """Seed master constraint definitions."""

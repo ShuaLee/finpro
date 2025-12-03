@@ -22,7 +22,7 @@ class Command(BaseCommand):
             Asset.objects.filter(
                 identifiers__value=symbol,
                 identifiers__id_type=AssetIdentifier.IdentifierType.TICKER,
-                asset_type=DomainType.EQUITY,
+                asset_type__domain=DomainType.EQUITY,
             )
             .distinct()
             .first()

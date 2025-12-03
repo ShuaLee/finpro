@@ -2,15 +2,17 @@ from assets.models.assets import AssetType
 from core.types import DOMAIN_REGISTRY
 
 
-def _seed_asset_types(self):
+def _seed_asset_types():
     """
-    Create system AssetType rows from DOMAIN_REGISTRY.
+    Create or update system AssetType rows from DOMAIN_REGISTRY.
+    Returns how many were created or updated.
     """
+    count = 0
 
     for domain, meta in DOMAIN_REGISTRY.items():
         label = meta.get("label", domain.replace("_", " ").title())
 
-        AssetType.objects.update_or_create(
+        _, created = AssetType.objects.update_or_create(
             name=label,
             defaults={
                 "domain": domain,
@@ -18,3 +20,7 @@ def _seed_asset_types(self):
                 "created_by": None,
             }
         )
+
+        count += 1  # treat update/create the same
+
+    return count

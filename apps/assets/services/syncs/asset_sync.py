@@ -22,9 +22,6 @@ SYNC_REGISTRY = {
 
 
 def _display_identifier(asset: Asset) -> str:
-    """
-    Return a string for logging: prefer primary identifier, else asset.name, else UUID.
-    """
     primary_id = asset.identifiers.filter(is_primary=True).first()
     if primary_id:
         return primary_id.value
@@ -36,14 +33,11 @@ def _display_identifier(asset: Asset) -> str:
 class AssetSyncService:
     @staticmethod
     def sync(asset: Asset, profile: bool = False) -> bool:
-        """
-        Sync a single asset.
-        profile=True → sync long-lived metadata (profile)
-        profile=False → sync price/quote (market data)
-        """
-        service = SYNC_REGISTRY.get(asset.asset_type)
+        domain = asset.asset_type.domain
+        service = SYNC_REGISTRY.get(domain)
+
         if not service:
-            logger.info(f"No sync service for {asset.asset_type}, skipping")
+            logger.info(f"No sync service for {domain}, skipping")
             return False
 
         try:
@@ -52,31 +46,27 @@ class AssetSyncService:
             return service.sync_quote(asset)
         except Exception as e:
             logger.error(
-                f"Error syncing {asset.asset_type} {_display_identifier(asset)}: {e}",
+                f"Error syncing {domain} {_display_identifier(asset)}: {e}",
                 exc_info=True,
             )
             return False
 
     @staticmethod
     def sync_many(assets: list[Asset], profile: bool = False) -> dict:
-        """
-        Sync many assets efficiently by grouping by type.
-        Uses bulk APIs when possible:
-          - Equities, Crypto, Metals: bulk supported for both profiles & quotes
-          - Bonds: bulk quotes only, profiles loop internally
-        """
         results = defaultdict(int)
         grouped = defaultdict(list)
 
-        # group assets by type
+        # group assets by true domain type
         for asset in assets:
-            grouped[asset.asset_type].append(asset)
+            domain = asset.asset_type.domain
+            grouped[domain].append(asset)
 
-        for asset_type, group in grouped.items():
-            service = SYNC_REGISTRY.get(asset_type)
+        for domain, group in grouped.items():
+            service = SYNC_REGISTRY.get(domain)
+
             if not service:
                 logger.info(
-                    f"No sync service for {asset_type}, skipping {len(group)} assets"
+                    f"No sync service for {domain}, skipping {len(group)} assets"
                 )
                 results["fail"] += len(group)
                 continue
@@ -85,7 +75,11 @@ class AssetSyncService:
                 bulk_results = {"success": 0, "fail": 0}
 
                 # --- Equities, Crypto, Metals ---
-                if asset_type in {DomainType.EQUITY, DomainType.CRYPTO, DomainType.METAL}:
+                if domain in {
+                    DomainType.EQUITY,
+                    DomainType.CRYPTO,
+                    DomainType.METAL,
+                }:
                     if profile and hasattr(service, "sync_profiles_bulk"):
                         bulk_results = service.sync_profiles_bulk(group)
                     elif not profile and hasattr(service, "sync_quotes_bulk"):
@@ -98,9 +92,8 @@ class AssetSyncService:
                                 bulk_results["fail"] += 1
 
                 # --- Bonds ---
-                elif asset_type == DomainType.BOND:
+                elif domain == DomainType.BOND:
                     if profile:
-                        # bond service handles loop internally
                         bulk_results = service.sync_profiles_bulk(group)
                     else:
                         bulk_results = service.sync_quotes_bulk(group)
@@ -110,7 +103,7 @@ class AssetSyncService:
 
             except Exception as e:
                 logger.error(
-                    f"Bulk sync failed for {asset_type}: {e}", exc_info=True
+                    f"Bulk sync failed for {domain}: {e}", exc_info=True
                 )
                 results["fail"] += len(group)
 

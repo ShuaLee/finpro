@@ -1,7 +1,8 @@
 from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from assets.models.assets import Asset, AssetIdentifier
+from assets.models.assets import Asset, AssetIdentifier, AssetType
 from assets.models.details.crypto_detail import CryptoDetail
 from assets.models.details.equity_detail import EquityDetail
 from assets.models.details.real_estate_detail import RealEstateDetail
@@ -9,6 +10,49 @@ from assets.models.market_data_cache import MarketDataCache
 from assets.services.syncs.asset_sync import AssetSyncService
 
 from core.types import DomainType
+
+
+@admin.register(AssetType)
+class AssetTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "domain", "is_system", "created_by")
+    list_filter = ("domain", "is_system")
+    search_fields = ("name",)
+
+    readonly_fields = ("is_system", "created_by")
+
+    # ------------------------------------------------------------
+    # Prevent editing of system AssetTypes
+    # ------------------------------------------------------------
+    def get_readonly_fields(self, request, obj=None):
+        # On creation → normal user types can set name/domain
+        if obj is None:
+            return self.readonly_fields
+
+        # Editing existing:
+        # System types → fully locked except created_by (but we keep read-only anyway)
+        if obj.is_system:
+            return ("name", "domain", "is_system", "created_by")
+
+        # User-created types → can edit name, cannot edit domain
+        return ("domain", "is_system", "created_by")
+
+    # ------------------------------------------------------------
+    # Prevent deleting system types
+    # ------------------------------------------------------------
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.is_system:
+            return False
+        return True
+
+    # Friendly error messaging in admin
+    def delete_model(self, request, obj):
+        try:
+            obj.delete()
+        except ValidationError as e:
+            self.message_user(request, str(e), level=messages.ERROR)
+        else:
+            self.message_user(request, "AssetType deleted.",
+                              level=messages.SUCCESS)
 
 
 # ================================================================
@@ -162,12 +206,16 @@ class AssetAdmin(admin.ModelAdmin):
 
         # Conditionally show crypto/equity detail
         if obj:
-            if obj.asset_type == DomainType.EQUITY:
+            domain = obj.asset_type.domain
+
+            if domain == DomainType.EQUITY:
                 inline_instances.append(
-                    EquityDetailInline(self.model, self.admin_site))
-            elif obj.asset_type == DomainType.CRYPTO:
+                    EquityDetailInline(self.model, self.admin_site)
+                )
+            elif domain == DomainType.CRYPTO:
                 inline_instances.append(
-                    CryptoDetailInline(self.model, self.admin_site))
+                    CryptoDetailInline(self.model, self.admin_site)
+                )
 
         return inline_instances
 

@@ -13,7 +13,7 @@ class CryptoDetail(models.Model):
         Asset,
         on_delete=models.CASCADE,
         related_name="crypto_detail",
-        limit_choices_to={"asset_type": DomainType.CRYPTO},
+        limit_choices_to={"asset_type__domain": DomainType.CRYPTO},
     )
 
     # Decimal place precision

@@ -5,7 +5,6 @@ from assets.models.assets import Asset
 from core.types import DomainType
 
 
-
 class MarketDataCache(models.Model):
     """
     Unified price snapshot for any tradable asset.
@@ -16,7 +15,7 @@ class MarketDataCache(models.Model):
         Asset,
         on_delete=models.CASCADE,
         related_name="market_data",
-        limit_choices_to={"asset_type__in": [
+        limit_choices_to={"asset_type__domain__in": [
             DomainType.EQUITY,
             DomainType.CRYPTO,
             DomainType.BOND,
