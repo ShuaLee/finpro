@@ -20,7 +20,7 @@ class Command(BaseCommand):
         # 🔎 Find crypto via primary PAIR_SYMBOL identifier
         asset = (
             Asset.objects.filter(
-                asset_type=DomainType.CRYPTO,
+                asset_type__domain=DomainType.CRYPTO,
                 identifiers__id_type=AssetIdentifier.IdentifierType.PAIR_SYMBOL,
                 identifiers__value=symbol,
             )
