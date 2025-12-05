@@ -1,12 +1,16 @@
 import uuid
 from django.db import models
-from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from core.types import DomainType, get_identifier_rules_for_domain
 from fx.models.fx import FXCurrency
+from users.models import Profile
 
 
 class AssetType(models.Model):
+
+    slug = models.SlugField(unique=True)
+
     name = models.CharField(
         max_length=100,
         unique=True,
@@ -18,11 +22,19 @@ class AssetType(models.Model):
         choices=DomainType.choices,
     )
 
+    # Identifier rules for this asset type
+    identifier_rules = ArrayField(
+        models.CharField(max_length=50),
+        default=list,
+        blank=True,
+        help_text="Allowed identifier types (e.g., TICKER, ISIN, BASE_SYMBOL)",
+    )
+
     # Whether user can delete it or not
     is_system = models.BooleanField(default=False)
 
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        Profile,
         null=True,
         blank=True,
         on_delete=models.SET_NULL

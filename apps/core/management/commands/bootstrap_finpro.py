@@ -3,6 +3,7 @@ from django.db import transaction
 
 # --- Assets ---
 from assets.services.seeds.seed_asset_types import _seed_asset_types
+from assets.services.seeds.seed_real_estate_types import seed_real_estate_types
 
 # --- FX + Countries ---
 from fx.services.sync import FXSyncService
@@ -90,6 +91,15 @@ class Command(BaseCommand):
         self._seed_constraints()
         self.stdout.write(self.style.SUCCESS(
             "   ✔ Master constraints seeded\n"))
+
+        # ============================================================
+        # 7. Real Estate Types
+        # ============================================================
+        self.stdout.write("🏠 Seeding real estate types...")
+        re_count = seed_real_estate_types()
+        self.stdout.write(self.style.SUCCESS(
+            f"   ✔ Real estate types seeded ({re_count})\n"
+        ))
 
         # ============================================================
         # Done

@@ -7,9 +7,6 @@ class PortfolioInline(nested_admin.NestedStackedInline):
     """
     Nested inline for Profile -> Portfolio
     """
-    print("DEBUG: PortfolioInline loaded")
-    print("DEBUG: PortfolioInline model FK:", Portfolio._meta.get_fields())
-    print("DEBUG: PortfolioInline fk_name:", "profile")
 
     model = Portfolio
     fk_name = "profile"
