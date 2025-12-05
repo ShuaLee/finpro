@@ -32,19 +32,16 @@ class SchemaGenerator:
     # =====================================================================
     # MAIN ENTRY
     # =====================================================================
-    @transaction.atomic
-    def initialize(self, custom_schema_namer=None, asset=None):
+    def initialize(self, custom_schema_namer=None):
+        from accounts.models.account_type import AccountType
+
         logger.info(
-            f"🧱 Initializing schemas for portfolio={self.portfolio.id}, domain={self.domain_type}"
+            f"🧱 Initializing schemas for portfolio={self.portfolio.id}, "
+            f"account_type domain={self.domain_type}"
         )
 
-        domain_meta = get_domain_meta(self.domain_type)
-        account_types = domain_meta.get("account_types", [])
-
-        if not account_types:
-            raise ValueError(
-                f"No account types registered for domain '{self.domain_type}'"
-            )
+        # Instead of domain-based lookup, directly fetch all account types
+        account_types = AccountType.objects.all()
 
         schemas = []
 
@@ -53,15 +50,15 @@ class SchemaGenerator:
             schema_name = (
                 custom_schema_namer(self.portfolio, account_type)
                 if custom_schema_namer
-                else f"{self.portfolio.profile.user.email}'s {self.domain_type.title()} ({account_type}) Schema"
+                else f"{self.portfolio.profile.user.email}'s {account_type.name} Schema"
             )
 
-            logger.info(f"📄 Generating schema for account_type={account_type}")
+            logger.info(f"📄 Generating schema for account_type={account_type.slug}")
 
             template = (
                 SchemaTemplate.objects.filter(
                     account_type=account_type,
-                    is_active=True
+                    is_active=True,
                 )
                 .prefetch_related(
                     Prefetch(
@@ -77,11 +74,10 @@ class SchemaGenerator:
             if template:
                 schema = self._create_from_template(template)
                 schemas.append(schema)
-                logger.info(
-                    f"✅ Created schema from template for {account_type}")
+                logger.info(f"✅ Created schema from template for {account_type.slug}")
             else:
                 raise ValueError(
-                    f"No active SchemaTemplate found for account type '{account_type}'."
+                    f"No active SchemaTemplate found for account type '{account_type.slug}'."
                 )
 
         logger.info(
@@ -89,6 +85,7 @@ class SchemaGenerator:
         )
 
         return schemas
+
 
     # =====================================================================
     # TEMPLATE → SCHEMA GENERATION

@@ -1,8 +1,11 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-# --- Assets ---
-from assets.services.seeds.seed_asset_types import _seed_asset_types
+# --- AssetType + AccountType seeds ---
+from assets.services.seeds.seed_asset_types import seed_asset_types
+from accounts.services.seeds.account_seeder import seed_account_types
+
+# --- Real Estate Types ---
 from assets.services.seeds.seed_real_estate_types import seed_real_estate_types
 
 # --- FX + Countries ---
@@ -25,48 +28,50 @@ from schemas.models.constraints import MasterConstraint
 
 
 class Command(BaseCommand):
-    help = "Full system bootstrap: countries, FX currencies, templates, formulas, constraints."
+    help = (
+        "Full system bootstrap: AssetTypes, AccountTypes, countries, FX currencies, "
+        "schema templates, formulas, and master constraints."
+    )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING(
-            "🚀 Starting FinPro system bootstrap...\n"))
-
-        self.stdout.write(self.style.WARNING(
-            "🚀 Starting FinPro system bootstrap...\n"))
+        self.stdout.write(self.style.WARNING("\n🚀 Starting FinPro system bootstrap...\n"))
 
         # ============================================================
-        # 0. Sync AssetTypes
+        # 0. Seed Asset Types
         # ============================================================
         self.stdout.write("🧩 Seeding system AssetTypes...")
-        count = _seed_asset_types()
-        self.stdout.write(self.style.SUCCESS(
-            f"   ✔ AssetTypes seeded ({count})\n"))
+        asset_count = seed_asset_types()
+        self.stdout.write(self.style.SUCCESS(f"   ✔ AssetTypes seeded ({asset_count})\n"))
 
         # ============================================================
-        # 1. Sync Countries
+        # 1. Seed Account Types
+        # ============================================================
+        self.stdout.write("📦 Seeding system AccountTypes...")
+        account_count = seed_account_types()
+        self.stdout.write(self.style.SUCCESS(f"   ✔ AccountTypes seeded ({account_count})\n"))
+
+        # ============================================================
+        # 2. Sync Countries
         # ============================================================
         self.stdout.write("🌍 Syncing countries...")
         country_count = CountrySyncService.sync_countries()
-        self.stdout.write(self.style.SUCCESS(
-            f"   ✔ Countries synced ({country_count} updated)\n"))
+        self.stdout.write(self.style.SUCCESS(f"   ✔ Countries synced ({country_count} updated)\n"))
 
         # ============================================================
-        # 2. Sync FX Currencies
+        # 3. Sync FX Currencies
         # ============================================================
         self.stdout.write("💱 Syncing FX currencies...")
         fx_count = FXSyncService.sync_currencies()
-        self.stdout.write(self.style.SUCCESS(
-            f"   ✔ FX currencies synced ({fx_count} new)\n"))
+        self.stdout.write(self.style.SUCCESS(f"   ✔ FX currencies synced ({fx_count} new)\n"))
 
         # ============================================================
-        # 3. (Removed) FX pairs – DO NOT SYNC HERE
+        # 4. Skip FX Pairs
         # ============================================================
-        self.stdout.write(self.style.WARNING(
-            "⚠ Skipping FX pair sync (lazy lookup used instead)\n"))
+        self.stdout.write(self.style.WARNING("⚠ Skipping FX pair sync (lazy lookup instead)\n"))
 
         # ============================================================
-        # 4. Schema Templates (Equity, Crypto, more later)
+        # 5. Schema Templates
         # ============================================================
         self.stdout.write("📐 Seeding schema templates...")
 
@@ -76,44 +81,55 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("   ✔ Schema templates seeded\n"))
 
         # ============================================================
-        # 5. Formulas
+        # 6. Formulas
         # ============================================================
         self.stdout.write("🧮 Seeding system formulas...")
         created, updated = self._seed_formulas()
-        self.stdout.write(self.style.SUCCESS(
-            f"   ✔ Formulas loaded ({created} created, {updated} updated)\n"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"   ✔ Formulas loaded ({created} created, {updated} updated)\n"
+            )
+        )
 
         # ============================================================
-        # 6. Constraints
+        # 7. Constraints
         # ============================================================
         self.stdout.write("📏 Seeding master constraints...")
         self._seed_constraints()
-        self.stdout.write(self.style.SUCCESS(
-            "   ✔ Master constraints seeded\n"))
+        self.stdout.write(self.style.SUCCESS("   ✔ Master constraints seeded\n"))
 
         # ============================================================
-        # 7. Real Estate Types
+        # 8. Real Estate Subtypes
         # ============================================================
         self.stdout.write("🏠 Seeding real estate types...")
         re_count = seed_real_estate_types()
-        self.stdout.write(self.style.SUCCESS(
-            f"   ✔ Real estate types seeded ({re_count})\n"
-        ))
+        self.stdout.write(self.style.SUCCESS(f"   ✔ Real estate types seeded ({re_count})\n"))
 
         # ============================================================
-        # Done
+        # DONE
         # ============================================================
         self.stdout.write(self.style.SUCCESS("🎉 FinPro bootstrap complete!"))
 
     # ---------------------------------------------------------------------
-    # Helpers
+    # Helper Methods
     # ---------------------------------------------------------------------
 
     def _seed_schema_template(self, cfg):
-        """Seed or update a schema template based on a config block."""
+        """
+        Seed or update a schema template based on a config dict.
+        Requires `account_type` in config to already be an AccountType instance.
+        """
+
+        # Ensure account_type is a real FK object, not a slug/string
+        account_type = cfg["account_type"]
+        if not hasattr(account_type, "pk"):
+            raise ValueError(
+                f"Schema template config has invalid account_type: {account_type}. "
+                "Must be an AccountType instance."
+            )
+
         template, _ = SchemaTemplate.objects.update_or_create(
-            account_type=cfg["account_type"],
+            account_type=account_type,
             defaults={
                 "name": cfg["name"],
                 "description": cfg["description"],
@@ -147,12 +163,10 @@ class Command(BaseCommand):
             identifier = data["identifier"]
             expression = data["expression"]
 
-            # Extract dependencies
-            temp_formula = Formula(expression=expression)
-            deps = list(map(str, FormulaDependencyResolver(
-                temp_formula).extract_identifiers()))
+            temp = Formula(expression=expression)
+            deps = list(FormulaDependencyResolver(temp).extract_identifiers())
 
-            formula, was_created = Formula.objects.get_or_create(
+            formula, is_created = Formula.objects.get_or_create(
                 identifier=identifier,
                 defaults={
                     "title": data.get("title", identifier.replace("_", " ").title()),
@@ -160,35 +174,31 @@ class Command(BaseCommand):
                     "decimal_places": data.get("decimal_places"),
                     "dependencies": deps,
                     "is_system": True,
-                }
+                },
             )
 
-            if was_created:
+            if is_created:
                 created += 1
-                continue  # nothing else to update
+                continue
 
-            # Otherwise check for updates
+            # Update existing record
             changed = False
 
-            new_title = data.get("title", formula.title)
-            new_expr = expression
-            new_dp = data.get("decimal_places")
-            new_deps = deps
-
-            if formula.title != new_title:
-                formula.title = new_title
+            maybe_title = data.get("title", formula.title)
+            if formula.title != maybe_title:
+                formula.title = maybe_title
                 changed = True
 
-            if formula.expression != new_expr:
-                formula.expression = new_expr
+            if formula.expression != expression:
+                formula.expression = expression
                 changed = True
 
-            if formula.decimal_places != new_dp:
-                formula.decimal_places = new_dp
+            if formula.decimal_places != data.get("decimal_places"):
+                formula.decimal_places = data.get("decimal_places")
                 changed = True
 
-            if formula.dependencies != new_deps:
-                formula.dependencies = new_deps
+            if formula.dependencies != deps:
+                formula.dependencies = deps
                 changed = True
 
             if changed:
@@ -198,7 +208,6 @@ class Command(BaseCommand):
         return created, updated
 
     def _seed_constraints(self):
-        """Seed master constraint definitions."""
         for data_type, templates in CONSTRAINT_TEMPLATES.items():
             for t in templates:
                 MasterConstraint.objects.update_or_create(

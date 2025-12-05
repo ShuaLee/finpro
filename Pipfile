@@ -21,6 +21,7 @@ simpleeval = "*"
 asteval = "*"
 celery = {extras = ["redis"], version = "*"}
 django-nested-admin = "*"
+psycopg = {extras = ["binary"], version = "*"}
 
 [dev-packages]
 pytest = "*"

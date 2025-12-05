@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django import forms
 from accounts.models.account import Account
+from accounts.models.account_type import AccountType
 from accounts.models.account_classification import ClassificationDefinition, AccountClassification
 from accounts.services.account_service import AccountService
 from fx.models.country import Country
@@ -28,10 +29,72 @@ class ClassificationDefinitionForm(forms.ModelForm):
 
         return cleaned
 
+class AccountTypeForm(forms.ModelForm):
+    """
+    Custom form for AccountType admin:
+    - prevents users from unchecking fields on system types
+    - ensures that allowed asset types are chosen
+    """
+
+    class Meta:
+        model = AccountType
+        fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+
+        instance = self.instance
+
+        # Prevent editing certain fields on system types
+        if instance and instance.is_system:
+            protected_fields = ["slug", "is_system"]
+            for field in protected_fields:
+                if field in cleaned and cleaned[field] != getattr(instance, field):
+                    self.add_error(field, "System account types cannot be modified.")
+
+        return cleaned
 
 # ----------------------------
 # Admin
 # ----------------------------
+@admin.register(AccountType)
+class AccountTypeAdmin(admin.ModelAdmin):
+    form = AccountTypeForm
+
+    list_display = (
+        "id",
+        "name",
+        "slug",
+        "allows_multiple",
+        "is_system",
+    )
+
+    list_filter = (
+        "is_system",
+        "allows_multiple",
+    )
+
+    search_fields = (
+        "name",
+        "slug",
+    )
+
+    ordering = (
+        "name",
+    )
+
+    filter_horizontal = ("allowed_asset_types",)
+
+    readonly_fields = ()
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        System types cannot have slug or is_system changed.
+        """
+        if obj and obj.is_system:
+            return ("slug", "is_system") + self.readonly_fields
+        return self.readonly_fields
+
 
 @admin.register(ClassificationDefinition)
 class ClassificationDefinitionAdmin(admin.ModelAdmin):

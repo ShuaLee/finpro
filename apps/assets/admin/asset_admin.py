@@ -14,8 +14,8 @@ from core.types import DomainType
 
 @admin.register(AssetType)
 class AssetTypeAdmin(admin.ModelAdmin):
-    list_display = ("name", "domain", "is_system", "created_by")
-    list_filter = ("domain", "is_system")
+    list_display = ("name", "is_system", "created_by")
+    list_filter = ("is_system",)
     search_fields = ("name",)
 
     readonly_fields = ("is_system", "created_by")
@@ -31,7 +31,7 @@ class AssetTypeAdmin(admin.ModelAdmin):
         # Editing existing:
         # System types → fully locked except created_by (but we keep read-only anyway)
         if obj.is_system:
-            return ("name", "domain", "is_system", "created_by")
+            return ("name", "is_system", "created_by")
 
         # User-created types → can edit name, cannot edit domain
         return ("domain", "is_system", "created_by")

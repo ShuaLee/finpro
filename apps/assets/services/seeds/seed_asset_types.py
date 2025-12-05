@@ -1,26 +1,20 @@
+from assets.config.asset_types import SYSTEM_ASSET_TYPES
 from assets.models.assets import AssetType
-from core.types import DOMAIN_REGISTRY
 
 
-def _seed_asset_types():
-    """
-    Create or update system AssetType rows from DOMAIN_REGISTRY.
-    Returns how many were created or updated.
-    """
+def seed_asset_types():
     count = 0
 
-    for domain, meta in DOMAIN_REGISTRY.items():
-        label = meta.get("label", domain.replace("_", " ").title())
-
+    for data in SYSTEM_ASSET_TYPES:
         _, created = AssetType.objects.update_or_create(
-            name=label,
+            slug=data["slug"],
             defaults={
-                "domain": domain,
+                "name": data["name"],
+                "identifier_rules": data["identifier_rules"],
                 "is_system": True,
                 "created_by": None,
-            }
+            },
         )
-
-        count += 1  # treat update/create the same
+        count += 1
 
     return count

@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from django.contrib.postgres.fields import ArrayField
+# from django.contrib.postgres.fields import ArrayField -> this when postgre
 from django.core.exceptions import ValidationError
 from fx.models.fx import FXCurrency
 from users.models import Profile
@@ -15,8 +15,7 @@ class AssetType(models.Model):
     )
 
     # Identifier rules for this asset type
-    identifier_rules = ArrayField(
-        models.CharField(max_length=50),
+    identifier_rules = models.JSONField(
         default=list,
         blank=True,
         help_text="Allowed identifier types (e.g., TICKER, ISIN, BASE_SYMBOL)",

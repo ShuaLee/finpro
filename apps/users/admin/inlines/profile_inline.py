@@ -6,8 +6,6 @@ from .portfolio_inline import PortfolioInline
 
 
 class ProfileInline(nested_admin.NestedStackedInline):
-    print("DEBUG: ProfileInline loaded")
-
     model = Profile
     fk_name = "user"
     extra = 0
@@ -15,7 +13,6 @@ class ProfileInline(nested_admin.NestedStackedInline):
     can_delete = False
 
     inlines = [PortfolioInline]
-    print("DEBUG: ProfileInline inlines:", inlines)
 
     fields = (
         "full_name",

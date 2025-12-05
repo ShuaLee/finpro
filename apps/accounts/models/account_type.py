@@ -25,11 +25,11 @@ class AccountType(models.Model):
 
     is_system = models.BooleanField(default=True)
 
-    display_order = models.PositiveIntegerField(default=0)
     description = models.TextField(blank=True, null=True)
 
+
     class Meta:
-        ordering = ["display_order", "slug"]
+        ordering = ["slug"]
 
     def __str__(self):
         return self.name
