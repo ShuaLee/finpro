@@ -1,7 +1,7 @@
 from schemas.config.utils import lookup_formula
 
 EQUITY_TEMPLATE_CONFIG = {
-    "account_type": "equity_self",
+    "account_type_slug": "brokerage",
     "name": "Equity Schema Template",
     "description": "Default schema template for equity portfolios.",
 

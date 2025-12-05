@@ -8,8 +8,8 @@ from schemas.services.schema_generator import SchemaGenerator
 class SchemaManager:
     """
     Manages a schema and keeps SCVs (SchemaColumnValues) in sync with the schema.
-    - Holding values remain RAW, untouched, unrounded.
-    - SCVs represent formatted display values derived from schema rules.
+    - Holding values remain RAW.
+    - SCVs are formatted display values.
     """
 
     def __init__(self, schema):
@@ -26,10 +26,16 @@ class SchemaManager:
         return self._columns_cache
 
     # ============================================================
-    # Ensure Schema Exists
+    # Ensure Schema Exists for an Account
     # ============================================================
     @staticmethod
     def ensure_for_account(account):
+        """
+        Schema is keyed by:
+        - portfolio
+        - account_type  (FK)
+        """
+
         schema = Schema.objects.filter(
             portfolio=account.portfolio,
             account_type=account.account_type
@@ -38,13 +44,23 @@ class SchemaManager:
         if schema:
             return schema
 
-        generator = SchemaGenerator(account.portfolio, account.domain_type)
+        # ❗ FIXED — remove domain_type, pass AccountType instead
+        generator = SchemaGenerator(
+            portfolio=account.portfolio,
+            domain_type=account.account_type  # correct: pass FK object
+        )
+
         schemas = generator.initialize()
+
+        # return only the schema matching this account_type
         return next(
             (s for s in schemas if s.account_type == account.account_type),
             None
         )
 
+    # ============================================================
+    # Wrapper to get a SchemaManager from an account
+    # ============================================================
     @classmethod
     def for_account(cls, account):
         schema = account.active_schema
@@ -59,15 +75,6 @@ class SchemaManager:
     # Ensure SCVs Exist for Holding
     # ============================================================
     def ensure_for_holding(self, holding):
-        """
-        Ensure every SchemaColumn has an SCV for this holding.
-        Rules:
-        - Holding-backed SCVs are ALWAYS recalculated (and never edited).
-        - Formula SCVs are ALWAYS recalculated (and never edited).
-        - Asset/custom SCVs only refresh if is_edited=False.
-        """
-
-        from schemas.models.schema import SchemaColumnValue
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
         for col in self.columns:
@@ -83,77 +90,59 @@ class SchemaManager:
 
             manager = SchemaColumnValueManager(scv)
 
-            # -------------------------
-            # 1️⃣ Holding-backed columns
-            # -------------------------
+            # holding-backed
             if col.source == "holding":
                 manager.scv.is_edited = False
                 manager.refresh_display_value()
                 manager.scv.save(update_fields=["value", "is_edited"])
                 continue
 
-            # -------------------------
-            # 2️⃣ Formula columns
-            # -------------------------
+            # formula
             if col.source == "formula":
                 manager.scv.is_edited = False
                 manager.refresh_display_value()
                 manager.scv.save(update_fields=["value", "is_edited"])
                 continue
 
-            # -------------------------
-            # 3️⃣ Asset / Custom columns
-            # -------------------------
+            # asset or custom
             if not scv.is_edited:
                 manager.refresh_display_value()
                 manager.scv.save(update_fields=["value", "is_edited"])
 
     # ============================================================
-    # Ensure SCVs for all holdings in an account
+    # Ensure SCVs for all holdings
     # ============================================================
-
     def ensure_for_all_holdings(self, account):
         for holding in account.holdings.all():
             self.ensure_for_holding(holding)
 
     # ============================================================
-    # Sync SCVs — Refreshes display values only
+    # Sync SCVs — only non-edited fields update
     # ============================================================
     def sync_for_holding(self, holding):
-        """
-        Refresh SCV display values without corrupting user edits.
-        - Holding-backed SCVs always auto-sync and are never edited.
-        - Asset/custom editable SCVs only update if !is_edited.
-        - Formula SCVs always recompute.
-        """
         for col in self.columns:
             scv = SchemaColumnValue.objects.filter(
-                column=col,
-                holding=holding
+                column=col, holding=holding
             ).first()
 
             if not scv:
-                # ensure SCV exists
                 self.ensure_for_holding(holding)
                 continue
 
             manager = SchemaColumnValueManager(scv)
 
-            # 1️⃣ Holding-backed columns → ALWAYS refresh, never edited
             if col.source == "holding":
                 manager.scv.is_edited = False
                 manager.refresh_display_value()
                 manager.scv.save(update_fields=["value", "is_edited"])
                 continue
 
-            # 2️⃣ Formula columns → ALWAYS refresh
             if col.source == "formula":
                 manager.scv.is_edited = False
                 manager.refresh_display_value()
                 manager.scv.save(update_fields=["value", "is_edited"])
                 continue
 
-            # 3️⃣ Asset/custom → refresh only if not edited
             if not scv.is_edited:
                 manager.refresh_display_value()
                 manager.scv.save(update_fields=["value", "is_edited"])
@@ -163,17 +152,14 @@ class SchemaManager:
             self.sync_for_holding(holding)
 
     # ============================================================
-    # FULL REFRESH (Force-resync everything including edited SCVs)
+    # Full refresh — resets all SCVs
     # ============================================================
     def refresh_all(self, account):
-        """
-        Force recompute of all SCV display values using raw holding values.
-        All SCVs become unedited.
-        """
         for holding in account.holdings.all():
             for col in self.columns:
                 scv = SchemaColumnValue.objects.filter(
-                    column=col, holding=holding).first()
+                    column=col, holding=holding
+                ).first()
                 if not scv:
                     continue
 
@@ -182,16 +168,16 @@ class SchemaManager:
                 scv.save(update_fields=["value", "is_edited"])
 
     # ============================================================
-    # Column-level management
+    # Column add / remove
     # ============================================================
     def on_column_added(self, column, account):
-        """Ensure all holdings receive a new SCV when a column is added."""
         holdings = account.holdings.all()
         new_scvs = []
 
         for holding in holdings:
             exists = SchemaColumnValue.objects.filter(
-                column=column, holding=holding
+                column=column,
+                holding=holding
             ).exists()
 
             if not exists:
@@ -209,16 +195,12 @@ class SchemaManager:
             SchemaColumnValue.objects.bulk_create(new_scvs)
 
     def on_column_deleted(self, column):
-        """Remove all SCVs for a deleted column."""
         SchemaColumnValue.objects.filter(column=column).delete()
 
     # ============================================================
-    # Resequencing columns
+    # Resequencing
     # ============================================================
     def resequence_for_schema(self, schema):
-        """
-        Reassign display_order to be sequential without gaps.
-        """
         columns = schema.columns.order_by("display_order", "id")
 
         for i, col in enumerate(columns, start=1):

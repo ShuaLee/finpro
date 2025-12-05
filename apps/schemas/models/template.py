@@ -3,30 +3,34 @@ from django.db import models
 
 class SchemaTemplate(models.Model):
     """
-    A global blueprint defining the default schema for a specific account type.
+    A global blueprint defining the default schema for a specific AccountType.
     Used when initializing new portfolio-level Schemas.
     """
-    account_type = models.CharField(
-        max_length=50,
-        unique=True,
+
+    account_type = models.OneToOneField(   # unique FK → OneToOneField is correct
+        "accounts.AccountType",
+        on_delete=models.CASCADE,
+        related_name="schema_template",
         db_index=True,
-        help_text="Account type this template applies to (e.g., equity_self, crypto_wallet)."
+        help_text="AccountType this template applies to.",
     )
-    name = models.CharField(
-        max_length=100, help_text="Human-readable template name.")
+
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["account_type"]
+        ordering = ["account_type__slug"]
 
     def __str__(self):
-        return f"{self.name} ({self.account_type})"
+        return f"{self.name} ({self.account_type.slug})"
 
 
 class SchemaTemplateColumn(models.Model):
+
     template = models.ForeignKey(
         SchemaTemplate,
         on_delete=models.CASCADE,
@@ -36,7 +40,7 @@ class SchemaTemplateColumn(models.Model):
     title = models.CharField(max_length=255)
     identifier = models.SlugField(max_length=100, db_index=True)
 
-    # Data behavior
+    # Data type
     data_type = models.CharField(
         max_length=20,
         choices=[
@@ -49,15 +53,7 @@ class SchemaTemplateColumn(models.Model):
         ],
     )
 
-    # NEW — formula FK (nullable)
-    formula = models.ForeignKey(
-        "schemas.Formula",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="template_columns"
-    )
-
+    # Source of the column value
     source = models.CharField(
         max_length=20,
         choices=[
@@ -68,7 +64,24 @@ class SchemaTemplateColumn(models.Model):
         ],
     )
 
-    source_field = models.CharField(max_length=100, null=True, blank=True)
+    # NEW — proper FK to Formula (required by admin UI)
+    formula = models.ForeignKey(
+        "schemas.Formula",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="template_columns",
+        help_text="Formula to use when source='formula'."
+    )
+
+    # String-based field for asset/holding/custom source fields
+    # (ignored if source='formula')
+    source_field = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Holding/Asset field name OR unused when formula is provided."
+    )
 
     constraints = models.JSONField(default=dict, blank=True)
 
@@ -84,4 +97,4 @@ class SchemaTemplateColumn(models.Model):
         ordering = ["display_order", "id"]
 
     def __str__(self):
-        return f"{self.title} ({self.template.account_type})"
+        return f"{self.title} ({self.template.account_type.slug})"

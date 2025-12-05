@@ -115,19 +115,20 @@ class Command(BaseCommand):
     # ---------------------------------------------------------------------
 
     def _seed_schema_template(self, cfg):
-        """
-        Seed or update a schema template based on a config dict.
-        Requires `account_type` in config to already be an AccountType instance.
-        """
+        from accounts.models.account_type import AccountType
 
-        # Ensure account_type is a real FK object, not a slug/string
-        account_type = cfg["account_type"]
-        if not hasattr(account_type, "pk"):
-            raise ValueError(
-                f"Schema template config has invalid account_type: {account_type}. "
-                "Must be an AccountType instance."
-            )
+        # Validate presence of slug
+        slug = cfg.get("account_type_slug")
+        if not slug:
+            raise ValueError("Schema template config missing 'account_type_slug'.")
 
+        # Look up the AccountType (FK)
+        try:
+            account_type = AccountType.objects.get(slug=slug)
+        except AccountType.DoesNotExist:
+            raise ValueError(f"AccountType '{slug}' does not exist.")
+
+        # Create or update template
         template, _ = SchemaTemplate.objects.update_or_create(
             account_type=account_type,
             defaults={
@@ -137,6 +138,7 @@ class Command(BaseCommand):
             },
         )
 
+        # Seed columns
         for col in cfg["columns"]:
             SchemaTemplateColumn.objects.update_or_create(
                 template=template,
@@ -154,6 +156,9 @@ class Command(BaseCommand):
                     "constraints": col.get("constraints", {}),
                 },
             )
+
+
+
 
     def _seed_formulas(self):
         created = 0

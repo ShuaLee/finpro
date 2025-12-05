@@ -1,5 +1,5 @@
 CRYPTO_TEMPLATE_CONFIG = {
-    "account_type": "crypto_wallet",
+    "account_type_slug": "crypto_wallet",
     "name": "Crypto Schema Template",
     "description": "Default schema template for crypto portfolios.",
 

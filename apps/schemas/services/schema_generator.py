@@ -1,4 +1,3 @@
-from django.db import transaction
 from django.db.models import Prefetch
 from django.utils.text import slugify
 
@@ -6,8 +5,6 @@ from schemas.models.schema import Schema, SchemaColumn
 from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-
-from core.types import get_domain_meta
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,67 +30,63 @@ class SchemaGenerator:
     # MAIN ENTRY
     # =====================================================================
     def initialize(self, custom_schema_namer=None):
-        from accounts.models.account_type import AccountType
+        """
+        Build a schema for ONE account_type (self.domain_type),
+        which is now an AccountType instance.
+        """
+        account_type = self.domain_type  # already the FK instance
 
-        logger.info(
-            f"🧱 Initializing schemas for portfolio={self.portfolio.id}, "
-            f"account_type domain={self.domain_type}"
+        # Build name
+        schema_name = (
+            custom_schema_namer(self.portfolio, account_type)
+            if custom_schema_namer
+            else f"{self.portfolio.profile.user.email}'s {account_type.name} Schema"
         )
 
-        # Instead of domain-based lookup, directly fetch all account types
-        account_types = AccountType.objects.all()
+        logger.info(f"📄 Generating schema for account_type={account_type.slug}")
 
-        schemas = []
-
-        for account_type in account_types:
-
-            schema_name = (
-                custom_schema_namer(self.portfolio, account_type)
-                if custom_schema_namer
-                else f"{self.portfolio.profile.user.email}'s {account_type.name} Schema"
+        # Retrieve template for this one type
+        template = (
+            SchemaTemplate.objects.filter(
+                account_type=account_type,
+                is_active=True,
             )
-
-            logger.info(f"📄 Generating schema for account_type={account_type.slug}")
-
-            template = (
-                SchemaTemplate.objects.filter(
-                    account_type=account_type,
-                    is_active=True,
+            .prefetch_related(
+                Prefetch(
+                    "columns",
+                    queryset=SchemaTemplateColumn.objects.order_by(
+                        "display_order", "id"
+                    ),
                 )
-                .prefetch_related(
-                    Prefetch(
-                        "columns",
-                        queryset=SchemaTemplateColumn.objects.order_by(
-                            "display_order", "id"
-                        ),
-                    )
-                )
-                .first()
             )
-
-            if template:
-                schema = self._create_from_template(template)
-                schemas.append(schema)
-                logger.info(f"✅ Created schema from template for {account_type.slug}")
-            else:
-                raise ValueError(
-                    f"No active SchemaTemplate found for account type '{account_type.slug}'."
-                )
-
-        logger.info(
-            f"🎉 Schema initialization complete for portfolio={self.portfolio.id}"
+            .first()
         )
 
-        return schemas
+        if not template:
+            raise ValueError(
+                f"No active SchemaTemplate found for account type '{account_type.slug}'."
+            )
+
+        # Build the schema
+        schema = self._create_from_template(template)
+
+        logger.info(
+            f"🎉 Schema initialization complete for portfolio={self.portfolio.id}, "
+            f"account type={account_type.slug}"
+        )
+
+        return [schema]  # keep same return type
 
 
     # =====================================================================
     # TEMPLATE → SCHEMA GENERATION
     # =====================================================================
     def _create_from_template(self, template: SchemaTemplate):
+
+        # 🔧 FIXED: Schema.account_type is now FK, so pass the FK object
         schema, created = Schema.objects.update_or_create(
             portfolio=self.portfolio,
-            account_type=template.account_type,
+            account_type=template.account_type,   # FIXED
             defaults={},
         )
 
@@ -105,14 +98,10 @@ class SchemaGenerator:
             f"🧩 Creating {template_columns.count()} columns for schema {schema.account_type}"
         )
 
-        # import locally to avoid cyclic issues
         from schemas.models.formula import Formula
 
         for tcol in template_columns:
 
-            # ----------------------------------------------------------
-            # Resolve formula FK if column uses a formula
-            # ----------------------------------------------------------
             formula_obj = None
             if tcol.source == "formula":
                 if not tcol.source_field:
@@ -131,9 +120,6 @@ class SchemaGenerator:
                         f"formula '{tcol.source_field}', but it does not exist."
                     )
 
-            # ----------------------------------------------------------
-            # Create SchemaColumn with formula attached immediately
-            # ----------------------------------------------------------
             column = SchemaColumn.objects.create(
                 schema=schema,
                 title=tcol.title,
@@ -148,23 +134,15 @@ class SchemaGenerator:
                 display_order=tcol.display_order,
             )
 
-            # ----------------------------------------------------------
-            # Apply template-level constraint overrides
-            # ----------------------------------------------------------
             overrides = dict(tcol.constraints or {})
             SchemaConstraintManager.create_from_master(column, overrides)
 
-            # ----------------------------------------------------------
-            # Create SCVs for ALL existing holdings
-            # ----------------------------------------------------------
             SchemaColumnValueManager.ensure_for_column(column)
 
             logger.debug(
-                f"➕ Added column '{column.title}' (order {column.display_order})")
+                f"➕ Added column '{column.title}' (order {column.display_order})"
+            )
 
-        # ----------------------------------------------------------
-        # After all columns created → refresh all formula SCVs
-        # ----------------------------------------------------------
         self._refresh_formula_columns(schema)
 
         return schema
@@ -172,12 +150,7 @@ class SchemaGenerator:
     # =====================================================================
     # RESOLVE ASSET CONTEXT FOR CRYPTO PRECISION
     # =====================================================================
-
     def _resolve_asset_context(self, schema):
-        """
-        Try to find *any* asset in this schema's accounts to determine crypto precision.
-        (This is only used for precision override.)
-        """
         portfolio = schema.portfolio
 
         for account in portfolio.accounts.prefetch_related("holdings__asset", "holdings"):
@@ -211,11 +184,6 @@ class SchemaGenerator:
     def _refresh_formula_columns(self, schema):
         """
         Recompute all formula-based SCVs in this schema.
-
-        Called after:
-        - schema creation
-        - template application
-        - column creation
         """
         formula_columns = schema.columns.filter(source="formula")
 
@@ -224,14 +192,14 @@ class SchemaGenerator:
 
         from schemas.services.formulas.update_engine import FormulaUpdateEngine
 
+        # FIXED: FK lookup now works correctly
         accounts = schema.portfolio.accounts.filter(
             account_type=schema.account_type
-        )
+        ).prefetch_related("holdings")
 
         for account in accounts:
             for holding in account.holdings.all():
                 engine = FormulaUpdateEngine(holding, schema)
 
-                # Trigger update for each formula column independently
                 for col in formula_columns:
                     engine.update_dependent_formulas(col.identifier)
