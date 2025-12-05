@@ -2,24 +2,16 @@ import uuid
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
-from core.types import DomainType, get_identifier_rules_for_domain
 from fx.models.fx import FXCurrency
 from users.models import Profile
 
 
 class AssetType(models.Model):
-
     slug = models.SlugField(unique=True)
 
     name = models.CharField(
         max_length=100,
         unique=True,
-    )
-
-    # Internal domain mapping
-    domain = models.CharField(
-        max_length=20,
-        choices=DomainType.choices,
     )
 
     # Identifier rules for this asset type
@@ -98,25 +90,19 @@ class Asset(models.Model):
 
     def clean(self):
         super().clean()
-        # Example enforcement: Tradables must have identifiers
-        if self.asset_type.domain in {
-            DomainType.EQUITY,
-            DomainType.BOND,
-            DomainType.CRYPTO,
-            DomainType.METAL,
-        } and not self.identifiers.exists():
+
+        required_identifiers = self.asset_type.identifier_rules
+
+        if required_identifiers and not self.identifiers.exists():
             raise ValidationError(
-                f"{self.asset_type.domain} assets must have at least one identifier (Ticker, ISIN, etc.)."
+                f"Asset type '{self.asset_type.slug}' requires at least one identifier "
+                f"(Allowed types: {required_identifiers})."
             )
 
     def __str__(self):
         # Prefer a primary identifier if available
         primary_id = self.identifiers.filter(is_primary=True).first()
         return f"{primary_id.value if primary_id else self.name} ({self.asset_type.name})"
-
-    @property
-    def domain(self):
-        return self.asset_type.domain
 
 
 class AssetIdentifier(models.Model):
@@ -166,21 +152,23 @@ class AssetIdentifier(models.Model):
     def clean(self):
         super().clean()
 
-        # --- Ensure only one primary identifier per asset ---
+        # Enforce exactly one primary identifier per asset
         if self.is_primary:
             existing_primary = self.asset.identifiers.filter(is_primary=True)
             if self.pk:
                 existing_primary = existing_primary.exclude(pk=self.pk)
             if existing_primary.exists():
                 raise ValidationError(
-                    "An asset can only have one primary identifier.")
+                    "An asset can only have one primary identifier."
+                )
 
-        # --- Domain-based identifier validation ---
-        allowed = get_identifier_rules_for_domain(self.asset.domain)
+        # Use AssetType.identifier_rules instead of domain registry
+        allowed = self.asset.asset_type.identifier_rules or []
 
-        if self.id_type not in allowed:
+        if allowed and self.id_type not in allowed:
             raise ValidationError(
-                f"Identifier type '{self.id_type}' is not valid for asset type '{self.asset.domain}'."
+                f"Identifier type '{self.id_type}' is not valid for asset type "
+                f"'{self.asset.asset_type.slug}'. Allowed: {allowed}"
             )
 
     def save(self, *args, **kwargs):
