@@ -1,7 +1,5 @@
 import logging
 
-from core.types import DomainType
-
 # Import fetchers
 from external_data.fmp.equities.fetchers import (
     fetch_equity_profile,
@@ -31,35 +29,43 @@ logger = logging.getLogger(__name__)
 # ------------------------------
 def fetch_asset_data(symbol: str, asset_type: str) -> dict | None:
     """
-    Fetch both profile + quote for a given asset type.
+    Fetch both profile + quote for a given asset type (by slug).
     Returns a dict that can be merged into Detail models.
     """
+
     try:
-        if asset_type == DomainType.EQUITY:
+        # ---------------- EQUITY ----------------
+        if asset_type == "equity":
             profile = fetch_equity_profile(symbol) or {}
             quote = fetch_equity_quote(symbol) or {}
-            return {**profile, **quote} if profile or quote else None
+            return {**profile, **quote} if (profile or quote) else None
 
-        elif asset_type == DomainType.CRYPTO:
+        # ---------------- CRYPTO ----------------
+        elif asset_type == "crypto":
             profile = fetch_crypto_profile(symbol) or {}
             quote = fetch_crypto_quote(symbol) or {}
-            return {**profile, **quote} if profile or quote else None
+            return {**profile, **quote} if (profile or quote) else None
 
-        elif asset_type == DomainType.METAL:
+        # ---------------- METAL ----------------
+        elif asset_type == "metal":
             return fetch_metal_quote(symbol)
 
-        elif asset_type == DomainType.BOND:
+        # ---------------- BOND ----------------
+        elif asset_type == "bond":
             profile = fetch_bond_profile(symbol) or {}
             quote = fetch_bond_quote(symbol) or {}
-            return {**profile, **quote} if profile or quote else None
+            return {**profile, **quote} if (profile or quote) else None
 
+        # ---------------- UNSUPPORTED ----------------
         else:
-            logger.warning(f"Unsupported asset type: {asset_type}")
+            logger.warning(f"Unsupported asset type slug: {asset_type}")
             return None
 
     except Exception as e:
         logger.error(
-            f"Failed to fetch {asset_type} {symbol}: {e}", exc_info=True)
+            f"Failed to fetch data for {asset_type} {symbol}: {e}",
+            exc_info=True,
+        )
         return None
 
 
@@ -68,23 +74,36 @@ def fetch_asset_data(symbol: str, asset_type: str) -> dict | None:
 # ------------------------------
 def bulk_fetch_asset_quotes(symbols: list[str], asset_type: str) -> dict[str, dict]:
     """
-    Bulk fetch quotes for multiple symbols of a given type.
+    Bulk fetch quotes for multiple symbols of a given asset-type slug.
     Returns {symbol: normalized_data}.
     """
+
     try:
-        if asset_type == DomainType.EQUITY:
+        # ---------------- EQUITY ----------------
+        if asset_type == "equity":
             return fetch_equity_quotes_bulk(symbols)
-        elif asset_type == DomainType.CRYPTO:
+
+        # ---------------- CRYPTO ----------------
+        elif asset_type == "crypto":
             return bulk_fetch_crypto_quotes(symbols)
-        elif asset_type == DomainType.METAL:
+
+        # ---------------- METAL ----------------
+        elif asset_type == "metal":
             return bulk_fetch_metal_quotes(symbols)
-        elif asset_type == DomainType.BOND:
+
+        # ---------------- BOND ----------------
+        elif asset_type == "bond":
             return bulk_fetch_bond_quotes(symbols)
+
+        # ---------------- UNSUPPORTED ----------------
         else:
             logger.warning(
-                f"Unsupported asset type for bulk fetch: {asset_type}")
+                f"Unsupported asset type slug for bulk fetch: {asset_type}")
             return {}
+
     except Exception as e:
         logger.error(
-            f"Bulk fetch failed for {asset_type} symbols {symbols}: {e}", exc_info=True)
+            f"Bulk fetch failed for {asset_type} symbols {symbols}: {e}",
+            exc_info=True,
+        )
         return {}

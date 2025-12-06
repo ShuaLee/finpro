@@ -1,10 +1,8 @@
 import requests
 import logging
+
 from django.conf import settings
 
-from assets.models.assets import Asset
-from assets.models.details.equity_detail import EquityDetail
-from core.types import DomainType
 
 logger = logging.getLogger(__name__)
 FMP_API_KEY = settings.FMP_API_KEY

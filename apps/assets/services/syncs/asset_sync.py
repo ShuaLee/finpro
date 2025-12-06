@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 
-from assets.models.assets import Asset, AssetIdentifier
+from assets.models.assets import Asset
 
 # Sync services
 from assets.services.syncs.equity_sync import EquitySyncService

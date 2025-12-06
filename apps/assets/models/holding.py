@@ -2,7 +2,6 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from accounts.models.account import Account
 from assets.models.assets import Asset
-from core.types import get_domain_meta
 
 
 class Holding(models.Model):
@@ -17,19 +16,16 @@ class Holding(models.Model):
         related_name="holdings",
     )
 
-    # Core ownership fields
     quantity = models.DecimalField(
         max_digits=50,
         decimal_places=30,
         default=0,
-        help_text="Number of units owned (shares, coins, ounces, etc.)",
     )
     purchase_price = models.DecimalField(
         max_digits=50,
         decimal_places=30,
         null=True,
         blank=True,
-        help_text="Purchase price per unit in account currency",
     )
     purchase_date = models.DateField(null=True, blank=True)
 
@@ -45,14 +41,19 @@ class Holding(models.Model):
         symbol = primary_id or getattr(self.asset, "name", "Unknown")
         return f"{self.quantity.normalize()} {symbol} in {self.account.name}"
 
-    # ----------------------------
+    # ------------------------
     # Validation
-    # ----------------------------
+    # ------------------------
     def clean(self):
-        allowed = get_domain_meta(self.account.domain_type)["allowed_assets"]
-        if self.asset.asset_type.domain not in allowed:
+        account_type = self.account.account_type
+        asset_type = self.asset.asset_type
+
+        allowed = account_type.allowed_asset_types.all()
+
+        if asset_type not in allowed:
             raise ValidationError(
-                f"{self.account.domain_type} accounts cannot hold {self.asset.asset_type.domain} assets."
+                f"Accounts of type '{account_type.name}' "
+                f"cannot hold assets of type '{asset_type.name}'."
             )
 
     def save(self, *args, **kwargs):
@@ -64,16 +65,13 @@ class Holding(models.Model):
         from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
         if is_new:
-            # Create SCVs and compute formula columns
             SchemaColumnValueManager.ensure_for_holding(self)
         else:
-            # Update ALL SCVs for normal columns + formulas
             SchemaColumnValueManager.refresh_for_holding(self)
 
-    # -----------------------
-    # Convenience properties
-    # -----------------------
-
+    # ------------------------
+    # Convenience
+    # ------------------------
     @property
     def profile_currency(self):
         return self.account.portfolio.profile.currency
@@ -84,6 +82,8 @@ class Holding(models.Model):
 
     @property
     def current_value(self):
-        """quantity × asset.last_price (if available)."""
-        price = getattr(self.asset, "last_price", None)
-        return self.quantity * price if price is not None else None
+        """quantity × asset.market_data.last_price (if present)."""
+        mdc = getattr(self.asset, "market_data", None)
+        if mdc and mdc.last_price is not None:
+            return self.quantity * mdc.last_price
+        return None

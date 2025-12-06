@@ -2,9 +2,8 @@ import logging
 from collections import defaultdict
 from django.db import transaction
 
-from assets.models.assets import Asset, AssetIdentifier
+from assets.models.assets import Asset
 from assets.models.details.metal_detail import MetalDetail
-from core.types import DomainType
 from external_data.fmp.metals.fetchers import (
     fetch_metal_quote,
     bulk_fetch_metal_quotes,
@@ -35,13 +34,13 @@ class MetalSyncService:
 
     @staticmethod
     def sync_profile(asset: Asset) -> bool:
-        # metals have no profile -> treat as success
+        # Metals have no profile
         return True
 
     @staticmethod
     def sync_quote(asset: Asset) -> bool:
-        # FIXED domain check
-        if asset.asset_type.domain != DomainType.METAL:
+        # ✅ Updated domain check (string, not DomainType)
+        if asset.asset_type.domain != "METAL":
             return False
 
         symbol = MetalSyncService._get_symbol(asset)
@@ -68,24 +67,28 @@ class MetalSyncService:
     # ----------------------------------------
     @staticmethod
     def sync_profiles_bulk(assets: list[Asset]) -> dict:
-        # metals have no profiles
-        count = sum(1 for a in assets if a.asset_type.domain ==
-                    DomainType.METAL)
+        """
+        Metals have no profiles — count only metal assets and return success.
+        """
+        count = sum(1 for a in assets if a.asset_type.domain == "METAL")
         return {"success": count, "fail": 0}
 
     @staticmethod
     def sync_quotes_bulk(assets: list[Asset]) -> dict:
         results = defaultdict(int)
 
-        # Build dict {asset: symbol}
+        # Build {asset: symbol}
         symbols = {
-            a: MetalSyncService._get_symbol(a)
-            for a in assets
-            if a.asset_type.domain == DomainType.METAL
+            asset: MetalSyncService._get_symbol(asset)
+            for asset in assets
+            if asset.asset_type.domain == "METAL"
         }
         symbols = {a: s for a, s in symbols.items() if s}
 
-        # Fetch all metal quotes
+        if not symbols:
+            return {"success": 0, "fail": len(assets)}
+
+        # Fetch all metal quotes in bulk
         data = bulk_fetch_metal_quotes(list(symbols.values()))
 
         with transaction.atomic():

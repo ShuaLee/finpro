@@ -50,9 +50,10 @@ class Account(models.Model):
         ordering = ["portfolio", "name"]
 
     def __str__(self):
-        return f"{self.name} ({self.account_type})"
+        return f"{self.name} [{self.account_type.slug}]"
 
     # ---------- Convenience ----------
+
     @property
     def allowed_asset_types(self):
         return self.account_type.allowed_asset_types.all()
