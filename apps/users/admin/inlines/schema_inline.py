@@ -1,6 +1,5 @@
 from django.utils.safestring import mark_safe
 from django.urls import reverse
-from django.contrib import admin
 
 
 class SchemaPreviewMixin:

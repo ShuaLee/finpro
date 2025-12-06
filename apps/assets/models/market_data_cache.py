@@ -2,33 +2,34 @@ from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 from assets.models.assets import Asset
-from core.types import DomainType
 
 
 class MarketDataCache(models.Model):
     """
     Unified price snapshot for any tradable asset.
-    Only fields actually relevant to your product.
+    Only applied to asset types that support market pricing
+    (e.g., equities, crypto, bonds, metals).
     """
 
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,
         related_name="market_data",
-        limit_choices_to={"asset_type__domain__in": [
-            DomainType.EQUITY,
-            DomainType.CRYPTO,
-            DomainType.BOND,
-            DomainType.METAL,
+        limit_choices_to={"asset_type__slug__in": [
+            "equity",
+            "crypto",
+            "bond",
+            "metal",
         ]},
     )
 
-    # Core
-    last_price = models.DecimalField(max_digits=20, decimal_places=8,
-                                     null=True, blank=True)
+    # --- Core ---
+    last_price = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
     market_cap = models.BigIntegerField(null=True, blank=True)
 
-    # Equity-only metrics (NULL for crypto/metals)
+    # --- Equity-specific (NULL for crypto/metals) ---
     pe_ratio = models.DecimalField(max_digits=10, decimal_places=4,
                                    null=True, blank=True)
     eps = models.DecimalField(max_digits=10, decimal_places=4,
@@ -38,7 +39,7 @@ class MarketDataCache(models.Model):
     dividend_per_share = models.DecimalField(max_digits=10, decimal_places=4,
                                              null=True, blank=True)
 
-    # Future-proof fields, may be NULL always
+    # --- Bond / Metal optional data ---
     yield_to_maturity = models.DecimalField(max_digits=10, decimal_places=4,
                                             null=True, blank=True)
     coupon_rate = models.DecimalField(max_digits=10, decimal_places=4,
@@ -54,6 +55,9 @@ class MarketDataCache(models.Model):
             models.Index(fields=["asset"]),
         ]
 
+    # -------------------------------------------------
+    # Helpers
+    # -------------------------------------------------
     def is_stale(self, ttl_minutes=5) -> bool:
         if not self.last_synced:
             return True

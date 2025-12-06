@@ -1,19 +1,20 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+
 from assets.models.assets import Asset
-from core.types import DomainType
 
 
 class MetalDetail(models.Model):
     """
-    Reference data for precious metals, synced from FMP or another provider.
-    One-to-one with Asset where asset_type = METAL.
+    Reference data for precious metals, synced from providers.
+    One-to-one with Asset where asset_type.slug = 'metal'.
     """
 
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,
         related_name="metal_detail",
-        limit_choices_to={"asset_type": DomainType.METAL},
+        limit_choices_to={"asset_type__slug": "metal"},
     )
 
     # --- Identification ---
@@ -50,7 +51,7 @@ class MetalDetail(models.Model):
     )
     volume = models.BigIntegerField(
         null=True, blank=True,
-        help_text="Trading volume if available (sometimes blank for metals)"
+        help_text="Trading volume if available (may not exist for metals)"
     )
 
     # --- Custom/System ---
@@ -68,5 +69,19 @@ class MetalDetail(models.Model):
             models.Index(fields=["is_custom"]),
         ]
 
+    # -------------------------------------------------
+    # Validation — ensure asset_type.slug matches
+    # -------------------------------------------------
+    def clean(self):
+        super().clean()
+
+        if self.asset.asset_type.slug != "metal":
+            raise ValidationError(
+                f"MetalDetail can only attach to assets with asset_type.slug='metal'. "
+                f"Got '{self.asset.asset_type.slug}'."
+            )
+
     def __str__(self):
-        return f"{self.asset.symbol} ({self.unit})"
+        primary_id = self.asset.primary_identifier
+        symbol = primary_id.value if primary_id else self.asset.name
+        return f"{symbol} ({self.unit})"

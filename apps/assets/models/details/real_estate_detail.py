@@ -1,17 +1,22 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from assets.models.assets import Asset
 from assets.models import RealEstateType
-from core.types import DomainType
 from fx.models.country import Country
 
 
 class RealEstateDetail(models.Model):
+    """
+    Real-estate–specific attributes stored alongside an Asset.
+    One-to-one with Asset where asset_type.slug = "real_estate".
+    """
+
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,
         related_name="real_estate_detail",
-        limit_choices_to={"asset_type": DomainType.REAL_ESTATE},
+        limit_choices_to={"asset_type__slug": "real_estate"},
     )
 
     # --- Location ---
@@ -45,7 +50,7 @@ class RealEstateDetail(models.Model):
         null=True,
         blank=True,
         related_name="properties",
-        help_text="Category of real estate asset (e.g. Single-Family, Duplex, Commercial).",
+        help_text="Type of property (e.g. Single-Family, Duplex, Commercial).",
     )
 
     # --- Valuation ---
@@ -87,10 +92,25 @@ class RealEstateDetail(models.Model):
             models.Index(fields=["country"]),
         ]
 
+    # -------------------------------------------------
+    # Validation – ensure only real-estate asset types attach
+    # -------------------------------------------------
+    def clean(self):
+        super().clean()
+
+        if self.asset.asset_type.slug != "real_estate":
+            raise ValidationError(
+                f"RealEstateDetail can only be attached to assets where "
+                f"asset_type.slug='real_estate'. Got '{self.asset.asset_type.slug}'."
+            )
+
     def __str__(self):
         name = self.asset.name or "Real Estate"
         loc = ", ".join(
-            filter(None, [self.city, self.region,
-                   getattr(self.country, "name", None)])
+            filter(None, [
+                self.city,
+                self.region,
+                getattr(self.country, "name", None),
+            ])
         )
         return f"{name} ({loc})" if loc else name

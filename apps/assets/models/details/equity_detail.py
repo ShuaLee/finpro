@@ -1,13 +1,14 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+
 from assets.models.assets import Asset
-from core.types import DomainType
 from fx.models.country import Country
 
 
 class EquityDetail(models.Model):
     """
     Equity-specific attributes and fundamentals.
-    One-to-one with Asset where asset_type = EQUITY.
+    One-to-one with Asset where asset_type.slug = 'equity'.
     Identifiers (ISIN, CUSIP, CIK, etc.) live in AssetIdentifier.
     """
 
@@ -15,7 +16,7 @@ class EquityDetail(models.Model):
         Asset,
         on_delete=models.CASCADE,
         related_name="equity_detail",
-        limit_choices_to={"asset_type__domain": DomainType.EQUITY},
+        limit_choices_to={"asset_type__slug": "equity"},
     )
 
     # --- Listing / Exchange Info ---
@@ -47,15 +48,14 @@ class EquityDetail(models.Model):
 
     # --- Listing Status ---
     LISTING_STATUS_CHOICES = [
-        ("ACTIVE", "Active"),                # Normal tradable equity
-        ("DELISTED", "Delisted"),            # Removed from market
-        ("SUSPENDED", "Suspended"),          # Trading halted/paused
-        ("IPO", "IPO Pending"),              # Known IPO, not yet active
-        # Exists, but not yet hydrated (profile/quote missing)
+        ("ACTIVE", "Active"),
+        ("DELISTED", "Delisted"),
+        ("SUSPENDED", "Suspended"),
+        ("IPO", "IPO Pending"),
         ("PENDING", "Pending Data"),
-        # Custom ticker conflicts with new real asset
         ("COLLISION", "Collision"),
     ]
+
     listing_status = models.CharField(
         max_length=20,
         choices=LISTING_STATUS_CHOICES,
@@ -66,10 +66,23 @@ class EquityDetail(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
 
+    # -------------------------------------------------
+    # VALIDATION — enforce correct asset type
+    # -------------------------------------------------
+    def clean(self):
+        super().clean()
+
+        if self.asset.asset_type.slug != "equity":
+            raise ValidationError(
+                f"EquityDetail can only attach to assets with type slug='equity'. "
+                f"Got slug='{self.asset.asset_type.slug}'."
+            )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["asset"], name="unique_equity_detail_asset")
+                fields=["asset"], name="unique_equity_detail_asset"
+            ),
         ]
         indexes = [
             models.Index(fields=["exchange"]),

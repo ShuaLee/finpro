@@ -1,8 +1,7 @@
-
 from django.core.management.base import BaseCommand, CommandError
-from assets.models.assets import Asset, AssetIdentifier
+
+from assets.models.assets import Asset, AssetIdentifier, AssetType
 from assets.services.syncs.equity_sync import EquitySyncService
-from core.types import DomainType
 
 
 class Command(BaseCommand):
@@ -18,12 +17,25 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         symbol = options["symbol"].upper().strip()
 
-        # Find the asset by its primary ticker
+        # -------------------------------------------------------
+        # 1. Resolve the system equity asset type
+        # -------------------------------------------------------
+        try:
+            equity_type = AssetType.objects.get(slug="equity")
+        except AssetType.DoesNotExist:
+            raise CommandError(
+                "❌ System AssetType with slug='equity' not found. "
+                "Ensure asset types are seeded."
+            )
+
+        # -------------------------------------------------------
+        # 2. Find the asset by its TICKER identifier
+        # -------------------------------------------------------
         asset = (
             Asset.objects.filter(
-                identifiers__value=symbol,
+                asset_type=equity_type,
                 identifiers__id_type=AssetIdentifier.IdentifierType.TICKER,
-                asset_type__domain=DomainType.EQUITY,
+                identifiers__value=symbol,
             )
             .distinct()
             .first()
@@ -32,11 +44,15 @@ class Command(BaseCommand):
         if not asset:
             raise CommandError(
                 f"❌ No equity found with ticker '{symbol}'. "
-                "Seed the universe first or create it manually."
+                "Make sure the equity is synced or created."
             )
 
-        self.stdout.write(f"🔄 Syncing profile for {symbol} ({asset.name})...")
+        self.stdout.write(
+            f"🔄 Syncing equity profile for {symbol} ({asset.name})...")
 
+        # -------------------------------------------------------
+        # 3. Perform sync
+        # -------------------------------------------------------
         success = EquitySyncService.sync_profile(asset)
 
         if success:

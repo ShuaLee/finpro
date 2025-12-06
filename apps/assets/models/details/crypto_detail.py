@@ -1,26 +1,26 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+
 from assets.models.assets import Asset
-from core.types import DomainType
+from assets.models.assets import AssetType
 
 
 class CryptoDetail(models.Model):
     """
-    Reference data for cryptocurrencies from providers.
-    Automatically synchronized from FMP.
+    Reference data for cryptocurrencies.
+    Automatically synchronized from FMP, but also supports custom entries.
     """
 
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,
         related_name="crypto_detail",
-        limit_choices_to={"asset_type__domain": DomainType.CRYPTO},
     )
 
-    # Decimal place precision
-    quantity_precision = models.PositiveIntegerField(
-        default=18)   # BTC=8, XRP=6, etc
+    # Decimal place precision (BTC=8, ETH=18, XRP=6)
+    quantity_precision = models.PositiveIntegerField(default=18)
 
-    # project metadata (FMP doesn't supply, but room for expansion)
+    # Project metadata
     description = models.TextField(blank=True, null=True)
     website = models.URLField(blank=True, null=True)
     logo_url = models.URLField(blank=True, null=True)
@@ -33,28 +33,45 @@ class CryptoDetail(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
 
+    # --------------------------------------
+    # Validation: must be crypto asset
+    # --------------------------------------
+    def clean(self):
+        super().clean()
+
+        if self.asset.asset_type.slug != "crypto":
+            raise ValidationError(
+                f"CryptoDetail can only attach to assets with type slug='crypto', "
+                f"but this asset has slug='{self.asset.asset_type.slug}'."
+            )
+
+    # --------------------------------------
+    # Identifier helpers
+    # --------------------------------------
     @property
     def base_symbol(self):
-        ident = self.asset.identifiers.filter(
-            id_type="BASE_SYMBOL"
-        ).first()
+        ident = self.asset.identifiers.filter(id_type="BASE_SYMBOL").first()
         return ident.value if ident else None
 
     @property
     def pair_symbol(self):
-        ident = self.asset.identifiers.filter(
-            id_type="PAIR_SYMBOL"
-        ).first()
+        ident = self.asset.identifiers.filter(id_type="PAIR_SYMBOL").first()
         return ident.value if ident else None
 
+    # --------------------------------------
+    # Display
+    # --------------------------------------
     def __str__(self):
         pid = self.asset.primary_identifier
-        return f"{pid.value if pid else self.asset.name}"
+        return pid.value if pid else self.asset.name
 
+    # --------------------------------------
+    # Precision Change Propagation
+    # --------------------------------------
     def _sync_precision_change(self, old):
         """
         If quantity_precision changes, update all SCVs for holdings
-        referencing this asset.
+        that reference this asset.
         """
         from schemas.services.schema_manager import SchemaManager
 
@@ -62,11 +79,9 @@ class CryptoDetail(models.Model):
             old, "quantity_precision", None) if old else None
         new_precision = self.quantity_precision
 
-        # No changee -> Nothing to do
         if old_precision == new_precision:
-            return
+            return  # no change
 
-        # Fetch all holdings that own this asset
         holdings = self.asset.holdings.all()
 
         for holding in holdings:
@@ -75,20 +90,19 @@ class CryptoDetail(models.Model):
                 continue
 
             manager = SchemaManager(schema)
-
-            # Rebuild SCVs using new precision
             manager.sync_for_holding(holding)
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
 
-        # Load old instance to compare precision
+        old = None
         if not is_new:
-            old = CryptoDetail.objects.get(pk=self.pk)
-        else:
-            old = None
+            try:
+                old = CryptoDetail.objects.get(pk=self.pk)
+            except CryptoDetail.DoesNotExist:
+                pass
 
         super().save(*args, **kwargs)
 
-        # Only after save -> sync precision effects
+        # Only after save
         self._sync_precision_change(old)

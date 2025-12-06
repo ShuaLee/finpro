@@ -1,8 +1,5 @@
-# users/admin/inlines/scv_inline.py
-
 import nested_admin
 from django import forms
-from django.utils.html import format_html
 from schemas.models import SchemaColumnValue
 
 

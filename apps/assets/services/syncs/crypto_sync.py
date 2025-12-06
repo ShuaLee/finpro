@@ -5,7 +5,6 @@ from django.db import transaction
 from assets.models.assets import Asset, AssetIdentifier, AssetType
 from assets.models.details.crypto_detail import CryptoDetail
 from assets.models.market_data_cache import MarketDataCache
-from core.types import DomainType
 
 from external_data.fmp.crypto.fetchers import (
     fetch_crypto_quote,
@@ -22,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 class CryptoSyncService:
 
-    # ----------------------------------------------------------------------
+    # ---------------------------------------------------------
     # Helpers
-    # ----------------------------------------------------------------------
+    # ---------------------------------------------------------
     @staticmethod
     def _get_primary_pair(asset: Asset) -> str | None:
         ident = asset.identifiers.filter(
@@ -39,10 +38,11 @@ class CryptoSyncService:
 
     @staticmethod
     def _update_identifiers(asset: Asset, pair_symbol: str, base_symbol: str, quote: str):
+
         pair_symbol = pair_symbol.upper()
         base_symbol = base_symbol.upper()
 
-        # Update primary PAIR symbol
+        # --- Ensure only one primary PAIR identifier ---
         existing_primary = asset.identifiers.filter(
             id_type=AssetIdentifier.IdentifierType.PAIR_SYMBOL,
             is_primary=True
@@ -62,41 +62,42 @@ class CryptoSyncService:
             pair_ident.is_primary = True
             pair_ident.save()
 
-        # Base symbol (non-primary)
+        # --- Base symbol (non-primary) ---
         AssetIdentifier.objects.get_or_create(
             asset=asset,
             id_type=AssetIdentifier.IdentifierType.BASE_SYMBOL,
             value=base_symbol,
         )
 
-    # ----------------------------------------------------------------------
+    # ---------------------------------------------------------
     # Apply Data
-    # ----------------------------------------------------------------------
+    # ---------------------------------------------------------
     @staticmethod
     def _apply_profile(asset: Asset, detail: CryptoDetail, data: dict):
+
         asset_dirty = False
         detail_dirty = False
 
-        FMP_DETAIL_FIELDS = {"exchange"}  # restrict what FMP can update
+        # Fields allowed to update on CryptoDetail
+        FMP_DETAIL_FIELDS = {"exchange"}
 
         for field, value in data.items():
 
-            # ---------------------------
-            # Asset-level fields
-            # ---------------------------
+            # ----------------------
+            # Asset fields: "asset__name", "asset__currency" etc.
+            # ----------------------
             if field.startswith("asset__"):
                 _, attr = field.split("__", 1)
 
                 if attr == "asset_type":
-                    continue  # never override
+                    continue  # Never override asset type
 
                 if attr == "currency" and value:
                     try:
                         asset.currency = resolve_fx_currency(value)
                         asset_dirty = True
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to resolve FXCurrency for {value}: {e}")
+                        logger.warning(f"FX resolve failed for {value}: {e}")
                     continue
 
                 if hasattr(asset, attr):
@@ -104,15 +105,16 @@ class CryptoSyncService:
                     asset_dirty = True
                 continue
 
-            # ---------------------------
+            # ----------------------
             # CryptoDetail fields
-            # ---------------------------
+            # ----------------------
             if field in FMP_DETAIL_FIELDS:
                 setattr(detail, field, value)
                 detail_dirty = True
 
         if asset_dirty:
             asset.save()
+
         if detail_dirty:
             detail.save()
 
@@ -121,26 +123,25 @@ class CryptoSyncService:
         cache, _ = MarketDataCache.objects.get_or_create(asset=asset)
 
         dirty = False
-
         for field, value in data.items():
             if hasattr(cache, field):
                 try:
-                    old = getattr(cache, field)
-                    if old != value:
+                    if getattr(cache, field) != value:
                         setattr(cache, field, value)
                         dirty = True
                 except Exception as e:
                     logger.warning(
-                        f"Skipping invalid quote field {field} for {asset}: {e}")
+                        f"Skipping quote field {field} for {asset}: {e}"
+                    )
 
         if dirty:
             cache.save()
 
         return cache
 
-    # ----------------------------------------------------------------------
-    # Single Sync
-    # ----------------------------------------------------------------------
+    # ---------------------------------------------------------
+    # Single-Asset Sync
+    # ---------------------------------------------------------
     @staticmethod
     def sync(asset: Asset) -> bool:
         return (
@@ -150,15 +151,14 @@ class CryptoSyncService:
 
     @staticmethod
     def sync_profile(asset: Asset) -> bool:
-        # FIX: Domain check
-        if asset.asset_type.domain != DomainType.CRYPTO:
+
+        if asset.asset_type.slug != "crypto":
             return False
 
         pair = CryptoSyncService._get_primary_pair(asset)
         if not pair:
             return False
 
-        # FMP uses quote endpoint to deliver both metadata + price
         profile = fetch_crypto_quote(pair)
         if not profile:
             return False
@@ -167,7 +167,7 @@ class CryptoSyncService:
 
         CryptoSyncService._update_identifiers(asset, pair, base, quote)
 
-        # Update asset currency
+        # Update currency field
         if quote:
             try:
                 fx = resolve_fx_currency(quote)
@@ -184,8 +184,8 @@ class CryptoSyncService:
 
     @staticmethod
     def sync_quote(asset: Asset) -> bool:
-        # FIX: Compare to domain, not AssetType object
-        if asset.asset_type.domain != DomainType.CRYPTO:
+
+        if asset.asset_type.slug != "crypto":
             return False
 
         pair = CryptoSyncService._get_primary_pair(asset)
@@ -199,23 +199,21 @@ class CryptoSyncService:
         CryptoSyncService._apply_quote(asset, quote)
         return True
 
-    # ----------------------------------------------------------------------
-    # Bulk Quotes
-    # ----------------------------------------------------------------------
-
+    # ---------------------------------------------------------
+    # Bulk Quotes (FMP supports this)
+    # ---------------------------------------------------------
     @staticmethod
     def sync_quotes_bulk(assets: list[Asset]) -> dict:
         results = defaultdict(int)
 
-        # Only include real crypto assets with a primary pair
         pairs = {
-            a: CryptoSyncService._get_primary_pair(a)
-            for a in assets
-            if a.asset_type.domain == DomainType.CRYPTO    # FIXED
+            asset: CryptoSyncService._get_primary_pair(asset)
+            for asset in assets
+            if asset.asset_type.slug == "crypto"
         }
         pairs = {a: p for a, p in pairs.items() if p}
 
-        data = fetch_crypto_quotes_bulk()  # returns {pair: quote_dict}
+        data = fetch_crypto_quotes_bulk()
 
         with transaction.atomic():
             for asset, pair in pairs.items():
@@ -229,23 +227,21 @@ class CryptoSyncService:
 
         return dict(results)
 
-    # ----------------------------------------------------------------------
-    # Universe Sync
-    # ----------------------------------------------------------------------
-
+    # ---------------------------------------------------------
+    # Universe Sync (mass creation/update)
+    # ---------------------------------------------------------
     @staticmethod
     @transaction.atomic
     def sync_universe(dry_run: bool = False) -> dict:
-        universe = fetch_crypto_universe()
 
+        universe = fetch_crypto_universe()
         created = 0
         updated = 0
 
-        # Load the correct AssetType once
-        crypto_type = AssetType.objects.get(
-            domain=DomainType.CRYPTO, is_system=True)
+        crypto_type = AssetType.objects.get(slug="crypto", is_system=True)
 
         for rec in universe:
+
             pair = rec.get("symbol")
             name = rec.get("name")
             exchange = rec.get("exchange")
@@ -256,21 +252,21 @@ class CryptoSyncService:
             base, quote = split_crypto_pair(pair)
             name_clean = clean_crypto_name(name)
 
+            # Find existing
             ident = AssetIdentifier.objects.filter(
                 id_type=AssetIdentifier.IdentifierType.PAIR_SYMBOL,
                 value=pair
             ).select_related("asset").first()
 
-            # -----------------------------
-            # Existing asset
-            # -----------------------------
+            # ------------------
+            # EXISTING ASSET
+            # ------------------
             if ident:
                 asset = ident.asset
 
-                # Safety: skip incorrect domain
-                if asset.asset_type.domain != DomainType.CRYPTO:
+                if asset.asset_type.slug != "crypto":
                     logger.warning(
-                        f"Identifier {pair} belongs to non-crypto asset {asset}"
+                        f"Identifier {pair} attaches to non-crypto asset {asset}"
                     )
                     continue
 
@@ -281,7 +277,6 @@ class CryptoSyncService:
                     asset.name = name_clean
                     changed = True
 
-                # Update currency via FX resolver
                 if quote:
                     fx = resolve_fx_currency(quote)
                     if asset.currency != fx:
@@ -299,14 +294,13 @@ class CryptoSyncService:
 
                 continue
 
-            # -----------------------------
-            # New Crypto Asset
-            # -----------------------------
+            # ------------------
+            # NEW ASSET
+            # ------------------
             created += 1
             if dry_run:
                 continue
 
-            # Must pass an AssetType, not domain
             asset = Asset.objects.create(
                 asset_type=crypto_type,
                 name=name_clean,
@@ -321,63 +315,38 @@ class CryptoSyncService:
                 exchange=exchange,
             )
 
-        return {
-            "created": created,
-            "updated": updated,
-        }
+        return {"created": created, "updated": updated}
 
-    # ----------------------------------------------------------------------
+    # ---------------------------------------------------------
     # Create From Symbol
-    # ----------------------------------------------------------------------
-
+    # ---------------------------------------------------------
     @staticmethod
     @transaction.atomic
     def create_from_symbol(symbol: str) -> Asset:
-        """
-        Create or fetch a crypto asset from either:
-        - BASE symbol (e.g. BTC)
-        - PAIR symbol (e.g. BTCUSD)
-        """
 
         symbol = symbol.upper().strip()
 
-        # Normalize BTC → BTCUSD
-        pair_symbol = f"{symbol}USD" if len(symbol) <= 4 else symbol
+        pair_symbol = (
+            f"{symbol}USD"
+            if len(symbol) <= 4 else symbol
+        )
 
-        # Load crypto AssetType once
-        crypto_type = AssetType.objects.get(
-            domain=DomainType.CRYPTO, is_system=True)
+        crypto_type = AssetType.objects.get(slug="crypto", is_system=True)
 
-        # ------------------------------------------------------------------
-        # Check for existing asset
-        # ------------------------------------------------------------------
         ident = AssetIdentifier.objects.filter(
             id_type=AssetIdentifier.IdentifierType.PAIR_SYMBOL,
             value=pair_symbol
         ).select_related("asset").first()
 
-        if ident:
-            asset = ident.asset
-            # Safety: ensure domain is crypto
-            if asset.asset_type.domain == DomainType.CRYPTO:
-                return asset
-            else:
-                logger.warning(
-                    f"PAIR {pair_symbol} belongs to non-crypto asset {asset}. Skipping."
-                )
+        if ident and ident.asset.asset_type.slug == "crypto":
+            return ident.asset
 
-        # ------------------------------------------------------------------
-        # Fetch profile+quote
-        # ------------------------------------------------------------------
         profile = fetch_crypto_quote(pair_symbol)
 
-        # ------------------------------------------------------------------
-        # No provider data → create custom crypto asset
-        # ------------------------------------------------------------------
+        # ----------------------
+        # No provider data
+        # ----------------------
         if not profile:
-            logger.warning(
-                f"No crypto data for {symbol}, creating as custom asset.")
-
             asset = Asset.objects.create(
                 asset_type=crypto_type,
                 name=symbol,
@@ -391,35 +360,28 @@ class CryptoSyncService:
                 value=pair_symbol,
                 is_primary=True,
             )
-
             return asset
 
-        # ------------------------------------------------------------------
-        # Provider returned valid data
-        # ------------------------------------------------------------------
+        # ----------------------
+        # Valid provider data
+        # ----------------------
         base, quote = split_crypto_pair(pair_symbol)
-        currency_fk = resolve_fx_currency(quote)
 
         asset = Asset.objects.create(
             asset_type=crypto_type,
             name=profile.get("name") or symbol,
-            currency=currency_fk,
+            currency=resolve_fx_currency(quote),
             is_custom=False,
         )
 
-        # Identifiers
         CryptoSyncService._update_identifiers(asset, pair_symbol, base, quote)
 
-        # Detail
         detail = CryptoDetail.objects.create(
             asset=asset,
             exchange=profile.get("exchange"),
         )
 
-        # Apply profile fields
         CryptoSyncService._apply_profile(asset, detail, profile)
-
-        # Cache quote (FMP full profile contains quote fields)
         CryptoSyncService._apply_quote(asset, profile)
 
         logger.info(f"Created new crypto asset: {asset.name} ({pair_symbol})")

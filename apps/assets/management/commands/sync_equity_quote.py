@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand, CommandError
-from assets.models.assets import Asset, AssetIdentifier
+
+from assets.models.assets import Asset, AssetIdentifier, AssetType
 from assets.services.syncs.equity_sync import EquitySyncService
-from core.types import DomainType
 
 
 class Command(BaseCommand):
@@ -17,12 +17,24 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         symbol = options["symbol"].upper().strip()
 
-        # ✅ Correct way: find asset via TICKER identifier
+        # -------------------------------------------------------
+        # 1. Find system equity type (slug='equity')
+        # -------------------------------------------------------
+        try:
+            equity_type = AssetType.objects.get(slug="equity")
+        except AssetType.DoesNotExist:
+            raise CommandError(
+                "❌ AssetType slug='equity' not found. Did you run bootstrap?"
+            )
+
+        # -------------------------------------------------------
+        # 2. Lookup asset via TICKER identifier
+        # -------------------------------------------------------
         asset = (
             Asset.objects.filter(
-                identifiers__value=symbol,
+                asset_type=equity_type,
                 identifiers__id_type=AssetIdentifier.IdentifierType.TICKER,
-                asset_type__domain=DomainType.EQUITY,
+                identifiers__value=symbol,
             )
             .distinct()
             .first()
@@ -30,17 +42,23 @@ class Command(BaseCommand):
 
         if not asset:
             raise CommandError(
-                f"❌ No equity found in DB with ticker '{symbol}'. "
-                "Seed the universe first or create it manually."
+                f"❌ No equity found with ticker '{symbol}'. "
+                "Run equity_universe_sync or create it manually."
             )
 
-        self.stdout.write(f"🔄 Syncing quote for {symbol} ({asset.name})...")
+        self.stdout.write(
+            f"🔄 Syncing latest quote for {symbol} ({asset.name})...")
 
+        # -------------------------------------------------------
+        # 3. Perform quote sync
+        # -------------------------------------------------------
         success = EquitySyncService.sync_quote(asset)
 
         if success:
             self.stdout.write(self.style.SUCCESS(
-                f"✅ Synced quote for {symbol}"))
+                f"✅ Synced quote for {symbol}"
+            ))
         else:
             self.stdout.write(self.style.WARNING(
-                f"⚠️ Failed to sync quote for {symbol}"))
+                f"⚠️ Failed to sync quote for {symbol}"
+            ))
