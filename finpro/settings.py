@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.postgres',
     'accounts',
     'assets',
+    'core',
     'datatype',
     'users',
     'subscriptions',
