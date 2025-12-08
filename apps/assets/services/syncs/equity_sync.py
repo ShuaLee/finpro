@@ -165,7 +165,6 @@ class EquitySyncService:
 
     @staticmethod
     def sync_profile(asset: Asset) -> bool:
-
         if asset.asset_type.slug != "equity":
             return False
 
@@ -177,8 +176,12 @@ class EquitySyncService:
         # Case 1: Profile by ticker
         # -------------------------
         if profile:
+            if "symbol" not in profile:
+                logger.warning(
+                    f"Profile missing 'symbol' for {ticker}: {profile}")
+                return False
 
-            if ticker and profile.get("symbol") != ticker:
+            if ticker and profile["symbol"].upper() != ticker.upper():
                 EquitySyncService._update_ticker_identifier(
                     asset, profile["symbol"])
 
@@ -251,9 +254,67 @@ class EquitySyncService:
 
         return True
 
+    @staticmethod
+    def sync_profile_multi(asset: Asset) -> bool:
+        """
+        Handles cases where FMP returns multiple profiles for a symbol.
+        Syncs *all* matching profiles in the result set, not just the exact one.
+        """
+        if asset.asset_type.slug != "equity":
+            return False
+
+        ticker = EquitySyncService._get_primary_ticker(asset)
+        if not ticker:
+            return False
+
+        from external_data.fmp.equities.fetchers import fetch_equity_profiles_multi
+        profiles = fetch_equity_profiles_multi(ticker)
+
+        if not profiles:
+            logger.warning(f"No profiles returned in multi-fetch for {ticker}")
+            return False
+
+        found_any = False
+
+        for profile in profiles:
+            symbol = profile.get("symbol")
+            if not symbol:
+                continue
+
+            ident = AssetIdentifier.objects.filter(
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol
+            ).select_related("asset").first()
+
+            if not ident:
+                continue
+
+            matched_asset = ident.asset
+
+            if matched_asset.asset_type.slug != "equity":
+                continue
+
+            detail = EquitySyncService._get_or_create_detail(matched_asset)
+
+            if symbol != EquitySyncService._get_primary_ticker(matched_asset):
+                EquitySyncService._update_ticker_identifier(
+                    matched_asset, symbol)
+
+            EquitySyncService._apply_fields(matched_asset, detail, profile)
+            EquitySyncService.hydrate_identifiers(matched_asset, profile)
+
+            if detail.listing_status == "PENDING":
+                detail.listing_status = "ACTIVE"
+                detail.save()
+
+            found_any = True
+
+        return found_any
+
     # ------------------------------------------------------------
     # Bulk Sync
     # ------------------------------------------------------------
+
     @staticmethod
     def sync_profiles_bulk(assets: list[Asset]) -> dict:
         results = defaultdict(int)

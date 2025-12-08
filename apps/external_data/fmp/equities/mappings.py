@@ -1,4 +1,5 @@
 EQUITY_PROFILE_MAP = {
+    "symbol": "symbol",
     "exchangeShortName": "exchange",
     "exchange": "exchange_full_name",
     "currency": "asset__currency",

@@ -10,10 +10,13 @@ from datatype.services.seeds.seed_datatypes import seed_datatypes
 from datatype.services.seeds.seed_constraint_types import seed_constraint_types
 from datatype.services.seeds.seed_constraint_definitions import seed_constraint_definitions
 
+# --- Asset Types ---
+from assets.services.seeds.seed_asset_types import seed_asset_types
+
 
 class Command(BaseCommand):
     help = (
-        "Bootstrap system FX currencies, Countries, DataTypes, "
+        "Bootstrap system FX currencies, Countries, AssetTypes, DataTypes, "
         "ConstraintTypes, and ConstraintDefinitions."
     )
 
@@ -39,7 +42,15 @@ class Command(BaseCommand):
             f"   ✔ FX currencies synced ({fx_count} new)\n"))
 
         # ============================================================
-        # 2. Seed DataTypes
+        # 2. Seed AssetTypes
+        # ============================================================
+        self.stdout.write("🧩 Seeding AssetTypes...")
+        asset_count = seed_asset_types()
+        self.stdout.write(self.style.SUCCESS(
+            f"   ✔ AssetTypes seeded ({asset_count})\n"))
+
+        # ============================================================
+        # 3. Seed DataTypes
         # ============================================================
         self.stdout.write("🔡 Seeding DataTypes...")
         dt_count = seed_datatypes()
@@ -47,7 +58,7 @@ class Command(BaseCommand):
             f"   ✔ DataTypes seeded ({dt_count} created)\n"))
 
         # ============================================================
-        # 3. Seed Constraint Types
+        # 4. Seed Constraint Types
         # ============================================================
         self.stdout.write("🧩 Seeding Constraint Types...")
         ct_count = seed_constraint_types()
@@ -55,7 +66,7 @@ class Command(BaseCommand):
             f"   ✔ Constraint Types seeded ({ct_count} created)\n"))
 
         # ============================================================
-        # 4. Seed Constraint Definitions
+        # 5. Seed Constraint Definitions
         # ============================================================
         self.stdout.write("📏 Seeding Constraint Definitions...")
         cd_count = seed_constraint_definitions()
