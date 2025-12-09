@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 
-from assets.models.assets import Asset, AssetType
+from apps.assets.models.asset_core.asset import Asset, AssetType
 
 
 class BondDetail(models.Model):

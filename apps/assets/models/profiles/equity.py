@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 
-from assets.models.assets import Asset
+from apps.assets.models.asset_core.asset import Asset
 from assets.models.classifications.sector import Sector
 from assets.models.classifications.industry import Industry
 from assets.models.exchanges import Exchange

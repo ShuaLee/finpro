@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from assets.models.assets import Asset
+from apps.assets.models.asset_core.asset import Asset
 from assets.models import RealEstateType
 from fx.models.country import Country
 

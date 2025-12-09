@@ -2,7 +2,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from assets.models.assets import Asset, AssetIdentifier, AssetType
+from apps.assets.models.asset_core.asset import Asset, AssetIdentifier, AssetType
 from assets.models.details.crypto_detail import CryptoDetail
 from assets.models.details.equity_detail import EquityDetail
 from assets.models.details.real_estate_detail import RealEstateDetail

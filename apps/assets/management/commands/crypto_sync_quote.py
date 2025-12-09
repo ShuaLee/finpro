@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from assets.models.assets import Asset, AssetIdentifier, AssetType
+from apps.assets.models.asset_core.asset import Asset, AssetIdentifier, AssetType
 from assets.services.syncs.crypto_sync import CryptoSyncService
 
 

@@ -6,40 +6,6 @@ from fx.models.fx import FXCurrency
 from users.models import Profile
 
 
-class AssetType(models.Model):
-    slug = models.SlugField(unique=True)
-
-    name = models.CharField(
-        max_length=100,
-        unique=True,
-    )
-
-    # Identifier rules for this asset type
-    identifier_rules = models.JSONField(
-        default=list,
-        blank=True,
-        help_text="Allowed identifier types (e.g., TICKER, ISIN, BASE_SYMBOL)",
-    )
-
-    # Whether user can delete it or not
-    is_system = models.BooleanField(default=False)
-
-    created_by = models.ForeignKey(
-        Profile,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
-
-    def __str__(self):
-        return self.name
-
-    def delete(self, *args, **kwargs):
-        if self.is_system:
-            raise ValidationError("System AssetTypes cannot be deleted.")
-        super().delete(*args, **kwargs)
-
-
 class Asset(models.Model):
     """
     Base universal asset/security record (Security Master).
@@ -48,7 +14,7 @@ class Asset(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     asset_type = models.ForeignKey(
-        AssetType,
+        "assets.AssetType",
         on_delete=models.PROTECT,
         related_name="assets",
     )

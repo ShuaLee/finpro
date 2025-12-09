@@ -1,7 +1,7 @@
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
-from assets.models.assets import Asset
+from apps.assets.models.asset_core.asset import Asset
 
 
 class MarketDataCache(models.Model):

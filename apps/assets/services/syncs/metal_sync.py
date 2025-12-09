@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from django.db import transaction
 
-from assets.models.assets import Asset
+from apps.assets.models.asset_core.asset import Asset
 from assets.models.details.metal_detail import MetalDetail
 from external_data.fmp.metals.fetchers import (
     fetch_metal_quote,

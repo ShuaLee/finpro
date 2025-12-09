@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from accounts.models.account import Account
-from assets.models.assets import Asset
+from apps.assets.models.asset_core.asset import Asset
 
 
 class Holding(models.Model):

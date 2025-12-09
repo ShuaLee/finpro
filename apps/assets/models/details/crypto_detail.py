@@ -1,8 +1,8 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 
-from assets.models.assets import Asset
-from assets.models.assets import AssetType
+from apps.assets.models.asset_core.asset import Asset
+from apps.assets.models.asset_core.asset import AssetType
 
 
 class CryptoDetail(models.Model):

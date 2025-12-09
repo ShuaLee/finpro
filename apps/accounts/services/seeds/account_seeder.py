@@ -1,6 +1,6 @@
 from accounts.config.account_types import SYSTEM_ACCOUNT_TYPES
 from accounts.models.account_type import AccountType
-from assets.models.assets import AssetType
+from apps.assets.models.asset_core.asset import AssetType
 from django.core.exceptions import ImproperlyConfigured
 
 

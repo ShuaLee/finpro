@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from django.db import transaction
 
-from assets.models.assets import Asset, AssetIdentifier, AssetType
+from apps.assets.models.asset_core.asset import Asset, AssetIdentifier, AssetType
 from assets.models.details.crypto_detail import CryptoDetail
 from assets.models.market_data_cache import MarketDataCache
 
