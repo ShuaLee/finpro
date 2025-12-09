@@ -4,7 +4,6 @@ from assets.models.exchanges import Exchange
 
 @admin.register(Exchange)
 class ExchangeAdmin(admin.ModelAdmin):
-
     list_display = (
         "code",
         "name",
@@ -12,42 +11,61 @@ class ExchangeAdmin(admin.ModelAdmin):
         "symbol_suffix",
         "delay",
         "is_system",
+    )
+
+    list_filter = (
+        "is_system",
+        "country",
+    )
+
+    search_fields = (
+        "code",
+        "name",
+        "country__name",
+        "country__code",
+    )
+
+    readonly_fields = (
+        "id",
+        "slug",
+        "created_at",
+        "is_system",
         "owner",
     )
 
-    list_filter = ("is_system", "country")
-    search_fields = ("code", "name", "country__name", "country__code")
+    fieldsets = (
+        ("Basic Info", {
+            "fields": ("id", "code", "name", "slug"),
+        }),
 
-    readonly_base = ("id", "slug", "created_at", "is_system", "owner")
+        ("Location", {
+            "fields": ("country",),
+        }),
 
-    def get_readonly_fields(self, request, obj=None):
-        """Superusers can edit everything; staff get locked system records."""
-        if request.user.is_superuser:
-            return self.readonly_base  # only structural fields locked
+        ("FMP Metadata", {
+            "fields": ("symbol_suffix", "delay"),
+        }),
 
-        # staff: if system → fully locked
-        if obj and obj.is_system:
-            return self.readonly_base + (
-                "code",
-                "name",
-                "country",
-                "symbol_suffix",
-                "delay",
-            )
+        ("System", {
+            "fields": ("is_system", "owner", "created_at"),
+        }),
+    )
 
-        # staff editing user-created → lock id/slug/system fields only
-        return self.readonly_base
+    ordering = ("code",)
+
+    def has_change_permission(self, request, obj=None):
+        """
+        Prevent admin from changing system exchanges 
+        unless they have superuser privileges.
+        """
+        if obj and obj.is_system and not request.user.is_superuser:
+            return False
+        return super().has_change_permission(request, obj)
 
     def has_delete_permission(self, request, obj=None):
-        """Only superusers or user-owned custom entries may be deleted."""
-        if request.user.is_superuser:
-            return True
-
-        if obj and obj.owner == request.user.profile:
-            return True
-
-        return False
-
-    def has_add_permission(self, request):
-        """Only superusers can manually add exchanges."""
-        return request.user.is_superuser
+        """
+        Prevent deleting system exchanges through admin.
+        """
+        if obj and obj.is_system:
+            return False
+        return super().has_delete_permission(request, obj)
