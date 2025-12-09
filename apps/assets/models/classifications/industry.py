@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
+
 class Industry(models.Model):
     """
     Industry classification (e.g., 'Semiconductors', 'Oil & Gas Midstream').
@@ -54,22 +55,22 @@ class Industry(models.Model):
             raise ValidationError(
                 "System industries (is_system=True) cannot have an owner."
             )
-        
+
         # Custom industries must NOT be marked as system
         if self.owner and self.is_system:
             raise ValidationError(
                 "User-created industries cannot be marked as system."
             )
-        
-        def save(self, *args, **kwargs):
-            if not self.slug:
-                self.slug = slugify(self.name)
 
-            self.clean()
-            return super().save(*args, **kwargs)
-        
-        class Meta:
-            constraints = [
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+
+        self.clean()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
             # System industries: slug must be globally unique
             models.UniqueConstraint(
                 fields=["slug"],
@@ -83,7 +84,7 @@ class Industry(models.Model):
                 name="unique_user_industry_slug_per_owner",
             ),
         ]
-        ordering = ["name"]
+    ordering = ["name"]
 
     def __str__(self):
         return self.name
