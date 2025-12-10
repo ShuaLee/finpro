@@ -48,7 +48,7 @@ def fetch_equity_profile(symbol: str) -> dict | None:
 # --------------------------------------------------
 
 
-def fetch_equity_profiles_bulk(part: int = 0) -> list[dict]:
+def _fetch_equity_profiles_bulk(part: int = 0) -> list[dict]:
     """
     Fetch a single bulk profile chunk from FMP.
     Returns a list of normalized profile dicts.
@@ -83,7 +83,7 @@ def fetch_all_equity_profiles_bulk() -> list[dict]:
 
     while True:
         logger.info(f"Fetching FMP profile-bulk part={part}...")
-        chunk = fetch_equity_profiles_bulk(part)
+        chunk = _fetch_equity_profiles_bulk(part)
 
         # Stop when FMP returns no more chunks
         if not chunk:
