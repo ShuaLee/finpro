@@ -10,7 +10,7 @@ class ExternalDataProviderUnavailable(Exception):
     pass
 
 
-def _get_json(url: str, timeout=10) -> dict | list | None:
+def get_json(url: str, timeout=10) -> dict | list | None:
     """
     Shared safe HTTP GET for all external-data APIs.
     Handles:

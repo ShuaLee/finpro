@@ -1,3 +1,18 @@
+def parse_equity_quote(raw: dict) -> dict:
+    """
+    Extract only fast-changing price fields from FMP quote endpoint.
+    """
+    if not raw:
+        return {}
+
+    return {
+        "price": raw.get("price"),
+        "change": raw.get("change"),
+        "change_percent": raw.get("changesPercentage"),
+        "volume": raw.get("volume"),
+    }
+
+
 EQUITY_PROFILE_MAP = {
     # ASSET FIELDS
     "companyName": "asset.name",
