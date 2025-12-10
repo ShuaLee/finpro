@@ -1,7 +1,7 @@
 import logging
 
 # Import fetchers
-from external_data.fmp.equities.fetchers import (
+from apps.external_data.fmp.equities.fetchers_old import (
     fetch_equity_profile,
     fetch_equity_quote,
     fetch_equity_quotes_bulk,

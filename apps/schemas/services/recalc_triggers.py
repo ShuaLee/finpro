@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from assets.models.holding import Holding
+from apps.accounts.models.holdings.holding import Holding
 from schemas.services.schema_manager import SchemaManager
 
 

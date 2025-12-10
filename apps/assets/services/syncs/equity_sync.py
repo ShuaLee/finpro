@@ -6,7 +6,7 @@ from apps.assets.models.asset_core.asset import Asset, AssetIdentifier, AssetTyp
 from assets.models.details.equity_detail import EquityDetail
 from assets.models.market_data_cache import MarketDataCache
 
-from external_data.fmp.equities.fetchers import (
+from apps.external_data.fmp.equities.fetchers_old import (
     fetch_equity_profile,
     fetch_equity_by_isin,
     fetch_equity_by_cusip,
@@ -267,7 +267,7 @@ class EquitySyncService:
         if not ticker:
             return False
 
-        from external_data.fmp.equities.fetchers import fetch_equity_profiles_multi
+        from apps.external_data.fmp.equities.fetchers_old import fetch_equity_profiles_multi
         profiles = fetch_equity_profiles_multi(ticker)
 
         if not profiles:

@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from assets.models.holding import Holding
+from apps.accounts.models.holdings.holding import Holding
 
 
 class Schema(models.Model):

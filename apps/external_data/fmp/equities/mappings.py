@@ -1,39 +1,32 @@
 EQUITY_PROFILE_MAP = {
-    "symbol": "symbol",
-    "exchangeShortName": "exchange",
-    "exchange": "exchange_full_name",
-    "currency": "asset__currency",
-    "country": "country",
-    "ipoDate": "ipo_date",
+    # ASSET FIELDS
+    "companyName": "asset.name",
+    "currency": "asset.currency",
+    "symbol": "identifier.TICKER",
+    "isin": "identifier.ISIN",
+    "cusip": "identifier.CUSIP",
+    "cik": "identifier.CIK",
+
+    # PROFILE FIELDS
+    "companyName": "company_name",
+    "website": "website",
+    "description": "description",
+    "image": "image_url",
+
+    # RELATION FIELDS
     "sector": "sector",
     "industry": "industry",
-    "isEtf": "is_etf",
-    "isAdr": "is_adr",
-    "isFund": "is_mutual_fund",
-    "companyName": "asset__name",
-    "isin": "isin",
-    "cusip": "cusip",
-    "cik": "cik",
-}
+    "exchange": "exchange",
+    "country": "country",
 
-EQUITY_QUOTE_MAP = {
-    # --- Core Quote Fields ---
-    "price": "last_price",
-    "change": "change",
-    "changesPercentage": "change_percent",
-    "previousClose": "previous_close",
-    "open": "open_price",
-    "dayHigh": "high_price",
-    "dayLow": "low_price",
-    "volume": "volume",
-    "avgVolume": "avg_volume",
+    # MARKET DATA
+    "price": "price",
     "marketCap": "market_cap",
-
-    # --- Extended Metrics ---
-    "yearHigh": "year_high",
-    "yearLow": "year_low",
-    "eps": "eps",
-    "pe": "pe_ratio",
-    "lastDiv": "dividend_per_share",
-    "yield": "dividend_yield",
+    "beta": "beta",
+    "lastDividend": "last_dividend",
+    "ipoDate": "ipo_date",
+    "volume": "volume",
+    "averageVolume": "avg_volume",
+    "change": "change",
+    "changePercentage": "change_percent",
 }

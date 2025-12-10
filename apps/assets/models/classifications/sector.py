@@ -44,12 +44,6 @@ class Sector(models.Model):
                 "System sectors (is_system=True) cannot have an owner."
             )
 
-        # User-created sectors must NOT be marked as system
-        if self.owner and self.is_system:
-            raise ValidationError(
-                "User-created sectors cannot be marked as system."
-            )
-
     # ------------------------
     # SAVE LOGIC
     # ------------------------

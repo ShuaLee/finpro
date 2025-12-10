@@ -46,6 +46,14 @@ class EquityProfile(models.Model):
         max_digits=20, decimal_places=6, null=True, blank=True)
     ipo_date = models.DateField(null=True, blank=True)
 
+    # --------- IRRELEVANT ----------
+    change = models.DecimalField(
+        max_digits=20, decimal_places=6, null=True, blank=True)
+    change_percent = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
+    volume = models.BigIntegerField(null=True, blank=True)
+    avg_volume = models.BigIntegerField(null=True, blank=True)
+
     # --------- FLAGS ----------
     is_etf = models.BooleanField(default=False)
     is_adr = models.BooleanField(default=False)
