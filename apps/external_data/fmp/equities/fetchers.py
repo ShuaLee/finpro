@@ -7,6 +7,7 @@ from external_data.fmp.equities.mappings import (
     parse_equity_quote
 )
 from external_data.fmp.shared.constants import (
+    FMP_BASE,
     FMP_API_KEY,
     FMP_STOCK_PROFILE,
     FMP_STOCK_QUOTE,
@@ -165,3 +166,23 @@ def fetch_equity_list() -> list[dict]:
         raise
 
     return raw if isinstance(raw, list) else []
+
+
+# --------------------------------------------------
+# ACTIVELY TRADING LIST
+# --------------------------------------------------
+def fetch_actively_trading_list() -> set[str]:
+    """
+    Returns a set of symbols that FMP currently classifies as 'actively trading'.
+    """
+    url = f"{FMP_BASE}"
+
+    try:
+        raw = get_json(url)
+    except ExternalDataProviderUnavailable:
+        raise
+
+    if not isinstance(raw, list):
+        return set()
+    
+    return {item["symbol"].upper() for item in raw if "symbol" in item}
