@@ -48,6 +48,13 @@ class Asset(models.Model):
     def primary_identifier(self):
         return self.identifiers.filter(is_primary=True).first()
 
+    @property
+    def price(self):
+        """
+        Convenience accessor: returns the latest (and only) price record.
+        """
+        return getattr(self, "asset_price", None)
+
     class Meta:
         indexes = [
             models.Index(fields=["asset_type"]),

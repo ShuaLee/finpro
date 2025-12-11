@@ -1,0 +1,1 @@
+from .equity_price_extension import EquityPriceExtension
