@@ -20,7 +20,7 @@ class Asset(models.Model):
     )
 
     name = models.CharField(
-        max_length=200,
+        max_length=250,
         blank=True,
         null=True,
         help_text="Human-readable name (filled by enrichment for tradables, user-supplied for custom/real estate)."
@@ -49,11 +49,12 @@ class Asset(models.Model):
         return self.identifiers.filter(is_primary=True).first()
 
     @property
-    def price(self):
+    def latest_price(self):
         """
         Convenience accessor: returns the latest (and only) price record.
         """
-        return getattr(self, "asset_price", None)
+        price = getattr(self, "asset_price", None)
+        return price.price if price else None
 
     class Meta:
         indexes = [

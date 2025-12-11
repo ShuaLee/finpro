@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from assets.models.asset_core import Asset
@@ -20,6 +21,14 @@ class AssetPrice(models.Model):
     source = models.CharField(max_length=50, default="FMP")
 
     last_updated = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        # If asset is not custom → require a currency
+        if not self.asset.is_custom and not self.asset.currency:
+            raise ValidationError(
+                "Non-custom assets must have a currency before pricing.")
+
+        super().clean()
 
     def __str__(self):
         return f"{self.asset} = {self.price}"

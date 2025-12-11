@@ -4,15 +4,16 @@ import requests
 from apps.external_data.shared.http import get_json, ExternalDataProviderUnavailable
 from external_data.fmp.equities.mappings import (
     EQUITY_PROFILE_MAP,
-    parse_equity_quote
+    parse_equity_quote,
+    parse_identifiers,
 )
 from external_data.fmp.shared.constants import (
-    FMP_BASE,
+    FMP_ACTIVELY_TRADING,
     FMP_API_KEY,
-    FMP_STOCK_PROFILE,
-    FMP_STOCK_QUOTE,
     FMP_BULK_PROFILE,
     FMP_STOCK_LIST,
+    FMP_STOCK_PROFILE,
+    FMP_STOCK_QUOTE_SHORT,
 )
 from external_data.fmp.shared.normalize import normalize_fmp_data
 
@@ -25,8 +26,12 @@ logger = logging.getLogger(__name__)
 
 def fetch_equity_profile(symbol: str) -> dict | None:
     """
-    Fetches a normalized equity profile for a symbol.
-    Returns None on failure or no data.
+    Fetch a normalized equity profile AND the identifiers.
+    Returns:
+        {
+            "profile": {...normalized profile data...},
+            "identifiers": {...ticker/isin/cusip/cik...}
+        }
     """
     url = f"{FMP_STOCK_PROFILE}?symbol={symbol}&apikey={FMP_API_KEY}"
 
@@ -39,8 +44,16 @@ def fetch_equity_profile(symbol: str) -> dict | None:
         return None
 
     for row in raw:
-        if row.get("symbol", "").upper() == symbol.upper():
-            return normalize_fmp_data(row, EQUITY_PROFILE_MAP)
+        if row.get("symbol", "").upper() != symbol.upper():
+            continue
+
+        profile = normalize_fmp_data(row, EQUITY_PROFILE_MAP)
+        identifiers = parse_identifiers(row)
+
+        return {
+            "profile": profile,
+            "identifiers": identifiers,
+        }
 
     return None
 
@@ -107,7 +120,7 @@ def fetch_equity_quote(symbol: str) -> dict | None:
     """
     Fetch only the fast-moving quote values for a symbol.
     """
-    url = f"{FMP_STOCK_QUOTE}?symbol={symbol}&apikey={FMP_API_KEY}"
+    url = f"{FMP_STOCK_QUOTE_SHORT}?symbol={symbol}&apikey={FMP_API_KEY}"
 
     try:
         raw = get_json(url)
@@ -132,7 +145,7 @@ def fetch_equity_quotes_bulk(symbols: list[str]) -> list[dict]:
         return []
 
     joined = ",".join(symbols)
-    url = f"{FMP_STOCK_QUOTE}?symbol={joined}&apikey={FMP_API_KEY}"
+    url = f"{FMP_STOCK_QUOTE_SHORT}?symbol={joined}&apikey={FMP_API_KEY}"
 
     try:
         raw = get_json(url)
@@ -175,7 +188,7 @@ def fetch_actively_trading_list() -> set[str]:
     """
     Returns a set of symbols that FMP currently classifies as 'actively trading'.
     """
-    url = f"{FMP_BASE}"
+    url = f"{FMP_ACTIVELY_TRADING}?apikey={FMP_API_KEY}"
 
     try:
         raw = get_json(url)
@@ -184,5 +197,5 @@ def fetch_actively_trading_list() -> set[str]:
 
     if not isinstance(raw, list):
         return set()
-    
+
     return {item["symbol"].upper() for item in raw if "symbol" in item}

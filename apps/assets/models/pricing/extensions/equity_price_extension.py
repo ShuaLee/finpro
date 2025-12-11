@@ -22,10 +22,10 @@ class EquityPriceExtension(models.Model):
     avg_volume = models.BigIntegerField(null=True, blank=True)
 
     def clean(self):
-        asset = self.price_record.asset
+        asset = self.asset_price.asset
         if asset.asset_type.slug != "equity":
             raise ValidationError(
                 "EquityPriceExtension may only attach to equity assets.")
 
     def __str__(self):
-        return f"Equity quote data for {self.price_record.asset}"
+        return f"Equity quote data for {self.asset_price.asset}"

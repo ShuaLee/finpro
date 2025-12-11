@@ -32,7 +32,6 @@ class EquityProfile(models.Model):
         Country, null=True, blank=True, on_delete=models.SET_NULL)
 
     # Stable metadata
-    company_name = models.CharField(max_length=255, blank=True, null=True)
     website = models.URLField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     image_url = models.URLField(blank=True, null=True)
