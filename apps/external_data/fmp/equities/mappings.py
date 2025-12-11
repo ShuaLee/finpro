@@ -30,6 +30,15 @@ def parse_identifiers(raw: dict) -> dict:
         "CIK": raw.get("cik"),
     }
 
+def parse_dividend_event(raw: dict) -> dict:
+    return {
+        "ex_date": raw.get("date"),
+        "payment_date": raw.get("paymentDate"),
+        "declaration_date": raw.get("declarationDate"),
+        "amount": raw.get("dividend") or raw.get("adjDividend"),
+        "frequency": raw.get("frequency"),
+    }
+
 
 EQUITY_PROFILE_MAP = {
     # PROFILE FIELDS
