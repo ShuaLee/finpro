@@ -19,13 +19,6 @@ class Asset(models.Model):
         related_name="assets",
     )
 
-    name = models.CharField(
-        max_length=250,
-        blank=True,
-        null=True,
-        help_text="Human-readable name (filled by enrichment for tradables, user-supplied for custom/real estate)."
-    )
-
     is_custom = models.BooleanField(
         default=False,
         help_text="True if this asset was manually created (not from external data)."
@@ -43,6 +36,12 @@ class Asset(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def name(self):
+        if hasattr(self, "equity_profile"):
+            return self.equity_profile.name
+        return None
 
     @property
     def primary_identifier(self):

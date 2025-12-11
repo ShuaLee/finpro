@@ -21,6 +21,8 @@ class EquityProfile(models.Model):
         related_name="equity_profile"
     )
 
+    name = models.CharField(max_length=255, null=True, blank=True)
+
     # Relationships
     exchange = models.ForeignKey(
         Exchange, null=True, blank=True, on_delete=models.SET_NULL)

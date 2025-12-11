@@ -15,6 +15,13 @@ def parse_equity_quote(raw: dict) -> dict:
 def parse_identifiers(raw: dict) -> dict:
     """
     Extract identifier fields from a profile record.
+    Returned dict:
+    {
+        "TICKER": "...",
+        "ISIN": "...",
+        "CUSIP": "...",
+        "CIK": "..."
+    }
     """
     return {
         "TICKER": raw.get("symbol"),
@@ -25,11 +32,8 @@ def parse_identifiers(raw: dict) -> dict:
 
 
 EQUITY_PROFILE_MAP = {
-    # ASSET FIELDS
-    "companyName": "asset.name",
-    "currency": "asset.currency",
-
     # PROFILE FIELDS
+    "companyName": "name",
     "website": "website",
     "description": "description",
     "image": "image_url",
