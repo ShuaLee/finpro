@@ -3,6 +3,7 @@ import logging
 from django.db import transaction
 
 from assets.models.asset_core import Asset, AssetIdentifier
+from assets.services.utils import get_primary_ticker, hydrate_identifiers
 from external_data.fmp.equities.fetchers import (
     fetch_equity_profile,
     fetch_equity_by_isin,
@@ -24,13 +25,14 @@ class EquityIdentifierSyncService:
     # =============================
     # PUBLIC SYNC ENTRYPOINT
     # =============================
+    @staticmethod
     @transaction.atomic
     def sync(self, asset: Asset) -> bool:
         if asset.asset_type.slug != "equity":
             return False
 
         # 1. If asset already has a ticker -> validate it
-        ticker = self._get_primary_ticker(asset)
+        ticker = get_primary_ticker(asset)
         if ticker:
             return self._sync_using_ticker(asset, ticker)
 
@@ -55,7 +57,7 @@ class EquityIdentifierSyncService:
             self._update_primary_ticker(asset, symbol)
 
         # hydrate identifiers from profile
-        self._hydrate_identifiers(asset, profile["identifiers"])
+        hydrate_identifiers(asset, profile["identifiers"])
 
         return True
 
@@ -86,3 +88,40 @@ class EquityIdentifierSyncService:
         self._update_primary_ticker(asset, symbol)
 
         return True
+
+    # =============================
+    # INTERNAL HELPERS
+    # =============================
+    def _resolve_available_identifier(self, asset: Asset):
+        for id_type in [
+            AssetIdentifier.IdentifierType.ISIN,
+            AssetIdentifier.IdentifierType.CUSIP,
+            AssetIdentifier.IdentifierType.CIK,
+        ]:
+            ident = asset.identifiers.filter(id_type=id_type).first()
+            if ident:
+                return id_type, ident.value
+        return None, None
+
+    def _update_primary_ticker(self, asset: Asset, ticker: str):
+        ticker = ticker.upper()
+
+        # demote old primary ticker
+        old = asset.identifiers.filter(
+            id_type=AssetIdentifier.IdentifierType.TICKER,
+            is_primary=True,
+        ).first()
+
+        if old and old.value != ticker:
+            old.is_primary = False
+            old.save()
+
+        ident, _ = AssetIdentifier.objects.get_or_create(
+            asset=asset,
+            id_type=AssetIdentifier.IdentifierType.TICKER,
+            value=ticker,
+        )
+
+        if not ident.is_primary:
+            ident.is_primary = True
+            ident.save()
