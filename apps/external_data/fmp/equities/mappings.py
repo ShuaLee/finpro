@@ -30,13 +30,20 @@ def parse_identifiers(raw: dict) -> dict:
         "CIK": raw.get("cik"),
     }
 
+
 def parse_dividend_event(raw: dict) -> dict:
+    """
+    Convert an FMP dividend record into fields matching EquityDividendEvent.
+    """
+    freq = raw.get("frequency")
+
     return {
         "ex_date": raw.get("date"),
-        "payment_date": raw.get("paymentDate"),
-        "declaration_date": raw.get("declarationDate"),
+        "payment_date": raw.get("paymentDate") or None,
+        "declaration_date": raw.get("declarationDate") or None,
         "amount": raw.get("dividend") or raw.get("adjDividend"),
-        "frequency": raw.get("frequency"),
+        "frequency": freq,
+        "is_special": freq in {"Irregular", "Special"},
     }
 
 

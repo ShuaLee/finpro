@@ -227,7 +227,7 @@ def fetch_equity_by_isin(isin: str) -> dict | None:
 
     if not isinstance(raw, list) or not raw:
         return None
-    
+
     row = raw[0]
 
     identifiers = {
@@ -240,7 +240,8 @@ def fetch_equity_by_isin(isin: str) -> dict | None:
         "identifiers": identifiers,
     }
 
-def fetch_equity_profile_by_cik(cik: str) -> dict | None:
+
+def fetch_equity_by_cik(cik: str) -> dict | None:
     """
     Fetch a normalized equity profile using a CIK.
     Returns:
@@ -268,6 +269,7 @@ def fetch_equity_profile_by_cik(cik: str) -> dict | None:
         "profile": profile,
         "identifiers": identifiers,
     }
+
 
 def fetch_equity_by_cusip(cusip: str) -> dict | None:
     """
