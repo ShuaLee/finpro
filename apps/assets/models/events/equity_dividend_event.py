@@ -1,13 +1,12 @@
+# assets/models/yields/equity_dividend_event.py
+
 from django.db import models
+from django.utils import timezone
 
 from assets.models.asset_core import Asset
 
+
 class EquityDividendEvent(models.Model):
-    """
-    Represents a single dividend declaration or payment.
-    Stored as raw events so we can compute trailing 12-month yield,
-    handle specials, and analyze history.
-    """
 
     class DividendFrequency(models.TextChoices):
         MONTHLY = "Monthly"
@@ -34,12 +33,19 @@ class EquityDividendEvent(models.Model):
         choices=DividendFrequency.choices,
     )
 
-    is_special = models.BooleanField(
-        default=False,
-        help_text="Marks this dividend as a non-recurring special dividend."
-    )
+    is_special = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-ex_date"]
+        constraints = [
+            # Prevent *true duplicates* but allow multiple events same ex-date
+            models.UniqueConstraint(
+                fields=["asset", "ex_date", "amount", "payment_date"],
+                name="unique_dividend_event",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.asset} dividend {self.amount} on {self.ex_date}"
