@@ -39,13 +39,6 @@ class EquityDividendEvent(models.Model):
 
     class Meta:
         ordering = ["-ex_date"]
-        constraints = [
-            # Prevent *true duplicates* but allow multiple events same ex-date
-            models.UniqueConstraint(
-                fields=["asset", "ex_date", "amount", "payment_date"],
-                name="unique_dividend_event",
-            )
-        ]
 
     def __str__(self):
         return f"{self.asset} dividend {self.amount} on {self.ex_date}"

@@ -26,105 +26,124 @@ class EquityDividendSyncService(BaseSyncService):
     @staticmethod
     @transaction.atomic
     def sync(asset: Asset) -> bool:
-        """
-        Pull the latest dividends from FMP and update our EquityDividendEvent table.
-        """
-        ticker = get_primary_ticker(ticker)
+
+        ticker = get_primary_ticker(asset)
         if not ticker:
-            logger.warning(f"[DIVIDEND] No ticker for {asset.id}")
+            logger.warning(f"[DIVIDEND] No ticker for asset {asset.id}")
             return False
 
-        raw = fetch_equity_dividends(ticker)
-        if not raw:
-            logger.warning(
-                f"[DIVIDEND] No dividend data returned for {ticker}")
+        raw_events = fetch_equity_dividends(ticker)
+        if not raw_events:
+            logger.warning(f"[DIVIDEND] No div data for {ticker}")
             return False
 
         synced_any = False
 
-        for event_raw in raw:
-            parsed = parse_dividend_event(event_raw)
+        # --------------------------------------------
+        # PRELOAD EXISTING EVENTS TO AVOID DUPLICATES
+        # --------------------------------------------
+        existing_events = set(
+            EquityDividendEvent.objects
+            .filter(asset=asset)
+            .values_list("ex_date", "amount", "is_special", "frequency")
+        )
 
-            # validation
-            if not parsed.get("ex_date") or not parsed.get("amount"):
+        # --------------------------------------------
+        # PROCESS ALL EVENTS (OLD → NEW)
+        # --------------------------------------------
+        for raw in reversed(raw_events):
+            parsed = parse_dividend_event(raw)
+
+            ex_date = parsed.get("ex_date")
+            amount = parsed.get("amount")
+            freq = parsed.get("frequency")
+            is_special = parsed.get("is_special", False)
+
+            if not ex_date or not amount:
                 continue
 
-            ex_date_val = parsed["ex_date"]
+            signature = (ex_date, amount, is_special, freq)
 
-            existing = EquityDividendEvent.objects.filter(
-                asset=asset,
-                ex_date=ex_date_val
-            ).first()
-
-            if existing:
-                # alreaady synced, skip
+            # Skip if already present
+            if signature in existing_events:
                 continue
 
+            # Insert new event
             EquityDividendEvent.objects.create(
                 asset=asset,
-                ex_date=ex_date_val,
+                ex_date=ex_date,
                 payment_date=parsed.get("payment_date"),
                 declaration_date=parsed.get("declaration_date"),
-                amount=parsed["amount"],
-                frequency=parsed.get("frequency"),
-                is_special=parsed.get("is_special", False),
+                amount=amount,
+                frequency=freq,
+                is_special=is_special,
             )
+
+            existing_events.add(signature)
             synced_any = True
 
-        # prune old history to keep storage small
+        # --------------------------------------------
+        # PRUNE OLD EVENTS
+        # --------------------------------------------
         EquityDividendSyncService._cleanup_events(asset)
 
-        # update profile yield metrics (forward & trending)
-        EquityDividendSyncService._update_yield_metric(asset)
+        # --------------------------------------------
+        # UPDATE FORWARD + TRAILING YIELDS
+        # --------------------------------------------
+        EquityDividendSyncService._update_yield_metrics(asset)
 
         return synced_any
 
     # ------------------------------------------------------------
-    # CLEANUP OLD EVENTS
+    # CLEANUP
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _cleanup_events(asset: Asset):
+        events = list(asset.dividend_events.order_by("-ex_date"))
+        if len(events) <= EquityDividendSyncService.MAX_EVENTS_TO_KEEP:
+            return
+
+        to_delete = events[EquityDividendSyncService.MAX_EVENTS_TO_KEEP:]
+        ids = [e.id for e in to_delete]
+        EquityDividendEvent.objects.filter(id__in=ids).delete()
+
+    # ------------------------------------------------------------
+    # YIELD CALCULATIONS
     # ------------------------------------------------------------
     @staticmethod
     def _update_yield_metrics(asset: Asset):
-        """
-        Computes:
-           - trailing 12-month dividend sum
-           - forward annualized dividend estimate (if determinable)
-        and updates them on EquityProfile.
-        """
         profile = getattr(asset, "equity_profile", None)
         if not profile:
             return
 
         events = list(asset.dividend_events.order_by("-ex_date")[:12])
+
         if not events:
             profile.trailing_dividend_12m = None
             profile.forward_dividend = None
             profile.save()
             return
 
-        # trailing 12-month sum
-        trailing_sum = sum([e.amount for e in events if not e.is_special])
+        # Trailing (EXCLUDES specials)
+        trailing_sum = sum(
+            e.amount for e in events
+            if not e.is_special
+        )
 
-        # forward projection:
-        # use the most recent *non-special* event
-        normal_event = next((e for e in events if not e.is_special), None)
+        # Forward: most recent NON-SPECIAL event
+        normal = next((e for e in events if not e.is_special), None)
 
-        if normal_event:
-            freq = normal_event.frequency
-            amt = normal_event.amount
-
-            multiplier = {
+        forward = None
+        if normal:
+            mult = {
                 "Monthly": 12,
                 "Quarterly": 4,
                 "SemiAnnual": 2,
                 "Annual": 1,
-            }.get(freq, None)
-
-            if multiplier:
-                forward = amt * multiplier
-            else:
-                forward = None  # Irregular/Special cannot project
-        else:
-            forward = None
+            }.get(normal.frequency)
+            if mult:
+                forward = normal.amount * mult
 
         profile.trailing_dividend_12m = trailing_sum
         profile.forward_dividend = forward

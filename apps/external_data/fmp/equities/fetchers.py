@@ -221,7 +221,7 @@ def fetch_equity_by_isin(isin: str) -> dict | None:
     url = f"{FMP_ISIN}?isin={isin}&apikey={FMP_API_KEY}"
 
     try:
-        raw = get_json
+        raw = get_json(url)
     except ExternalDataProviderUnavailable:
         raise
 
