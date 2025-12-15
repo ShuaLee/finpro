@@ -7,7 +7,7 @@ from assets.models.details.crypto_detail import CryptoDetail
 from assets.models.details.equity_detail import EquityDetail
 from assets.models.details.real_estate_detail import RealEstateDetail
 from assets.models.market_data_cache import MarketDataCache
-from assets.services.syncs.asset_sync import AssetSyncService
+from apps.assets.services.syncs.asset_sync_manager import AssetSyncService
 
 
 @admin.register(AssetType)
