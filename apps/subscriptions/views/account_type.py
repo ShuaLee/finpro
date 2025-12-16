@@ -1,6 +1,6 @@
 from rest_framework import generics
-from apps.subscriptions.models import AccountType
-from apps.subscriptions.serializers.account_type import AccountTypeSerializer
+from subscriptions.models import AccountType
+from subscriptions.serializers.account_type import AccountTypeSerializer
 
 
 class AccountTypeListView(generics.ListAPIView):

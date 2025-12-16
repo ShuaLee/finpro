@@ -1,8 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.accounts.models.holdings.holding import Holding
-
 
 class Schema(models.Model):
     """
@@ -143,7 +141,7 @@ class SchemaColumnValue(models.Model):
         related_name="values",
     )
     holding = models.ForeignKey(
-        Holding,
+        "accounts.Holding",
         on_delete=models.CASCADE,
         related_name="schema_values",
     )

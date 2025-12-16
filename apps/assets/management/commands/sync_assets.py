@@ -1,175 +1,107 @@
 from django.core.management.base import BaseCommand, CommandError
 
 from assets.models.asset_core import Asset, AssetIdentifier, AssetType
-from assets.services.syncs.managers import AssetSyncManager
+from assets.services.syncs.equity import EquitySyncManager
 
 
 class Command(BaseCommand):
-    help = (
-        "Universal asset sync command. Supports:\n"
-        " - full universe sync (per asset type)\n"
-        " - deep sync for all assets\n"
-        " - targeted sync for a single asset\n"
-        " - selective sync (profile, quote, dividends, identifiers)"
-    )
+    help = "Sync equity universe or individual equities (identifier/profile/price/dividends)."
 
     def add_arguments(self, parser):
-        # -------------------------------
-        # Required: asset type
-        # -------------------------------
         parser.add_argument(
-            "--type",
-            type=str,
-            required=True,
-            help="Asset type slug (equity, crypto, real_state, custom)."
+            "--universe",
+            action="store_true",
+            help="Run full equity universe sync from FMP stock-list."
         )
 
-        # -------------------------------
-        # Optional: target a single symbol
-        # -------------------------------
         parser.add_argument(
             "--symbol",
             type=str,
-            help="Sync a single asset by its primary identifier (e.g., AAPL)."
+            help="Sync a single equity by ticker (e.g., --symbol AAPL)"
         )
 
-        # -------------------------------
-        # Universe Sync
-        # -------------------------------
         parser.add_argument(
-            "--include-universe",
-            action="store_true",
-            help="Run a universe sync before deep sync.",
-        )
-        parser.add_argument(
-            "--exchange",
+            "--components",
+            nargs="*",
             type=str,
-            help="Optional exchange filter for equities (e.g. NASDAQ).",
+            choices=["identifiers", "profile", "price", "dividends"],
+            help="Optional list of components to sync. Default = all."
         )
 
-        # -------------------------------
-        # Selective sync operations
-        # -------------------------------
-        parser.add_argument(
-            "--profile",
-            action="store_true",
-            help="Sync only profile data.",
-        )
-        parser.add_argument(
-            "--quote",
-            action="store_true",
-            help="Sync only price/quote data.",
-        )
-        parser.add_argument(
-            "--dividends",
-            action="store_true",
-            help="Sync only dividend data.",
-        )
-        parser.add_argument(
-            "--identifiers",
-            action="store_true",
-            help="Sync only identifier resolution (ticker, ISIN, CUSIP, CIK)."
-        )
-
-        # -------------------------------
-        # Sync all components
-        # -------------------------------
-        parser.add_argument(
-            "--all",
-            action="store_true",
-            help="Sync ALL components (profile, quote, dividends, identifiers)."
-        )
-
-        # -------------------------------
-        # Dry run
-        # -------------------------------
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Do everything except saving DB changes.",
+            help="Perform universe sync without DB modifications."
         )
 
-    def handle(self, *args, **opts):
+    def handle(self, *args, **options):
 
-        asset_type_slug = opts["type"].strip()
+        # ============================================================
+        # 1. UNIVERSE SYNC
+        # ============================================================
+        if options["universe"]:
+            dry = options["dry_run"]
+            self.stdout.write(f"🔄 Running equity universe sync (dry={dry})...")
 
-        # Validate asset type
-        try:
-            asset_type = AssetType.objects.get(slug=asset_type_slug)
-        except AssetType.DoesNotExist:
-            raise CommandError(
-                f"❌ AssetType '{asset_type_slug}' does not exist")
+            results = EquitySyncManager.sync_universe(dry_run=dry)
 
-        # Get the correct sync service
-        service = AssetSyncManager.for_type(asset_type_slug)
-        if not service:
-            raise CommandError(
-                f"❌ No sync service implemented for type '{asset_type_slug}'")
+            self.stdout.write(self.style.SUCCESS("✅ Universe sync complete:"))
+            for key, val in results.items():
+                self.stdout.write(f" • {key}: {val}")
 
-        # -----------------------------------------------------
-        # 1. UNIVERSE SYNC (optional)
-        # -----------------------------------------------------
-        if opts["include_universe"]:
-            self.stdout.write(self.style.NOTICE("🔭 Running universe sync..."))
-            results = service.sync_universe(
-                exchange=opts.get("exchange"),
-                dry_run=opts.get("dry_run")
-            )
-            self.stdout.write(self.style.SUCCESS(
-                f"universe sync completed: {results}"
-            ))
+            return
 
-        # -----------------------------------------------------
-        # 2. SINGLE ASSET TARGETED SYNC
-        # -----------------------------------------------------
-        symbol = opts.get("symbol")
+        # ============================================================
+        # 2. INDIVIDUAL EQUITY SYNC
+        # ============================================================
+        symbol = options.get("symbol")
         if symbol:
             symbol = symbol.upper().strip()
 
-            # Look up the asset
+            try:
+                equity_type = AssetType.objects.get(slug="equity")
+            except AssetType.DoesNotExist:
+                raise CommandError(
+                    "❌ AssetType slug='equity' not found. Run bootstrap.")
+
+            # Find the asset by ticker
             asset = (
                 Asset.objects.filter(
-                    asset_type=asset_type,
-                    indentifier__id_type=AssetIdentifier.IdentifierType.TICKER,
+                    asset_type=equity_type,
+                    identifiers__id_type=AssetIdentifier.IdentifierType.TICKER,
                     identifiers__value=symbol,
                 )
+                .distinct()
                 .first()
             )
 
             if not asset:
-                raise CommandError(f"❌ Asset {symbol} not found.")
+                raise CommandError(
+                    f"❌ No equity found with ticker '{symbol}'.")
 
-            self.stdout.write(self.style.NOTICE(
-                f"🔄 Syncing single asset: {symbol}"))
+            # Selected components
+            components = options.get("components")
 
-            # Determine which sync components to run
-            service.sync_asset(
-                asset,
-                profile=opts["profile"] or opts["all"],
-                quote=opts["quote"] or opts["all"],
-                dividends=opts["dividends"] or opts["all"],
-                identifiers=opts["identifiers"] or opts["all"],
+            self.stdout.write(
+                f"🔄 Syncing equity {symbol} ({asset.name}) "
+                f"components={components or 'ALL'}"
             )
 
-            self.stdout.write(self.style.SUCCESS(
-                f"✅ Completed sync for {symbol}"))
+            results = EquitySyncManager.sync(asset, components=components)
+
+            self.stdout.write(self.style.SUCCESS("✅ Sync complete:"))
+            for k, v in results.items():
+                self.stdout.write(f" • {k}: {v}")
+
             return
 
-        # -----------------------------------------------------
-        # 3. SYNC ALL ASSETS OF THIS TYPE (bulk deep sync)
-        # -----------------------------------------------------
-        self.stdout.write(self.style.NOTICE(
-            f"🔄 Running deep sync for all '{asset_type_slug}' assets..."
-        ))
-
-        results = service.sync_all_assets(
-            profile=opts["profile"] or opts["all"],
-            quote=opts["quote"] or opts["all"],
-            dividends=opts["dividends"] or opts["all"],
-            identifiers=opts["identifiers"] or opts["all"],
-            dry_run=opts["dry_run"],
+        # ============================================================
+        # 3. NO VALID ARGUMENTS
+        # ============================================================
+        raise CommandError(
+            "You must pass either --universe or --symbol SYMBOL.\n"
+            "Examples:\n"
+            "  manage.py sync_equities --universe\n"
+            "  manage.py sync_equities --symbol AAPL\n"
+            "  manage.py sync_equities --symbol AAPL --components price profile\n"
         )
-
-        self.stdout.write(self.style.SUCCESS(
-            f"✅ Completed deep sync for {asset_type_slug}: {results}"
-        ))

@@ -27,7 +27,6 @@ class AccountType(models.Model):
 
     description = models.TextField(blank=True, null=True)
 
-
     class Meta:
         ordering = ["slug"]
 

@@ -4,7 +4,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from apps.accounts.models.holdings.holding import Holding
+from accounts.models.holdings.holding import Holding
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from users.admin.inlines.scv_inline import SCVInline
 

@@ -1,7 +1,7 @@
 import logging
 import requests
 
-from apps.external_data.shared.http import get_json, ExternalDataProviderUnavailable
+from external_data.shared.http import get_json, ExternalDataProviderUnavailable
 from external_data.fmp.equities.mappings import (
     EQUITY_PROFILE_MAP,
     parse_equity_quote,

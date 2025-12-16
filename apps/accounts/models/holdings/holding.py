@@ -1,7 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from accounts.models.account import Account
-from apps.assets.models.asset_core.asset import Asset
 
 
 class Holding(models.Model):
@@ -11,7 +10,7 @@ class Holding(models.Model):
         related_name="holdings",
     )
     asset = models.ForeignKey(
-        Asset,
+        "assets.Asset",
         on_delete=models.CASCADE,
         related_name="holdings",
     )

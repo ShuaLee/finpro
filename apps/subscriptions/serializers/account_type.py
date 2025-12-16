@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.subscriptions.models import AccountType
+from subscriptions.models import AccountType
 
 
 class AccountTypeSerializer(serializers.ModelSerializer):

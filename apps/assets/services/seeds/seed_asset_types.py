@@ -1,5 +1,5 @@
 from assets.config.asset_types import SYSTEM_ASSET_TYPES
-from apps.assets.models.asset_core.asset import AssetType
+from assets.models.asset_core import AssetType
 
 
 def seed_asset_types():
