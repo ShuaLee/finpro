@@ -1,4 +1,4 @@
-from assets.models.asset_types.real_estate import RealEstateType
+from assets.models.sub_asset_types.real_estate import RealEstateType
 from assets.config.real_estate_types import SYSTEM_REAL_ESTATE_TYPES
 
 

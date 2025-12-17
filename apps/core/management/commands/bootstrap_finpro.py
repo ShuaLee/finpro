@@ -17,7 +17,7 @@ from datatype.services.seeds.seed_constraint_definitions import seed_constraint_
 from assets.services.seeds.seed_asset_types import seed_asset_types
 
 # --- NEW: Sectors + Industries ---
-from assets.services.seeds.classifications import ClassificationSeeder
+from apps.assets.services.seeds.seed_classifications import ClassificationSeeder
 
 
 class Command(BaseCommand):
