@@ -54,7 +54,7 @@ class EquityProfile(models.Model):
     last_synced = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["asset__name"]
+        ordering = ["name"]
 
     def clean(self):
         if self.asset.asset_type.slug != "equity":

@@ -13,93 +13,94 @@ logger = logging.getLogger(__name__)
 
 class EquityPriceSyncService:
     """
-    Responsible ONLY for:
-      - Price
-      - Change
-      - Volume
-      - (other fast-moving fields if added later)
-
-    This service does NOT:
-      - Update profile metadata
-      - Update identifiers
-      - Perform universe reconciliation
-      - Sync dividends
+    Syncs:
+      - AssetPrice.price
+      - EquityPriceExtension.change
+      - EquityPriceExtension.volume
     """
 
-    # =============================
-    # PUBLIC ENTRYPOINT
-    # =============================
     @staticmethod
     @transaction.atomic
-    def sync(asset: Asset) -> bool:
+    def sync(asset: Asset) -> dict:
         if asset.asset_type.slug != "equity":
-            return False
+            return {"success": False, "error": "non_equity"}
 
         ticker = get_primary_ticker(asset)
         if not ticker:
-            logger.warning(f"[PRICE] No primary ticker for asset {asset.id}")
-            return False
+            return {"success": False, "error": "no_ticker"}
 
         data = fetch_equity_quote(ticker)
         if not data:
-            logger.warning(f"[PRICE] No quote returned for {ticker}")
             EquityPriceSyncService._mark_asset_inactive(asset)
-            return False
+            return {"success": False, "error": "no_data"}
 
-        EquityPriceSyncService._apply_quote(asset, data)
-        return True
+        return EquityPriceSyncService._apply_price_fields(asset, data)
 
-    # ---------------------------------------------------------
-    # Write quote → AssetPrice + EquityPriceExtension
-    # ---------------------------------------------------------
     @staticmethod
-    def _apply_price_fields(asset: Asset, quote: dict):
-        """
-        Writes:
-         - AssetPrice.price
-         - EquityPriceExtension.change, change_percent, volume, avg_volume
-        """
+    def _apply_price_fields(asset: Asset, quote: dict) -> dict:
+        """Write price/change/volume and return a structured diff report."""
 
-        # 1. Base price record
+        report = {
+            "price": None,
+            "change": None,
+            "volume": None,
+        }
+
+        # -----------------------
+        # AssetPrice
+        # -----------------------
         asset_price, _ = AssetPrice.objects.get_or_create(
             asset=asset,
             defaults={"price": quote.get("price") or 0, "source": "FMP"}
         )
 
-        if quote.get("price") is not None:
-            asset_price.price = quote["price"]
+        old_price = asset_price.price
+        new_price = quote.get("price")
+
+        if new_price is None:
+            report["price"] = "missing"
+        elif old_price != new_price:
+            asset_price.price = new_price
+            report["price"] = "updated"
+        else:
+            report["price"] = "unchanged"
 
         asset_price.source = "FMP"
         asset_price.save()
 
-        # 2. Equity-specific extension
+        # -----------------------
+        # Extension
+        # -----------------------
         ext, _ = EquityPriceExtension.objects.get_or_create(
-            asset_price=asset_price
-        )
+            asset_price=asset_price)
 
-        if "change" in quote:
-            ext.change = quote["change"]
+        def apply(field, key):
+            new_val = quote.get(key)
+            old_val = getattr(ext, field)
 
-        if "changePercent" in quote:
-            ext.change_percent = quote["changePercent"]
+            if new_val is None:
+                report[field] = "missing"
+                return
 
-        if "volume" in quote:
-            ext.volume = quote["volume"]
+            if old_val != new_val:
+                setattr(ext, field, new_val)
+                report[field] = "updated"
+            else:
+                report[field] = "unchanged"
 
-        if "avgVolume" in quote:
-            ext.avg_volume = quote["avgVolume"]
+        apply("change", "change")
+        apply("volume", "volume")
 
         ext.save()
 
-    # ---------------------------------------------------------
-    # Mark delisted if price endpoint stops returning data
-    # ---------------------------------------------------------
+        return {
+            "success": True,
+            "fields": report
+        }
+
     @staticmethod
     def _mark_asset_inactive(asset: Asset):
         profile = getattr(asset, "equity_profile", None)
-        if not profile:
-            return
-
-        if profile.is_actively_trading:
+        if profile and profile.is_actively_trading:
             profile.is_actively_trading = False
             profile.save()

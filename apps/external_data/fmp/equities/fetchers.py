@@ -304,39 +304,18 @@ def fetch_equity_by_cusip(cusip: str) -> dict | None:
 # --------------------------------------------------
 def fetch_equity_dividends(symbol: str) -> list[dict] | None:
     """
-    Fetch the full list of dividend events for an equity.
-    Returns a list of raw dividend dictionaries OR None on failure.
-
-    FMP returns structure:
-    {
-        "symbol": "AAPL",
-        "historical": [
-            {
-                "date": "2025-11-10",
-                "recordDate": "2025-11-10",
-                "paymentDate": "2025-11-13",
-                "declarationDate": "2025-10-30",
-                "adjDividend": 0.26,
-                "dividend": 0.26,
-                "yield": 0.38,
-                "frequency": "Quarterly"
-            },
-            ...
-        ]
-    }
+    Correct handling of the FMP dividends endpoint.
+    FMP returns a LIST, not a dict with 'historical'.
     """
-    url = f"{FMP_DIVIDENDS}/{symbol}?apikey={FMP_API_KEY}"
+    url = f"{FMP_DIVIDENDS}?symbol={symbol}&apikey={FMP_API_KEY}"
 
     try:
         raw = get_json(url)
     except ExternalDataProviderUnavailable:
-        raise  # let upper layer handle outage
+        raise
 
-    if not raw or "historical" not in raw:
+    # FMP returns [] when no dividends
+    if not raw or not isinstance(raw, list):
         return None
 
-    historical = raw.get("historical", [])
-    if not isinstance(historical, list):
-        return None
-
-    return historical
+    return raw

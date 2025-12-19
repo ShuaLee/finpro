@@ -5,12 +5,10 @@ from django.db import transaction
 from assets.models.asset_core import Asset, AssetType, AssetIdentifier
 from assets.models.profiles import EquityProfile
 from assets.services.syncs.base import BaseSyncService
-from assets.services.syncs.equity import (
-    EquityIdentifierSyncService,
-    EquityProfileSyncService,
-    EquityPriceSyncService,
-    EquityDividendSyncService,
-)
+from assets.services.syncs.equity.identifier_sync_service import EquityIdentifierSyncService
+from assets.services.syncs.equity.profile_sync_service import EquityProfileSyncService
+from assets.services.syncs.equity.price_sync_service import EquityPriceSyncService
+from assets.services.syncs.equity.dividend_sync_service import EquityDividendSyncService
 from assets.services.utils import hydrate_identifiers
 from external_data.fmp.equities.fetchers import (
     fetch_actively_trading_list,
@@ -44,7 +42,6 @@ class EquitySyncManager(BaseSyncService):
         "dividends":   EquityDividendSyncService,
     }
 
-    @staticmethod
     @transaction.atomic
     def sync(asset: Asset, components: list[str] | None = None) -> dict:
         """
@@ -60,10 +57,14 @@ class EquitySyncManager(BaseSyncService):
 
         results = {}
 
-        # default → full sync
-        components = components or list(EquitySyncManager.COMPONENTS.keys())
+        ordered = components or list(EquitySyncManager.COMPONENTS.keys())
 
-        for name in components:
+        # Always run identifiers first if included
+        if "identifiers" in ordered:
+            ordered = ["identifiers"] + \
+                [c for c in ordered if c != "identifiers"]
+
+        for name in ordered:
             service_cls = EquitySyncManager.COMPONENTS.get(name)
             if not service_cls:
                 results[name] = {"success": False,
@@ -73,8 +74,12 @@ class EquitySyncManager(BaseSyncService):
             try:
                 logger.info(
                     f"[EQUITY_SYNC] Running {name} for asset {asset.id}")
-                success = service_cls().sync(asset)
-                results[name] = {"success": success}
+                result = service_cls().sync(asset)
+                if isinstance(result, dict):
+                    results[name] = result
+                else:
+                    results[name] = {"success": bool(result)}
+
             except Exception as e:
                 logger.exception(
                     f"[EQUITY_SYNC] {name} failed for {asset.id}: {e}")
@@ -236,7 +241,6 @@ class EquitySyncManager(BaseSyncService):
 
             asset = Asset.objects.create(
                 asset_type=equity_type,
-                name=company_name,
             )
 
             AssetIdentifier.objects.create(

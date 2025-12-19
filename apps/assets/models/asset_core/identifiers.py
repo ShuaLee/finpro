@@ -2,6 +2,7 @@ import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q, UniqueConstraint
 
 from assets.models.asset_core import Asset
 
@@ -46,6 +47,13 @@ class AssetIdentifier(models.Model):
             models.Index(fields=["id_type", "value"]),
             models.Index(fields=["asset", "is_primary"]),
         ]
+        constraints = [
+            UniqueConstraint(
+                fields=["asset", "id_type"],
+                condition=Q(is_primary=True),
+                name="uniq_primary_identifier_per_type",
+            )
+        ]
 
     # ---------------------------------------------------------------
     # Validation rules: enforce one primary + domain-specific id types
@@ -55,12 +63,16 @@ class AssetIdentifier(models.Model):
 
         # Enforce exactly one primary identifier per asset
         if self.is_primary:
-            existing_primary = self.asset.identifiers.filter(is_primary=True)
+            existing_primary = self.asset.identifiers.filter(
+                id_type=self.id_type,
+                is_primary=True,
+            )
             if self.pk:
                 existing_primary = existing_primary.exclude(pk=self.pk)
+
             if existing_primary.exists():
                 raise ValidationError(
-                    "An asset can only have one primary identifier."
+                    f"An asset can only have one primary {self.id_type} identifier."
                 )
 
         # Use AssetType.identifier_rules instead of domain registry
@@ -73,14 +85,27 @@ class AssetIdentifier(models.Model):
             )
 
     def save(self, *args, **kwargs):
-        # Validate before saving
         self.clean()
 
-        # Auto-mark first identifier as primary if none exist
-        if not self.asset.identifiers.exists():
-            self.is_primary = True
+        # Auto-mark first identifier of this type as primary (only on create)
+        if self._state.adding:
+            if not self.asset.identifiers.filter(id_type=self.id_type).exists():
+                self.is_primary = True
 
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """
+        Prevent deleting a primary identifier.
+        Replacement must be handled explicitly by services.
+        """
+        if self.is_primary:
+            raise ValidationError(
+                "Cannot delete a primary identifier. "
+                "Assign a new primary before deleting this one."
+            )
+
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.id_type}: {self.value}"

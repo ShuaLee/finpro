@@ -1,1 +1,1 @@
-from .equity_dividend_event import EquityDividendEvent
+from .equity.equity_dividend_event import EquityDividendEvent

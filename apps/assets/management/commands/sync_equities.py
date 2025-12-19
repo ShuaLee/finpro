@@ -1,3 +1,5 @@
+import json
+
 from django.core.management.base import BaseCommand, CommandError
 
 from assets.models.asset_core import Asset, AssetIdentifier, AssetType
@@ -5,7 +7,7 @@ from assets.services.syncs.equity import EquitySyncManager
 
 
 class Command(BaseCommand):
-    help = "Sync equity universe or individual equities (identifier/profile/price/dividends)."
+    help = "Sync equity universe or individual equities (identifiers, profile, price, dividends)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -17,13 +19,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--symbol",
             type=str,
-            help="Sync a single equity by ticker (e.g., --symbol AAPL)"
+            help="Sync a single equity by ticker (e.g. --symbol AAPL)"
         )
 
         parser.add_argument(
             "--components",
             nargs="*",
-            type=str,
             choices=["identifiers", "profile", "price", "dividends"],
             help="Optional list of components to sync. Default = all."
         )
@@ -32,6 +33,12 @@ class Command(BaseCommand):
             "--dry-run",
             action="store_true",
             help="Perform universe sync without DB modifications."
+        )
+
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="Output full structured sync results as JSON."
         )
 
     def handle(self, *args, **options):
@@ -62,9 +69,9 @@ class Command(BaseCommand):
                 equity_type = AssetType.objects.get(slug="equity")
             except AssetType.DoesNotExist:
                 raise CommandError(
-                    "❌ AssetType slug='equity' not found. Run bootstrap.")
+                    "AssetType slug='equity' not found. Run bootstrap."
+                )
 
-            # Find the asset by ticker
             asset = (
                 Asset.objects.filter(
                     asset_type=equity_type,
@@ -77,9 +84,9 @@ class Command(BaseCommand):
 
             if not asset:
                 raise CommandError(
-                    f"❌ No equity found with ticker '{symbol}'.")
+                    f"No equity found with ticker '{symbol}'."
+                )
 
-            # Selected components
             components = options.get("components")
 
             self.stdout.write(
@@ -89,9 +96,45 @@ class Command(BaseCommand):
 
             results = EquitySyncManager.sync(asset, components=components)
 
+            # --------------------------------------------------------
+            # JSON OUTPUT (debug / automation)
+            # --------------------------------------------------------
+            if options["json"]:
+                self.stdout.write(
+                    json.dumps(results, indent=2, default=str)
+                )
+                return
+
+            # --------------------------------------------------------
+            # HUMAN OUTPUT (default)
+            # --------------------------------------------------------
+            ok_count = 0
+
             self.stdout.write(self.style.SUCCESS("✅ Sync complete:"))
-            for k, v in results.items():
-                self.stdout.write(f" • {k}: {v}")
+
+            for name, result in results.items():
+                if result.get("success"):
+                    ok_count += 1
+
+                    stats = result.get("fields") or result.get("events")
+
+                    if isinstance(stats, dict) and stats:
+                        self.stdout.write(f" • {name}: ok {stats}")
+                    else:
+                        self.stdout.write(f" • {name}: ok")
+                else:
+                    error = result.get("error") or "unknown_error"
+                    self.stdout.write(
+                        self.style.ERROR(
+                            f" • {name}: failed ({error})"
+                        )
+                    )
+
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"✔️ {ok_count}/{len(results)} components completed successfully"
+                )
+            )
 
             return
 

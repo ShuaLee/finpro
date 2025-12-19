@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.core.exceptions import ValidationError
 
+from assets.admin.base.base_price_extension import BasePriceExtensionInline
 from assets.models.asset_core import Asset, AssetIdentifier
+from assets.models.events.equity.dividend_extensions import EquityDividendExtension
+from assets.models.events import EquityDividendEvent
 from assets.models.pricing import AssetPrice
 from assets.models.pricing.extensions import EquityPriceExtension
 from assets.models.profiles.equity_profile import EquityProfile
@@ -24,10 +27,47 @@ class AssetPriceInline(admin.StackedInline):
     max_num = 1
 
 
-class EquityPriceExtensionInline(admin.StackedInline):
+class EquityPriceExtensionInline(BasePriceExtensionInline):
     model = EquityPriceExtension
+
+
+class EquityDividendExtensionInline(admin.StackedInline):
+    model = EquityDividendExtension
     extra = 0
     max_num = 1
+    can_delete = False
+    verbose_name = "Dividend Summary"
+    verbose_name_plural = "Dividend Summary"
+
+    readonly_fields = (
+        "trailing_dividend_12m",
+        "forward_dividend",
+        "last_computed",
+    )
+
+    fields = readonly_fields
+
+
+class EquityDividendEventInline(admin.TabularInline):
+    model = EquityDividendEvent
+    extra = 0
+    can_delete = False
+    show_change_link = True
+
+    ordering = ("-ex_date",)
+
+    fields = (
+        "ex_date",
+        "dividend",
+        "adj_dividend",
+        "payment_date",
+        "record_date",
+        "frequency",
+        "yield_value",
+        "created_at",
+    )
+
+    readonly_fields = fields
 
 
 class EquityProfileInline(admin.StackedInline):
@@ -105,7 +145,9 @@ class AssetAdmin(admin.ModelAdmin):
 
         if obj.asset_type.slug == "equity":
             inlines.append(EquityProfileInline(self.model, self.admin_site))
-            inlines.append(EquityPriceExtensionInline(
+            inlines.append(EquityDividendExtensionInline(
+                self.model, self.admin_site))
+            inlines.append(EquityDividendEventInline(
                 self.model, self.admin_site))
 
         return inlines
