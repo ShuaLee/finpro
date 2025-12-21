@@ -5,16 +5,22 @@ from django.db import transaction
 from assets.models.asset_core import Asset, AssetType, AssetIdentifier
 from assets.models.profiles import EquityProfile
 from assets.services.syncs.base import BaseSyncService
-from assets.services.syncs.equity.identifier_sync_service import EquityIdentifierSyncService
-from assets.services.syncs.equity.profile_sync_service import EquityProfileSyncService
-from assets.services.syncs.equity.price_sync_service import EquityPriceSyncService
-from assets.services.syncs.equity.dividend_sync_service import EquityDividendSyncService
+from assets.services.syncs.equity.identifier_sync_service import (
+    EquityIdentifierSyncService,
+)
+from assets.services.syncs.equity.profile_sync_service import (
+    EquityProfileSyncService,
+)
+from assets.services.syncs.equity.price_sync_service import (
+    EquityPriceSyncService,
+)
+from assets.services.syncs.equity.dividend_sync_service import (
+    EquityDividendSyncService,
+)
 from assets.services.utils import hydrate_identifiers
 from external_data.fmp.equities.fetchers import (
     fetch_actively_trading_list,
-    fetch_equity_by_cik,
-    fetch_equity_by_cusip,
-    fetch_equity_by_isin,
+    fetch_equity_profile,
     fetch_equity_list,
 )
 
@@ -24,84 +30,69 @@ logger = logging.getLogger(__name__)
 class EquitySyncManager(BaseSyncService):
     """
     Full synchronization manager for equities.
-
-    Runs sync steps in correct dependency order:
-
-        1. identifiers (ticker, ISIN, CUSIP…)
-        2. profile (sector, industry, exchange, metadata…)
-        3. price (asset_price + equity price extension)
-        4. dividends
-
-    Also includes universe-level synchronization using the FMP stock list.
     """
 
     COMPONENTS = {
         "identifiers": EquityIdentifierSyncService,
-        "profile":     EquityProfileSyncService,
-        "price":       EquityPriceSyncService,
-        "dividends":   EquityDividendSyncService,
+        "profile": EquityProfileSyncService,
+        "price": EquityPriceSyncService,
+        "dividends": EquityDividendSyncService,
     }
 
+    # ============================================================
+    # INDIVIDUAL ASSET SYNC
+    # ============================================================
+    @staticmethod
     @transaction.atomic
     def sync(asset: Asset, components: list[str] | None = None) -> dict:
-        """
-        Perform a full or partial sync.
-
-        components:
-            None → run all components
-            ["price"], ["profile", "dividends"], etc.
-        """
-
         if asset.asset_type.slug != "equity":
             raise ValueError("EquitySyncManager called on non-equity asset")
 
-        results = {}
+        results: dict = {}
 
         ordered = components or list(EquitySyncManager.COMPONENTS.keys())
 
-        # Always run identifiers first if included
+        # identifiers must always run first
         if "identifiers" in ordered:
-            ordered = ["identifiers"] + \
-                [c for c in ordered if c != "identifiers"]
+            ordered = ["identifiers"] + [
+                c for c in ordered if c != "identifiers"
+            ]
 
         for name in ordered:
             service_cls = EquitySyncManager.COMPONENTS.get(name)
             if not service_cls:
-                results[name] = {"success": False,
-                                 "reason": "unknown_component"}
+                results[name] = {
+                    "success": False,
+                    "error": "unknown_component",
+                }
                 continue
 
             try:
                 logger.info(
-                    f"[EQUITY_SYNC] Running {name} for asset {asset.id}")
+                    f"[EQUITY_SYNC] Running {name} for asset {asset.id}"
+                )
                 result = service_cls().sync(asset)
-                if isinstance(result, dict):
-                    results[name] = result
-                else:
-                    results[name] = {"success": bool(result)}
+                results[name] = result or {"success": True}
 
-            except Exception as e:
+            except Exception as exc:
                 logger.exception(
-                    f"[EQUITY_SYNC] {name} failed for {asset.id}: {e}")
-                results[name] = {"success": False, "error": str(e)}
+                    f"[EQUITY_SYNC] {name} failed for {asset.id}: {exc}"
+                )
+                results[name] = {
+                    "success": False,
+                    "error": str(exc),
+                }
 
         return results
 
-    # ------------------------------------------------------------
-    # UNIVERSE SYNC USING FMP STOCK-LIST
-    # ------------------------------------------------------------
+    # ============================================================
+    # UNIVERSE SYNC
+    # ============================================================
     @staticmethod
     @transaction.atomic
     def sync_universe(dry_run: bool = False) -> dict:
         """
-        Sync the complete equity universe.
-
-        Steps:
-            1) Fetch FMP ticker list
-            2) Match against DB
-            3) Detect renames via ISIN/CUSIP/CIK
-            4) Create new assets
-            5) Mark delisted assets
+        Authoritative equity universe sync using FMP stock-list.
         """
 
         results = {
@@ -113,19 +104,26 @@ class EquitySyncManager(BaseSyncService):
 
         equity_type = AssetType.objects.get(slug="equity")
 
+        if not Asset.objects.filter(asset_type=equity_type).exists():
+            raise RuntimeError(
+                "Equity universe not seeded. "
+                "Run `manage.py seed_equities` before `sync_equities --universe`."
+            )
+
+        identifier_service = EquityIdentifierSyncService()
+
         # ------------------------------------------------------------
         # 1. Load FMP universe
         # ------------------------------------------------------------
         fmp_list = fetch_equity_list() or []
         fmp_symbols = {row["symbol"].upper(): row for row in fmp_list}
 
-        logger.info(f"[UNIVERSE] Fetched {len(fmp_list)} symbols")
+        logger.info(f"[UNIVERSE] Fetched {len(fmp_symbols)} symbols")
 
-        # Actively trading
-        active_set = fetch_actively_trading_list()
+        active_set = fetch_actively_trading_list() or set()
 
         # ------------------------------------------------------------
-        # 2. Index DB assets
+        # 2. Index DB assets by PRIMARY ticker only
         # ------------------------------------------------------------
         db_assets = (
             Asset.objects.filter(asset_type=equity_type)
@@ -133,115 +131,100 @@ class EquitySyncManager(BaseSyncService):
             .prefetch_related("identifiers")
         )
 
-        db_by_ticker = {}
-        db_by_isin = {}
-        db_by_cusip = {}
-        db_by_cik = {}
+        db_by_primary_ticker: dict[str, Asset] = {}
 
         for asset in db_assets:
             for ident in asset.identifiers.all():
-                if ident.id_type == AssetIdentifier.IdentifierType.TICKER:
-                    db_by_ticker[ident.value.upper()] = asset
-                elif ident.id_type == AssetIdentifier.IdentifierType.ISIN:
-                    db_by_isin[ident.value] = asset
-                elif ident.id_type == AssetIdentifier.IdentifierType.CUSIP:
-                    db_by_cusip[ident.value] = asset
-                elif ident.id_type == AssetIdentifier.IdentifierType.CIK:
-                    db_by_cik[ident.value] = asset
+                if (
+                    ident.id_type == AssetIdentifier.IdentifierType.TICKER
+                    and ident.is_primary
+                ):
+                    db_by_primary_ticker[ident.value.upper()] = asset
+
+        seen_asset_ids: set[str] = set()
 
         # ------------------------------------------------------------
-        # 3. Process all FMP tickers
+        # 3. Process FMP symbols
         # ------------------------------------------------------------
-        seen_assets = set()
-
         for symbol, row in fmp_symbols.items():
             company_name = row.get("companyName")
+            is_active = symbol in active_set
 
             # --------------------------------------------------------
-            # CASE A — Ticker already exists
+            # CASE A — direct primary ticker match
             # --------------------------------------------------------
-            if symbol in db_by_ticker:
-                asset = db_by_ticker[symbol]
-                seen_assets.add(asset.id)
+            asset = db_by_primary_ticker.get(symbol)
+            if asset:
+                seen_asset_ids.add(asset.id)
                 results["existing"] += 1
 
-                # update company name if changed
-                if asset.equity_profile.name != company_name:
-                    asset.equity_profile.name = company_name
-                    if not dry_run:
-                        asset.equity_profile.save()
-
-                # update actively trading flag
-                is_active = symbol in active_set
-                if asset.equity_profile.is_actively_trading != is_active:
-                    asset.equity_profile.is_actively_trading = is_active
-                    if not dry_run:
-                        asset.equity_profile.save()
+                if not dry_run:
+                    profile = asset.equity_profile
+                    if profile.name != company_name:
+                        profile.name = company_name
+                    if profile.is_actively_trading != is_active:
+                        profile.is_actively_trading = is_active
+                    profile.save()
 
                 continue
 
             # --------------------------------------------------------
-            # CASE B — Ticker not found → attempt identifier-based match
+            # CASE B — identity recovery via identifiers
             # --------------------------------------------------------
+            profile_data = fetch_equity_profile(symbol)
             matched_asset = None
 
-            # 1) Try ISIN lookup
-            lookup = fetch_equity_by_isin(
-                row.get("isin")) if row.get("isin") else None
-            if lookup and lookup.get("symbol"):
-                ident_symbol = lookup["symbol"].upper()
-                matched_asset = db_by_ticker.get(ident_symbol)
+            if profile_data and "identifiers" in profile_data:
+                identifiers = profile_data["identifiers"]
 
-            # 2) Try CUSIP
-            if not matched_asset and row.get("cusip"):
-                lookup = fetch_equity_by_cusip(row.get("cusip"))
-                if lookup and lookup.get("symbol"):
-                    ident_symbol = lookup["symbol"].upper()
-                    matched_asset = db_by_ticker.get(ident_symbol)
+                for id_type in (
+                    AssetIdentifier.IdentifierType.ISIN,
+                    AssetIdentifier.IdentifierType.CUSIP,
+                    AssetIdentifier.IdentifierType.CIK,
+                ):
+                    value = identifiers.get(id_type)
+                    if not value:
+                        continue
 
-            # 3) Try CIK
-            if not matched_asset and row.get("cik"):
-                lookup = fetch_equity_by_cik(row.get("cik"))
-                if lookup and lookup.get("symbol"):
-                    ident_symbol = lookup["symbol"].upper()
-                    matched_asset = db_by_ticker.get(ident_symbol)
+                    matched_asset = Asset.objects.filter(
+                        asset_type=equity_type,
+                        identifiers__id_type=id_type,
+                        identifiers__value=value,
+                    ).first()
+
+                    if matched_asset:
+                        break
 
             if matched_asset:
-                # rename case
-                old_ticker = matched_asset.primary_ticker
                 results["renamed"] += 1
+                seen_asset_ids.add(matched_asset.id)
 
                 if not dry_run:
-                    # deactivate old ticker
-                    matched_asset.identifiers.filter(
-                        id_type=AssetIdentifier.IdentifierType.TICKER,
-                        is_primary=True,
-                    ).update(is_primary=False)
-
-                    # assign new ticker
-                    AssetIdentifier.objects.create(
-                        asset=matched_asset,
-                        id_type=AssetIdentifier.IdentifierType.TICKER,
-                        value=symbol,
-                        is_primary=True,
+                    identifier_service._set_primary_ticker(
+                        matched_asset, symbol
                     )
 
                     hydrate_identifiers(
-                        matched_asset, lookup.get("identifiers", {}))
+                        matched_asset,
+                        profile_data.get("identifiers", {}),
+                    )
 
-                seen_assets.add(matched_asset.id)
+                    profile = matched_asset.equity_profile
+                    if profile.name != company_name:
+                        profile.name = company_name
+                    profile.is_actively_trading = is_active
+                    profile.save()
+
                 continue
 
             # --------------------------------------------------------
             # CASE C — brand new asset
             # --------------------------------------------------------
+            results["created"] += 1
             if dry_run:
-                results["created"] += 1
                 continue
 
-            asset = Asset.objects.create(
-                asset_type=equity_type,
-            )
+            asset = Asset.objects.create(asset_type=equity_type)
 
             AssetIdentifier.objects.create(
                 asset=asset,
@@ -253,20 +236,68 @@ class EquitySyncManager(BaseSyncService):
             EquityProfile.objects.create(
                 asset=asset,
                 name=company_name,
+                is_actively_trading=is_active,
+            )
+
+            seen_asset_ids.add(asset.id)
+
+        # ------------------------------------------------------------
+        # 4. Delist missing assets (safe only)
+        # ------------------------------------------------------------
+        for asset in db_assets:
+            if asset.id not in seen_asset_ids:
+                if asset.identifiers.filter(
+                    id_type__in=[
+                        AssetIdentifier.IdentifierType.ISIN,
+                        AssetIdentifier.IdentifierType.CIK,
+                    ]
+                ).exists():
+                    results["delisted"] += 1
+                    if not dry_run:
+                        asset.equity_profile.is_actively_trading = False
+                        asset.equity_profile.save()
+
+        return results
+
+    @staticmethod
+    @transaction.atomic
+    def seed_universe() -> dict:
+        equity_type = AssetType.objects.get(slug="equity")
+
+        fmp_list = fetch_equity_list() or []
+        active_set = fetch_actively_trading_list() or set()
+
+        existing = set(
+            AssetIdentifier.objects.filter(
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                is_primary=True,
+            ).values_list("value", flat=True)
+        )
+
+        created = 0
+
+        for row in fmp_list:
+            symbol = row["symbol"].upper()
+            name = row.get("companyName")
+
+            if symbol in existing:
+                continue
+
+            asset = Asset.objects.create(asset_type=equity_type)
+
+            AssetIdentifier.objects.create(
+                asset=asset,
+                id_type=AssetIdentifier.IdentifierType.TICKER,
+                value=symbol,
+                is_primary=True,
+            )
+
+            EquityProfile.objects.create(
+                asset=asset,
+                name=name,
                 is_actively_trading=(symbol in active_set),
             )
 
-            results["created"] += 1
-            seen_assets.add(asset.id)
+            created += 1
 
-        # ------------------------------------------------------------
-        # 4. Mark delisted assets
-        # ------------------------------------------------------------
-        for asset in db_assets:
-            if asset.id not in seen_assets:
-                results["delisted"] += 1
-                if not dry_run:
-                    asset.equity_profile.is_actively_trading = False
-                    asset.equity_profile.save()
-
-        return results
+        return {"created": created}

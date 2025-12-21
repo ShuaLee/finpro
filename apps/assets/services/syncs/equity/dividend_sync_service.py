@@ -1,18 +1,13 @@
 import logging
-
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 
 from assets.models.asset_core import Asset
-from assets.models.events.equity import EquityDividendExtension
 from assets.models.events import EquityDividendEvent
 from assets.services.syncs.base import BaseSyncService
 from assets.services.utils import get_primary_ticker
-from assets.services.dividends.calculations import (
-    trailing_dividend_12m,
-    forward_dividend,
-)
+from assets.services.dividends.recompute import recompute_dividend_extension
 from external_data.fmp.equities.fetchers import fetch_equity_dividends
 from external_data.fmp.equities.mappings import parse_dividend_event
 
@@ -65,8 +60,7 @@ class EquityDividendSyncService(BaseSyncService):
             parsed = parse_dividend_event(raw)
 
             if not parsed.get("ex_date"):
-                # Skip malformed provider rows
-                continue
+                continue  # skip malformed rows
 
             event, created = EquityDividendEvent.objects.get_or_create(
                 asset=asset,
@@ -84,10 +78,10 @@ class EquityDividendSyncService(BaseSyncService):
                     continue
 
                 old_value = _norm_decimal(getattr(event, field))
-                new_value = _norm_decimal(parsed.get(field))
+                new_value = _norm_decimal(new_value)
 
                 if old_value != new_value:
-                    setattr(event, field, parsed.get(field))
+                    setattr(event, field, new_value)
                     changed = True
 
             if changed:
@@ -97,9 +91,9 @@ class EquityDividendSyncService(BaseSyncService):
                 unchanged += 1
 
         # --------------------------------------------------
-        # Recompute derived dividend metrics
+        # Recompute derived dividend metrics (SINGLE SOURCE)
         # --------------------------------------------------
-        EquityDividendSyncService._recompute_metrics(asset)
+        recompute_dividend_extension(asset)
 
         return {
             "success": True,
@@ -109,27 +103,3 @@ class EquityDividendSyncService(BaseSyncService):
                 "unchanged": unchanged,
             },
         }
-
-    # --------------------------------------------------
-    # Derived metrics (delegated)
-    # --------------------------------------------------
-    @staticmethod
-    def _recompute_metrics(asset: Asset) -> None:
-        """
-        Recompute trailing and forward dividend metrics
-        derived from dividend events.
-
-        Writes ONLY to EquityDividendExtension.
-        Never touches EquityProfile.
-        """
-        events = asset.dividend_events.all()
-        if not events.exists():
-            return
-
-        extension, _ = EquityDividendExtension.objects.get_or_create(
-            asset=asset
-        )
-
-        extension.trailing_dividend_12m = trailing_dividend_12m(events)
-        extension.forward_dividend = forward_dividend(events)
-        extension.save()

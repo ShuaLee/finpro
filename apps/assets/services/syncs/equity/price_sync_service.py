@@ -6,6 +6,7 @@ from assets.models.asset_core import Asset
 from assets.models.pricing import AssetPrice
 from assets.models.pricing.extensions import EquityPriceExtension
 from assets.services.utils import get_primary_ticker
+from assets.services.dividends.recompute import recompute_dividend_extension
 from external_data.fmp.equities.fetchers import fetch_equity_quote
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,9 @@ class EquityPriceSyncService:
       - AssetPrice.price
       - EquityPriceExtension.change
       - EquityPriceExtension.volume
+
+    IMPORTANT:
+    Any price change MUST trigger dividend yield recomputation.
     """
 
     @staticmethod
@@ -38,8 +42,6 @@ class EquityPriceSyncService:
 
     @staticmethod
     def _apply_price_fields(asset: Asset, quote: dict) -> dict:
-        """Write price/change/volume and return a structured diff report."""
-
         report = {
             "price": None,
             "change": None,
@@ -51,7 +53,7 @@ class EquityPriceSyncService:
         # -----------------------
         asset_price, _ = AssetPrice.objects.get_or_create(
             asset=asset,
-            defaults={"price": quote.get("price") or 0, "source": "FMP"}
+            defaults={"price": quote.get("price") or 0, "source": "FMP"},
         )
 
         old_price = asset_price.price
@@ -69,10 +71,11 @@ class EquityPriceSyncService:
         asset_price.save()
 
         # -----------------------
-        # Extension
+        # EquityPriceExtension
         # -----------------------
         ext, _ = EquityPriceExtension.objects.get_or_create(
-            asset_price=asset_price)
+            asset_price=asset_price
+        )
 
         def apply(field, key):
             new_val = quote.get(key)
@@ -93,9 +96,14 @@ class EquityPriceSyncService:
 
         ext.save()
 
+        # --------------------------------------------------
+        # 🔁 CRITICAL: price change affects dividend yield
+        # --------------------------------------------------
+        recompute_dividend_extension(asset)
+
         return {
             "success": True,
-            "fields": report
+            "fields": report,
         }
 
     @staticmethod

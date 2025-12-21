@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Iterable
 
 from django.utils.timezone import now
@@ -15,17 +15,12 @@ def events_last_n_months(
     Return dividend events within the last N months,
     based on ex-date.
 
-    This function performs NO sorting side effects.
+    Uses a rolling day-based window (365 * months/12).
     """
     if not as_of:
-        from django.utils.timezone import now
         as_of = now().date()
 
-    cutoff = as_of.replace(day=1)
-    cutoff = cutoff.replace(
-        year=cutoff.year - (months // 12),
-        month=((cutoff.month - months - 1) % 12) + 1,
-    )
+    cutoff = as_of - timedelta(days=int(365 * (months / 12)))
 
     return [
         e for e in events

@@ -49,9 +49,9 @@ class AssetIdentifier(models.Model):
         ]
         constraints = [
             UniqueConstraint(
-                fields=["asset", "id_type"],
+                fields=["asset"],
                 condition=Q(is_primary=True),
-                name="uniq_primary_identifier_per_type",
+                name="uniq_primary_identifier_per_asset",
             )
         ]
 
@@ -61,21 +61,34 @@ class AssetIdentifier(models.Model):
     def clean(self):
         super().clean()
 
-        # Enforce exactly one primary identifier per asset
-        if self.is_primary:
-            existing_primary = self.asset.identifiers.filter(
-                id_type=self.id_type,
-                is_primary=True,
-            )
-            if self.pk:
-                existing_primary = existing_primary.exclude(pk=self.pk)
+        asset_type = self.asset.asset_type.slug
 
-            if existing_primary.exists():
+        # --------------------------------------------------
+        # EQUITY RULES
+        # --------------------------------------------------
+        if asset_type == "equity":
+
+            # ❌ Only TICKER can ever be primary
+            if self.is_primary and self.id_type != self.IdentifierType.TICKER:
                 raise ValidationError(
-                    f"An asset can only have one primary {self.id_type} identifier."
+                    "Only TICKER identifiers may be primary for equities."
                 )
 
-        # Use AssetType.identifier_rules instead of domain registry
+            # ❌ Only ONE primary identifier total
+            if self.is_primary:
+                existing_primary = self.asset.identifiers.filter(
+                    is_primary=True)
+                if self.pk:
+                    existing_primary = existing_primary.exclude(pk=self.pk)
+
+                if existing_primary.exists():
+                    raise ValidationError(
+                        "An equity can only have one primary identifier."
+                    )
+
+        # --------------------------------------------------
+        # DOMAIN RULES (all asset types)
+        # --------------------------------------------------
         allowed = self.asset.asset_type.identifier_rules or []
 
         if allowed and self.id_type not in allowed:
@@ -86,12 +99,6 @@ class AssetIdentifier(models.Model):
 
     def save(self, *args, **kwargs):
         self.clean()
-
-        # Auto-mark first identifier of this type as primary (only on create)
-        if self._state.adding:
-            if not self.asset.identifiers.filter(id_type=self.id_type).exists():
-                self.is_primary = True
-
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

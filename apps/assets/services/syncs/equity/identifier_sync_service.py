@@ -148,29 +148,47 @@ class EquityIdentifierSyncService:
 
     def _set_primary_ticker(self, asset: Asset, ticker: str):
         """
-        Sets the primary ticker and removes all other tickers.
+        Sets the primary ticker for an equity.
+        Guarantees:
+        - exactly one primary ticker
+        - primary is always TICKER
+        - old tickers are safely removed
         """
         ticker = ticker.upper()
 
-        # 1️⃣ Demote any existing primary ticker
-        asset.identifiers.filter(
+        old_primary = asset.identifiers.filter(
             id_type=AssetIdentifier.IdentifierType.TICKER,
             is_primary=True,
-        ).exclude(value=ticker).update(is_primary=False)
+        ).first()
 
-        # 2️⃣ Promote or create the new primary ticker
-        ident, _ = AssetIdentifier.objects.get_or_create(
+        # No-op if already correct
+        if old_primary and old_primary.value == ticker:
+            return
+
+        # --------------------------------------------------
+        # 1️⃣ Ensure new ticker exists (non-primary)
+        # --------------------------------------------------
+        new_ident, _ = AssetIdentifier.objects.get_or_create(
             asset=asset,
             id_type=AssetIdentifier.IdentifierType.TICKER,
             value=ticker,
         )
 
-        if not ident.is_primary:
-            ident.is_primary = True
-            ident.save(update_fields=["is_primary"])
+        # --------------------------------------------------
+        # 2️⃣ Switch primary (LEGAL STATE TRANSITION)
+        # --------------------------------------------------
+        if old_primary:
+            old_primary.is_primary = False
+            old_primary.save(update_fields=["is_primary"])
 
-        # 3️⃣ Delete ALL non-primary tickers (safe now)
-        asset.identifiers.filter(
-            id_type=AssetIdentifier.IdentifierType.TICKER,
-            is_primary=False,
-        ).exclude(value=ticker).delete()
+        if not new_ident.is_primary:
+            new_ident.is_primary = True
+            new_ident.save(update_fields=["is_primary"])
+
+        # --------------------------------------------------
+        # 3️⃣ Delete all other tickers (safe path)
+        # --------------------------------------------------
+        for ident in asset.identifiers.filter(
+            id_type=AssetIdentifier.IdentifierType.TICKER
+        ).exclude(pk=new_ident.pk):
+            ident.delete()

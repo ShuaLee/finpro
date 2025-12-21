@@ -19,4 +19,12 @@ class EquityDividendExtension(models.Model):
         max_digits=20, decimal_places=6, null=True, blank=True
     )
 
+    trailing_yield = models.DecimalField(
+        max_digits=10, decimal_places=6, null=True, blank=True
+    )
+
+    forward_yield = models.DecimalField(
+        max_digits=10, decimal_places=6, null=True, blank=True
+    )
+
     last_computed = models.DateTimeField(auto_now=True)
