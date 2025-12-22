@@ -1,0 +1,81 @@
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any, Dict, Optional
+
+# --------------------------------------------------
+# Identifier bundle
+# --------------------------------------------------
+
+
+@dataclass(frozen=True)
+class IdentifierBundle:
+    """
+    Canonical identifier set for an asset as returned by a provider.
+
+    Values may be None if not supplied by the provider.
+    """
+    ticker: Optional[str] = None
+    isin: Optional[str] = None
+    cusip: Optional[str] = None
+    cik: Optional[str] = None
+
+# --------------------------------------------------
+# Equity identity result
+# --------------------------------------------------
+
+
+@dataclass(frozen=True)
+class EquityIdentity:
+    """
+    Represents a resolved equity identity from a provider.
+
+    This proves the symbol exists (or existed) and ties together
+    profile metadata and identifiers.
+    """
+    symbol: str
+    profile: Dict[str, Any]
+    identifiers: IdentifierBundle
+
+# --------------------------------------------------
+# Quote snapshot
+# --------------------------------------------------
+
+
+@dataclass(frozen=True)
+class QuoteSnapshot:
+    """
+    Lightweight, fast-moving price snapshot.
+    """
+    price: Optional[Decimal]
+    change: Optional[Decimal] = None
+    volume: Optional[int] = None
+
+
+# --------------------------------------------------
+# Symbol resolution candidate
+# --------------------------------------------------
+
+@dataclass(frozen=True)
+class SymbolCandidate:
+    """
+    Represents a possible symbol match when resolving renamed
+    or ambiguous identifiers.
+    """
+    symbol: str
+    name: Optional[str] = None
+    exchange: Optional[str] = None
+    currency: Optional[str] = None
+
+
+# --------------------------------------------------
+# FX quote
+# --------------------------------------------------
+
+@dataclass(frozen=True)
+class FXQuote:
+    """
+    Represents a foreign exchange rate.
+    """
+    base: str
+    quote: str
+    rate: Decimal

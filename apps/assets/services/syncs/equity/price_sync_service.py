@@ -7,7 +7,13 @@ from assets.models.pricing import AssetPrice
 from assets.models.pricing.extensions import EquityPriceExtension
 from assets.services.utils import get_primary_ticker
 from assets.services.dividends.recompute import recompute_dividend_extension
-from external_data.fmp.equities.fetchers import fetch_equity_quote
+from assets.services.syncs.equity.identifier_sync_service import (
+    EquityIdentifierSyncService,
+)
+from external_data.fmp.equities.fetchers import (
+    fetch_equity_quote,
+    fetch_equity_profile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +25,10 @@ class EquityPriceSyncService:
       - EquityPriceExtension.change
       - EquityPriceExtension.volume
 
-    IMPORTANT:
-    Any price change MUST trigger dividend yield recomputation.
+    Defensive behavior:
+      - attempts identity repair on quote failure
+      - retries quote once
+      - marks inactive only as a last resort
     """
 
     @staticmethod
@@ -33,13 +41,53 @@ class EquityPriceSyncService:
         if not ticker:
             return {"success": False, "error": "no_ticker"}
 
+        # --------------------------------------------------
+        # 1️⃣ Primary quote attempt
+        # --------------------------------------------------
         data = fetch_equity_quote(ticker)
-        if not data:
-            EquityPriceSyncService._mark_asset_inactive(asset)
-            return {"success": False, "error": "no_data"}
+        if data:
+            return EquityPriceSyncService._apply_price_fields(asset, data)
 
-        return EquityPriceSyncService._apply_price_fields(asset, data)
+        logger.warning(
+            "[PRICE_SYNC] Quote failed for %s — attempting identity repair",
+            ticker,
+        )
 
+        # --------------------------------------------------
+        # 2️⃣ Identity repair via profile
+        # --------------------------------------------------
+        profile = fetch_equity_profile(ticker)
+        if profile and "identifiers" in profile:
+            EquityIdentifierSyncService().sync(asset)
+
+            # retry with updated ticker
+            new_ticker = get_primary_ticker(asset)
+            if new_ticker and new_ticker != ticker:
+                data = fetch_equity_quote(new_ticker)
+                if data:
+                    logger.info(
+                        "[PRICE_SYNC] Quote recovered after ticker repair: %s → %s",
+                        ticker,
+                        new_ticker,
+                    )
+                    return EquityPriceSyncService._apply_price_fields(
+                        asset, data
+                    )
+
+        # --------------------------------------------------
+        # 3️⃣ Final failure → mark inactive
+        # --------------------------------------------------
+        logger.error(
+            "[PRICE_SYNC] Quote permanently failed for asset %s — marking inactive",
+            asset.id,
+        )
+        EquityPriceSyncService._mark_asset_inactive(asset)
+
+        return {"success": False, "error": "quote_failed"}
+
+    # --------------------------------------------------
+    # Price application
+    # --------------------------------------------------
     @staticmethod
     def _apply_price_fields(asset: Asset, quote: dict) -> dict:
         report = {
@@ -97,7 +145,7 @@ class EquityPriceSyncService:
         ext.save()
 
         # --------------------------------------------------
-        # 🔁 CRITICAL: price change affects dividend yield
+        # 🔁 Price change affects dividend yields
         # --------------------------------------------------
         recompute_dividend_extension(asset)
 
@@ -106,6 +154,9 @@ class EquityPriceSyncService:
             "fields": report,
         }
 
+    # --------------------------------------------------
+    # Inactive handling
+    # --------------------------------------------------
     @staticmethod
     def _mark_asset_inactive(asset: Asset):
         profile = getattr(asset, "equity_profile", None)
