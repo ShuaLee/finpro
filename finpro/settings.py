@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'datatype',
     'users',
     'subscriptions',
+    'sync',
     'portfolios',
     'schemas',
     'analytics',
