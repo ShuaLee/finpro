@@ -29,11 +29,26 @@ class ProviderGuard:
     MAX_FAILURES = 5
     COOLDOWN_SECONDS = 300  # 5 minutes
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, provider):
         self.name = name
+        self.provider = provider
         self.consecutive_failures = 0
         self.last_success_ts: float | None = None
         self.last_failure_ts: float | None = None
+
+    def __getattr__(self, attr):
+        """
+        Forward provider method calls through the circuit breaker.
+        """
+        target = getattr(self.provider, attr)
+
+        if not callable(target):
+            return target
+
+        def guarded(*args, **kwargs):
+            return self.request(target, *args, **kwargs)
+
+        return guarded
 
     # --------------------------------------------------
     # Circuit breaker state

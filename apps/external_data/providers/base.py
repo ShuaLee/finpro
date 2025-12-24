@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
-from external_data.exceptions import ExternalDataError
 from external_data.shared.types import (
     EquityIdentity,
     QuoteSnapshot,
