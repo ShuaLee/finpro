@@ -8,7 +8,7 @@ from external_data.exceptions import (
     ExternalDataError,
 )
 from external_data.providers.fmp.client import FMP_PROVIDER
-from external_data.shared.types import IdentifierBundle
+from external_data.shared.types import EquityIdentifierBundle
 from sync.services.base import BaseSyncService
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class EquityIdentifierSyncService(BaseSyncService):
     def _apply_identifiers(
         self,
         asset: Asset,
-        identifiers: IdentifierBundle,
+        identifiers: EquityIdentifierBundle,
     ) -> None:
         """
         Persist identifier bundle to the database.

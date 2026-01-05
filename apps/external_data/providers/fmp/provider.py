@@ -33,22 +33,18 @@ class FMPProvider(ExternalDataProvider):
 
         returned_ticker = raw_ids.get("TICKER")
 
-        if returned_ticker and returned_ticker.upper() != symbol.upper():
-            raise ExternalDataEmptyResult(
-                f"Symbol {symbol} resolved to {returned_ticker}"
-            )
-
-        identifiers = EquityIdentifierBundle(
-            ticker=returned_ticker,
-            isin=raw_ids.get("ISIN"),
-            cusip=raw_ids.get("CUSIP"),
-            cik=raw_ids.get("CIK"),
-        )
+        if not returned_ticker:
+            raise ExternalDataEmptyResult(f"No ticker returned for {symbol}")
 
         return EquityIdentity(
-            symbol=symbol,
+            symbol=returned_ticker.upper(),
             profile=profile,
-            identifiers=identifiers,
+            identifiers=EquityIdentifierBundle(
+                ticker=returned_ticker,
+                isin=raw_ids.get("ISIN"),
+                cusip=raw_ids.get("CUSIP"),
+                cik=raw_ids.get("CIK"),
+            ),
         )
 
     # --------------------------------------------------
