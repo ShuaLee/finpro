@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 
 @dataclass(frozen=True)
-class IdentifierBundle:
+class EquityIdentifierBundle:
     """
     Canonical identifier set for an asset as returned by a provider.
 
@@ -34,7 +34,7 @@ class EquityIdentity:
     """
     symbol: str
     profile: Dict[str, Any]
-    identifiers: IdentifierBundle
+    identifiers: EquityIdentifierBundle
 
 # --------------------------------------------------
 # Quote snapshot

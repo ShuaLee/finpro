@@ -1,7 +1,7 @@
 from external_data.providers.base import ExternalDataProvider
 from external_data.shared.types import (
     EquityIdentity,
-    IdentifierBundle,
+    EquityIdentifierBundle,
     QuoteSnapshot,
     SymbolCandidate,
     FXQuote,
@@ -31,15 +31,22 @@ class FMPProvider(ExternalDataProvider):
         profile = data["profile"]
         raw_ids = data["identifiers"]
 
-        identifiers = IdentifierBundle(
-            ticker=raw_ids.get("TICKER"),
+        returned_ticker = raw_ids.get("TICKER")
+
+        if returned_ticker and returned_ticker.upper() != symbol.upper():
+            raise ExternalDataEmptyResult(
+                f"Symbol {symbol} resolved to {returned_ticker}"
+            )
+
+        identifiers = EquityIdentifierBundle(
+            ticker=returned_ticker,
             isin=raw_ids.get("ISIN"),
             cusip=raw_ids.get("CUSIP"),
             cik=raw_ids.get("CIK"),
         )
 
         return EquityIdentity(
-            symbol=identifiers.ticker,
+            symbol=symbol,
             profile=profile,
             identifiers=identifiers,
         )
