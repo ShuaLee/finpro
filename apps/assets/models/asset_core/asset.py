@@ -43,8 +43,13 @@ class Asset(models.Model):
         return None
 
     @property
-    def primary_identifier(self):
-        return self.identifiers.filter(is_primary=True).first()
+    def ticker(self):
+        """
+        Returns the equity ticker identifier if present.
+        """
+        return self.identifiers.filter(
+            id_type="TICKER"
+        ).first()
 
     @property
     def latest_price(self):
@@ -71,6 +76,5 @@ class Asset(models.Model):
             )
 
     def __str__(self):
-        # Prefer a primary identifier if available
-        primary_id = self.identifiers.filter(is_primary=True).first()
-        return f"{primary_id.value if primary_id else self.name} ({self.asset_type.name})"
+        ticker = self.identifiers.filter(id_type="TICKER").first()
+        return f"{ticker.value if ticker else self.name} ({self.asset_type.name})"

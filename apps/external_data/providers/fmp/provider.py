@@ -26,6 +26,8 @@ class FMPProvider(ExternalDataProvider):
     # --------------------------------------------------
 
     def get_equity_identity(self, symbol: str) -> EquityIdentity:
+        symbol = symbol.strip().upper()
+
         data = fetch_equity_profile(symbol)
 
         profile = data["profile"]
