@@ -42,17 +42,27 @@ class AssetIdentifier(models.Model):
     )
 
     class Meta:
-        unique_together = ("id_type", "value")
         indexes = [
             models.Index(fields=["id_type", "value"]),
             models.Index(fields=["asset", "is_primary"]),
         ]
         constraints = [
+            # Only one primary identifier per asset
             UniqueConstraint(
                 fields=["asset"],
                 condition=Q(is_primary=True),
                 name="uniq_primary_identifier_per_asset",
-            )
+            ),
+
+            # Ticker must be unique among ACTIVELY TRADED equities
+            UniqueConstraint(
+                fields=["id_type", "value"],
+                condition=Q(
+                    id_type="TICKER",
+                    asset__equity_profile__is_actively_trading=True,
+                ),
+                name="uniq_active_equity_ticker",
+            ),
         ]
 
     # ---------------------------------------------------------------
