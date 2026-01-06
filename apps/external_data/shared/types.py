@@ -52,22 +52,6 @@ class QuoteSnapshot:
 
 
 # --------------------------------------------------
-# Symbol resolution candidate
-# --------------------------------------------------
-
-@dataclass(frozen=True)
-class SymbolCandidate:
-    """
-    Represents a possible symbol match when resolving renamed
-    or ambiguous identifiers.
-    """
-    symbol: str
-    name: Optional[str] = None
-    exchange: Optional[str] = None
-    currency: Optional[str] = None
-
-
-# --------------------------------------------------
 # FX quote
 # --------------------------------------------------
 

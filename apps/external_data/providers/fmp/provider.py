@@ -3,7 +3,6 @@ from external_data.shared.types import (
     EquityIdentity,
     EquityIdentifierBundle,
     QuoteSnapshot,
-    SymbolCandidate,
     FXQuote,
 )
 from external_data.exceptions import ExternalDataEmptyResult
@@ -62,15 +61,6 @@ class FMPProvider(ExternalDataProvider):
             volume=quote.get("volume"),
         )
 
-    def get_equity_quotes_bulk(self, symbols):
-        results = []
-        for symbol in symbols:
-            try:
-                results.append(self.get_equity_quote(symbol))
-            except ExternalDataEmptyResult:
-                continue
-        return results
-
     # --------------------------------------------------
     # Dividends
     # --------------------------------------------------
@@ -78,38 +68,6 @@ class FMPProvider(ExternalDataProvider):
     def get_equity_dividends(self, symbol: str) -> list[dict]:
         return fetch_equity_dividends(symbol)
 
-    # --------------------------------------------------
-    # Symbol resolution
-    # --------------------------------------------------
-
-    def resolve_symbol(self, query: str) -> list[SymbolCandidate]:
-        """
-        Attempt to resolve renamed or changed equity symbols.
-
-        Strategy:
-        - Attempt profile lookup
-        - If profile exists but ticker differs → rename detected
-        - Otherwise return empty list
-        """
-        try:
-            data = fetch_equity_profile(query)
-        except ExternalDataEmptyResult:
-            return []
-
-        raw_ids = data.get("identifiers", {})
-        symbol = raw_ids.get("TICKER")
-
-        if not symbol:
-            return []
-
-        return [
-            SymbolCandidate(
-                symbol=symbol,
-                name=data.get("profile", {}).get("name"),
-                exchange=data.get("profile", {}).get("exchange"),
-                currency=data.get("profile", {}).get("currency"),
-            )
-        ]
 
     # --------------------------------------------------
     # FX

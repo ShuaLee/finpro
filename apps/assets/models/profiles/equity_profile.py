@@ -60,6 +60,29 @@ class EquityProfile(models.Model):
         if self.asset.asset_type.slug != "equity":
             raise ValidationError(
                 "EquityProfile may only attach to equity assets.")
+        
+    @property
+    def ticker(self):
+        ident = self.asset.identifiers.filter(id_type="TICKER").first()
+        return ident.value if ident else None
+
+    @property
+    def display_name(self):
+        """
+        Equity display format:
+        TICKER – Company Name
+        """
+        ticker = self.ticker
+        name = self.name
+
+        if ticker and name:
+            return f"{ticker} – {name}"
+        if ticker:
+            return ticker
+        if name:
+            return name
+
+        return str(self.asset.id)
 
     def __str__(self):
         ident = self.asset.primary_identifier

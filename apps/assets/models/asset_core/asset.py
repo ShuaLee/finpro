@@ -2,8 +2,9 @@ import uuid
 from django.db import models
 # from django.contrib.postgres.fields import ArrayField -> this when postgre
 from django.core.exceptions import ValidationError
-from fx.models.fx import FXCurrency
 
+from fx.models.fx import FXCurrency
+from users.models.profile import Profile
 
 class Asset(models.Model):
     """
@@ -18,9 +19,21 @@ class Asset(models.Model):
         related_name="assets",
     )
 
+    # -------------------------
+    # CUSTOM / OWNERSHIP
+    # -------------------------
     is_custom = models.BooleanField(
         default=False,
         help_text="True if this asset was manually created (not from external data)."
+    )
+
+    created_by = models.ForeignKey(
+        Profile,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="custom_assets",
+        help_text="Owner of this asset if is_custom=True. NULL for system assets."
     )
 
     currency = models.ForeignKey(
@@ -37,21 +50,6 @@ class Asset(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     @property
-    def name(self):
-        if hasattr(self, "equity_profile"):
-            return self.equity_profile.name
-        return None
-
-    @property
-    def ticker(self):
-        """
-        Returns the equity ticker identifier if present.
-        """
-        return self.identifiers.filter(
-            id_type="TICKER"
-        ).first()
-
-    @property
     def latest_price(self):
         """
         Convenience accessor: returns the latest (and only) price record.
@@ -59,22 +57,54 @@ class Asset(models.Model):
         price = getattr(self, "asset_price", None)
         return price.price if price else None
 
-    class Meta:
-        indexes = [
-            models.Index(fields=["asset_type"]),
-        ]
 
     def clean(self):
         super().clean()
 
-        required_identifiers = self.asset_type.identifier_rules
+        # --- Custom asset rules ---
+        if self.is_custom and not self.created_by:
+            raise ValidationError(
+                "Custom assets (is_custom=True) must have a creator."
+            )
+
+        if not self.is_custom and self.created_by:
+            raise ValidationError(
+                "System assets cannot have a creator."
+            )
+
+        # --- Identifier rules ---
+        required_identifiers = self.asset_type.identifier_rules or []
 
         if required_identifiers and not self.identifiers.exists():
             raise ValidationError(
-                f"Asset type '{self.asset_type.slug}' requires at least one identifier "
-                f"(Allowed types: {required_identifiers})."
+                f"Asset type '{self.asset_type.slug}' requires identifiers: "
+                f"{required_identifiers}"
             )
+        
+    class Meta:
+        indexes = [
+            models.Index(fields=["asset_type"]),
+            models.Index(fields=["is_custom"]),
+            models.Index(fields=["created_by"]),
+        ]
+            
+
+    @property
+    def display_name(self):
+        """
+        Human-friendly display name.
+        Delegates to asset-type-specific profiles when available.
+        """
+        # Equity-specific display logic
+        if hasattr(self, "equity_profile"):
+            return self.equity_profile.display_name
+
+        # Fallbacks for other asset types (for now)
+        ident = self.identifiers.first()
+        if ident:
+            return ident.value
+
+        return str(self.id)
 
     def __str__(self):
-        ticker = self.identifiers.filter(id_type="TICKER").first()
-        return f"{ticker.value if ticker else self.name} ({self.asset_type.name})"
+        return f"{self.display_name} ({self.asset_type.name})"
