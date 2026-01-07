@@ -4,7 +4,7 @@ from django.db import transaction
 from assets.models.classifications.sector import Sector
 from assets.models.classifications.industry import Industry
 
-from external_data.fmp.meta.classifications.fetchers import (
+from external_data.providers.fmp.classifications.fetchers import (
     fetch_available_sectors,
     fetch_available_industries,
 )

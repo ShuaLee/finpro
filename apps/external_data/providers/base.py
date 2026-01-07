@@ -5,7 +5,6 @@ from external_data.shared.types import (
     EquityIdentity,
     QuoteSnapshot,
     FXQuote,
-    SymbolCandidate,
 )
 
 
@@ -76,22 +75,6 @@ class ExternalDataProvider(ABC):
         raise NotImplementedError
 
     # --------------------------------------------------
-    # Symbol resolution / rename handling
-    # --------------------------------------------------
-
-    @abstractmethod
-    def resolve_symbol(self, query: str) -> List[SymbolCandidate]:
-        """
-        Resolve possible symbols for a query.
-
-        Used for:
-        - Renamed tickers (FB → META)
-        - Ambiguous symbols
-        - User-entered search
-        """
-        raise NotImplementedError
-
-    # --------------------------------------------------
     # FX
     # --------------------------------------------------
 
@@ -99,5 +82,22 @@ class ExternalDataProvider(ABC):
     def get_fx_quote(self, base: str, quote: str) -> FXQuote:
         """
         Fetch a single FX quote.
+        """
+        raise NotImplementedError
+
+    # --------------------------------------------------
+    # Universes / discovery
+    # --------------------------------------------------
+
+    @abstractmethod
+    def get_actively_traded_equities(self) -> list[dict]:
+        """
+        Return the actively traded equity universe.
+
+        Each item must include:
+        - symbol (str)
+        - name (str | None)
+
+        Used for discovery / seeding only.
         """
         raise NotImplementedError

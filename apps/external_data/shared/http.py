@@ -3,10 +3,8 @@ import requests
 from external_data.exceptions import (
     ExternalDataInvalidResponse,
     ExternalDataProviderUnavailable,
-    ExternalDataRateLimited
+    ExternalDataRateLimited,
 )
-
-from external_data.providers.fmp.client import FMP_PROVIDER
 
 DEFAULT_TIMEOUT = 10
 
@@ -19,52 +17,49 @@ def get_json(url: str, timeout: int = DEFAULT_TIMEOUT):
     - Returns parsed JSON (list or dict)
     - OR raises a well-defined ExternalDataError subclass
     - Never returns raw requests.Response
+
+    NOTE:
+    - This function is provider-agnostic.
+    - Circuit breakers / retries must be applied by the caller.
     """
+    try:
+        response = requests.get(url, timeout=timeout)
+    except requests.RequestException as exc:
+        raise ExternalDataProviderUnavailable(
+            "Network error while contacting provider."
+        ) from exc
 
-    def _do_request():
-        try:
-            response = requests.get(url, timeout=timeout)
-        except requests.RequestException as exc:
-            # Network-level failure (DNS, timeout, connection reset)
-            raise ExternalDataProviderUnavailable(
-                "Network error while contacting provider."
-            ) from exc
+    status = response.status_code
 
-        status = response.status_code
+    # --- Rate limiting ---
+    if status == 429:
+        raise ExternalDataRateLimited(
+            "Provider rate limit exceeded (429)"
+        )
 
-        # --- Rate limiting ---
-        if status == 429:
-            raise ExternalDataRateLimited(
-                "Provider rate limit exceeded (429)"
-            )
+    # --- Provider outage ---
+    if status >= 500:
+        raise ExternalDataProviderUnavailable(
+            f"Provider server error ({status})"
+        )
 
-        # --- Provider outage ---
-        if status >= 500:
-            raise ExternalDataProviderUnavailable(
-                f"Provider server error ({status})"
-            )
+    # --- Client errors ---
+    if status >= 400:
+        raise ExternalDataInvalidResponse(
+            f"Unexpected client error ({status})"
+        )
 
-        # --- Client errors (bad request, unauthorized, etc.) ---
-        if status >= 400:
-            raise ExternalDataInvalidResponse(
-                f"Unexpected client error ({status})"
-            )
+    # --- Parse JSON ---
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ExternalDataInvalidResponse(
+            "Response contained invalid JSON"
+        ) from exc
 
-        # --- Parse JSON ---
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise ExternalDataInvalidResponse(
-                "Response contained invalid JSON"
-            ) from exc
+    if data is None:
+        raise ExternalDataInvalidResponse(
+            "Provider returned empty response body"
+        )
 
-        # Ecplicitly reject completely empty responses
-        if data is None:
-            raise ExternalDataInvalidResponse(
-                "Provider returned empty response body"
-            )
-
-        return data
-
-    # Route through circuit breaker
-    return FMP_PROVIDER.request(_do_request)
+    return data

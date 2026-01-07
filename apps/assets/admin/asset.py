@@ -17,8 +17,7 @@ from assets.models.profiles.equity_profile import EquityProfile
 class AssetIdentifierInline(admin.TabularInline):
     model = AssetIdentifier
     extra = 1
-    fields = ("id_type", "value", "is_primary")
-    ordering = ("-is_primary",)
+    fields = ("id_type", "value",)
 
 
 class AssetPriceInline(admin.StackedInline):
@@ -88,7 +87,6 @@ class AssetAdmin(admin.ModelAdmin):
         "id",
         "asset_type",
         "display_name",
-        "primary_identifier",
         "currency",
         "is_custom",
         "created_at",

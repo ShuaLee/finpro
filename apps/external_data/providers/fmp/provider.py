@@ -11,6 +11,7 @@ from external_data.providers.fmp.equities.fetchers import (
     fetch_equity_profile,
     fetch_equity_quote_short,
     fetch_equity_dividends,
+    fetch_actively_trading_equity_symbols,
 )
 from external_data.providers.fmp.fx.fetchers import (
     fetch_fx_quote,
@@ -68,7 +69,6 @@ class FMPProvider(ExternalDataProvider):
     def get_equity_dividends(self, symbol: str) -> list[dict]:
         return fetch_equity_dividends(symbol)
 
-
     # --------------------------------------------------
     # FX
     # --------------------------------------------------
@@ -82,3 +82,25 @@ class FMPProvider(ExternalDataProvider):
             quote=quote,
             rate=data["rate"],
         )
+
+    # --------------------------------------------------
+    # Universes / discovery
+    # --------------------------------------------------
+
+    def get_actively_traded_equities(self) -> list[dict]:
+        """
+        Return actively traded equities from FMP.
+
+        Minimal discovery payload:
+        - symbol
+        - name (may be None)
+        """
+        symbols = fetch_actively_trading_equity_symbols()
+
+        return [
+            {
+                "symbol": symbol,
+                "name": None,  # profile sync will populate later
+            }
+            for symbol in symbols
+        ]

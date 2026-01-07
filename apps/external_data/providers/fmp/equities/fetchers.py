@@ -126,7 +126,7 @@ def fetch_equity_list() -> list[dict]:
     return get_json(url)
 
 
-def fetch_actively_trading_symbols() -> set[str]:
+def fetch_actively_trading_equity_symbols() -> set[str]:
     url = f"{FMP_BASE_URL}{ACTIVELY_TRADING_LIST}?apikey={FMP_API_KEY}"
     data = get_json(url)
     return {row["symbol"].upper() for row in data if "symbol" in row}

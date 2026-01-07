@@ -1,4 +1,4 @@
-from external_data.fmp.fx.fetchers import fetch_fx_universe, fetch_fx_quotes_bulk, fetch_fx_quote
+from external_data.providers.fmp.fx.fetchers import fetch_fx_universe, fetch_fx_quotes_bulk, fetch_fx_quote
 from fx.models.fx import FXCurrency, FXRate
 
 

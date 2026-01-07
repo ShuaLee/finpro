@@ -5,7 +5,7 @@ from django.db import models, transaction
 from assets.models.exchanges import Exchange
 from fx.models.country import Country
 
-from external_data.fmp.exchanges.fetchers import fetch_available_exchanges
+from external_data.providers.fmp.classifications.fetchers import fetch_available_exchanges
 
 logger = logging.getLogger(__name__)
 

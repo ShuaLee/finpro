@@ -2,7 +2,7 @@ import logging
 import pycountry
 
 from fx.models.country import Country
-from external_data.fmp.fx.fetchers import fetch_available_countries
+from external_data.providers.fmp.fx.fetchers import fetch_available_countries
 
 logger = logging.getLogger(__name__)
 
