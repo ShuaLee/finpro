@@ -2,14 +2,14 @@ import logging
 
 from django.db import transaction
 
-from assets.models.asset_core import Asset
+from assets.models.asset_core import Asset, AssetIdentifier
 from assets.models.profiles.equity_profile import EquityProfile
 from assets.models.classifications.sector import Sector
 from assets.models.classifications.industry import Industry
 from assets.models.exchanges import Exchange
 from fx.services.utils import resolve_fx_currency, resolve_country
 from external_data.providers.fmp.client import FMP_PROVIDER
-from external_data.exceptions import ExternalDataError
+from external_data.exceptions import ExternalDataError, ExternalDataEmptyResult
 from sync.services.base import BaseSyncService
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,10 @@ class EquityProfileSyncService(BaseSyncService):
         if asset.asset_type.slug != "equity":
             return {"success": False, "error": "non_equity_asset"}
 
-        ticker = asset.primary_identifier.value
+        ticker = self._get_ticker(asset)
+        if not ticker:
+            return {"success": False, "error": "missing_ticker"}
+
         provider = FMP_PROVIDER
 
         try:
@@ -55,9 +58,9 @@ class EquityProfileSyncService(BaseSyncService):
         # Simple scalar fields
         # --------------------------------------------------
         def apply(field, value):
-            old = getattr(profile, field)
             if value is None:
                 return
+            old = getattr(profile, field)
             if old != value:
                 setattr(profile, field, value)
                 changes[field] = "updated"
@@ -141,3 +144,12 @@ class EquityProfileSyncService(BaseSyncService):
             "fields": changes,
             "is_actively_trading": profile.is_actively_trading,
         }
+
+    # --------------------------------------------------
+    # Helpers
+    # --------------------------------------------------
+    def _get_ticker(self, asset: Asset) -> str | None:
+        ident = asset.identifiers.filter(
+            id_type=AssetIdentifier.IdentifierType.TICKER
+        ).first()
+        return ident.value.upper() if ident else None

@@ -25,9 +25,6 @@ class EquitySyncManager(BaseSyncService):
 
     name = "equity.manager"
 
-    # --------------------------------------------------
-    # Registered component services (order matters)
-    # --------------------------------------------------
     COMPONENTS: dict[str, type[BaseSyncService]] = {
         "identifiers": EquityIdentifierSyncService,
         "profile": EquityProfileSyncService,
@@ -35,21 +32,12 @@ class EquitySyncManager(BaseSyncService):
         "dividends": EquityDividendSyncService,
     }
 
-    # ==================================================
-    # Public API
-    # ==================================================
-    @transaction.atomic
-    def _sync(self, asset: Asset, *, components: Iterable[str] | None = None,) -> dict:
-        """
-        Sync an equity asset.
-
-        Args:
-            asset: Asset instance (must be equity)
-            components: Optional subset of components to run
-
-        Returns:
-            Dict keyed by component name with result payloads
-        """
+    def _sync(
+        self,
+        asset: Asset,
+        *,
+        components: Iterable[str] | None = None,
+    ) -> dict:
         if asset.asset_type.slug != "equity":
             raise ValueError("EquitySyncManager called for non-equity asset.")
 
@@ -81,7 +69,7 @@ class EquitySyncManager(BaseSyncService):
                     asset.id,
                 )
                 result = service.sync(asset)
-                results[name] = results or {"success": True}
+                results[name] = result
 
             except Exception as exc:
                 logger.exception(
@@ -102,21 +90,15 @@ class EquitySyncManager(BaseSyncService):
 
         return results
 
-    # ==================================================
-    # Internal helpers
-    # ==================================================
-    def _resolve_components(self, components: Iterable[str] | None,) -> list[str]:
-        """
-        Resolve and order components to run.
-
-        Ensures identifiers always run first if included.
-        """
+    def _resolve_components(
+        self,
+        components: Iterable[str] | None,
+    ) -> list[str]:
         if components is None:
             ordered = list(self.COMPONENTS.keys())
         else:
             ordered = [c for c in components if c in self.COMPONENTS]
 
-        # identifiers must always run first
         if "identifiers" in ordered:
             ordered = ["identifiers"] + [
                 c for c in ordered if c != "identifiers"
