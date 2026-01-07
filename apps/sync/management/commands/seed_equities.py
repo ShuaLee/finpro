@@ -3,8 +3,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from assets.models.asset_core import Asset, AssetIdentifier
-from assets.models.asset_core import AssetType
+from assets.models.asset_core import Asset, AssetIdentifier, AssetType
 from external_data.providers.fmp.client import FMP_PROVIDER
 from external_data.exceptions import ExternalDataError
 
@@ -35,13 +34,11 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
 
         self.stdout.write(
-            self.style.NOTICE(
-                "[SEED_EQUITIES] Starting equity seed"
-            )
+            self.style.NOTICE("[SEED_EQUITIES] Starting equity seed")
         )
 
         try:
-            symbols = FMP_PROVIDER.get_actively_traded_list()
+            rows = FMP_PROVIDER.get_actively_traded_equities()
         except ExternalDataError as exc:
             self.stderr.write(
                 self.style.ERROR(
@@ -51,18 +48,22 @@ class Command(BaseCommand):
             return
 
         if limit:
-            symbols = symbols[:limit]
+            rows = rows[:limit]
 
-        equity_type = AssetType.objects.get(slug="equity")
+        try:
+            equity_type = AssetType.objects.get(slug="equity")
+        except AssetType.DoesNotExist:
+            self.stderr.write(
+                self.style.ERROR("AssetType 'equity' does not exist.")
+            )
+            return
 
         created_assets = 0
         existing_assets = 0
         created_identifiers = 0
 
-        for item in symbols:
-            ticker = item.get("symbol")
-            name = item.get("name")
-
+        for item in rows:
+            ticker = (item.get("symbol") or "").strip().upper()
             if not ticker:
                 continue
 
@@ -73,39 +74,30 @@ class Command(BaseCommand):
                 continue
 
             with transaction.atomic():
-                asset, created = Asset.objects.get_or_create(
-                    asset_type=equity_type,
-                    defaults={
-                        "name": name or ticker,
-                        "is_actively_trading": True,
-                    },
-                )
-
-                if created:
-                    created_assets += 1
-                else:
-                    existing_assets += 1
-
-                # Ensure actively trading flag is correct
-                if not asset.is_actively_trading:
-                    asset.is_actively_trading = True
-                    asset.save(update_fields=["is_actively_trading"])
-
-                # Ensure ticker identifier exists
-                ident, ident_created = AssetIdentifier.objects.get_or_create(
-                    asset=asset,
+                # -----------------------------------------
+                # Resolve or create Asset via identifier
+                # -----------------------------------------
+                ident = AssetIdentifier.objects.filter(
                     id_type=AssetIdentifier.IdentifierType.TICKER,
-                    defaults={"value": ticker.upper()},
-                )
+                    value=ticker,
+                ).select_related("asset").first()
 
-                if ident_created:
+                if ident:
+                    asset = ident.asset
+                    existing_assets += 1
+                else:
+                    asset = Asset.objects.create(
+                        asset_type=equity_type,
+                    )
+                    AssetIdentifier.objects.create(
+                        asset=asset,
+                        id_type=AssetIdentifier.IdentifierType.TICKER,
+                        value=ticker,
+                    )
+                    created_assets += 1
                     created_identifiers += 1
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                "[SEED_EQUITIES] Completed"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS("[SEED_EQUITIES] Completed"))
         self.stdout.write(
             f"  Assets created: {created_assets}\n"
             f"  Assets existing: {existing_assets}\n"
