@@ -5,9 +5,6 @@ from django.db import transaction
 from fx.services.sync import FXSyncService
 from fx.services.country_sync import CountrySyncService
 
-# --- Exchanges ---
-from assets.services.seeds.seed_exchanges import seed_exchanges
-
 # --- Datatypes + Constraints ---
 from datatype.services.seeds.seed_datatypes import seed_datatypes
 from datatype.services.seeds.seed_constraint_types import seed_constraint_types
@@ -17,7 +14,7 @@ from datatype.services.seeds.seed_constraint_definitions import seed_constraint_
 from assets.services.seeds.seed_asset_types import seed_asset_types
 
 # --- NEW: Sectors + Industries ---
-from apps.assets.services.seeds.seed_classifications import ClassificationSeeder
+from apps.sync.services.seeds.equity.seed_classifications import ClassificationSeeder
 
 
 class Command(BaseCommand):
@@ -49,16 +46,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"   ✔ FX currencies synced ({fx_count} new)\n"))
 
-        # ============================================================
-        # 2. Seed Exchanges (requires Countries)
-        # ============================================================
-        self.stdout.write("🏛  Seeding Exchanges...")
-        exchange_count = seed_exchanges()
-        self.stdout.write(self.style.SUCCESS(
-            f"   ✔ Exchanges seeded: {exchange_count}\n"))
 
         # ============================================================
-        # 3. Seed AssetTypes
+        # 2. Seed AssetTypes
         # ============================================================
         self.stdout.write("🧩 Seeding AssetTypes...")
         asset_count = seed_asset_types()
@@ -66,21 +56,26 @@ class Command(BaseCommand):
             f"   ✔ AssetTypes seeded ({asset_count})\n"))
 
         # ============================================================
-        # 4. Seed Sectors + Industries
+        # 3. Seed Market Classifications (Exchanges, Sectors, Industries)
         # ============================================================
-        self.stdout.write("🏷  Seeding Sectors & Industries from FMP...")
+        self.stdout.write("🏷  Seeding market classifications from provider...")
         classifications = ClassificationSeeder.seed_all()
+
+        self.stdout.write(self.style.SUCCESS(
+            f"   ✔ Exchanges created: {classifications['exchanges']['created']}, "
+            f"updated: {classifications['exchanges']['updated']}"
+        ))
         self.stdout.write(self.style.SUCCESS(
             f"   ✔ Sectors created: {classifications['sectors']['created']}, "
-            f"updated: {classifications['sectors']['updated']}"
+            f"unchanged: {classifications['sectors']['unchanged']}"
         ))
         self.stdout.write(self.style.SUCCESS(
             f"   ✔ Industries created: {classifications['industries']['created']}, "
-            f"updated: {classifications['industries']['updated']}\n"
+            f"unchanged: {classifications['industries']['unchanged']}\n"
         ))
 
         # ============================================================
-        # 5. Seed DataTypes
+        # 4. Seed DataTypes
         # ============================================================
         self.stdout.write("🔡 Seeding DataTypes...")
         dt_count = seed_datatypes()
@@ -88,7 +83,7 @@ class Command(BaseCommand):
             f"   ✔ DataTypes seeded ({dt_count} created)\n"))
 
         # ============================================================
-        # 6. Seed Constraint Types
+        # 5. Seed Constraint Types
         # ============================================================
         self.stdout.write("🧩 Seeding Constraint Types...")
         ct_count = seed_constraint_types()
@@ -96,7 +91,7 @@ class Command(BaseCommand):
             f"   ✔ Constraint Types seeded ({ct_count} created)\n"))
 
         # ============================================================
-        # 7. Seed Constraint Definitions
+        # 6. Seed Constraint Definitions
         # ============================================================
         self.stdout.write("📏 Seeding Constraint Definitions...")
         cd_count = seed_constraint_definitions()

@@ -101,3 +101,37 @@ class ExternalDataProvider(ABC):
         Used for discovery / seeding only.
         """
         raise NotImplementedError
+    
+    # --------------------------------------------------
+    # Reference metadata (market-level)
+    # --------------------------------------------------
+
+    @abstractmethod
+    def get_available_sectors(self) -> list[str]:
+        """
+        Return all known equity sectors.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def get_available_industries(self) -> list[str]:
+        """
+        Return all known equity industries.
+        """
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def get_available_exchanges(self) -> list[dict]:
+        """
+        Return all known exchanges.
+
+        Each item should include:
+        - exchange (code)
+        - name
+        - countryCode (optional)
+        - symbolSuffix (optional)
+        - delay (optional)
+        """
+        raise NotImplementedError

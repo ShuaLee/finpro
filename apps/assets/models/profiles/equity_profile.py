@@ -1,10 +1,8 @@
-# assets/models/profiles/equity_profile.py
 from django.db import models
 from django.core.exceptions import ValidationError
+
 from assets.models.asset_core import Asset
-from assets.models.classifications.sector import Sector
-from assets.models.classifications.industry import Industry
-from assets.models.exchanges import Exchange
+from assets.models.classifications import Exchange, Industry, Sector
 from fx.models.country import Country
 
 

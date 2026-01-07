@@ -1,5 +1,5 @@
 from django.contrib import admin
-from assets.models.exchanges import Exchange
+from assets.models.classifications import Exchange
 
 
 @admin.register(Exchange)

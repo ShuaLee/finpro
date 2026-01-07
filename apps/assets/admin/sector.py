@@ -4,6 +4,5 @@ from assets.models.classifications.sector import Sector
 
 @admin.register(Sector)
 class SectorAdmin(admin.ModelAdmin):
-    list_display = ("name", "is_system", "owner")
-    list_filter = ("is_system",)
+    list_display = ("name",)
     search_fields = ("name",)

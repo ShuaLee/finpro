@@ -1,3 +1,5 @@
+from typing import Iterable, List
+
 from external_data.providers.base import ExternalDataProvider
 from external_data.shared.types import (
     EquityIdentity,
@@ -12,6 +14,11 @@ from external_data.providers.fmp.equities.fetchers import (
     fetch_equity_quote_short,
     fetch_equity_dividends,
     fetch_actively_trading_equity_symbols,
+)
+from external_data.providers.fmp.equities.classifications.fetchers import (
+    fetch_available_sectors,
+    fetch_available_industries,
+    fetch_available_exchanges,
 )
 from external_data.providers.fmp.fx.fetchers import (
     fetch_fx_quote,
@@ -61,6 +68,29 @@ class FMPProvider(ExternalDataProvider):
             change=quote.get("change"),
             volume=quote.get("volume"),
         )
+    
+    def get_equity_quotes_bulk(
+            self,
+            symbols: Iterable[str],
+        ) -> List[QuoteSnapshot]:
+            """
+            Fallback bulk implementation using single-quote endpoint.
+
+            NOTE:
+            - This is intentionally inefficient
+            - It satisfies the provider contract
+            - Can be upgraded to batch endpoint later
+            """
+            results: list[QuoteSnapshot] = []
+
+            for symbol in symbols:
+                try:
+                    quote = self.get_equity_quote(symbol)
+                except ExternalDataEmptyResult:
+                    continue
+                results.append(quote)
+
+            return results
 
     # --------------------------------------------------
     # Dividends
@@ -104,3 +134,27 @@ class FMPProvider(ExternalDataProvider):
             }
             for symbol in symbols
         ]
+    
+    # --------------------------------------------------
+    # Reference metadata
+    # --------------------------------------------------
+
+    def get_available_sectors(self) -> list[str]:
+        """
+        Return available equity sectors from FMP.
+        """
+        return fetch_available_sectors() or []
+
+
+    def get_available_industries(self) -> list[str]:
+        """
+        Return available equity industries from FMP.
+        """
+        return fetch_available_industries() or []
+
+
+    def get_available_exchanges(self) -> list[dict]:
+        """
+        Return available exchanges from FMP.
+        """
+        return fetch_available_exchanges() or []
