@@ -4,12 +4,10 @@ from django.db import transaction
 
 from assets.models.asset_core import Asset, AssetIdentifier
 from assets.models.profiles.equity_profile import EquityProfile
-from assets.models.classifications.sector import Sector
-from assets.models.classifications.industry import Industry
-from assets.models.exchanges import Exchange
+from assets.models.classifications import Exchange, Industry, Sector
 from fx.services.utils import resolve_fx_currency, resolve_country
 from external_data.providers.fmp.client import FMP_PROVIDER
-from external_data.exceptions import ExternalDataError, ExternalDataEmptyResult
+from external_data.exceptions import ExternalDataError
 from sync.services.base import BaseSyncService
 
 logger = logging.getLogger(__name__)
