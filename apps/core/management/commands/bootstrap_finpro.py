@@ -14,7 +14,7 @@ from datatype.services.seeds.seed_constraint_definitions import seed_constraint_
 from assets.services.seeds.seed_asset_types import seed_asset_types
 
 # --- NEW: Sectors + Industries ---
-from apps.sync.services.seeds.equity.seed_classifications import ClassificationSeeder
+from apps.sync.services.equity.classification.seed_classifications import ClassificationSeeder
 
 
 class Command(BaseCommand):
@@ -45,7 +45,6 @@ class Command(BaseCommand):
         fx_count = FXSyncService.sync_currencies()
         self.stdout.write(self.style.SUCCESS(
             f"   ✔ FX currencies synced ({fx_count} new)\n"))
-
 
         # ============================================================
         # 2. Seed AssetTypes

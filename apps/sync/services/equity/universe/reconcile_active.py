@@ -1,3 +1,4 @@
+# sync/services/equity/universe/reconcile_active.py
 import logging
 
 from django.db import transaction
@@ -5,22 +6,13 @@ from django.db import transaction
 from assets.models.asset_core import AssetIdentifier
 from assets.models.profiles.equity_profile import EquityProfile
 from external_data.providers.fmp.client import FMP_PROVIDER
-from sync.services.syncs.base import BaseSyncService
+from sync.services.base import BaseSyncService
 
 logger = logging.getLogger(__name__)
 
 
 class ReconcileActiveEquitiesService(BaseSyncService):
-    """
-    Reconcile active equities against provider universe.
-
-    Rules:
-    - Missing tickers → mark inactive
-    - NEVER reactivate assets
-    - NEVER create assets
-    """
-
-    name = "equity.universe.reconcile_active"
+    name = "equity.universe.reconcile"
 
     @transaction.atomic
     def _sync(self) -> dict:
@@ -37,32 +29,22 @@ class ReconcileActiveEquitiesService(BaseSyncService):
         )
 
         deactivated = 0
-        total = 0
 
         for ident in identifiers:
-            total += 1
-            symbol = ident.value.upper()
-
-            if symbol in provider_symbols:
+            if ident.value.upper() in provider_symbols:
                 continue
 
-            asset = ident.asset
-            profile, _ = EquityProfile.objects.get_or_create(asset=asset)
+            profile, _ = EquityProfile.objects.get_or_create(
+                asset=ident.asset
+            )
 
             if profile.is_actively_trading:
                 profile.is_actively_trading = False
                 profile.save(update_fields=["is_actively_trading"])
                 deactivated += 1
 
-        logger.info(
-            "[EQUITY_RECONCILE] checked=%s deactivated=%s",
-            total,
-            deactivated,
-        )
-
         return {
             "success": True,
-            "checked": total,
+            "checked": identifiers.count(),
             "deactivated": deactivated,
-            "provider_count": len(provider_symbols),
         }
