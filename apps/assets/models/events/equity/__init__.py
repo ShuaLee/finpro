@@ -1,2 +1,0 @@
-from .dividend_extensions import EquityDividendExtension
-from .equity_dividend_event import EquityDividendEvent
