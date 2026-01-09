@@ -48,6 +48,7 @@ class EquityProfile(models.Model):
     is_adr = models.BooleanField(default=False)
     is_fund = models.BooleanField(default=False)
     is_actively_trading = models.BooleanField(default=True)
+    identity_conflict = models.BooleanField(default=False)
 
     last_synced = models.DateTimeField(auto_now=True)
 
@@ -58,7 +59,7 @@ class EquityProfile(models.Model):
         if self.asset.asset_type.slug != "equity":
             raise ValidationError(
                 "EquityProfile may only attach to equity assets.")
-        
+
     @property
     def ticker(self):
         ident = self.asset.identifiers.filter(id_type="TICKER").first()

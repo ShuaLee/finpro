@@ -2,9 +2,9 @@ import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import UniqueConstraint
+from django.db.models import UniqueConstraint, Q
 
-from assets.models.asset_core import Asset
+from assets.models.asset_core import Asset, AssetIdentifier
 
 
 class AssetIdentifier(models.Model):
@@ -47,7 +47,18 @@ class AssetIdentifier(models.Model):
                 fields=["asset", "id_type"],
                 name="uniq_identifier_type_per_asset",
             ),
+
+            # 🔒 Only ONE active equity per ticker
+            UniqueConstraint(
+                fields=["value"],
+                condition=Q(
+                    id_type=AssetIdentifier.IdentifierType.TICKER,
+                    asset__profiles__is_actively_trading=True,
+                ),
+                name="uniq_active_equity_ticker",
+            ),
         ]
+
         indexes = [
             models.Index(fields=["id_type", "value"]),
         ]

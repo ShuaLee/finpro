@@ -8,6 +8,7 @@ from assets.models.classifications import Exchange, Industry, Sector
 from fx.services.utils import resolve_fx_currency, resolve_country
 from external_data.providers.fmp.client import FMP_PROVIDER
 from external_data.exceptions import ExternalDataError
+from external_data.shared.types import EquityIdentifierBundle
 from sync.services.base import BaseSyncService
 
 logger = logging.getLogger(__name__)
@@ -18,14 +19,15 @@ class EquityProfileSyncService(BaseSyncService):
     Syncs equity profile metadata from the provider.
 
     Responsibilities:
-    - Update EquityProfile fields
+    - Verify equity identity (ISIN / CUSIP / CIK)
+    - Update EquityProfile fields if identity matches
     - Update Asset currency
     - Update is_actively_trading flag
 
     Does NOT:
-    - Change tickers
-    - Handle renames
-    - Touch identifiers
+    - Create assets
+    - Deactivate assets
+    - Resolve identity conflicts
     """
 
     name = "equity.profile"
@@ -39,22 +41,65 @@ class EquityProfileSyncService(BaseSyncService):
         if not ticker:
             return {"success": False, "error": "missing_ticker"}
 
-        provider = FMP_PROVIDER
-
         try:
-            identity = provider.get_equity_identity(ticker)
+            identity = FMP_PROVIDER.get_equity_identity(ticker)
         except ExternalDataError:
             raise
 
+        identifiers: EquityIdentifierBundle = identity.identifiers
         profile_data = identity.profile
 
         profile, _ = EquityProfile.objects.get_or_create(asset=asset)
 
-        changes: dict[str, str] = {}
+        # --------------------------------------------------
+        # IDENTITY VERIFICATION (CRITICAL)
+        # --------------------------------------------------
+        existing = {
+            i.id_type: i.value
+            for i in asset.identifiers.all()
+        }
+
+        def mismatch(id_type, new_val):
+            old = existing.get(id_type)
+            return old and new_val and old != new_val
+
+        conflicts = {
+            "isin": mismatch(
+                AssetIdentifier.IdentifierType.ISIN,
+                identifiers.isin,
+            ),
+            "cusip": mismatch(
+                AssetIdentifier.IdentifierType.CUSIP,
+                identifiers.cusip,
+            ),
+            "cik": mismatch(
+                AssetIdentifier.IdentifierType.CIK,
+                identifiers.cik,
+            ),
+        }
+
+        if any(conflicts.values()):
+            profile.identity_conflict = True
+            profile.save(update_fields=["identity_conflict"])
+
+            logger.error(
+                "[IDENTITY_CONFLICT] %s asset=%s conflicts=%s",
+                ticker,
+                asset.id,
+                conflicts,
+            )
+
+            return {
+                "success": False,
+                "error": "identity_conflict",
+                "conflicts": conflicts,
+            }
 
         # --------------------------------------------------
-        # Simple scalar fields
+        # Scalar fields
         # --------------------------------------------------
+        changes: dict[str, str] = {}
+
         def apply(field, value):
             if value is None:
                 return
@@ -131,7 +176,8 @@ class EquityProfileSyncService(BaseSyncService):
                     changes["currency"] = "updated"
             except Exception:
                 logger.warning(
-                    "[PROFILE_SYNC] Failed to resolve currency %s", currency
+                    "[PROFILE_SYNC] Failed to resolve currency %s",
+                    currency,
                 )
                 changes["currency"] = "failed"
 
