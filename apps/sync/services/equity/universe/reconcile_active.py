@@ -1,54 +1,77 @@
 import logging
+
 from django.db import transaction
 
-from assets.models.asset_core import Asset, AssetIdentifier, AssetType
+from assets.models.asset_core import AssetIdentifier
 from assets.models.profiles.equity_profile import EquityProfile
 from external_data.providers.fmp.client import FMP_PROVIDER
+from sync.services.base import BaseSyncService
 
 logger = logging.getLogger(__name__)
 
 
-class EquityIdentityConflictService:
+class ReconcileActiveEquitiesService(BaseSyncService):
     """
-    Resolve identity conflicts by:
-    - Deactivating the old asset
-    - Creating a NEW asset with the same ticker
+    Reconcile active equities against provider universe.
+
+    Rules:
+    - If a ticker exists in DB but NOT in provider list → deactivate
+    - NEVER reactivate assets
+    - NEVER create assets
+    - Identity conflicts are NOT handled here
     """
+
+    name = "equity.universe.reconcile_active"
 
     @transaction.atomic
-    def resolve(self, asset: Asset) -> Asset:
-        ticker_ident = asset.identifiers.get(
-            id_type=AssetIdentifier.IdentifierType.TICKER
-        )
-        ticker = ticker_ident.value.upper()
+    def _sync(self) -> dict:
+        # ----------------------------------
+        # Fetch provider universe
+        # ----------------------------------
+        provider_symbols = {
+            row["symbol"].upper()
+            for row in FMP_PROVIDER.get_actively_traded_equities()
+            if row.get("symbol")
+        }
 
-        # Deactivate old profile
-        profile = EquityProfile.objects.get(asset=asset)
-        profile.is_actively_trading = False
-        profile.identity_conflict = True
-        profile.save(update_fields=[
-                     "is_actively_trading", "identity_conflict"])
-
-        # Create new asset
-        equity_type = AssetType.objects.get(slug="equity")
-        new_asset = Asset.objects.create(asset_type=equity_type)
-
-        AssetIdentifier.objects.create(
-            asset=new_asset,
-            id_type=AssetIdentifier.IdentifierType.TICKER,
-            value=ticker,
+        # ----------------------------------
+        # Iterate all equity tickers
+        # ----------------------------------
+        ticker_idents = (
+            AssetIdentifier.objects
+            .filter(id_type=AssetIdentifier.IdentifierType.TICKER)
+            .select_related("asset")
         )
 
-        EquityProfile.objects.create(
-            asset=new_asset,
-            is_actively_trading=True,
+        checked = 0
+        deactivated = 0
+
+        for ident in ticker_idents:
+            checked += 1
+            symbol = ident.value.upper()
+
+            if symbol in provider_symbols:
+                continue
+
+            profile, _ = EquityProfile.objects.get_or_create(
+                asset=ident.asset
+            )
+
+            if profile.is_actively_trading:
+                profile.is_actively_trading = False
+                profile.save(update_fields=["is_actively_trading"])
+                deactivated += 1
+
+        logger.info(
+            "[RECONCILE_ACTIVE] checked=%s deactivated=%s provider_count=%s",
+            checked,
+            deactivated,
+            len(provider_symbols),
         )
 
-        logger.warning(
-            "[IDENTITY_RESOLVED] %s old_asset=%s new_asset=%s",
-            ticker,
-            asset.id,
-            new_asset.id,
-        )
-
-        return new_asset
+        return {
+            "success": True,
+            "checked": checked,
+            "deactivated": deactivated,
+            "provider_count": len(provider_symbols),
+        }

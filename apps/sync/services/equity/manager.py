@@ -6,7 +6,7 @@ from django.db import transaction
 from assets.models.asset_core import Asset
 from sync.services.base import BaseSyncService
 from sync.services.equity.identifier import EquityIdentifierSyncService
-from sync.services.equity.profile import EquityProfileSyncService
+from sync.services.equity.identity import EquityIdentitySyncService
 from sync.services.equity.price import EquityPriceSyncService
 from sync.services.equity.dividends import EquityDividendSyncService
 
@@ -27,7 +27,7 @@ class EquitySyncManager(BaseSyncService):
 
     COMPONENTS: dict[str, type[BaseSyncService]] = {
         "identifiers": EquityIdentifierSyncService,
-        "profile": EquityProfileSyncService,
+        "identity": EquityIdentitySyncService,
         "price": EquityPriceSyncService,
         "dividends": EquityDividendSyncService,
     }

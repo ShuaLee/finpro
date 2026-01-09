@@ -62,7 +62,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"   ✔ Exchanges created: {classifications['exchanges']['created']}, "
-            f"updated: {classifications['exchanges']['updated']}"
+            f"unchanged: {classifications['exchanges']['unchanged']}"
         ))
         self.stdout.write(self.style.SUCCESS(
             f"   ✔ Sectors created: {classifications['sectors']['created']}, "

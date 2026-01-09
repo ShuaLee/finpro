@@ -112,7 +112,7 @@ class ClassificationSeeder:
             else:
                 unchanged += 1
 
-            return {"created": created, "unchanged": unchanged}
+        return {"created": created, "unchanged": unchanged}
 
     # ---------------------------------------------------------
     # All
