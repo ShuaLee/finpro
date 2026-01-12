@@ -23,7 +23,7 @@ class AssetPrice(models.Model):
     # Where the price came from (FMP, manual, derived, etc.)
     source = models.CharField(
         max_length=50,
-        defaults="FMP",
+        default="FMP",
     )
 
     last_updated = models.DateTimeField(auto_now=True)

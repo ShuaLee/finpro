@@ -28,6 +28,8 @@ class EquityAsset(models.Model):
     Inactive equities are removed from the table entirely.
     """
 
+    snapshot_id = models.UUIDField(db_index=True)
+
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,

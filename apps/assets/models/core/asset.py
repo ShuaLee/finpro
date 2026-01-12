@@ -29,3 +29,7 @@ class Asset(models.Model):
 
     def __str__(self):
         return f"{self.asset_type.slug.upper()} - {self.id}"
+
+    @property
+    def extension(self):
+        return getattr(self, self.asset_type.slug, None)
