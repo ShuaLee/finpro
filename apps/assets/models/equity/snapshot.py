@@ -1,7 +1,7 @@
 from django.db import models
 
 
-class EquitySnapshot(models.Model):
+class EquitySnapshotID(models.Model):
     """
     Singleton pointer to the active equity snapshot.
     """

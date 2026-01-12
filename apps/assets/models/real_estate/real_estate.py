@@ -2,7 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 
 from assets.models.core import Asset
-from assets.models.real_estate import RealEstateType
+from assets.models.real_estate.real_estate_type import RealEstateType
 from fx.models.fx import FXCurrency
 from fx.models.country import Country
 from users.models import Profile

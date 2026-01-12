@@ -22,6 +22,7 @@ from external_data.providers.fmp.equities.classifications.fetchers import (
 )
 from external_data.providers.fmp.fx.fetchers import (
     fetch_fx_quote,
+    fetch_available_countries,
 )
 
 
@@ -112,6 +113,13 @@ class FMPProvider(ExternalDataProvider):
             quote=quote,
             rate=data["rate"],
         )
+    
+    def get_available_countries(self) -> list[str]:
+        """
+        Return ISO-3166 alpha-2 country codes where equities trade.
+        Names are resolved externally (ISO standard).
+        """
+        return fetch_available_countries() or []
 
     # --------------------------------------------------
     # Universes / discovery

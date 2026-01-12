@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from assets.models.core import Asset
-from assets.models.custom import CustomAssetType
+from assets.models.custom.custom_type import CustomAssetType
 from fx.models.fx import FXCurrency
 from users.models.profile import Profile
 

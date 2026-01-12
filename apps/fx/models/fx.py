@@ -1,9 +1,7 @@
-# fx/models.py
-
 from django.db import models, transaction
 from django.utils import timezone
+
 from datetime import timedelta
-from decimal import Decimal
 
 
 class FXCurrency(models.Model):
@@ -13,14 +11,12 @@ class FXCurrency(models.Model):
     Example: "USD" → "US Dollar".
     """
     code = models.CharField(
-        max_length=3,
+        max_length=6,
         primary_key=True,
         help_text="ISO-like currency code (derived from FX pairs)"
     )
     name = models.CharField(
-        max_length=50,
-        blank=True,
-        null=True,
+        max_length=150,
         help_text="Human-readable currency name from FMP"
     )
 

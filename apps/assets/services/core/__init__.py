@@ -1,0 +1,1 @@
+from .asset_type_seeder import AssetTypeSeeder

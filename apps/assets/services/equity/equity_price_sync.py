@@ -2,7 +2,7 @@ from django.db import transaction
 
 from assets.models.equity import EquityAsset
 from assets.models.core import AssetPrice
-from assets.models.equity import EquitySnapshot
+from assets.models.equity import EquitySnapshotID
 from external_data.providers.fmp.client import FMP_PROVIDER
 
 
@@ -13,7 +13,7 @@ class EquityPriceSyncService:
 
     @transaction.atomic
     def run(self):
-        snapshot = EquitySnapshot.obejcts.get(id=1).current_snapshot
+        snapshot = EquitySnapshotID.obejcts.get(id=1).current_snapshot
 
         equities = EquityAsset.objects.filter(
             snapshot_id=snapshot
