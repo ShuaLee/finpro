@@ -7,7 +7,7 @@ from fx.models.country import Country
 from fx.models.fx import FXCurrency
 
 
-class Equity(models.Model):
+class EquityAsset(models.Model):
     """
     Canonical, non-historical equity reference.
 
@@ -120,4 +120,3 @@ class Equity(models.Model):
 
     def __str__(self) -> str:
         return f"{self.ticker} – {self.name}"
-

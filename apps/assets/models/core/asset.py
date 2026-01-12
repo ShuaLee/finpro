@@ -1,8 +1,6 @@
 import uuid
 from django.db import models
 
-from users.models.profile import Profile
-
 
 class Asset(models.Model):
     """
