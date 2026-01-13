@@ -8,42 +8,37 @@ from external_data.providers.fmp.client import FMP_PROVIDER
 
 class CountrySeederService:
     """
-    Seeds Country using:
-    - FMP as source of truth for WHICH countries exist
-    - ISO-3166 (pycountry) as source of truth for NAMES
+    Non-destructive Country reconciliation.
     """
 
     @transaction.atomic
     def run(self):
         codes = FMP_PROVIDER.get_available_countries()
 
-        created = 0
-        existing = 0
-        skipped = 0
+        created = updated = 0
 
         for code in codes:
             code = code.strip().upper()
-
-            if not code or len(code) != 2:
-                skipped += 1
+            if len(code) != 2:
                 continue
 
             iso = pycountry.countries.get(alpha_2=code)
-            name = iso.name if iso else code  # safe fallback
+            name = iso.name if iso else code
 
-            _, was_created = Country.objects.get_or_create(
+            obj, was_created = Country.objects.get_or_create(
                 code=code,
                 defaults={"name": name[:100]},
             )
 
             if was_created:
                 created += 1
-            else:
-                existing += 1
+            elif obj.name != name:
+                obj.name = name[:100]
+                obj.save(update_fields=["name"])
+                updated += 1
 
         return {
             "created": created,
-            "existing": existing,
-            "skipped": skipped,
+            "updated": updated,
             "total": len(codes),
         }

@@ -30,6 +30,29 @@ class FMPProvider(ExternalDataProvider):
     name = "FMP"
 
     # --------------------------------------------------
+    # Equity profile (metadata only)
+    # --------------------------------------------------
+
+    def get_equity_profile(self, symbol: str) -> dict:
+        """
+        Fetch normalized equity profile data from FMP.
+
+        Used for:
+        - Profile sync
+        - Sector / industry updates
+        - Country / currency resolution
+        """
+        symbol = symbol.strip().upper()
+
+        data = fetch_equity_profile(symbol)
+
+        profile = data.get("profile")
+        if not profile:
+            raise ExternalDataEmptyResult(f"No profile data for {symbol}")
+
+        return profile
+
+    # --------------------------------------------------
     # Equity identity
     # --------------------------------------------------
 
@@ -69,29 +92,29 @@ class FMPProvider(ExternalDataProvider):
             change=quote.get("change"),
             volume=quote.get("volume"),
         )
-    
+
     def get_equity_quotes_bulk(
-            self,
-            symbols: Iterable[str],
-        ) -> List[QuoteSnapshot]:
-            """
-            Fallback bulk implementation using single-quote endpoint.
+        self,
+        symbols: Iterable[str],
+    ) -> List[QuoteSnapshot]:
+        """
+        Fallback bulk implementation using single-quote endpoint.
 
-            NOTE:
-            - This is intentionally inefficient
-            - It satisfies the provider contract
-            - Can be upgraded to batch endpoint later
-            """
-            results: list[QuoteSnapshot] = []
+        NOTE:
+        - This is intentionally inefficient
+        - It satisfies the provider contract
+        - Can be upgraded to batch endpoint later
+        """
+        results: list[QuoteSnapshot] = []
 
-            for symbol in symbols:
-                try:
-                    quote = self.get_equity_quote(symbol)
-                except ExternalDataEmptyResult:
-                    continue
-                results.append(quote)
+        for symbol in symbols:
+            try:
+                quote = self.get_equity_quote(symbol)
+            except ExternalDataEmptyResult:
+                continue
+            results.append(quote)
 
-            return results
+        return results
 
     # --------------------------------------------------
     # Dividends
@@ -113,7 +136,7 @@ class FMPProvider(ExternalDataProvider):
             quote=quote,
             rate=data["rate"],
         )
-    
+
     def get_available_countries(self) -> list[str]:
         """
         Return ISO-3166 alpha-2 country codes where equities trade.
@@ -142,7 +165,7 @@ class FMPProvider(ExternalDataProvider):
             }
             for symbol in symbols
         ]
-    
+
     # --------------------------------------------------
     # Reference metadata
     # --------------------------------------------------
@@ -153,13 +176,11 @@ class FMPProvider(ExternalDataProvider):
         """
         return fetch_available_sectors() or []
 
-
     def get_available_industries(self) -> list[str]:
         """
         Return available equity industries from FMP.
         """
         return fetch_available_industries() or []
-
 
     def get_available_exchanges(self) -> list[dict]:
         """

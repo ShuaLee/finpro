@@ -6,14 +6,7 @@ from external_data.providers.fmp.fx.fetchers import fetch_fx_universe
 
 class FXCurrencySeederService:
     """
-    Seeds FXCurrency strictly from FMP forex-list.
-
-    Rules:
-    - Currency existence is defined ONLY by FMP
-    - Code is canonical
-    - Name is best-effort metadata
-    - Name is REQUIRED (fallback = code)
-    - Never overwrite existing rows
+    Non-destructive FX currency reconciliation.
     """
 
     @transaction.atomic
@@ -36,28 +29,25 @@ class FXCurrencySeederService:
                 code = code.strip().upper()
                 name = name.strip() if isinstance(name, str) else None
 
-                # Keep first-seen name only
                 seen.setdefault(code, name)
 
-        created = 0
-        existing = 0
+        created = updated = 0
 
         for code, name in seen.items():
-            _, was_created = FXCurrency.objects.get_or_create(
+            obj, was_created = FXCurrency.objects.get_or_create(
                 code=code,
-                defaults={
-                    # 🔑 CRITICAL FIX
-                    "name": (name or code)[:150],
-                },
+                defaults={"name": name[:150] if name else code},
             )
 
             if was_created:
                 created += 1
-            else:
-                existing += 1
+            elif not obj.name and name:
+                obj.name = name[:150]
+                obj.save(update_fields=["name"])
+                updated += 1
 
         return {
             "created": created,
-            "existing": existing,
+            "updated": updated,
             "total": len(seen),
         }
