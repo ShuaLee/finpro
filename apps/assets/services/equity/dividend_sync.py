@@ -25,11 +25,6 @@ FREQUENCY_GRACE_DAYS = {
 class EquityDividendSyncService:
     """
     Rebuilds the dividend snapshot for an equity asset.
-
-    Optimized:
-    - Single sort
-    - Single pass
-    - Early cutoff
     """
 
     @transaction.atomic
@@ -52,9 +47,6 @@ class EquityDividendSyncService:
             )
             return
 
-        # --------------------------------------------------
-        # Sort newest → oldest
-        # --------------------------------------------------
         events.sort(key=lambda e: e["date"], reverse=True)
 
         now = timezone.now().date()
@@ -69,31 +61,27 @@ class EquityDividendSyncService:
         status = EquityDividendSnapshot.DividendStatus.INACTIVE
         forward = None
 
-        # --------------------------------------------------
-        # Single-pass scan
-        # --------------------------------------------------
         for e in events:
             div_date = e["date"]
-            dividend = Decimal(str(e["dividend"]))
-            freq = e.get("frequency")
-
             if div_date < cutoff:
-                break  # 🔥 early exit
+                break
 
-            # Cashflow = ALL dividends
+            dividend = Decimal(str(e["dividend"]))
+            if dividend <= 0:
+                continue
+
+            freq = e.get("frequency")
+            freq = freq.title() if isinstance(freq, str) else None
+
             trailing_cashflow += dividend
 
-            # Regular-only logic
             if freq in FREQUENCY_MULTIPLIER:
                 trailing_regular += dividend
-                if not last_regular:
+                if last_regular is None:
                     last_regular = e
 
-        # --------------------------------------------------
-        # Forward estimate
-        # --------------------------------------------------
         if last_regular:
-            freq = last_regular["frequency"]
+            freq = last_regular["frequency"].title()
             last_date = last_regular["date"]
 
             days_since = (now - last_date).days
@@ -108,23 +96,19 @@ class EquityDividendSyncService:
             else:
                 status = EquityDividendSnapshot.DividendStatus.UNCERTAIN
 
-        # --------------------------------------------------
-        # Persist snapshot
-        # --------------------------------------------------
         EquityDividendSnapshot.objects.update_or_create(
             asset=asset,
             defaults={
-                # Last actual dividend
-                "last_dividend_amount": last_event["dividend"],
+                "last_dividend_amount": Decimal(str(last_event["dividend"])),
                 "last_dividend_date": last_event["date"],
                 "last_dividend_frequency": last_event.get("frequency"),
                 "last_dividend_is_special": (
                     last_event.get("frequency") not in FREQUENCY_MULTIPLIER
                 ),
 
-                # Regular anchor
                 "regular_dividend_amount": (
-                    last_regular["dividend"] if last_regular else None
+                    Decimal(str(last_regular["dividend"]))
+                    if last_regular else None
                 ),
                 "regular_dividend_date": (
                     last_regular["date"] if last_regular else None
@@ -133,7 +117,6 @@ class EquityDividendSyncService:
                     last_regular["frequency"] if last_regular else None
                 ),
 
-                # Computed
                 "trailing_12m_dividend": trailing_regular,
                 "trailing_12m_cashflow": trailing_cashflow,
                 "forward_annual_dividend": forward,

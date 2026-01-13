@@ -1,33 +1,46 @@
 from django.db import transaction
 
-from assets.models.equity import EquityAsset
 from assets.models.core import AssetPrice
-from assets.models.equity import EquitySnapshotID
+from assets.models.equity import EquityAsset, EquitySnapshotID
 from external_data.providers.fmp.client import FMP_PROVIDER
 
 
 class EquityPriceSyncService:
     """
-    Updates prices for the ACTIVE equity snapshot only.
+    Updates prices for equities in the ACTIVE snapshot.
+    Can optionally sync a single ticker.
     """
 
     @transaction.atomic
-    def run(self):
-        snapshot = EquitySnapshotID.obejcts.get(id=1).current_snapshot
+    def run(self, *, ticker: str | None = None) -> dict:
+        snapshot = EquitySnapshotID.objects.get(id=1).current_snapshot
 
-        equities = EquityAsset.objects.filter(
-            snapshot_id=snapshot
-        ).select_related("asset")
+        qs = EquityAsset.objects.filter(snapshot_id=snapshot)
 
-        for equity in equities:
+        if ticker:
+            qs = qs.filter(ticker__iexact=ticker)
+
+        updated = 0
+        skipped = 0
+
+        for equity in qs.select_related("asset"):
             quote = FMP_PROVIDER.get_equity_quote(equity.ticker)
+
             if not quote or quote.price is None:
+                skipped += 1
                 continue
 
             AssetPrice.objects.update_or_create(
                 asset=equity.asset,
                 defaults={
                     "price": quote.price,
-                    "source": "FMP",
+                    "source": FMP_PROVIDER.name,
                 },
             )
+
+            updated += 1
+
+        return {
+            "updated": updated,
+            "skipped": skipped,
+        }
