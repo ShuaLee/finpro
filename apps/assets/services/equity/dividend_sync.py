@@ -39,11 +39,15 @@ class EquityDividendSyncService:
         ticker = asset.equity.ticker
         events = FMP_PROVIDER.get_equity_dividends(ticker)
 
+        # --------------------------------------------------
+        # No dividends at all
+        # --------------------------------------------------
         if not events:
             EquityDividendSnapshot.objects.update_or_create(
                 asset=asset,
                 defaults={
                     "status": EquityDividendSnapshot.DividendStatus.INACTIVE,
+                    "cadence_status": EquityDividendSnapshot.DividendCadenceStatus.NONE,
                     "trailing_12m_dividend": Decimal("0"),
                     "trailing_12m_cashflow": Decimal("0"),
                     "forward_annual_dividend": None,
@@ -67,6 +71,7 @@ class EquityDividendSyncService:
         last_regular = None
 
         status = EquityDividendSnapshot.DividendStatus.INACTIVE
+        cadence_status = EquityDividendSnapshot.DividendCadenceStatus.NONE
         forward = None
 
         # --------------------------------------------------
@@ -96,7 +101,7 @@ class EquityDividendSyncService:
                     last_regular = e
 
         # --------------------------------------------------
-        # Forward dividend estimate
+        # Forward dividend estimate + cadence health
         # --------------------------------------------------
         if last_regular and regular_count > 0:
             freq = last_regular.get("frequency")
@@ -112,9 +117,27 @@ class EquityDividendSyncService:
                 if days_since <= grace:
                     avg_dividend = trailing_regular / Decimal(regular_count)
                     forward = avg_dividend * multiplier
+
+                    cadence_status = (
+                        EquityDividendSnapshot.DividendCadenceStatus.ACTIVE
+                    )
                     status = EquityDividendSnapshot.DividendStatus.CONFIDENT
+
                 else:
+                    cadence_status = (
+                        EquityDividendSnapshot.DividendCadenceStatus.STALE
+                    )
                     status = EquityDividendSnapshot.DividendStatus.UNCERTAIN
+
+            else:
+                cadence_status = (
+                    EquityDividendSnapshot.DividendCadenceStatus.BROKEN
+                )
+                status = EquityDividendSnapshot.DividendStatus.UNCERTAIN
+
+        else:
+            cadence_status = EquityDividendSnapshot.DividendCadenceStatus.NONE
+            status = EquityDividendSnapshot.DividendStatus.INACTIVE
 
         # --------------------------------------------------
         # Persist snapshot
@@ -122,15 +145,17 @@ class EquityDividendSyncService:
         EquityDividendSnapshot.objects.update_or_create(
             asset=asset,
             defaults={
-                # Last actual dividend
-                "last_dividend_amount": Decimal(str(last_event.get("dividend") or 0)),
+                # Last actual dividend (fact)
+                "last_dividend_amount": Decimal(
+                    str(last_event.get("dividend") or 0)
+                ),
                 "last_dividend_date": last_event.get("date"),
                 "last_dividend_frequency": last_event.get("frequency"),
                 "last_dividend_is_special": (
                     last_event.get("frequency") not in FREQUENCY_MULTIPLIER
                 ),
 
-                # Regular anchor
+                # Regular anchor (inference)
                 "regular_dividend_amount": (
                     Decimal(str(last_regular.get("dividend")))
                     if last_regular else None
@@ -142,10 +167,15 @@ class EquityDividendSyncService:
                     last_regular.get("frequency") if last_regular else None
                 ),
 
-                # Computed
+                # Trailing (facts)
                 "trailing_12m_dividend": trailing_regular,
                 "trailing_12m_cashflow": trailing_cashflow,
+
+                # Forward (heuristic)
                 "forward_annual_dividend": forward,
+
+                # Health & confidence
+                "cadence_status": cadence_status,
                 "status": status,
             },
         )
