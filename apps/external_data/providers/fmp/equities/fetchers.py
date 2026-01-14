@@ -113,6 +113,22 @@ def fetch_equity_dividends(symbol: str) -> list[dict]:
     url = f"{FMP_BASE_URL}{DIVIDENDS}?symbol={symbol}&apikey={FMP_API_KEY}"
     data = get_json(url)
 
+    if not isinstance(data, list):
+        return []
+
+    events = []
+    for row in data:
+        parsed = parse_dividend_event(row)
+        if parsed:
+            events.append(parsed)
+
+    return events
+
+
+def ole_fetch_equity_dividends(symbol: str) -> list[dict]:
+    url = f"{FMP_BASE_URL}{DIVIDENDS}?symbol={symbol}&apikey={FMP_API_KEY}"
+    data = get_json(url)
+
     # Empty list is VALID here
     return [parse_dividend_event(row) for row in data] if data else []
 

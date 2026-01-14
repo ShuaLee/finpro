@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 
@@ -42,7 +42,37 @@ def parse_equity_quote(raw: dict) -> dict:
     }
 
 
-def parse_dividend_event(raw: dict) -> dict:
+def parse_dividend_event(raw: dict) -> dict | None:
+    """
+    Normalize FMP dividend event.
+    """
+    # Choose best available date (priority order)
+    date_str = (
+        raw.get("paymentDate")
+        or raw.get("recordDate")
+        or raw.get("declarationDate")
+    )
+
+    if not date_str:
+        return None
+
+    try:
+        event_date = date.fromisoformat(date_str)
+    except ValueError:
+        return None
+
+    dividend = raw.get("dividend")
+    if dividend is None:
+        return None
+
+    return {
+        "date": event_date,
+        "dividend": Decimal(str(dividend)),
+        "frequency": raw.get("frequency"),
+    }
+
+
+def ole_parse_dividend_event(raw: dict) -> dict:
     return {
         "ex_date": _parse_date(raw.get("date")),
         "record_date": _parse_date(raw.get("recordDate")),
