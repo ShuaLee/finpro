@@ -37,6 +37,14 @@ class RealEstateAsset(models.Model):
     )
 
     # -------------------------
+    # Occupancy behaviour
+    # -------------------------
+    is_owner_occupied = models.BooleanField(
+        default=False,
+        help_text="True if the owner occupies this property."
+    )
+
+    # -------------------------
     # Location
     # -------------------------
     country = models.ForeignKey(
