@@ -72,19 +72,6 @@ def parse_dividend_event(raw: dict) -> dict | None:
     }
 
 
-def ole_parse_dividend_event(raw: dict) -> dict:
-    return {
-        "ex_date": _parse_date(raw.get("date")),
-        "record_date": _parse_date(raw.get("recordDate")),
-        "payment_date": _parse_date(raw.get("paymentDate")),
-        "declaration_date": _parse_date(raw.get("declarationDate")),
-        "dividend": _dec(raw.get("dividend")),
-        "adj_dividend": _dec(raw.get("adjDividend")),
-        "yield_value": raw.get("yield"),
-        "frequency": raw.get("frequency"),
-    }
-
-
 # --------------------------------------------------
 # Profile normalization map
 # --------------------------------------------------
