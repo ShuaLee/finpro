@@ -125,14 +125,6 @@ def fetch_equity_dividends(symbol: str) -> list[dict]:
     return events
 
 
-def ole_fetch_equity_dividends(symbol: str) -> list[dict]:
-    url = f"{FMP_BASE_URL}{DIVIDENDS}?symbol={symbol}&apikey={FMP_API_KEY}"
-    data = get_json(url)
-
-    # Empty list is VALID here
-    return [parse_dividend_event(row) for row in data] if data else []
-
-
 # --------------------------------------------------
 # Universes
 # --------------------------------------------------
