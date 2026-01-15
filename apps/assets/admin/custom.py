@@ -179,7 +179,7 @@ class CustomAssetAdmin(admin.ModelAdmin):
             )
         }),
         ("Attributes", {
-            "fields": ("attributes",)
+            "fields": (),
         }),
         ("Valuation", {
             "fields": (
