@@ -5,14 +5,7 @@ from users.models.profile import Profile
 
 class CustomAssetType(models.Model):
     """
-    User-defined asset classification.
-
-    Examples:
-    - Pokémon Cards
-    - Cars
-    - Watches
-    - Art
-    - Knives
+    User-defined asset classification and schema.
     """
 
     name = models.CharField(max_length=100)
@@ -28,4 +21,4 @@ class CustomAssetType(models.Model):
         ordering = ["name"]
 
     def __str__(self) -> str:
-        return self.name
+        return self.name or "Unnamed Custom Asset Type"

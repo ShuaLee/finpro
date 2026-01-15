@@ -1,34 +1,48 @@
 from django.db import transaction
-
-from assets.models.custom import CustomAsset, CustomAssetType
-from assets.services.base import BaseAssetFactory
-from fx.models.fx import FXCurrency
-from users.models.profile import Profile
+from assets.models.core import Asset, AssetType, AssetPrice
+from assets.models.custom.custom_asset import CustomAsset
 
 
-class CustomAssetFactory(BaseAssetFactory):
-    asset_type_slug = "custom"
+class CustomAssetFactory:
 
     @classmethod
     @transaction.atomic
     def create(
         cls,
         *,
-        owner: Profile,
-        custom_type: CustomAssetType,
-        name: str,
-        estimated_value,
-        currency: FXCurrency,
-        description: str = "",
+        owner,
+        custom_type,
+        name,
+        currency,
+        attributes=None,
+        price=None,
+        price_source="MANUAL",
+        description="",
     ) -> CustomAsset:
-        asset = cls._create_asset()
 
-        return CustomAsset.objects.create(
+        asset_type = AssetType.objects.get(slug="custom")
+
+        asset = Asset.objects.create(
+            asset_type=asset_type,
+            currency=currency,
+            is_custom=True,
+        )
+
+        custom_asset = CustomAsset.objects.create(
             asset=asset,
             owner=owner,
             custom_type=custom_type,
             name=name,
             description=description,
-            estimated_value=estimated_value,
             currency=currency,
+            attributes=attributes or {},
         )
+
+        if price is not None:
+            AssetPrice.objects.create(
+                asset=asset,
+                price=price,
+                source=price_source,
+            )
+
+        return custom_asset
