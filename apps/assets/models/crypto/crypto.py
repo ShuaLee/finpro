@@ -4,6 +4,7 @@ from django.db import models
 from assets.models.core import Asset
 from fx.models.fx import FXCurrency
 
+
 class CryptoAsset(models.Model):
     """
     Represents a cryptocurrency asset priced via an external provider (FMP).
@@ -22,6 +23,8 @@ class CryptoAsset(models.Model):
         related_name="crypto",
     )
 
+    snapshot_id = models.UUIDField(db_index=True)
+
     # -------------------------
     # Identity
     # -------------------------
@@ -33,7 +36,7 @@ class CryptoAsset(models.Model):
 
     pair_symbol = models.CharField(
         max_length=30,
-        unique=True,
+        db_index=True,
         help_text="Provider pricing pair (e.g. BTCUSD).",
     )
 
@@ -58,14 +61,14 @@ class CryptoAsset(models.Model):
     # Supply (optional metadata)
     # -------------------------
     circulating_supply = models.DecimalField(
-        max_digits=30,
+        max_digits=45,
         decimal_places=10,
         null=True,
         blank=True,
     )
 
     total_supply = models.DecimalField(
-        max_digits=30,
+        max_digits=45,
         decimal_places=10,
         null=True,
         blank=True,
@@ -93,12 +96,12 @@ class CryptoAsset(models.Model):
             raise ValidationError(
                 "CryptoAsset may only attach to crypto assets."
             )
-        
+
     @property
     def display_name(self) -> str:
         if self.name:
             return f"{self.base_symbol} - {self.name}"
         return self.base_symbol
-    
+
     def __str__(self):
         return self.display_name

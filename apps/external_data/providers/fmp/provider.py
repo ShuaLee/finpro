@@ -8,7 +8,11 @@ from external_data.shared.types import (
     FXQuote,
 )
 from external_data.exceptions import ExternalDataEmptyResult
-
+from external_data.providers.fmp.crypto.fetchers import (
+    fetch_crypto_list,
+    fetch_crypto_quote_short,
+    fetch_crypto_quotes_batch
+)
 from external_data.providers.fmp.equities.fetchers import (
     fetch_equity_profile,
     fetch_equity_quote_short,
@@ -28,6 +32,10 @@ from external_data.providers.fmp.fx.fetchers import (
 
 class FMPProvider(ExternalDataProvider):
     name = "FMP"
+
+    # ==================================================
+    # EQUITY
+    # ==================================================
 
     # --------------------------------------------------
     # Equity profile (metadata only)
@@ -187,3 +195,16 @@ class FMPProvider(ExternalDataProvider):
         Return available exchanges from FMP.
         """
         return fetch_available_exchanges() or []
+
+    # ==================================================
+    # CRYPTO
+    # ==================================================
+
+    def get_cryptocurrencies(self) -> list[dict]:
+        return fetch_crypto_list()
+
+    def get_crypto_quote(self, pair_symbol: str):
+        return fetch_crypto_quote_short(pair_symbol)
+
+    def get_crypto_quotes_bulk(self):
+        return fetch_crypto_quotes_batch(short=True)

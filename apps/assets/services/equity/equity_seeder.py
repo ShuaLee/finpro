@@ -1,7 +1,6 @@
 import uuid
 from django.db import transaction
 
-from assets.models.core import AssetType
 from assets.services.equity.equity_factory import EquityAssetFactory
 from external_data.providers.fmp.client import FMP_PROVIDER
 

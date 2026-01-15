@@ -1,9 +1,10 @@
-# assets/services/factories/crypto.py
 from django.db import transaction
 
 from assets.models.crypto import CryptoAsset
 from assets.services.base import BaseAssetFactory
 from fx.models.fx import FXCurrency
+
+from uuid import UUID
 
 
 class CryptoAssetFactory(BaseAssetFactory):
@@ -14,6 +15,7 @@ class CryptoAssetFactory(BaseAssetFactory):
     def create(
         cls,
         *,
+        snapshot_id: UUID,
         base_symbol: str,
         pair_symbol: str,
         name: str | None,
@@ -26,6 +28,7 @@ class CryptoAssetFactory(BaseAssetFactory):
 
         return CryptoAsset.objects.create(
             asset=asset,
+            snapshot_id=snapshot_id,
             base_symbol=base_symbol,
             pair_symbol=pair_symbol,
             name=name,
