@@ -8,7 +8,7 @@ from uuid import UUID
 
 
 class CryptoAssetFactory(BaseAssetFactory):
-    asset_type_slug = "crypto"
+    asset_type_slug = "cryptocurrency"
 
     @classmethod
     @transaction.atomic
