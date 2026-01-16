@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand
 
-from assets.services.core import AssetTypeSeeder
 from assets.services.equity import (
     EquitySeederService,
     EquitySnapshotService,
@@ -13,8 +12,6 @@ class Command(BaseCommand):
     help = "Rebuild the equity universe using snapshot-based seeding"
 
     def handle(self, *args, **options):
-        self.stdout.write("🧱 Ensuring AssetTypes...")
-        AssetTypeSeeder.run()
 
         self.stdout.write("🏦 Seeding exchanges...")
         ExchangeSeederService().run()
