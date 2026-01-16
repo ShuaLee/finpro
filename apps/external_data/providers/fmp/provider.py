@@ -8,6 +8,10 @@ from external_data.shared.types import (
     FXQuote,
 )
 from external_data.exceptions import ExternalDataEmptyResult
+from external_data.providers.fmp.commodity.fetchers import (
+    fetch_commodity_list,
+    fetch_commodity_quote_short,
+)
 from external_data.providers.fmp.crypto.fetchers import (
     fetch_crypto_list,
     fetch_crypto_quote_short,
@@ -208,3 +212,34 @@ class FMPProvider(ExternalDataProvider):
 
     def get_crypto_quotes_bulk(self):
         return fetch_crypto_quotes_batch(short=True)
+    
+
+    # ==================================================
+    # COMMODITIES
+    # ==================================================
+
+    def get_commodities(self) -> list[dict]:
+        """
+        Return the full tradable commodity universe from FMP.
+
+        Minimal discovery payload:
+        - symbol
+        - name
+        - exchange
+        - tradeMonth
+        - currency (normalized later: USX -> USD)
+        """
+        return fetch_commodity_list()
+
+    def get_commodity_quote(self, symbol: str) -> QuoteSnapshot:
+        """
+        Return a fast quote snapshot for a single commodity.
+        """
+        symbol = symbol.strip().upper()
+        quote = fetch_commodity_quote_short(symbol)
+
+        return QuoteSnapshot(
+            price=quote.get("price"),
+            change=quote.get("change"),
+            volume=quote.get("volume"),
+        )

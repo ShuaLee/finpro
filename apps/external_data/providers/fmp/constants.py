@@ -108,3 +108,4 @@ CRYPTO_BATCH_QUOTES = "/batch-crypto-quotes"
 
 COMMODITIES_LIST = "/commodities-list"
 COMMODITIES_BATCH_QUOTES = "/batch-commodity-quotes"
+COMMODITIES_QUOTE_SHORT = "/quote-short"

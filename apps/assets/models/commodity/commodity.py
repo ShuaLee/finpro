@@ -7,19 +7,13 @@ from fx.models.fx import FXCurrency
 
 class CommodityAsset(models.Model):
     """
-    Canonical, non-historical commodity reference.
+    Represents a tradable commodity priced via FMP.
 
-    This table represents the CURRENT actively tradable commodity universe
-    as provided by the data provider (e.g. FMP).
-
-    Characteristics:
-    - One row per active commodity symbol
-    - No ownership or account semantics
-    - Safe to truncate and rebuild multiple times per day
-    - Optimized for valuation and exposure tracking
-    - Referenced by domain-specific holdings (e.g. precious metals)
-
-    Inactive commodities are removed from the table entirely.
+    Design principles:
+    - One row per commodity symbol (e.g. GCUSD, CLUSD)
+    - Safe to delete & rebuild frequently
+    - No historical assumptions
+    - No yield / income model
     """
 
     asset = models.OneToOneField(
@@ -29,59 +23,64 @@ class CommodityAsset(models.Model):
         primary_key=True,
     )
 
+    snapshot_id = models.UUIDField(db_index=True)
+
     # -------------------------
-    # Identifiers
+    # Identity
     # -------------------------
     symbol = models.CharField(
-        max_length=20,
-        unique=True,
+        max_length=30,
         db_index=True,
-        help_text="Provider symbol (e.g. GCUSD, CLUSD, SIUSD).",
+        help_text="Provider commodity symbol (e.g. GCUSD).",
     )
 
     name = models.CharField(
-        max_length=200,
-        help_text="Human-readable commodity name from provider.",
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Human-readable name (e.g. Gold Futures).",
+    )
+
+    trade_month = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="Futures delivery month if applicable (e.g. Dec).",
+    )
+
+    exchange = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Exchange name if provided by FMP.",
     )
 
     # -------------------------
-    # Market metadata
+    # Pricing
     # -------------------------
     currency = models.ForeignKey(
         FXCurrency,
         on_delete=models.PROTECT,
-        related_name="commodities",
-        null=True,
-        blank=True,
-        help_text="Trading currency for this commodity.",
-    )
-
-    trade_month = models.CharField(
-        max_length=10,
-        blank=True,
-        help_text="Front or active contract month as reported by provider.",
+        related_name="commodity_assets",
+        help_text="Currency this commodity is priced in (USD).",
     )
 
     # -------------------------
-    # Provider metadata
+    # Lifecycle
     # -------------------------
     last_synced = models.DateTimeField(
         auto_now=True,
-        help_text="Last time this commodity was fetched from the data provider.",
+        help_text="Last time this commodity was synced from provider.",
     )
 
-    class Meta:
-        ordering = ["symbol"]
-        verbose_name_plural = "Commodities"
-        indexes = [
-            models.Index(fields=["symbol"]),
-        ]
-
+    # -------------------------
+    # Validation
+    # -------------------------
     def clean(self):
         if self.asset.asset_type.slug != "commodity":
             raise ValidationError(
-                "CommodityAsset may only be attached to assets of type 'commodity'."
+                "CommodityAsset may only attach to commodity assets."
             )
 
     def __str__(self) -> str:
-        return f"{self.symbol} – {self.name}"
+        return self.name or self.symbol
