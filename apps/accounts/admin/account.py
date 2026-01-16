@@ -1,16 +1,29 @@
 from django.contrib import admin, messages
 from django import forms
+
 from accounts.models.account import Account
 from accounts.models.account_type import AccountType
-from accounts.models.account_classification import ClassificationDefinition, AccountClassification
+from accounts.models.account_classification import (
+    ClassificationDefinition,
+    AccountClassification,
+)
 from accounts.services.account_service import AccountService
 from fx.models.country import Country
 
 
+# =================================================
+# Forms
+# =================================================
+
 class ClassificationDefinitionForm(forms.ModelForm):
+    """
+    Admin-safe form:
+    - Country queryset is injected at runtime
+    - Avoids app-registry import issues
+    """
 
     countries = forms.ModelMultipleChoiceField(
-        queryset=Country.objects.all(),
+        queryset=Country.objects.none(),  # ✅ placeholder
         required=False,
         widget=forms.SelectMultiple(attrs={"size": 12}),
         help_text="Countries where this classification applies.",
@@ -20,20 +33,26 @@ class ClassificationDefinitionForm(forms.ModelForm):
         model = ClassificationDefinition
         fields = "__all__"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Safe: executed after app registry is ready
+        self.fields["countries"].queryset = Country.objects.all()
+
     def clean(self):
         cleaned = super().clean()
 
         if cleaned.get("all_countries"):
-            # If all_countries=True → ignore any selected countries
             cleaned["countries"] = Country.objects.none()
 
         return cleaned
 
+
+
 class AccountTypeForm(forms.ModelForm):
     """
     Custom form for AccountType admin:
-    - prevents users from unchecking fields on system types
-    - ensures that allowed asset types are chosen
+    - prevents editing protected fields on system types
     """
 
     class Meta:
@@ -42,21 +61,23 @@ class AccountTypeForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-
         instance = self.instance
 
-        # Prevent editing certain fields on system types
-        if instance and instance.is_system:
-            protected_fields = ["slug", "is_system"]
-            for field in protected_fields:
-                if field in cleaned and cleaned[field] != getattr(instance, field):
-                    self.add_error(field, "System account types cannot be modified.")
+        if instance and instance.pk and instance.is_system:
+            for field in ("slug", "is_system"):
+                if cleaned.get(field) != getattr(instance, field):
+                    self.add_error(
+                        field,
+                        "System account types cannot be modified."
+                    )
 
         return cleaned
 
-# ----------------------------
+
+# =================================================
 # Admin
-# ----------------------------
+# =================================================
+
 @admin.register(AccountType)
 class AccountTypeAdmin(admin.ModelAdmin):
     form = AccountTypeForm
@@ -79,21 +100,14 @@ class AccountTypeAdmin(admin.ModelAdmin):
         "slug",
     )
 
-    ordering = (
-        "name",
-    )
+    ordering = ("name",)
 
     filter_horizontal = ("allowed_asset_types",)
 
-    readonly_fields = ()
-
     def get_readonly_fields(self, request, obj=None):
-        """
-        System types cannot have slug or is_system changed.
-        """
         if obj and obj.is_system:
-            return ("slug", "is_system") + self.readonly_fields
-        return self.readonly_fields
+            return ("slug", "is_system")
+        return ()
 
 
 @admin.register(ClassificationDefinition)
@@ -108,13 +122,13 @@ class ClassificationDefinitionAdmin(admin.ModelAdmin):
         "is_system",
         "created_at",
     )
+
     list_filter = ("tax_status", "is_system")
     search_fields = ("name",)
     readonly_fields = ("created_at",)
     ordering = ("name",)
 
     def display_scope(self, obj):
-        """Show either 'All Countries' or the country list."""
         if obj.all_countries:
             return "All Countries"
 
@@ -134,12 +148,14 @@ class AccountClassificationAdmin(admin.ModelAdmin):
         "carry_forward_room",
         "created_at",
     )
+
     list_filter = ("definition__tax_status",)
     search_fields = (
         "definition__name",
         "profile__user__username",
         "profile__user__email",
     )
+
     ordering = ("profile", "definition__name")
     readonly_fields = ("created_at",)
 
@@ -147,78 +163,88 @@ class AccountClassificationAdmin(admin.ModelAdmin):
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
     """
-    Custom admin for Account:
-    - Dynamically defines AccountForm to avoid circular model loading
-    - Enforces classification assignment via AccountService
+    Account admin:
+    - Uses definition at creation time
+    - Delegates classification logic to AccountService
     """
 
     list_display = (
-        "id", "portfolio", "name", "account_type",
-        "classification", "created_at", "last_synced",
+        "id",
+        "portfolio",
+        "name",
+        "account_type",
+        "classification",
+        "created_at",
+        "last_synced",
     )
+
     list_filter = ("account_type", "created_at")
+
     search_fields = (
-        "name", "portfolio__name",
+        "name",
+        "portfolio__name",
         "portfolio__profile__user__username",
         "portfolio__profile__user__email",
     )
-    ordering = ("portfolio", "name")
-    readonly_fields = ("created_at", "classification", "last_synced")
 
-    # ----------------------------
-    # Dynamic form definition
-    # ----------------------------
+    ordering = ("portfolio", "name")
+
+    readonly_fields = (
+        "created_at",
+        "classification",
+        "last_synced",
+    )
+
+    # -------------------------------------------------
+    # Dynamic form
+    # -------------------------------------------------
     def get_form(self, request, obj=None, **kwargs):
         """
-        Define AccountForm dynamically so it's loaded only
-        after all related models (like Portfolio) are ready.
+        Define form dynamically to avoid circular imports.
         """
 
         class AccountForm(forms.ModelForm):
             definition = forms.ModelChoiceField(
                 queryset=ClassificationDefinition.objects.all(),
                 required=True,
-                help_text="Select a classification definition (e.g., TFSA, RRSP, 401k).",
                 label="Account Definition",
+                help_text="Select a classification definition (e.g. TFSA, RRSP).",
             )
 
             class Meta:
                 model = Account
-                fields = [
+                fields = (
                     "portfolio",
                     "name",
                     "account_type",
                     "broker",
                     "definition",
-                ]
+                )
 
         kwargs["form"] = AccountForm
         return super().get_form(request, obj, **kwargs)
 
-    # ----------------------------
+    # -------------------------------------------------
     # Save logic
-    # ----------------------------
+    # -------------------------------------------------
     def save_model(self, request, obj, form, change):
         """
-        Ensure every Account has a valid classification.
-        Uses AccountService.assign_classification() for consistency.
+        Create Account, then initialize classification exactly once.
         """
 
         definition = form.cleaned_data.get("definition")
-
         if not definition:
             self.message_user(
                 request,
-                "A definition is required to create an account.",
+                "A classification definition is required.",
                 level=messages.ERROR,
             )
             return
 
         try:
-            # Save the base account first
-            obj.save()
+            # Let Account.save() handle validation
+            super().save_model(request, obj, form, change)
 
-            # Assign classification atomically
             AccountService.initialize_account(
                 account=obj,
                 definition=definition,
@@ -227,13 +253,13 @@ class AccountAdmin(admin.ModelAdmin):
 
             self.message_user(
                 request,
-                f"Account '{obj.name}' created and linked to '{definition.name}'.",
+                f"Account '{obj.name}' linked to '{definition.name}'.",
                 level=messages.SUCCESS,
             )
 
-        except Exception as e:
+        except Exception as exc:
             self.message_user(
                 request,
-                f"Error assigning classification: {e}",
+                f"Error creating account: {exc}",
                 level=messages.ERROR,
             )

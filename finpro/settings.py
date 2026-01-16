@@ -55,7 +55,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django.contrib.postgres',
-    # 'accounts',
+    'accounts',
     'assets',
     'core',
     # 'datatype',

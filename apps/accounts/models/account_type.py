@@ -1,5 +1,7 @@
 from django.db import models
 
+from assets.models.core import AssetType
+
 
 class AccountType(models.Model):
     """
@@ -15,7 +17,7 @@ class AccountType(models.Model):
 
     # Which asset types this account can hold
     allowed_asset_types = models.ManyToManyField(
-        "assets.AssetType",
+        AssetType,
         related_name="account_types",
         blank=True,
         help_text="What asset types can be held in accounts of this type."
