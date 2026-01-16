@@ -10,12 +10,18 @@ class CustomAssetField(models.Model):
     Defines a schema field for a CustomAssetType.
     """
 
+    TEXT = "text"
+    NUMBER = "number"
+    BOOLEAN = "boolean"
+    CHOICE = "choice"
+    DATE = "date"
+
     FIELD_TYPES = [
-        ("text", "Text"),
-        ("number", "Decimal"),
-        ("boolean", "Boolean"),
-        ("choice", "Choice"),
-        ("date", "Date"),
+        (TEXT, "Text"),
+        (NUMBER, "Decimal"),
+        (BOOLEAN, "Boolean"),
+        (CHOICE, "Choice"),
+        (DATE, "Date"),
     ]
 
     asset_type = models.ForeignKey(
@@ -27,12 +33,12 @@ class CustomAssetField(models.Model):
     name = models.CharField(
         max_length=100,
         editable=False,
-        help_text="Internal field name (e.g. 'grade', 'card_type').",
+        help_text="Internal field name (auto-generated).",
     )
 
     label = models.CharField(
         max_length=100,
-        help_text="Display label (e.g. 'Graded Score').",
+        help_text="Display label (e.g. 'Grade').",
     )
 
     field_type = models.CharField(
@@ -43,9 +49,9 @@ class CustomAssetField(models.Model):
     required = models.BooleanField(default=False)
 
     choices = models.JSONField(
-        blank=True,
         null=True,
-        help_text="Used for choice fields only.",
+        blank=True,
+        help_text="Required for choice fields only.",
     )
 
     class Meta:
@@ -61,9 +67,6 @@ class CustomAssetField(models.Model):
         ]
         ordering = ["id"]
 
-    def __str__(self):
-        return f"{self.label}"
-    
     def save(self, *args, **kwargs):
         if not self.name:
             self.name = slugify(self.label).replace("-", "_")
@@ -72,14 +75,16 @@ class CustomAssetField(models.Model):
     def clean(self):
         super().clean()
 
-        if not self.pk:
-            return
-
-        old = CustomAssetField.objects.get(pk=self.pk)
-
-        if old.name != self.name or old.label != self.label:
-            if self.asset_type.assets.exists():
+        if self.pk:
+            old = CustomAssetField.objects.get(pk=self.pk)
+            if (
+                (old.name != self.name or old.label != self.label)
+                and self.asset_type.assets.exists()
+            ):
                 raise ValidationError(
                     "Field name and label cannot be changed once assets exist. "
                     "Delete and recreate the field instead."
                 )
+
+    def __str__(self):
+        return f"{self.asset_type.name}: {self.label}"

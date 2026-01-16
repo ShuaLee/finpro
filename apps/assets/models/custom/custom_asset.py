@@ -26,10 +26,9 @@ def _validate_boolean(value, label):
 def _validate_date(value, label):
     if isinstance(value, date):
         return
-
     try:
         date.fromisoformat(str(value))
-    except (TypeError, ValueError):
+    except Exception:
         raise ValidationError(
             f"Field '{label}' must be a valid ISO date (YYYY-MM-DD)."
         )
@@ -37,7 +36,7 @@ def _validate_date(value, label):
 
 class CustomAsset(models.Model):
     """
-    User-defined, manually valued asset with user-defined structure.
+    User-defined asset with schema-driven attributes.
     """
 
     asset = models.OneToOneField(
@@ -59,39 +58,28 @@ class CustomAsset(models.Model):
         related_name="assets",
     )
 
-    name = models.CharField(
-        max_length=255,
-        help_text="User-defined asset name (e.g. 'Charizard PSA 10').",
-    )
-
+    name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
 
-    # ✅ User-defined attributes (schema-driven)
     attributes = models.JSONField(
         default=dict,
-        help_text="Custom attributes defined by the asset type schema.",
+        help_text="Schema-defined attributes.",
     )
 
-    # ✅ Currency explicitly stored (matches RealEstateAsset)
     currency = models.ForeignKey(
         FXCurrency,
         on_delete=models.PROTECT,
         related_name="custom_assets",
-        help_text="Currency this asset is valued in.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # -------------------------
-    # Validation
-    # -------------------------
     def clean(self):
         super().clean()
 
-        # ⛔ Asset does not exist yet (admin / factory pre-save)
         if not self.asset_id:
-            return
+            return  # Admin creates asset later
 
         if self.asset.asset_type.slug != "custom":
             raise ValidationError(
@@ -107,14 +95,12 @@ class CustomAsset(models.Model):
             f.name: f for f in self.custom_type.fields.all()
         }
 
-        # Required fields
         for field in schema_fields.values():
             if field.required and field.name not in self.attributes:
                 raise ValidationError(
                     f"Missing required field: {field.label}"
                 )
 
-        # Type validation
         for name, value in self.attributes.items():
             field = schema_fields.get(name)
             if not field:
@@ -122,27 +108,25 @@ class CustomAsset(models.Model):
                     f"Unknown field '{name}' for asset type '{self.custom_type.name}'."
                 )
 
-            label = field.label
-
-            if field.field_type == CustomAssetField.DECIMAL:
-                _validate_decimal(value, label)
+            if field.field_type == CustomAssetField.NUMBER:
+                _validate_decimal(value, field.label)
 
             elif field.field_type == CustomAssetField.BOOLEAN:
-                _validate_boolean(value, label)
+                _validate_boolean(value, field.label)
 
             elif field.field_type == CustomAssetField.DATE:
-                _validate_date(value, label)
+                _validate_date(value, field.label)
 
             elif field.field_type == CustomAssetField.CHOICE:
                 if not field.choices or value not in field.choices:
                     raise ValidationError(
-                        f"Field '{label}' must be one of: {field.choices}"
+                        f"Field '{field.label}' must be one of: {list(field.choices)}"
                     )
 
             elif field.field_type == CustomAssetField.TEXT:
                 if not isinstance(value, str):
                     raise ValidationError(
-                        f"Field '{label}' must be text."
+                        f"Field '{field.label}' must be text."
                     )
 
     def __str__(self):

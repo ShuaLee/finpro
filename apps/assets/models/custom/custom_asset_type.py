@@ -20,5 +20,5 @@ class CustomAssetType(models.Model):
         unique_together = ("name", "created_by")
         ordering = ["name"]
 
-    def __str__(self) -> str:
-        return self.name or "Unnamed Custom Asset Type"
+    def __str__(self):
+        return self.name
