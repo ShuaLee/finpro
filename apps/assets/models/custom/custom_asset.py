@@ -1,44 +1,11 @@
-from decimal import Decimal, InvalidOperation
-from datetime import date
-
-from django.core.exceptions import ValidationError
 from django.db import models
 
 from assets.models.core import Asset
-from assets.models.custom.custom_asset_type import CustomAssetType
-from assets.models.custom.custom_asset_field import CustomAssetField
 from fx.models.fx import FXCurrency
-from users.models.profile import Profile
-
-
-def _validate_decimal(value, label):
-    try:
-        Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        raise ValidationError(f"Field '{label}' must be a decimal number.")
-
-
-def _validate_boolean(value, label):
-    if not isinstance(value, bool):
-        raise ValidationError(f"Field '{label}' must be true or false.")
-
-
-def _validate_date(value, label):
-    if isinstance(value, date):
-        return
-    try:
-        date.fromisoformat(str(value))
-    except Exception:
-        raise ValidationError(
-            f"Field '{label}' must be a valid ISO date (YYYY-MM-DD)."
-        )
+from users.models import Profile
 
 
 class CustomAsset(models.Model):
-    """
-    User-defined asset with schema-driven attributes.
-    """
-
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,
@@ -46,88 +13,11 @@ class CustomAsset(models.Model):
         related_name="custom",
     )
 
-    owner = models.ForeignKey(
-        Profile,
-        on_delete=models.CASCADE,
-        related_name="custom_assets",
-    )
-
-    custom_type = models.ForeignKey(
-        CustomAssetType,
-        on_delete=models.PROTECT,
-        related_name="assets",
-    )
+    owner = models.ForeignKey(Profile, on_delete=models.CASCADE)
 
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
 
-    attributes = models.JSONField(
-        default=dict,
-        help_text="Schema-defined attributes.",
-    )
-
-    currency = models.ForeignKey(
-        FXCurrency,
-        on_delete=models.PROTECT,
-        related_name="custom_assets",
-    )
+    currency = models.ForeignKey(FXCurrency, on_delete=models.PROTECT)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def clean(self):
-        super().clean()
-
-        if not self.asset_id:
-            return  # Admin creates asset later
-
-        if self.asset.asset_type.slug != "custom":
-            raise ValidationError(
-                "CustomAsset may only attach to assets of type 'custom'."
-            )
-
-        if self.custom_type.created_by != self.owner:
-            raise ValidationError(
-                "You cannot use another user's custom asset type."
-            )
-
-        schema_fields = {
-            f.name: f for f in self.custom_type.fields.all()
-        }
-
-        for field in schema_fields.values():
-            if field.required and field.name not in self.attributes:
-                raise ValidationError(
-                    f"Missing required field: {field.label}"
-                )
-
-        for name, value in self.attributes.items():
-            field = schema_fields.get(name)
-            if not field:
-                raise ValidationError(
-                    f"Unknown field '{name}' for asset type '{self.custom_type.name}'."
-                )
-
-            if field.field_type == CustomAssetField.NUMBER:
-                _validate_decimal(value, field.label)
-
-            elif field.field_type == CustomAssetField.BOOLEAN:
-                _validate_boolean(value, field.label)
-
-            elif field.field_type == CustomAssetField.DATE:
-                _validate_date(value, field.label)
-
-            elif field.field_type == CustomAssetField.CHOICE:
-                if not field.choices or value not in field.choices:
-                    raise ValidationError(
-                        f"Field '{field.label}' must be one of: {list(field.choices)}"
-                    )
-
-            elif field.field_type == CustomAssetField.TEXT:
-                if not isinstance(value, str):
-                    raise ValidationError(
-                        f"Field '{field.label}' must be text."
-                    )
-
-    def __str__(self):
-        return self.name
