@@ -1,5 +1,7 @@
-from django.contrib import admin, messages
 from django import forms
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from accounts.models.account import Account
 from accounts.models.account_type import AccountType
@@ -8,6 +10,7 @@ from accounts.models.account_classification import (
     AccountClassification,
 )
 from accounts.services.account_service import AccountService
+from assets.models.core import AssetType
 from fx.models.country import Country
 
 
@@ -18,12 +21,12 @@ from fx.models.country import Country
 class ClassificationDefinitionForm(forms.ModelForm):
     """
     Admin-safe form:
-    - Country queryset is injected at runtime
+    - Country queryset injected at runtime
     - Avoids app-registry import issues
     """
 
     countries = forms.ModelMultipleChoiceField(
-        queryset=Country.objects.none(),  # ✅ placeholder
+        queryset=Country.objects.none(),  # placeholder
         required=False,
         widget=forms.SelectMultiple(attrs={"size": 12}),
         help_text="Countries where this classification applies.",
@@ -35,43 +38,49 @@ class ClassificationDefinitionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # Safe: executed after app registry is ready
         self.fields["countries"].queryset = Country.objects.all()
 
     def clean(self):
         cleaned = super().clean()
-
         if cleaned.get("all_countries"):
             cleaned["countries"] = Country.objects.none()
-
         return cleaned
 
 
-
 class AccountTypeForm(forms.ModelForm):
-    """
-    Custom form for AccountType admin:
-    - prevents editing protected fields on system types
-    """
-
     class Meta:
         model = AccountType
         fields = "__all__"
 
-    def clean(self):
-        cleaned = super().clean()
-        instance = self.instance
+    def clean_allowed_asset_types(self):
+        asset_types = self.cleaned_data.get("allowed_asset_types")
+        owner = self.cleaned_data.get("owner")
+        is_system = self.cleaned_data.get("is_system")
 
-        if instance and instance.pk and instance.is_system:
-            for field in ("slug", "is_system"):
-                if cleaned.get(field) != getattr(instance, field):
-                    self.add_error(
-                        field,
-                        "System account types cannot be modified."
-                    )
+        if not asset_types:
+            return asset_types
 
-        return cleaned
+        # System AccountTypes may ONLY use system AssetTypes
+        if is_system:
+            invalid = asset_types.exclude(created_by__isnull=True)
+            if invalid.exists():
+                names = ", ".join(invalid.values_list("name", flat=True))
+                raise ValidationError(
+                    f"System account types cannot use user asset types: {names}"
+                )
+
+        # User AccountTypes may use system OR owned AssetTypes
+        else:
+            invalid = asset_types.exclude(
+                Q(created_by__isnull=True) | Q(created_by=owner)
+            )
+            if invalid.exists():
+                names = ", ".join(invalid.values_list("name", flat=True))
+                raise ValidationError(
+                    f"You cannot use asset types you do not own: {names}"
+                )
+
+        return asset_types
 
 
 # =================================================
@@ -80,33 +89,35 @@ class AccountTypeForm(forms.ModelForm):
 
 @admin.register(AccountType)
 class AccountTypeAdmin(admin.ModelAdmin):
+    """
+    AccountType admin rules:
+    - slug is never editable
+    - is_system is editable on CREATE, immutable on EDIT
+    """
+
     form = AccountTypeForm
+    exclude = ("slug",)
 
     list_display = (
         "id",
         "name",
         "slug",
-        "allows_multiple",
         "is_system",
     )
 
     list_filter = (
         "is_system",
-        "allows_multiple",
     )
 
-    search_fields = (
-        "name",
-        "slug",
-    )
-
+    search_fields = ("name",)
     ordering = ("name",)
 
     filter_horizontal = ("allowed_asset_types",)
 
     def get_readonly_fields(self, request, obj=None):
-        if obj and obj.is_system:
-            return ("slug", "is_system")
+        # is_system locked after creation
+        if obj:
+            return ("is_system",)
         return ()
 
 
@@ -164,8 +175,8 @@ class AccountClassificationAdmin(admin.ModelAdmin):
 class AccountAdmin(admin.ModelAdmin):
     """
     Account admin:
-    - Uses definition at creation time
-    - Delegates classification logic to AccountService
+    - Classification definition chosen at creation
+    - Classification initialized via AccountService
     """
 
     list_display = (
@@ -200,7 +211,8 @@ class AccountAdmin(admin.ModelAdmin):
     # -------------------------------------------------
     def get_form(self, request, obj=None, **kwargs):
         """
-        Define form dynamically to avoid circular imports.
+        Dynamic form avoids circular imports and
+        ensures definition is only used on create.
         """
 
         class AccountForm(forms.ModelForm):
@@ -228,11 +240,8 @@ class AccountAdmin(admin.ModelAdmin):
     # Save logic
     # -------------------------------------------------
     def save_model(self, request, obj, form, change):
-        """
-        Create Account, then initialize classification exactly once.
-        """
-
         definition = form.cleaned_data.get("definition")
+
         if not definition:
             self.message_user(
                 request,
@@ -242,7 +251,6 @@ class AccountAdmin(admin.ModelAdmin):
             return
 
         try:
-            # Let Account.save() handle validation
             super().save_model(request, obj, form, change)
 
             AccountService.initialize_account(

@@ -1,36 +1,94 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q, Value
+from django.utils.text import slugify
 
 from assets.models.core import AssetType
 
 
 class AccountType(models.Model):
-    """
-    Defines system or user-defined account categories.
-    Controls:
-      - How accounts behave
-      - What assets they can hold (M2M to AssetType)
-      - Whether multiple accounts of this type are allowed
-    """
-
-    slug = models.SlugField(unique=True, max_length=50)
     name = models.CharField(max_length=100)
 
-    # Which asset types this account can hold
-    allowed_asset_types = models.ManyToManyField(
-        AssetType,
-        related_name="account_types",
+    slug = models.SlugField(
+        max_length=50,
         blank=True,
-        help_text="What asset types can be held in accounts of this type."
+        null=True,
+        help_text="System identifier (only for system-defined account types).",
     )
 
-    allows_multiple = models.BooleanField(default=True)
+    is_system = models.BooleanField(default=False)
 
-    is_system = models.BooleanField(default=True)
+    owner = models.ForeignKey(
+        "users.Profile",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="custom_account_types",
+    )
+
+    allowed_asset_types = models.ManyToManyField(
+        AssetType,
+        blank=True,
+        related_name="account_types",
+    )
 
     description = models.TextField(blank=True, null=True)
 
     class Meta:
-        ordering = ["slug"]
+        constraints = [
+            # Enforce namespace-level name uniqueness
+            models.UniqueConstraint(
+                fields=["name", "owner"],
+                condition=Q(is_system=False),
+                name="uniq_user_accounttype_name",
+            ),
+            models.UniqueConstraint(
+                fields=["name"],
+                condition=Q(is_system=True),
+                name="uniq_system_accounttype_name",
+            ),
+            models.CheckConstraint(
+                condition=Q(is_system=True, owner__isnull=True)
+                | Q(is_system=False, owner__isnull=False),
+                name="accounttype_owner_required_if_not_system",
+            ),
+        ]
+
+    # -------------------------------------------------
+    # Validation (THIS blocks the bug you hit)
+    # -------------------------------------------------
+    def clean(self):
+        super().clean()
+
+        if self.is_system and self.owner is not None:
+            raise ValidationError("System account types cannot have an owner.")
+
+        if not self.is_system and self.owner is None:
+            raise ValidationError(
+                "User-defined account types must have an owner.")
+
+        if not self.is_system:
+            if AccountType.objects.filter(
+                is_system=True,
+                name__iexact=self.name,
+            ).exists():
+                raise ValidationError(
+                    f"'{self.name}' is a reserved system account type name."
+                )
+
+    # -------------------------------------------------
+    # Save logic
+    # -------------------------------------------------
+
+    def save(self, *args, **kwargs):
+        if self.is_system:
+            if not self.slug:
+                self.slug = slugify(self.name)
+        else:
+            self.slug = None
+
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
