@@ -62,7 +62,7 @@ INSTALLED_APPS = [
     'users',
     'subscriptions',
     'portfolios',
-    # 'schemas',
+    'schemas',
     'analytics',
     'fx',
 ]
