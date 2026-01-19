@@ -80,25 +80,11 @@ class Account(models.Model):
 
     # ---------- Save ----------
     def save(self, *args, **kwargs):
-        is_new = self._state.adding
-
         self.full_clean()
         super().save(*args, **kwargs)
 
-        if (
-            is_new
-            and self.classification
-            and getattr(self.classification, "definition", None)
-        ):
-            from accounts.services.account_service import AccountService
-
-            AccountService.initialize_account(
-                self,
-                self.classification.definition,
-                self.portfolio.profile,
-            )
-
     # ---------- Schema ----------
+
     @property
     def active_schema(self):
         from schemas.models.schema import Schema

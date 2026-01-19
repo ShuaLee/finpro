@@ -251,19 +251,21 @@ class AccountAdmin(admin.ModelAdmin):
             return
 
         try:
+            # 1️⃣ Save the Account itself
             super().save_model(request, obj, form, change)
 
-            AccountService.initialize_account(
-                account=obj,
-                definition=definition,
-                profile=obj.portfolio.profile,
-            )
+            # 2️⃣ Initialize ONLY on creation
+            if not change:
+                AccountService.initialize_account(
+                    account=obj,
+                    definition=definition,
+                )
 
-            self.message_user(
-                request,
-                f"Account '{obj.name}' linked to '{definition.name}'.",
-                level=messages.SUCCESS,
-            )
+                self.message_user(
+                    request,
+                    f"Account '{obj.name}' initialized with '{definition.name}'.",
+                    level=messages.SUCCESS,
+                )
 
         except Exception as exc:
             self.message_user(
