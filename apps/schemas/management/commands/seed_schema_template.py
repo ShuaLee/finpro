@@ -1,44 +1,256 @@
 from django.core.management.base import BaseCommand
+from accounts.models import AccountType
 from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
 
 
-TEMPLATES = [
-    {
-        "account_type_slug": "brokerage",
-        "name": "Equity Schema Template",
-        "description": "Default schema template for equity portfolios.",
-        "columns": [  # ... copy from EQUITY_TEMPLATE_CONFIG['columns']
-            # (paste them here as-is)
-        ],
-    },
-    {
-        "account_type_slug": "crypto_wallet",
-        "name": "Crypto Schema Template",
-        "description": "Default schema template for crypto portfolios.",
-        "columns": [  # ... copy from CRYPTO_TEMPLATE_CONFIG['columns']
-            # (paste them here as-is)
-        ],
-    },
-]
-
-
 class Command(BaseCommand):
-    help = "Seed schema templates (equity, crypto) and their default columns."
+    help = "Seed schema templates for equity and crypto"
 
     def handle(self, *args, **kwargs):
-        for template_cfg in TEMPLATES:
-            account_type = template_cfg["account_type_slug"]
+        templates = [
+            {
+                "account_type_slug": "brokerage",
+                "name": "Equity Schema Template",
+                "description": "Default schema template for equity portfolios.",
+                "columns": [
+                    {
+                        "title": "Symbol",
+                        "identifier": "symbol",
+                        "data_type": "string",
+                        "source": "asset",
+                        "source_field": "primary_identifier__value",
+                        "is_system": True,
+                        "is_editable": False,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 1,
+                        "constraints": {"max_length": 10},
+                    },
+                    {
+                        "title": "Name",
+                        "identifier": "name",
+                        "data_type": "string",
+                        "source": "asset",
+                        "source_field": "name",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 2,
+                        "constraints": {"max_length": 80},
+                    },
+                    {
+                        "title": "Currency",
+                        "identifier": "currency",
+                        "data_type": "string",
+                        "source": "asset",
+                        "source_field": "currency",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 3,
+                        "constraints": {"max_length": 50},
+                    },
+                    {
+                        "title": "Purchase Price",
+                        "identifier": "purchase_price",
+                        "data_type": "decimal",
+                        "source": "holding",
+                        "source_field": "purchase_price",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 4,
+                        "constraints": {"decimal_places": 2},
+                    },
+                    {
+                        "title": "Quantity",
+                        "identifier": "quantity",
+                        "data_type": "decimal",
+                        "source": "holding",
+                        "source_field": "quantity",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 5,
+                        "constraints": {"decimal_places": 6},
+                    },
+                    {
+                        "title": "Last Price",
+                        "identifier": "last_price",
+                        "data_type": "decimal",
+                        "source": "asset",
+                        "source_field": "market_data__last_price",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 6,
+                        "constraints": {"decimal_places": 2},
+                    },
+                    {
+                        "title": "Current Value - Asset FX",
+                        "identifier": "current_value_asset_fx",
+                        "data_type": "decimal",
+                        "source": "formula",
+                        "source_field": "current_value_asset_fx",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 7,
+                        "constraints": {"decimal_places": 2},
+                    },
+                    {
+                        "title": "Current Value - Profile FX",
+                        "identifier": "current_value_profile_fx",
+                        "data_type": "decimal",
+                        "source": "formula",
+                        "source_field": "current_value_profile_fx",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 8,
+                        "constraints": {"decimal_places": 2},
+                    },
+                ],
+            },
+            {
+                "account_type_slug": "crypto-wallet",
+                "name": "Crypto Schema Template",
+                "description": "Default schema template for crypto portfolios.",
+                "columns": [
+                    {
+                        "title": "Symbol",
+                        "identifier": "symbol",
+                        "data_type": "string",
+                        "source": "asset",
+                        "source_field": "crypto_detail__base_symbol",
+                        "is_system": True,
+                        "is_editable": False,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 1,
+                        "constraints": {"max_length": 20},
+                    },
+                    {
+                        "title": "Name",
+                        "identifier": "name",
+                        "data_type": "string",
+                        "source": "asset",
+                        "source_field": "name",
+                        "is_system": True,
+                        "is_editable": False,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 2,
+                        "constraints": {"max_length": 20},
+                    },
+                    {
+                        "title": "Currency",
+                        "identifier": "currency",
+                        "data_type": "string",
+                        "source": "asset",
+                        "source_field": "currency",
+                        "is_system": True,
+                        "is_editable": False,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 3,
+                        "constraints": {"max_length": 50},
+                    },
+                    {
+                        "title": "Purchase Price",
+                        "identifier": "purchase_price",
+                        "data_type": "decimal",
+                        "source": "holding",
+                        "source_field": "purchase_price",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 4,
+                        "constraints": {"decimal_places": 2},
+                    },
+                    {
+                        "title": "Quantity",
+                        "identifier": "quantity",
+                        "data_type": "decimal",
+                        "source": "holding",
+                        "source_field": "quantity",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 5,
+                        "constraints": {"decimal_places": 18},
+                    },
+                    {
+                        "title": "Last Price",
+                        "identifier": "last_price",
+                        "data_type": "decimal",
+                        "source": "asset",
+                        "source_field": "market_data__last_price",
+                        "is_system": True,
+                        "is_editable": False,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 6,
+                        "constraints": {"decimal_places": 2},
+                    },
+                    {
+                        "title": "Current Value - Asset FX",
+                        "identifier": "current_value_asset_fx",
+                        "data_type": "decimal",
+                        "source": "formula",
+                        "source_field": "current_value_asset_fx",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 7,
+                        "constraints": {"decimal_places": 2},
+                    },
+                    {
+                        "title": "Current Value - Profile FX",
+                        "identifier": "current_value_profile_fx",
+                        "data_type": "decimal",
+                        "source": "formula",
+                        "source_field": "current_value_profile_fx",
+                        "is_system": True,
+                        "is_editable": True,
+                        "is_deletable": False,
+                        "is_default": True,
+                        "display_order": 8,
+                        "constraints": {"decimal_places": 2},
+                    },
+                ],
+            }
+        ]
+
+        for config in templates:
+            slug = config["account_type_slug"]
+            try:
+                account_type = AccountType.objects.get(slug=slug)
+            except AccountType.DoesNotExist:
+                self.stderr.write(f"❌ AccountType not found: {slug}")
+                continue
+
             template, _ = SchemaTemplate.objects.update_or_create(
                 account_type=account_type,
                 defaults={
-                    "name": template_cfg["name"],
-                    "description": template_cfg["description"],
+                    "name": config["name"],
+                    "description": config["description"],
                     "is_active": True,
                 },
             )
 
-            for col in template_cfg["columns"]:
-                obj, created = SchemaTemplateColumn.objects.update_or_create(
+            for col in config["columns"]:
+                SchemaTemplateColumn.objects.update_or_create(
                     template=template,
                     identifier=col["identifier"],
                     defaults={
@@ -54,6 +266,5 @@ class Command(BaseCommand):
                         "constraints": col.get("constraints", {}),
                     },
                 )
-                self.stdout.write(f"{'Created' if created else 'Updated'}: {obj.title}")
 
-        self.stdout.write(self.style.SUCCESS("✅ Schema templates seeded."))
+            self.stdout.write(self.style.SUCCESS(f"✅ Seeded: {config['name']}"))

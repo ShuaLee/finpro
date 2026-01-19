@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from decimal import Decimal
 
 from schemas.models.constraints import MasterConstraint
 
@@ -9,72 +10,42 @@ CONSTRAINT_TEMPLATES = {
         {
             "name": "max_length",
             "label": "Max Length",
-            "default": "100",
-            "min": "1",
-            "max": "255",
-            "editable": False,
+            "default_string": "100",
         },
     ],
     "decimal": [
         {
             "name": "decimal_places",
             "label": "Decimal Places",
-            "default": "4",
-            "min": "0",
-            "max": "20",
-            "editable": True,
-        },
-        {
-            "name": "max_value",
-            "label": "Maximum Value",
-            "default": None,
-            "min": None,
-            "max": None,
-            "editable": False,
+            "default_integer": 4,
         },
         {
             "name": "min_value",
             "label": "Minimum Value",
-            "default": None,
-            "min": None,
-            "max": None,
-            "editable": False,
+        },
+        {
+            "name": "max_value",
+            "label": "Maximum Value",
         },
     ],
     "integer": [
         {
-            "name": "max_value",
-            "label": "Maximum Value",
-            "default": None,
-            "min": None,
-            "max": None,
-            "editable": False,
-        },
-        {
             "name": "min_value",
             "label": "Minimum Value",
-            "default": None,
-            "min": None,
-            "max": None,
-            "editable": False,
+        },
+        {
+            "name": "max_value",
+            "label": "Maximum Value",
         },
     ],
     "date": [
         {
             "name": "min_date",
             "label": "Earliest Date",
-            "default": None,
-            "min": None,
-            "max": None,
-            "editable": False,
         },
         {
             "name": "max_date",
             "label": "Latest Date",
-            "default": None,
-            "min": None,
-            "max": None,
-            "editable": False,
         },
     ],
     "boolean": [],
@@ -82,45 +53,55 @@ CONSTRAINT_TEMPLATES = {
         {
             "name": "max_length",
             "label": "Max Length",
-            "default": "200",
-            "min": "1",
-            "max": "500",
-            "editable": False,
+            "default_string": "200",
         },
     ],
 }
 
 
 class Command(BaseCommand):
-    help = "Seed MasterConstraint definitions used by SchemaColumns"
+    help = "Seed MasterConstraint definitions using valid typed fields only"
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write("🌱 Seeding MasterConstraints...")
+        self.stdout.write("🌱 Seeding MasterConstraints (typed)…")
 
         created = 0
-        skipped = 0
+        updated = 0
 
         for applies_to, rules in CONSTRAINT_TEMPLATES.items():
             for rule in rules:
-                obj, was_created = MasterConstraint.objects.get_or_create(
+                defaults = {
+                    "label": rule["label"],
+                }
+
+                # Write typed default fields only
+                if "default_string" in rule:
+                    defaults["default_string"] = rule["default_string"]
+
+                if "default_integer" in rule:
+                    defaults["default_integer"] = rule["default_integer"]
+
+                if "default_decimal" in rule:
+                    defaults["default_decimal"] = Decimal(str(rule["default_decimal"]))
+
+                # 🚫 DO NOT include min_integer / max_integer
+
+                obj, was_created = MasterConstraint.objects.update_or_create(
                     applies_to=applies_to,
                     name=rule["name"],
-                    defaults={
-                        "label": rule["label"],
-                        "default_value": rule.get("default"),
-                        "min_limit": rule.get("min"),
-                        "max_limit": rule.get("max"),
-                        "is_editable": rule.get("editable", True),
-                        "is_active": True,
-                    },
+                    defaults=defaults,
                 )
+
                 if was_created:
                     created += 1
                     self.stdout.write(f"  ✅ Created [{applies_to}] {obj.name}")
                 else:
-                    skipped += 1
+                    updated += 1
+                    self.stdout.write(f"  🔁 Updated [{applies_to}] {obj.name}")
 
-        self.stdout.write(self.style.SUCCESS(
-            f"✅ Done. Created: {created}, Skipped: {skipped}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"✅ MasterConstraints complete (created={created}, updated={updated})"
+            )
+        )

@@ -34,7 +34,7 @@ class Command(BaseCommand):
             expr = data["expression"]
             deps = FormulaDependencyResolver(Formula(expression=expr)).extract_identifiers()
 
-            obj, exists = Formula.objects.get_or_create(
+            obj, was_created = Formula.objects.update_or_create(
                 identifier=identifier,
                 defaults={
                     "title": data["title"],
@@ -45,35 +45,9 @@ class Command(BaseCommand):
                 }
             )
 
-            changed = False
-
-            if not exists:
+            if was_created:
                 created += 1
-                continue
-
-            if obj.expression != expr:
-                obj.expression = expr
-                changed = True
-
-            if obj.title != data["title"]:
-                obj.title = data["title"]
-                changed = True
-
-            if obj.decimal_places != data.get("decimal_places"):
-                obj.decimal_places = data.get("decimal_places")
-                changed = True
-
-            new_deps = list(map(str, deps))
-            if obj.dependencies != new_deps:
-                obj.dependencies = new_deps
-                changed = True
-
-            if obj.is_system is not True:
-                obj.is_system = True
-                changed = True
-
-            if changed:
-                obj.save()
+            else:
                 updated += 1
 
         self.stdout.write(self.style.SUCCESS(
