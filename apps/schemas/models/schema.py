@@ -144,12 +144,10 @@ class SchemaColumn(models.Model):
 
         if not is_new:
             old = SchemaColumn.objects.get(pk=self.pk)
-            immutable_fields = (
-                "data_type",
-                "source",
-                "source_field",
-                "formula",
-            )
+            immutable_fields = ["data_type", "source"]
+
+            if old.source != "formula":
+                immutable_fields.append("formula")
 
             for field in immutable_fields:
                 if getattr(old, field) != getattr(self, field):

@@ -227,14 +227,16 @@ class SchemaColumnValueManager:
             if asset and getattr(asset, "crypto_detail", None):
                 return asset.crypto_detail.quantity_precision
 
-        # Regular constraint fallback
+        # Use typed value from constraint (or fallback)
         c = column.constraints_set.filter(name="decimal_places").first()
-        return int(c.value or c.default_value or 2) if c else 2
+        return c.get_typed_value() if c and c.get_typed_value() is not None else 2
+
 
     @staticmethod
     def _max_length_for_column(column):
         c = column.constraints_set.filter(name="max_length").first()
-        return int(c.value or c.default_value or 255) if c else None
+        return c.get_typed_value() if c and c.get_typed_value() is not None else 255
+
 
     # ============================================================
     # EDITING VALUES

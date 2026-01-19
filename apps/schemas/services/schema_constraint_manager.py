@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 
 from schemas.models.constraints import MasterConstraint, SchemaConstraint
 from schemas.models.schema import SchemaColumnValue
-from schemas.config.constraints_template import CONSTRAINT_TEMPLATES
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
 import logging
@@ -12,178 +11,129 @@ logger = logging.getLogger(__name__)
 
 class SchemaConstraintManager:
     """
-    Creates SchemaConstraint rows for a SchemaColumn based on:
-
-        1. MasterConstraint templates
-        2. Template-level overrides (SchemaTemplateColumn.constraints)
-        3. Per-asset intelligence (CryptoDetail.precision)
+    Creates SchemaConstraint rows for a SchemaColumn based on MasterConstraint rows.
     """
 
-    # ==========================================================================
-    # MAIN ENTRY POINT
-    # ==========================================================================
+    # ======================================================================
+    # MAIN ENTRY
+    # ======================================================================
     @classmethod
     def create_from_master(cls, column, overrides=None):
-        """
-        Create SchemaConstraint objects for a SchemaColumn.
-
-        Precedence:
-            1. Template overrides (from column template)
-            2. Per-asset auto overrides (CryptoDetail.precision)
-            3. MasterConstraint.default_value
-        """
         overrides = overrides or {}
 
-        # Add auto-detected overrides (clean, deterministic)
-        autodetected = SchemaConstraintManager._auto_detect_overrides(column)
-
-        # Template overrides override auto-detected ones
+        autodetected = cls._auto_detect_overrides(column)
         merged_overrides = {**autodetected, **overrides}
 
         masters = MasterConstraint.objects.filter(
             applies_to=column.data_type,
-            is_active=True
-        )
-
-        print(
-            f"Creating constraints for column '{column.title}' "
-            f"(type={column.data_type}) with overrides={merged_overrides}"
         )
 
         for master in masters:
+            raw_value = merged_overrides.get(
+                master.name, cls._get_master_default(master)
+            )
 
-            if master.name in merged_overrides:
-                raw_val = merged_overrides[master.name]
-                value = SchemaConstraintManager._validate_override(
-                    master, raw_val)
+            typed_value = cls._cast_and_validate(master, raw_value)
+
+            defaults = {
+                "label": master.label,
+                "applies_to": master.applies_to,
+                "is_editable": master.is_editable,
+            }
+
+            if master.applies_to == "integer":
+                defaults["value_integer"] = typed_value
+                defaults["min_integer"] = master.min_integer
+                defaults["max_integer"] = master.max_integer
+
+            elif master.applies_to == "decimal":
+                defaults["value_decimal"] = typed_value
+                defaults["min_decimal"] = master.min_decimal
+                defaults["max_decimal"] = master.max_decimal
+
             else:
-                value = master.default_value
-
-            # Always saved as string (SchemaConstraint model uses CharField)
-            value = str(value) if value is not None else None
+                defaults["value_string"] = typed_value
 
             SchemaConstraint.objects.get_or_create(
                 column=column,
                 name=master.name,
-                defaults={
-                    "label": master.label,
-                    "applies_to": master.applies_to,
-                    "value": value,
-                    "min_limit": master.min_limit,
-                    "max_limit": master.max_limit,
-                    "is_editable": master.is_editable,
-                },
+                defaults=defaults,
             )
+
         cls._refresh_scv_if_needed(column)
 
-
-    # ==========================================================================
-    # VALIDATE OVERRIDE VALUE
-    # ==========================================================================
+    # ======================================================================
+    # TYPED FIELD HELPERS
+    # ======================================================================
     @staticmethod
-    def _validate_override(master, override_value):
-        """Convert override_value to correct type and validate via constraint metadata."""
+    def _get_master_default(master):
+        if master.applies_to == "integer":
+            return master.default_integer
+        if master.applies_to == "decimal":
+            return master.default_decimal
+        return master.default_string
 
-        if override_value is None:
+    @staticmethod
+    def _cast_and_validate(master, raw_value):
+        if raw_value in [None, "", "None"]:
             return None
 
-        rule_def = None
-        for r in CONSTRAINT_TEMPLATES.get(master.applies_to, []):
-            if r["name"] == master.name:
-                rule_def = r
-                break
-
-        # No rules → string fallback
-        if not rule_def:
-            return override_value
-
-        value_type = rule_def["type"]
-
-        # ----- INTEGER -----
-        if value_type == "integer":
-            try:
-                return int(override_value)
-            except Exception:
-                raise ValidationError(
-                    f"Constraint '{master.name}' must be an integer; got '{override_value}'."
+        try:
+            if master.applies_to == "integer":
+                value = int(raw_value)
+                SchemaConstraintManager._check_min_max(
+                    value, master.min_integer, master.max_integer
                 )
+                return value
 
-        # ----- DECIMAL -----
-        if value_type == "decimal":
-            try:
-                dec = Decimal(str(override_value))
-            except Exception:
-                raise ValidationError(
-                    f"Constraint '{master.name}' must be a decimal; got '{override_value}'."
+            elif master.applies_to == "decimal":
+                value = Decimal(str(raw_value))
+                SchemaConstraintManager._check_min_max(
+                    value, master.min_decimal, master.max_decimal
                 )
+                return value
 
-            # Validate within master limits
-            if master.min_limit not in [None, "", "None"]:
-                if dec < Decimal(master.min_limit):
-                    raise ValidationError(
-                        f"{master.label} cannot be below {master.min_limit}"
-                    )
+            else:
+                return raw_value
 
-            if master.max_limit not in [None, "", "None"]:
-                if dec > Decimal(master.max_limit):
-                    raise ValidationError(
-                        f"{master.label} cannot exceed {master.max_limit}"
-                    )
+        except Exception:
+            raise ValidationError(
+                f"Constraint '{master.name}' must be {master.applies_to}, "
+                f"got '{raw_value}'."
+            )
 
-            return dec
+    @staticmethod
+    def _check_min_max(value, min_val, max_val):
+        if min_val is not None and value < min_val:
+            raise ValidationError(f"Value {value} is below minimum {min_val}")
+        if max_val is not None and value > max_val:
+            raise ValidationError(f"Value {value} exceeds maximum {max_val}")
 
-        # ----- STRING / BOOL / URL / DATE -----
-        return override_value
-
-    # ==========================================================================
-    # AUTO-DETECTION: Per-Asset Precision (CryptoDetail)
-    # ==========================================================================
+    # ======================================================================
+    # AUTO-DETECTION (CRYPTO PRECISION ONLY)
+    # ======================================================================
     @staticmethod
     def _auto_detect_overrides(column):
         """
-        Currently only auto-detects crypto decimal precision from CryptoDetail.
-        No inference from market_data. No guessing from holdings.
-        Clean and deterministic.
+        Currently only auto-detects crypto decimal precision.
+        Explicit overrides always win.
         """
         overrides = {}
 
-        # Only decimals can have precision
         if column.data_type != "decimal":
             return overrides
 
-        schema = column.schema
-        account = getattr(schema, "account", None)
-
-        if not account:
-            return overrides
-
-        # Only crypto wallets get per-asset precision
-        if account.account_type != "crypto_wallet":
-            return overrides
-
-        # Try to get any asset in this wallet → but more accurately:
-        # precision should come from the template (SchemaGenerator)
-        # NOT here. So we DO NOT guess from holdings here.
-        # This manager only applies when explicitly called during creation.
-
-        # If the schema is generated for a specific asset, we pass asset along
         asset = getattr(column, "_asset_context", None)
-
         if asset and getattr(asset, "crypto_detail", None):
-            precision = asset.crypto_detail.precision
-            overrides["decimal_places"] = precision
+            overrides["decimal_places"] = asset.crypto_detail.precision
 
         return overrides
 
-    # ==========================================================================
-    # BUSINESS RULE VALIDATION (min/max ONLY)
-    # ==========================================================================
+    # ======================================================================
+    # BUSINESS RULE VALIDATION (FOR FORMS ONLY)
+    # ======================================================================
     @staticmethod
     def validate_business_rules_only(account, holding, cleaned_data):
-        """
-        Used by HoldingForm to apply min_value/max_value validation.
-        (No rounding. No decimal_places enforcement.)
-        """
         schema = account.active_schema
         if not schema:
             return cleaned_data
@@ -195,58 +145,37 @@ class SchemaConstraintManager:
             if value is None:
                 continue
 
-            for c in col.constraints_set.all():
-
-                if c.value in [None, "", "-", "None"]:
+            for constraint in col.constraints_set.all():
+                typed = constraint.get_typed_value()
+                if typed is None:
                     continue
 
-                # ---- MIN VALUE ----
-                if c.name == "min_value":
-                    min_val = Decimal(str(c.value))
-                    if Decimal(str(value)) < min_val:
-                        raise ValidationError(
-                            {field: f"{col.title}: value {value} is below minimum {min_val}"}
+                if constraint.name == "min_value" and Decimal(value) < Decimal(typed):
+                    raise ValidationError({
+                        field: (
+                            f"{col.title}: value {value} "
+                            f"is below minimum {typed}"
                         )
+                    })
 
-                # ---- MAX VALUE ----
-                if c.name == "max_value":
-                    max_val = Decimal(str(c.value))
-                    if Decimal(str(value)) > max_val:
-                        raise ValidationError(
-                            {field: f"{col.title}: value {value} exceeds maximum {max_val}"}
+                if constraint.name == "max_value" and Decimal(value) > Decimal(typed):
+                    raise ValidationError({
+                        field: (
+                            f"{col.title}: value {value} "
+                            f"exceeds maximum {typed}"
                         )
+                    })
 
         return cleaned_data
-    
-    def trigger_scv_refresh_for_column(column):
+
+    # ======================================================================
+    # SCV REFRESH
+    # ======================================================================
+    @classmethod
+    def _refresh_scv_if_needed(cls, column):
         scvs = SchemaColumnValue.objects.filter(column=column)
 
         for scv in scvs:
             mgr = SchemaColumnValueManager(scv)
-
-            # HOLDING-SOURCED → always refresh
-            if column.source == "holding":
-                mgr.scv.is_edited = False
-                mgr.refresh_display_value()
-                mgr.scv.save(update_fields=["value", "is_edited"])
-                continue
-
-            # FORMULA COLUMNS → always refresh
-            if column.source == "formula":
-                mgr.scv.is_edited = False
-                mgr.refresh_display_value()
-                mgr.scv.save(update_fields=["value", "is_edited"])
-                continue
-
-            # ASSET/CUSTOM → refresh only if not edited
-            if not scv.is_edited:
-                mgr.refresh_display_value()
-                mgr.scv.save(update_fields=["value", "is_edited"])
-
-    @classmethod
-    def _refresh_scv_if_needed(cls, column):
-
-        scvs = SchemaColumnValue.objects.filter(column=column)
-        for scv in scvs:
-            SchemaColumnValueManager(scv).refresh_display_value()
+            mgr.refresh_display_value()
             scv.save(update_fields=["value", "is_edited"])

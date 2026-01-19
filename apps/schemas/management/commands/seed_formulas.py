@@ -1,75 +1,81 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from schemas.config.formulas.formula_template import FORMULA_TEMPLATE
 from schemas.models.formula import Formula
 from schemas.services.formulas.resolver import FormulaDependencyResolver
 
 
+FORMULAS = [
+    {
+        "identifier": "current_value_asset_fx",
+        "title": "Current Value – Asset FX",
+        "expression": "quantity * last_price",
+        "decimal_places": 2,
+    },
+    {
+        "identifier": "current_value_profile_fx",
+        "title": "Current Value – Profile FX",
+        "expression": "quantity * last_price",
+        "decimal_places": 2,
+    },
+]
+
+
 class Command(BaseCommand):
-    help = "Loads or updates built-in system formulas from FORMULA_TEMPLATE."
+    help = "Seed built-in system formulas (no config files used)."
 
     @transaction.atomic
     def handle(self, *args, **options):
         created = 0
         updated = 0
 
-        for key, data in FORMULA_TEMPLATE.items():
+        for data in FORMULAS:
             identifier = data["identifier"]
-
-            # Auto-extract dependencies from expression
             expr = data["expression"]
-            temp_formula = Formula(expression=expr)
-            raw_deps = FormulaDependencyResolver(
-                temp_formula).extract_identifiers()
-            deps = list(map(str, raw_deps))
+            deps = FormulaDependencyResolver(Formula(expression=expr)).extract_identifiers()
 
-            formula, exists = Formula.objects.get_or_create(
+            obj, exists = Formula.objects.get_or_create(
                 identifier=identifier,
                 defaults={
-                    "title": data.get("title", identifier.replace("_", " ").title()),
+                    "title": data["title"],
                     "expression": expr,
-                    "dependencies": deps,
+                    "dependencies": list(map(str, deps)),
                     "decimal_places": data.get("decimal_places"),
                     "is_system": True,
                 }
             )
 
-            # Update fields
-            new_title = data.get("title", formula.title)
-            new_expr = data.get("expression", formula.expression)
-            new_dp = data.get("decimal_places", formula.decimal_places)
-
             changed = False
 
-            if formula.title != new_title:
-                formula.title = new_title
-                changed = True
-
-            if formula.expression != new_expr:
-                formula.expression = new_expr
-                changed = True
-
-            if formula.decimal_places != new_dp:
-                formula.decimal_places = new_dp
-                changed = True
-
-            # ALWAYS update dependencies automatically
-            if formula.dependencies != deps:
-                formula.dependencies = deps
-                changed = True
-
-            # System formulas must always be system
-            if formula.is_system is not True:
-                formula.is_system = True
-                changed = True
-
-            if changed and exists:
-                formula.save()
-                updated += 1
-            elif not exists:
+            if not exists:
                 created += 1
+                continue
+
+            if obj.expression != expr:
+                obj.expression = expr
+                changed = True
+
+            if obj.title != data["title"]:
+                obj.title = data["title"]
+                changed = True
+
+            if obj.decimal_places != data.get("decimal_places"):
+                obj.decimal_places = data.get("decimal_places")
+                changed = True
+
+            new_deps = list(map(str, deps))
+            if obj.dependencies != new_deps:
+                obj.dependencies = new_deps
+                changed = True
+
+            if obj.is_system is not True:
+                obj.is_system = True
+                changed = True
+
+            if changed:
+                obj.save()
+                updated += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f"System formulas loaded: {created} created, {updated} updated."
+            f"✅ Formulas seeded: {created} created, {updated} updated"
         ))

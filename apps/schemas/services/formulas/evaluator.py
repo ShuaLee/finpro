@@ -139,11 +139,31 @@ class FormulaEvaluator:
 
         # --- numeric constants ---
         if isinstance(node, ast.Constant):
-            return Decimal(str(node.value))
+            value = node.value
+
+            # Allow only numeric literals
+            if isinstance(value, (int, float, Decimal)):
+                try:
+                    return Decimal(str(value))
+                except (InvalidOperation, ValueError):
+                    raise ValueError(
+                        f"Invalid numeric constant '{value}' "
+                        f"in formula '{self.formula.identifier}'"
+                    )
+
+            raise ValueError(
+                f"Unsupported constant '{value}' "
+                f"(type {type(value).__name__}) "
+                f"in formula '{self.formula.identifier}'"
+            )
+
 
         # --- variable reference ---
         if isinstance(node, ast.Name):
-            return self.context.get(node.id, Decimal("0"))
+            if node.id not in self.context:
+                raise ValueError(f"Missing SCV context for '{node.id}' in formula '{self.formula.identifier}'")
+            return self.context[node.id]
+
 
         # --- Anything else is disallowed ---
         raise ValueError(f"Unsupported expression element: {ast.dump(node)}")

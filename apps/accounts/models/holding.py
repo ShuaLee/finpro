@@ -48,6 +48,11 @@ class Holding(models.Model):
     def clean(self):
         super().clean()
 
+        if not self.account.active_schema:
+            raise ValidationError(
+                "Account schema must exist before holdings can be created."
+            )
+
         # ---- Quantity rules ----
         if self.quantity < 0:
             raise ValidationError(

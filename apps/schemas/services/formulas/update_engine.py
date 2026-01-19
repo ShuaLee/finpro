@@ -1,6 +1,7 @@
 from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.formulas.precision import FormulaPrecisionResolver
 
+from decimal import Decimal
 
 class FormulaUpdateEngine:
     """
@@ -66,11 +67,14 @@ class FormulaUpdateEngine:
             target_column=column,
         )
 
-        result = FormulaEvaluator(
-            formula=column.formula,
-            context=context,
-            precision=precision,
-        ).evaluate()
+        try:
+            result = FormulaEvaluator(
+                formula=column.formula,
+                context=context,
+                precision=precision,
+            ).evaluate()
+        except Exception as e:
+            result = Decimal("0")
 
         scv = SchemaColumnValue.objects.get(
             column=column,
