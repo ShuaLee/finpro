@@ -69,8 +69,13 @@ class SchemaColumn(models.Model):
         ],
     )
 
-    # field name OR formula identifier
-    source_field = models.CharField(max_length=100, null=True, blank=True)
+    # Field name OR unused (depending on source)
+    source_field = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Required for asset/holding sources."
+    )
 
     # Formula FK (nullable)
     formula = models.ForeignKey(
@@ -94,17 +99,59 @@ class SchemaColumn(models.Model):
     def __str__(self):
         return f"{self.title} ({self.schema.account_type.slug})"
 
+    # -------------------------------------------------
+    # Validation
+    # -------------------------------------------------
     def clean(self):
         super().clean()
 
+        # ---- Source consistency rules ----
+
+        if self.source == "formula":
+            if not self.formula:
+                raise ValidationError(
+                    "Columns with source='formula' must define a formula."
+                )
+            if self.source_field:
+                raise ValidationError(
+                    "source_field must be empty when source='formula'."
+                )
+
+        elif self.source in ("asset", "holding"):
+            if not self.source_field:
+                raise ValidationError(
+                    f"Columns with source='{self.source}' require source_field."
+                )
+            if self.formula:
+                raise ValidationError(
+                    "formula must be empty unless source='formula'."
+                )
+
+        elif self.source == "custom":
+            if self.source_field or self.formula:
+                raise ValidationError(
+                    "Custom columns cannot define source_field or formula."
+                )
+
+        else:
+            raise ValidationError(f"Invalid source '{self.source}'.")
+
+    # -------------------------------------------------
+    # Save / immutability
+    # -------------------------------------------------
     def save(self, *args, **kwargs):
         is_new = self._state.adding
 
         if not is_new:
             old = SchemaColumn.objects.get(pk=self.pk)
-            immutable = ["data_type", "source", "source_field", "formula"]
+            immutable_fields = (
+                "data_type",
+                "source",
+                "source_field",
+                "formula",
+            )
 
-            for field in immutable:
+            for field in immutable_fields:
                 if getattr(old, field) != getattr(self, field):
                     raise ValidationError(
                         f"Field '{field}' cannot be changed after creation."
@@ -113,10 +160,13 @@ class SchemaColumn(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    # -------------------------------------------------
+    # Delete behavior
+    # -------------------------------------------------
     def delete(self, *args, **kwargs):
         if not self.is_deletable:
             raise ValidationError(
-                f"Column '{self.title}' cannot be deleted — it's system-protected."
+                f"Column '{self.title}' cannot be deleted — it is system-protected."
             )
 
         schema = self.schema
@@ -124,7 +174,9 @@ class SchemaColumn(models.Model):
 
         super().delete(*args, **kwargs)
 
-        schema.columns.filter(display_order__gt=removed_order).update(
+        schema.columns.filter(
+            display_order__gt=removed_order
+        ).update(
             display_order=models.F("display_order") - 1
         )
 
@@ -134,6 +186,16 @@ class SchemaColumnValue(models.Model):
     Stores the actual value for a given column + holding.
     Example: Quantity = 10, Price = 100.
     """
+
+    SOURCE_SYSTEM = "system"
+    SOURCE_FORMULA = "formula"
+    SOURCE_USER = "user"
+
+    SOURCE_CHOICES = (
+        (SOURCE_SYSTEM, "System"),
+        (SOURCE_FORMULA, "Formula"),
+        (SOURCE_USER, "User Override"),
+    )
 
     column = models.ForeignKey(
         SchemaColumn,
@@ -147,10 +209,18 @@ class SchemaColumnValue(models.Model):
     )
 
     value = models.TextField(blank=True, null=True)
-    is_edited = models.BooleanField(default=False)
+
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        default=SOURCE_SYSTEM,
+        db_index=True,
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ("column", "holding")
 
     def __str__(self):
-        return f"{self.column.title} = {self.value} ({self.holding})"
+        return f"{self.column.identifier} = {self.value} ({self.source})"

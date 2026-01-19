@@ -29,16 +29,19 @@ class MasterConstraint(models.Model):
         db_index=True,
     )
 
-    # Default configuration values
-    default_value = models.CharField(max_length=100, blank=True, null=True)
-    min_limit = models.CharField(max_length=100, blank=True, null=True)
-    max_limit = models.CharField(max_length=100, blank=True, null=True)
+    # Default values (typed)
+    default_string = models.CharField(max_length=255, blank=True, null=True)
+    default_decimal = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
+    default_integer = models.IntegerField(null=True, blank=True)
 
-    # Whether this can be edited by users
-    is_editable = models.BooleanField(default=True)
-
-    # Active flag — allows soft-disable of deprecated templates
-    is_active = models.BooleanField(default=True)
+    min_decimal = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
+    max_decimal = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
 
     class Meta:
         ordering = ["applies_to", "label"]
@@ -66,13 +69,6 @@ class SchemaConstraint(models.Model):
     # Human-friendly name (e.g., "Max Length", "Decimal Places")
     label = models.CharField(max_length=100)
 
-    # Constraint value (e.g., 255, 4, or None)
-    value = models.CharField(max_length=100, null=True, blank=True)
-
-    # Optional range limits for numeric/date constraints
-    min_limit = models.CharField(max_length=100, null=True, blank=True)
-    max_limit = models.CharField(max_length=100, null=True, blank=True)
-
     # Data type that this constraint applies to
     applies_to = models.CharField(
         max_length=20,
@@ -84,11 +80,27 @@ class SchemaConstraint(models.Model):
             ("boolean", "Boolean"),
             ("url", "URL"),
         ],
-        blank=True,
-        null=True,
     )
 
-    # Whether this constraint can be adjusted by users
+    # ------------------
+    # Typed values
+    # ------------------
+    value_string = models.CharField(max_length=255, null=True, blank=True)
+    value_decimal = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
+    value_integer = models.IntegerField(null=True, blank=True)
+
+    min_decimal = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
+    max_decimal = models.DecimalField(
+        max_digits=20, decimal_places=8, null=True, blank=True
+    )
+
+    min_integer = models.IntegerField(null=True, blank=True)
+    max_integer = models.IntegerField(null=True, blank=True)
+
     is_editable = models.BooleanField(default=True)
 
     class Meta:
@@ -97,13 +109,15 @@ class SchemaConstraint(models.Model):
     def __str__(self):
         return f"{self.column.identifier}.{self.label} = {self.value}"
 
-    # -----------------------------------------
-    # Validation Logic
-    # -----------------------------------------
+    # -------------------------------------------------
+    # Validation
+    # -------------------------------------------------
     def clean(self):
-        # Enforce unique constraint per column
+        super().clean()
+
+        # Enforce uniqueness manually (safety)
         if (
-            SchemaConstraint.objects.exclude(id=self.id)
+            SchemaConstraint.objects.exclude(pk=self.pk)
             .filter(column=self.column, name=self.name)
             .exists()
         ):
@@ -111,38 +125,54 @@ class SchemaConstraint(models.Model):
                 f"Constraint '{self.name}' already exists for this column."
             )
 
-        # If value is blank, skip validation
-        if self.value in [None, "", "None"]:
-            return super().clean()
+        # Enforce exactly ONE value field
+        values = [
+            self.value_string,
+            self.value_decimal,
+            self.value_integer,
+        ]
+        if sum(v is not None for v in values) > 1:
+            raise ValidationError(
+                "Only one constraint value field may be set."
+            )
 
-        # Validate numeric constraints
-        try:
-            numeric_value = Decimal(self.value)
-        except Exception:
-            # Only check numeric validity for numeric constraints
-            if self.applies_to in ("integer", "decimal"):
+        # Type-specific validation
+        if self.applies_to == "integer":
+            if self.value_integer is None:
                 raise ValidationError(
-                    f"{self.label} must be a numeric value, got '{self.value}'."
-                )
-            return super().clean()
+                    "Integer constraint requires value_integer.")
+            if (
+                self.min_integer is not None
+                and self.value_integer < self.min_integer
+            ):
+                raise ValidationError("Value below minimum.")
+            if (
+                self.max_integer is not None
+                and self.value_integer > self.max_integer
+            ):
+                raise ValidationError("Value above maximum.")
 
-        # Enforce min/max range if applicable
-        if self.min_limit not in [None, "", "None"]:
-            if numeric_value < Decimal(self.min_limit):
+        if self.applies_to == "decimal":
+            if self.value_decimal is None:
                 raise ValidationError(
-                    f"{self.label} cannot be below {self.min_limit}."
-                )
-        if self.max_limit not in [None, "", "None"]:
-            if numeric_value > Decimal(self.max_limit):
-                raise ValidationError(
-                    f"{self.label} cannot exceed {self.max_limit}."
-                )
-
-        super().clean()
+                    "Decimal constraint requires value_decimal.")
+            if (
+                self.min_decimal is not None
+                and self.value_decimal < self.min_decimal
+            ):
+                raise ValidationError("Value below minimum.")
+            if (
+                self.max_decimal is not None
+                and self.value_decimal > self.max_decimal
+            ):
+                raise ValidationError("Value above maximum.")
 
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
 
-        # After any constraint edit → refresh SCVs for this column
-        from schemas.services.schema_constraint_manager import SchemaConstraintManager
+        from schemas.services.schema_constraint_manager import (
+            SchemaConstraintManager
+        )
+
         SchemaConstraintManager._refresh_scv_if_needed(self.column)

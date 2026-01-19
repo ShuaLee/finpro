@@ -2,6 +2,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
+from typing import Set
+
 import re
 
 
@@ -11,6 +13,9 @@ def to_snake_case(value: str) -> str:
     """
     value = slugify(value)
     return re.sub(r'[-\s]+', '_', value)
+
+
+IDENTIFIER_REGEX = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")
 
 
 class Formula(models.Model):
@@ -70,25 +75,50 @@ class Formula(models.Model):
             raise ValidationError("Formula must define an expression.")
 
         if not isinstance(self.dependencies, list):
-            raise ValidationError(
-                "Formula dependencies must be a list of strings.")
+            raise ValidationError("Dependencies must be a list.")
+
+        # ---- Normalize + validate dependencies ----
+        deps: Set[str] = set()
 
         for dep in self.dependencies:
             if not isinstance(dep, str):
                 raise ValidationError(f"Invalid dependency entry: {dep}")
+            deps.add(dep)
+
+        if len(deps) != len(self.dependencies):
+            raise ValidationError("Duplicate dependencies are not allowed.")
+
+        # ---- Prevent self-reference ----
+        if self.identifier in deps:
+            raise ValidationError(
+                "Formula cannot depend on itself."
+            )
+
+        # ---- Validate expression references ----
+        referenced = set(IDENTIFIER_REGEX.findall(self.expression))
+
+        # Remove numeric literals
+        referenced = {
+            token for token in referenced
+            if not token.isdigit()
+        }
+
+        unknown = referenced - deps
+        if unknown:
+            raise ValidationError(
+                f"Expression references undeclared dependencies: {sorted(unknown)}"
+            )
 
     # ======================================================
     # Save
     # ======================================================
-
     def save(self, *args, **kwargs):
-        # Normalize key
         self.identifier = to_snake_case(self.identifier or self.title)
         self.full_clean()
         super().save(*args, **kwargs)
 
     # ======================================================
-    # String Representation
+    # String representation
     # ======================================================
     def __str__(self):
         return f"Formula({self.identifier})"
