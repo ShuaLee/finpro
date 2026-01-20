@@ -5,12 +5,14 @@ import ast
 from django.core.exceptions import ValidationError
 
 from schemas.models.formula import Formula
+from schemas.models.schema import SchemaColumnValue
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
 
 class FormulaDependencyResolver:
     """
     READ-ONLY resolver.
+    Builds a numeric evaluation context for formulas.
     """
 
     def __init__(self, formula: Formula):
@@ -43,32 +45,42 @@ class FormulaDependencyResolver:
             )
 
     # ================================================================
-    # CONTEXT BUILDING (SCV-FIRST)
+    # CONTEXT BUILDING (SCV-FIRST, READ-ONLY)
     # ================================================================
     def build_context(self, holding, schema) -> Dict[str, Decimal]:
+        """
+        Build evaluation context:
+        - SOURCE_USER → use stored SCV value
+        - otherwise   → recompute display value
+        """
         self.validate_schema_columns_exist(schema)
 
         ctx: Dict[str, Decimal] = {}
 
         for ident in self.extract_identifiers():
             column = schema.columns.get(identifier=ident)
-            scv_mgr = SchemaColumnValueManager.get_or_create(holding, column)
-            scv = scv_mgr.scv
 
-            if scv.is_edited:
+            scv = SchemaColumnValue.objects.filter(
+                column=column,
+                holding=holding,
+            ).first()
+
+            if not scv:
+                raise ValidationError(
+                    f"Missing SchemaColumnValue for '{ident}' "
+                    f"(holding={holding.id})"
+                )
+
+            # ---------------- USER OVERRIDE ----------------
+            if scv.source == SchemaColumnValue.SOURCE_USER:
                 ctx[ident] = Decimal(str(scv.value))
                 continue
 
-            if column.formula:
-                from schemas.services.formulas.evaluator import FormulaEvaluator
-                raw = FormulaEvaluator.evaluate_for_holding(
-                    column.formula, holding, schema, raw=True
-                )
-                ctx[ident] = Decimal(str(raw))
-                continue
+            # ---------------- SYSTEM / FORMULA ----------------
+            mgr = SchemaColumnValueManager(scv)
+            value = mgr.display_for_column(column, holding)
 
-            display = scv_mgr.display_for_column(column, holding)
-            ctx[ident] = Decimal(str(display))
+            ctx[ident] = Decimal(str(value))
 
         return ctx
 

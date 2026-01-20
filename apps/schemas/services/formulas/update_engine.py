@@ -1,7 +1,8 @@
+from decimal import Decimal
+
 from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.formulas.precision import FormulaPrecisionResolver
 
-from decimal import Decimal
 
 class FormulaUpdateEngine:
     """
@@ -73,13 +74,14 @@ class FormulaUpdateEngine:
                 context=context,
                 precision=precision,
             ).evaluate()
-        except Exception as e:
+        except Exception:
             result = Decimal("0")
 
         scv = SchemaColumnValue.objects.get(
             column=column,
             holding=self.holding,
         )
+
         scv.value = str(result)
-        scv.is_edited = False
-        scv.save(update_fields=["value", "is_edited"])
+        scv.source = SchemaColumnValue.SOURCE_FORMULA
+        scv.save(update_fields=["value", "source"])

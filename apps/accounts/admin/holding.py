@@ -3,6 +3,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from accounts.models.holding import Holding
+from accounts.services.holding_service import HoldingService
 
 
 # =================================================
@@ -126,3 +127,23 @@ class HoldingAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return True
+
+    def save_model(self, request, obj, form, change):
+        """
+        Create or update Holding using HoldingService to ensure SCVs stay in sync.
+        """
+        if not change:
+            # Creating new holding
+            HoldingService.create(
+                account=obj.account,
+                asset=obj.asset,
+                quantity=obj.quantity,
+                average_purchase_price=obj.average_purchase_price,
+            )
+        else:
+            # Updating existing holding
+            HoldingService.update(
+                holding=obj,
+                quantity=obj.quantity,
+                average_purchase_price=obj.average_purchase_price,
+            )

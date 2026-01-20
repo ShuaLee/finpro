@@ -1,107 +1,45 @@
 from decimal import Decimal, ROUND_HALF_UP
+from schemas.models.schema import SchemaColumnValue
 
 
 class SchemaColumnValueManager:
     """
     SCV Manager:
-      - Holds display (formatted) values derived from Holding/raw values
-      - Never mutates Holding values except when the user explicitly edits through SCV
-      - Applies decimal_places, max_length, etc. to SCV display
-      - Holding = raw truth (no rounding)
+      - Computes display values
+      - NEVER decides whether to recompute (SchemaManager does that)
+      - Applies constraints (decimal places, max_length, etc.)
+      - Preserves SOURCE_USER values
     """
 
-    # ============================================================
-    # INITIALIZATION
-    # ============================================================
-    def __init__(self, scv):
-        from schemas.models.schema import SchemaColumnValue
-        if not isinstance(scv, SchemaColumnValue):
-            raise TypeError("Expected SchemaColumnValue instance")
-
+    def __init__(self, scv: SchemaColumnValue):
         self.scv = scv
         self.column = scv.column
         self.holding = scv.holding
 
     # ============================================================
-    # CREATE SCVs FOR HOLDING OR FOR COLUMN
+    # DISPLAY ENTRY POINT (PURE)
     # ============================================================
-    @classmethod
-    def ensure_for_holding(cls, holding):
+    def refresh_display_value(self):
         """
-        Ensure SCVs exist for all columns AND refresh formula columns.
-        Called whenever holding loads or schema initializes.
+        Recompute the SCV value ONLY.
+        Caller decides whether this is allowed.
         """
-
-        schema = holding.active_schema
-        if not schema:
-            return
-
-        # 1. Ensure SCVs exist
-        created_columns = []
-        for column in schema.columns.all():
-            mgr = cls.get_or_create(holding, column)
-            created_columns.append(column)
-
-        # 2. After all SCVs exist, recalc formulas
-        from schemas.services.formulas.update_engine import FormulaUpdateEngine
-
-        engine = FormulaUpdateEngine(holding, schema)
-
-        # Re-evaluate all formula columns from scratch
-        for column in schema.columns.filter(source="formula"):
-            engine.update_dependent_formulas(column.identifier)
-
-    @classmethod
-    def ensure_for_column(cls, column):
-        """Every holding for accounts of this schema must get an SCV for this column."""
-        schema = column.schema
-        accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type
+        self.scv.value = self.display_for_column(
+            self.column,
+            self.holding,
         )
-
-        for account in accounts:
-            for holding in account.holdings.all():
-                cls.get_or_create(holding, column)
-
-    @classmethod
-    def refresh_for_holding(cls, holding):
-        schema = holding.active_schema
-        if not schema:
-            return
-
-        for column in schema.columns.all():
-            mgr = cls.get_or_create(holding, column)
-            mgr.refresh_display_value()
-            mgr.scv.save(update_fields=["value", "is_edited"])
-
-    @classmethod
-    def get_or_create(cls, holding, column):
-        from schemas.models.schema import SchemaColumnValue
-
-        initial_value = cls.display_for_column(column, holding)
-
-        scv, created = SchemaColumnValue.objects.get_or_create(
-            column=column,
-            holding=holding,
-            defaults={"value": initial_value, "is_edited": False},
-        )
-        return cls(scv)
 
     # ============================================================
     # DISPLAY LOGIC
     # ============================================================
     @staticmethod
     def display_for_column(column, holding):
-        """Compute display value using schema constraints."""
-
         from schemas.services.formulas.resolver import FormulaDependencyResolver
         from schemas.services.formulas.evaluator import FormulaEvaluator
         from schemas.services.formulas.precision import FormulaPrecisionResolver
 
-        # ------------------------------------------------------
-        # 1. FORMULA COLUMN — evaluate with SCV-first context
-        # ------------------------------------------------------
-        if column.source == "formula" and getattr(column, "formula", None):
+        # ---------------- FORMULA ----------------
+        if column.source == "formula" and column.formula:
             resolver = FormulaDependencyResolver(column.formula)
             ctx = resolver.build_context(holding, column.schema)
 
@@ -118,267 +56,164 @@ class SchemaColumnValueManager:
                 ).evaluate()
             )
 
-        # ------------------------------------------------------
-        # 2. HOLDING-SOURCED COLUMN
-        # ------------------------------------------------------
-        raw_value = None
-
+        # ---------------- HOLDING ----------------
         if column.source == "holding" and column.source_field:
-            raw_value = SchemaColumnValueManager._resolve_path(
-                holding, column.source_field
+            raw = SchemaColumnValueManager._resolve_path(
+                holding,
+                column.source_field,
             )
+            return SchemaColumnValueManager._format(column, raw, holding)
 
-        # ------------------------------------------------------
-        # 3. ASSET-SOURCED COLUMN
-        # ------------------------------------------------------
-        elif column.source == "asset" and column.source_field:
-            asset = getattr(holding, "asset", None)
-            if asset:
-                raw_value = SchemaColumnValueManager._resolve_path(
-                    asset, column.source_field
-                )
+        # ---------------- ASSET ----------------
+        if column.source == "asset" and column.source_field:
+            asset = holding.asset if holding else None
+            raw = (
+                SchemaColumnValueManager._resolve_path(
+                    asset, column.source_field)
+                if asset
+                else None
+            )
+            return SchemaColumnValueManager._format(column, raw, holding)
 
-        # ------------------------------------------------------
-        # 4. NO RAW VALUE → RETURN STATIC DEFAULT
-        # ------------------------------------------------------
-        if raw_value is None:
+        # ---------------- CUSTOM / EMPTY ----------------
+        return SchemaColumnValueManager._static_default(column)
+
+    # ============================================================
+    # FORMATTING
+    # ============================================================
+    @staticmethod
+    def _format(column, raw, holding):
+        if raw is None:
             return SchemaColumnValueManager._static_default(column)
 
-        # ------------------------------------------------------
-        # 5. APPLY DISPLAY FORMATTING (decimal places, lengths, etc.)
-        # ------------------------------------------------------
-        return SchemaColumnValueManager._apply_display_constraints(
-            column, raw_value, holding
-        )
+        if column.data_type == "decimal":
+            try:
+                val = Decimal(str(raw))
+            except Exception:
+                return raw
 
-    def refresh_display_value(self):
-        col = self.column
+            dp = SchemaColumnValueManager._decimal_places(column, holding)
 
-        # 1️⃣ Holding-backed columns never have edited overrides.
-        if col.source == "holding":
-            self.scv.value = self.display_for_column(col, self.holding)
-            self.scv.is_edited = False
-            return
+            try:
+                quant = Decimal("1").scaleb(-int(dp))
+                return str(val.quantize(quant, rounding=ROUND_HALF_UP))
+            except Exception:
+                # Absolute fallback — never break SCV creation
+                return str(val)
 
-        # 2️⃣ For editable SCVs, only refresh if NOT edited.
-        if self.scv.is_edited:
-            return  # preserve manual override
+        if column.data_type == "integer":
+            try:
+                return str(int(raw))
+            except Exception:
+                return raw
 
-        # 3️⃣ Asset & formula columns auto-update
-        self.scv.value = self.display_for_column(col, self.holding)
-        self.scv.is_edited = False
+        if column.data_type == "string":
+            s = str(raw)
+            max_len = SchemaColumnValueManager._max_length(column)
+            return s[:max_len] if max_len else s
+
+        return raw
 
     # ============================================================
-    # DISPLAY FORMATTING
-    # ============================================================
-
-    @staticmethod
-    def _apply_display_constraints(column, raw_value, holding):
-        dt = column.data_type
-
-        # ---------- DECIMAL ----------
-        if dt == "decimal":
-            try:
-                numeric = Decimal(str(raw_value))
-            except:
-                return raw_value
-
-            dp = SchemaColumnValueManager._decimal_places_for_column(
-                column, holding
-            )
-            quant = Decimal("1").scaleb(-dp)
-            return str(numeric.quantize(quant, rounding=ROUND_HALF_UP))
-
-        # ---------- STRING ----------
-        if dt == "string":
-            try:
-                s = str(raw_value)
-            except:
-                return raw_value
-
-            max_len = SchemaColumnValueManager._max_length_for_column(column)
-            return s[:max_len] if max_len and len(s) > max_len else s
-
-        # ---------- INTEGER ----------
-        if dt == "integer":
-            try:
-                return str(int(raw_value))
-            except:
-                return raw_value
-
-        return raw_value
-
-    # ============================================================
-    # DECIMAL PLACES WITH CRYPTO OVERRIDE
+    # CONSTRAINT HELPERS
     # ============================================================
     @staticmethod
-    def _decimal_places_for_column(column, holding=None):
+    def _decimal_places(column, holding=None):
         """
-        Crypto quantity override:
-        If holding.asset.crypto_detail.quantity_precision exists → use that.
+        Always return a safe integer decimal place count.
         """
-        if (
-            holding is not None
-            and column.schema.account_type == "crypto_wallet"
-            and column.source == "holding"
-            and column.source_field == "quantity"
-        ):
-            asset = getattr(holding, "asset", None)
-            if asset and getattr(asset, "crypto_detail", None):
-                return asset.crypto_detail.quantity_precision
-
-        # Use typed value from constraint (or fallback)
         c = column.constraints_set.filter(name="decimal_places").first()
-        return c.get_typed_value() if c and c.get_typed_value() is not None else 2
 
+        if not c:
+            return 2
+
+        try:
+            value = c.get_typed_value()
+            if value is None:
+                return 2
+            return int(value)
+        except (TypeError, ValueError):
+            return 2
 
     @staticmethod
-    def _max_length_for_column(column):
+    def _max_length(column):
         c = column.constraints_set.filter(name="max_length").first()
-        return c.get_typed_value() if c and c.get_typed_value() is not None else 255
-
+        return c.get_typed_value() if c else 255
 
     # ============================================================
-    # EDITING VALUES
+    # USER EDIT API
     # ============================================================
-
-    def _trigger_formula_updates(self, changed_identifier: str):
+    def save_user_value(self, raw_value):
         """
-        After any SCV or raw holding value changes, update formula columns
-        that depend on this identifier.
+        User explicitly overrides the SCV.
         """
+        formatted = self._format(self.column, raw_value, self.holding)
 
-        schema = self.scv.column.schema
-        holding = self.scv.holding
+        self.scv.value = formatted
+        self.scv.source = SchemaColumnValue.SOURCE_USER
+        self.scv.save(update_fields=["value", "source"])
 
+        self._trigger_formula_updates(self.column.identifier)
+
+    def revert_to_system(self):
+        """
+        User clears manual override.
+        """
+        self.refresh_display_value()
+
+        self.scv.source = (
+            SchemaColumnValue.SOURCE_FORMULA
+            if self.column.source == "formula"
+            else SchemaColumnValue.SOURCE_SYSTEM
+        )
+        self.scv.save(update_fields=["value", "source"])
+
+        self._trigger_formula_updates(self.column.identifier)
+
+    # ============================================================
+    # FORMULA CASCADE
+    # ============================================================
+    def _trigger_formula_updates(self, changed_identifier):
         from schemas.services.formulas.update_engine import FormulaUpdateEngine
 
-        engine = FormulaUpdateEngine(holding, schema)
+        engine = FormulaUpdateEngine(self.holding, self.column.schema)
         engine.update_dependent_formulas(changed_identifier)
 
-    def save_value(self, new_raw_value, is_edited: bool):
-        col = self.column
-        holding = self.holding
-
-        #
-        # ------------------------------------------------------------
-        # CASE 1 — HOLDING-SOURCED COLUMN (quantity / purchase_price)
-        # ------------------------------------------------------------
-        #
-        if col.source == "holding" and col.source_field:
-
-            casted = self._cast_raw_value(new_raw_value)
-
-            # Apply constraints before saving
-            constrained_value = self._apply_display_constraints(
-                col, casted, holding)
-
-            # Convert constrained → raw python type
-            if col.data_type == "decimal":
-                raw_final = Decimal(constrained_value)
-            elif col.data_type == "integer":
-                raw_final = int(constrained_value)
-            else:
-                raw_final = constrained_value
-
-            # ----- SAVE TO HOLDING -----
-            setattr(holding, col.source_field, raw_final)
-            holding.save(update_fields=[col.source_field])
-
-            # ----- SCV SHOULD *NEVER* BE EDITED FOR HOLDING COLUMNS -----
-            self.scv.is_edited = False
-            self.scv.value = constrained_value
-            self.scv.save(update_fields=["value", "is_edited"])
-
-            # Formulas update normally
-            self._trigger_formula_updates(col.identifier)
-            return self.scv
-
-        #
-        # ------------------------------------------------------------
-        # CASE 2 — ASSET or CUSTOM COLUMN (edit OR revert)
-        # ------------------------------------------------------------
-        #
-        if col.is_editable:
-
-            #
-            # REVERT EDITED VALUE → is_edited=False
-            #
-            if not is_edited:
-                # revert back to automatic source or formula value
-                auto_value = self.display_for_column(col, holding)
-                self.scv.value = auto_value
-                self.scv.is_edited = False
-                self.scv.save(update_fields=["value", "is_edited"])
-
-                self._trigger_formula_updates(col.identifier)
-                return self.scv
-
-            #
-            # APPLY MANUAL EDIT → is_edited=True
-            #
-            casted = self._cast_raw_value(new_raw_value)
-            constrained_display = self._apply_display_constraints(
-                col, casted, holding)
-
-            self.scv.value = constrained_display
-            self.scv.is_edited = True
-            self.scv.save(update_fields=["value", "is_edited"])
-
-            self._trigger_formula_updates(col.identifier)
-            return self.scv
-
-        #
-        # ------------------------------------------------------------
-        # CASE 3 — NON-EDITABLE or FORMULA COLUMN
-        # ------------------------------------------------------------
-        #
-        raise ValueError(f"Column '{col.identifier}' is not editable.")
-
     # ============================================================
-    # RAW CASTING (NO ROUNDING)
-    # ============================================================
-
-    def _cast_raw_value(self, raw_value):
-        if raw_value in [None, ""]:
-            return None
-
-        dt = self.column.data_type
-        if dt == "decimal":
-            return Decimal(str(raw_value))
-        if dt == "integer":
-            return int(raw_value)
-        if dt == "string":
-            return str(raw_value)
-        return raw_value
-
-    # ============================================================
-    # STATIC DEFAULT VALUES
+    # STATIC DEFAULTS
     # ============================================================
     @staticmethod
     def _static_default(column):
         if column.data_type == "decimal":
-            dp = SchemaColumnValueManager._decimal_places_for_column(
-                column, None
-            )
-            return str(Decimal("0").scaleb(-dp))
-
-        if column.data_type == "string":
-            return "-"
-
+            return "0.00"
         if column.data_type == "integer":
             return "0"
-
+        if column.data_type == "string":
+            return "-"
         return None
 
     # ============================================================
-    # FIELD RESOLUTION (supports "crypto_detail__base_symbol")
+    # FIELD RESOLUTION
     # ============================================================
     @staticmethod
     def _resolve_path(obj, path):
-        parts = path.split("__")
-        for part in parts:
+        if not obj or not path:
+            return None
+
+        for part in path.split("__"):
             obj = getattr(obj, part, None)
             if obj is None:
                 return None
         return obj
+
+    @classmethod
+    def get_or_create(cls, holding, column):
+        initial_value = cls.display_for_column(column, holding)
+
+        scv, created = SchemaColumnValue.objects.get_or_create(
+            column=column,
+            holding=holding,
+            defaults={"value": initial_value,
+                      "source": SchemaColumnValue.SOURCE_SYSTEM},
+        )
+        return cls(scv)

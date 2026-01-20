@@ -144,10 +144,9 @@ class SchemaConstraint(models.Model):
                 raise ValidationError("Value above maximum.")
 
         if self.applies_to == "decimal":
-            if self.value_decimal is None:
+            if self.name == "decimal_places" and self.value_decimal is None:
                 raise ValidationError(
-                    "Decimal constraint requires value_decimal."
-                )
+                    "Decimal constraint requires value_decimal.")
             if self.min_decimal is not None and self.value_decimal < self.min_decimal:
                 raise ValidationError("Value below minimum.")
             if self.max_decimal is not None and self.value_decimal > self.max_decimal:

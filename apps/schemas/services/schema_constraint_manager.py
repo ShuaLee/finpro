@@ -38,7 +38,7 @@ class SchemaConstraintManager:
             defaults = {
                 "label": master.label,
                 "applies_to": master.applies_to,
-                "is_editable": master.is_editable,
+                "is_editable": False,
             }
 
             if master.applies_to == "integer":
