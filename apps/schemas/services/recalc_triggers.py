@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from apps.accounts.models.holding import Holding
+from accounts.models.holding import Holding
 from schemas.services.scv_refresh_service import SCVRefreshService
 
 

@@ -81,12 +81,12 @@ class FXRate(models.Model):
 
         super().save(*args, **kwargs)
 
-        # We delay recalculation until transaction commits
-        def _after_commit():
-            from schemas.services.recalc_triggers import recalc_holdings_for_fx_pair
-            recalc_holdings_for_fx_pair(
-                self.from_currency.code,
-                self.to_currency.code
-            )
+        # # We delay recalculation until transaction commits
+        # def _after_commit():
+        #     from schemas.services.recalc_triggers import recalc_holdings_for_fx_pair
+        #     recalc_holdings_for_fx_pair(
+        #         self.from_currency.code,
+        #         self.to_currency.code
+        #     )
 
-        transaction.on_commit(_after_commit)
+        # transaction.on_commit(_after_commit)
