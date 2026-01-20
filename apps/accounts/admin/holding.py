@@ -129,21 +129,16 @@ class HoldingAdmin(admin.ModelAdmin):
         return True
 
     def save_model(self, request, obj, form, change):
-        """
-        Create or update Holding using HoldingService to ensure SCVs stay in sync.
-        """
-        if not change:
-            # Creating new holding
-            HoldingService.create(
-                account=obj.account,
-                asset=obj.asset,
-                quantity=obj.quantity,
-                average_purchase_price=obj.average_purchase_price,
-            )
-        else:
-            # Updating existing holding
+        if change:
             HoldingService.update(
                 holding=obj,
-                quantity=obj.quantity,
-                average_purchase_price=obj.average_purchase_price,
+                quantity=form.cleaned_data["quantity"],
+                average_purchase_price=form.cleaned_data["average_purchase_price"],
+            )
+        else:
+            HoldingService.create(
+                account=form.cleaned_data["account"],
+                asset=form.cleaned_data["asset"],
+                quantity=form.cleaned_data["quantity"],
+                average_purchase_price=form.cleaned_data["average_purchase_price"],
             )

@@ -137,8 +137,22 @@ class SchemaColumnValueManager:
 
     @staticmethod
     def _max_length(column):
+        """
+        Always return a safe integer max length.
+        """
         c = column.constraints_set.filter(name="max_length").first()
-        return c.get_typed_value() if c else 255
+
+        if not c:
+            return 255
+
+        try:
+            value = c.get_typed_value()
+            if value is None:
+                return 255
+            return int(value)
+        except (TypeError, ValueError):
+            return 255
+
 
     # ============================================================
     # USER EDIT API
@@ -221,3 +235,19 @@ class SchemaColumnValueManager:
                       "source": SchemaColumnValue.SOURCE_SYSTEM},
         )
         return cls(scv)
+    
+    @classmethod
+    def ensure_for_column(cls, column):
+        """
+        Ensure every holding for accounts using this schema
+        has an SCV for this column.
+        """
+        schema = column.schema
+
+        accounts = schema.portfolio.accounts.filter(
+            account_type=schema.account_type
+        ).prefetch_related("holdings")
+
+        for account in accounts:
+            for holding in account.holdings.all():
+                cls.get_or_create(holding, column)

@@ -1,14 +1,17 @@
+from django.db import transaction
+
 from external_data.providers.fmp.client import FMP_PROVIDER
 from fx.models.fx import FXCurrency
 from fx.models.country import Country
 from assets.models.equity.exchange import Exchange
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 class EquityProfileSyncService:
     """
     Syncs profile metadata for a single EquityAsset.
     """
-
+    @transaction.atomic
     def sync(self, equity):
         data = FMP_PROVIDER.get_equity_identity(equity.ticker)
 
@@ -85,6 +88,8 @@ class EquityProfileSyncService:
         # -------------------------
         if updated_fields:
             equity.save(update_fields=updated_fields)
+
+            SCVRefreshService.asset_changed(equity.asset)
 
         return {
             "ticker": equity.ticker,

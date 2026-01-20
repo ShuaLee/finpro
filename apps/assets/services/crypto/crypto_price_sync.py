@@ -3,7 +3,7 @@ from django.db import transaction
 from assets.models.core import AssetPrice
 from assets.models.crypto import CryptoAsset, CryptoSnapshotID
 from external_data.providers.fmp.client import FMP_PROVIDER
-
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 class CryptoPriceSyncService:
     """
@@ -46,6 +46,8 @@ class CryptoPriceSyncService:
                     "source": FMP_PROVIDER.name,
                 },
             )
+
+            SCVRefreshService.asset_changed(crypto.asset)
 
             updated += 1
 

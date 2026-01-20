@@ -1,35 +1,26 @@
 from django.db.models import Q
 
 from apps.accounts.models.holding import Holding
-from schemas.services.schema_manager import SchemaManager
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 def recalc_holdings_for_fx_pair(from_fx: str, to_fx: str):
     """
     Called when an FX rate changes.
 
-    Recompute SCVs for all holdings where:
-      - asset.currency == from_ccy
-      - asset.currency == to_ccy
-    OR     any formulas depend on FX in general.
-
-    This does NOT apply rounding changes to holding models.
-    SCVs for holding-sourced values remain untouched.
+    FX changes affect displayed values, NOT holdings themselves.
+    We therefore route through SCVRefreshService to ensure:
+      - user overrides are respected
+      - formulas recompute
+      - asset + FX-backed SCVs refresh
     """
 
-    # --- 1. Identify affected holdings ---
     affected = Holding.objects.filter(
         Q(asset__currency=from_fx) | Q(asset__currency=to_fx)
     )
 
-    if not affected.exists():
-        return
-
-    # --- 2. For each holding, refresh SCVs using schema manager ---
     for holding in affected:
-        schema = holding.active_schema
-        if not schema:
-            continue
-
-        mgr = SchemaManager(schema)
-        mgr.sync_for_holding(holding)
+        # SCVRefreshService already handles:
+        # - schema existence
+        # - recompute rules
+        SCVRefreshService.holding_changed(holding)

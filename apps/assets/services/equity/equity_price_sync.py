@@ -3,6 +3,7 @@ from django.db import transaction
 from assets.models.core import AssetPrice
 from assets.models.equity import EquityAsset, EquitySnapshotID
 from external_data.providers.fmp.client import FMP_PROVIDER
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 class EquityPriceSyncService:
@@ -37,6 +38,8 @@ class EquityPriceSyncService:
                     "source": FMP_PROVIDER.name,
                 },
             )
+
+            SCVRefreshService.asset_changed(equity.asset)
 
             updated += 1
 

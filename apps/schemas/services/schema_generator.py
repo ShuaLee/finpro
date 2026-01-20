@@ -14,38 +14,25 @@ logger = logging.getLogger(__name__)
 
 class SchemaGenerator:
     """
-    🔧 Builds schemas for a portfolio.
+    Builds schemas for a portfolio.
 
     Flow:
         SchemaTemplate → SchemaColumn → SchemaConstraint → SchemaColumnValue
-
-    - Holding stores RAW values (no rounding)
-    - SCV is the formatted display layer (rounded)
-    - Per-asset precision comes from CryptoDetail
     """
 
     def __init__(self, portfolio, domain_type):
         self.portfolio = portfolio
-        self.domain_type = domain_type  # AccountType instance
+        self.domain_type = domain_type
 
     # =====================================================================
     # MAIN ENTRY
     # =====================================================================
     def initialize(self, custom_schema_namer=None):
-        """
-        Build a schema for ONE account_type (self.domain_type),
-        which is already an AccountType instance.
-        """
         account_type = self.domain_type
 
-        schema_name = (
-            custom_schema_namer(self.portfolio, account_type)
-            if custom_schema_namer
-            else f"{self.portfolio.profile.user.email}'s {account_type.name} Schema"
-        )
-
         logger.info(
-            f"📄 Generating schema for account_type={account_type.slug}")
+            f"📄 Generating schema for account_type={account_type.slug}"
+        )
 
         template = (
             SchemaTemplate.objects.filter(
@@ -56,7 +43,8 @@ class SchemaGenerator:
                 Prefetch(
                     "columns",
                     queryset=SchemaTemplateColumn.objects.order_by(
-                        "display_order", "id"),
+                        "display_order", "id"
+                    ),
                 )
             )
             .first()
@@ -77,24 +65,20 @@ class SchemaGenerator:
         return [schema]
 
     # =====================================================================
-    # TEMPLATE → SCHEMA GENERATION
+    # TEMPLATE → SCHEMA
     # =====================================================================
     def _create_from_template(self, template: SchemaTemplate):
-        schema, created = Schema.objects.update_or_create(
+        schema, _ = Schema.objects.update_or_create(
             portfolio=self.portfolio,
             account_type=template.account_type,
             defaults={},
         )
 
         template_columns = template.columns.filter(
-            is_default=True).order_by("display_order", "id")
-        logger.debug(
-            f"🧩 Creating {template_columns.count()} columns for schema {schema.account_type}")
+            is_default=True
+        ).order_by("display_order", "id")
 
         from schemas.models.formula import Formula
-        from schemas.services.formulas.update_engine import FormulaUpdateEngine
-
-        formula_columns = []
 
         for tcol in template_columns:
             formula_obj = None
@@ -103,16 +87,16 @@ class SchemaGenerator:
                 if not tcol.source_field:
                     raise ValueError(
                         f"Template column '{tcol.identifier}' is marked as formula "
-                        f"but has no source_field (formula identifier)."
+                        f"but has no source_field."
                     )
 
                 formula_obj = Formula.objects.filter(
-                    identifier=tcol.source_field).first()
+                    identifier=tcol.source_field
+                ).first()
 
                 if not formula_obj:
                     raise ValueError(
-                        f"SchemaTemplateColumn '{tcol.identifier}' references "
-                        f"formula '{tcol.source_field}', but it does not exist."
+                        f"Formula '{tcol.source_field}' does not exist."
                     )
 
             column = SchemaColumn.objects.create(
@@ -133,18 +117,18 @@ class SchemaGenerator:
             SchemaConstraintManager.create_from_master(column, overrides)
             SchemaColumnValueManager.ensure_for_column(column)
 
-            if column.source == "formula":
-                formula_columns.append(column)
-
             logger.debug(
-                f"➕ Added column '{column.title}' (order {column.display_order})")
+                f"➕ Added column '{column.title}' (order {column.display_order})"
+            )
 
-        self._refresh_formula_columns(schema, formula_columns)
+        # 🔑 SINGLE schema-wide recompute
+        from schemas.services.scv_refresh_service import SCVRefreshService
+        SCVRefreshService.schema_changed(schema)
 
         return schema
 
     # =====================================================================
-    # UNIQUE IDENTIFIER BUILDER
+    # UNIQUE IDENTIFIER
     # =====================================================================
     def _safe_identifier(self, base_identifier: str, schema: Schema) -> str:
         identifier = slugify(base_identifier)
@@ -160,26 +144,3 @@ class SchemaGenerator:
             identifier = f"{original}_{counter}"
 
         return identifier
-
-    # =====================================================================
-    # REFRESH FORMULAS
-    # =====================================================================
-    def _refresh_formula_columns(self, schema, formula_columns):
-        """
-        Recompute all formula-based SCVs in this schema.
-        """
-        if not formula_columns:
-            return
-
-        from schemas.services.formulas.update_engine import FormulaUpdateEngine
-
-        accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type
-        ).prefetch_related("holdings")
-
-        for account in accounts:
-            for holding in account.holdings.all():
-                engine = FormulaUpdateEngine(holding, schema)
-
-                for col in formula_columns:
-                    engine.update_dependent_formulas(col.identifier)

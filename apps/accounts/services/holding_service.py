@@ -1,5 +1,5 @@
 from accounts.models import Holding
-from schemas.services.schema_manager import SchemaManager
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 class HoldingService:
@@ -12,10 +12,7 @@ class HoldingService:
             average_purchase_price=average_purchase_price,
         )
 
-        # Ensure SCVs after creation
-        schema = account.active_schema
-        if schema:
-            SchemaManager.for_account(account).ensure_for_holding(holding)
+        SCVRefreshService.holding_changed(holding)
 
         return holding
 
@@ -31,6 +28,7 @@ class HoldingService:
         # Sync SCVs after update
         account = holding.account
         if account.active_schema:
-            SchemaManager.for_account(account).sync_for_holding(holding)
+            SCVRefreshService.holding_changed(holding)
+
 
         return holding

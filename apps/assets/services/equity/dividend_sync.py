@@ -7,6 +7,7 @@ from django.utils import timezone
 from assets.models.core import Asset
 from assets.models.equity import EquityDividendSnapshot
 from external_data.providers.fmp.client import FMP_PROVIDER
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 # ============================================================
@@ -235,3 +236,5 @@ class EquityDividendSyncService:
                 ),
             },
         )
+
+        SCVRefreshService.asset_changed(asset)

@@ -2,8 +2,6 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 
 from schemas.models.constraints import MasterConstraint, SchemaConstraint
-from schemas.models.schema import SchemaColumnValue
-from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,7 +58,9 @@ class SchemaConstraintManager:
                 defaults=defaults,
             )
 
-        cls._refresh_scv_if_needed(column)
+        # 🔑 IMPORTANT: local import to avoid circular dependency
+        from schemas.services.scv_refresh_service import SCVRefreshService
+        SCVRefreshService.schema_changed(column.schema)
 
     # ======================================================================
     # TYPED FIELD HELPERS
@@ -167,15 +167,3 @@ class SchemaConstraintManager:
                     })
 
         return cleaned_data
-
-    # ======================================================================
-    # SCV REFRESH
-    # ======================================================================
-    @classmethod
-    def _refresh_scv_if_needed(cls, column):
-        scvs = SchemaColumnValue.objects.filter(column=column)
-
-        for scv in scvs:
-            mgr = SchemaColumnValueManager(scv)
-            mgr.refresh_display_value()
-            scv.save(update_fields=["value", "is_edited"])

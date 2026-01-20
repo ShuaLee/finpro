@@ -6,6 +6,7 @@ from schemas.models.template import SchemaTemplateColumn
 from schemas.models.schema import SchemaColumn
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 class SchemaColumnFactory:
@@ -13,8 +14,15 @@ class SchemaColumnFactory:
 
     @staticmethod
     def _finalize_column(column):
+        # 1. Create constraints
         SchemaConstraintManager.create_from_master(column)
+
+        # 2. Ensure SCVs exist
         SchemaColumnValueManager.ensure_for_column(column)
+
+        # 3. Schema-wide refresh (formulas, formatting, dependencies)
+        SCVRefreshService.schema_changed(column.schema)
+
         return column
 
     # ---------------------------
@@ -24,21 +32,20 @@ class SchemaColumnFactory:
     def add_from_template(schema, template_column_id):
         template_col = SchemaTemplateColumn.objects.get(id=template_column_id)
 
-        # Ensure account type alignment
         if schema.account_type != template_col.template.account_type:
             raise ValidationError(
                 f"Template column belongs to '{template_col.template.account_type}', "
                 f"but schema is '{schema.account_type}'."
             )
 
-        # Prevent duplicates
         if schema.columns.filter(identifier=template_col.identifier).exists():
             raise ValidationError(
                 f"The column '{template_col.title}' already exists in this schema."
             )
 
-        max_order = schema.columns.aggregate(models.Max("display_order"))[
-            "display_order__max"] or 0
+        max_order = schema.columns.aggregate(
+            models.Max("display_order")
+        )["display_order__max"] or 0
 
         column = SchemaColumn.objects.create(
             schema=schema,
@@ -63,9 +70,6 @@ class SchemaColumnFactory:
         if not title or not data_type:
             raise ValidationError("Both 'title' and 'data_type' are required.")
 
-        # ---------------------------------------------------------
-        # 1. Determine final identifier
-        # ---------------------------------------------------------
         base_identifier = identifier_override or slugify(title)
         if not base_identifier:
             raise ValidationError("Could not derive a valid identifier.")
@@ -75,23 +79,16 @@ class SchemaColumnFactory:
         identifier = base_identifier
         counter = 1
         while identifier in existing_ids:
-            # When override is given, we *must* preserve it.
-            # Only suffix when there is a collision in THIS schema.
             identifier = f"{base_identifier}_{counter}"
             counter += 1
 
-        # ---------------------------------------------------------
-        # 2. Determine display order
-        # ---------------------------------------------------------
         next_order = (
             schema.columns.aggregate(models.Max("display_order"))[
-                "display_order__max"]
+                "display_order__max"
+            ]
             or 0
         ) + 1
 
-        # ---------------------------------------------------------
-        # 3. Create column
-        # ---------------------------------------------------------
         column = SchemaColumn.objects.create(
             schema=schema,
             title=title,
@@ -105,25 +102,24 @@ class SchemaColumnFactory:
             display_order=next_order,
         )
 
-        # Create constraints + SCVs
         return SchemaColumnFactory._finalize_column(column)
 
+    # ---------------------------
+    # Delete Column
+    # ---------------------------
     @staticmethod
     def delete_column(column):
-        """
-        Deletes a SchemaColumn safely.
-        Resequencing is handled automatically by the model's delete().
-        """
+        schema = column.schema
         column.delete()
 
+        # Column removal can affect formulas & layout
+        SCVRefreshService.schema_changed(schema)
+
+    # ---------------------------
+    # Ensure Column
+    # ---------------------------
     @staticmethod
     def ensure_column(schema, identifier: str, title: str, data_type: str):
-        """
-        Ensures a SchemaColumn exists with the given identifier.
-
-        - If it exists → validates its data_type
-        - If missing → creates a custom column
-        """
         existing = schema.columns.filter(identifier=identifier).first()
 
         if existing:
@@ -134,10 +130,9 @@ class SchemaColumnFactory:
                 )
             return existing
 
-        # Otherwise create a custom column
         return SchemaColumnFactory.add_custom_column(
             schema=schema,
             title=title,
             data_type=data_type,
-            identifier_override=identifier,  # NEW PARAM
+            identifier_override=identifier,
         )
