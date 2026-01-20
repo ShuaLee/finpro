@@ -200,8 +200,12 @@ class SchemaColumnValueManager:
         if not obj or not path:
             return None
 
+        print(f"Resolving path: {path}")
+        print(f"Initial obj: {obj}")
+
         for part in path.split("__"):
             obj = getattr(obj, part, None)
+            print(f" → {part}: {obj}")
             if obj is None:
                 return None
         return obj
