@@ -10,10 +10,12 @@ class HoldingService:
             asset=asset,
             quantity=quantity,
             average_purchase_price=average_purchase_price,
+            source=Holding.SOURCE_ASSET,
+            original_ticker=getattr(asset.equity, "ticker", None),
+            custom_reason=None,
         )
 
         SCVRefreshService.holding_changed(holding)
-
         return holding
 
     @staticmethod
@@ -29,6 +31,5 @@ class HoldingService:
         account = holding.account
         if account.active_schema:
             SCVRefreshService.holding_changed(holding)
-
 
         return holding

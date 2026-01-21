@@ -156,12 +156,6 @@ class SchemaConstraint(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-        from schemas.services.schema_constraint_manager import (
-            SchemaConstraintManager
-        )
-
-        SchemaConstraintManager._refresh_scv_if_needed(self.column)
-
     # -------------------------------------------------
     # Typed access API (THIS IS THE ONLY PUBLIC API)
     # -------------------------------------------------

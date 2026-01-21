@@ -77,6 +77,12 @@ class CommodityAsset(models.Model):
     # Validation
     # -------------------------
     def clean(self):
+        super().clean()
+
+        # Allow partial construction (e.g. during factory/admin usage)
+        if not self.asset:
+            return
+
         if self.asset.asset_type.slug != "commodity":
             raise ValidationError(
                 "CommodityAsset may only attach to commodity assets."

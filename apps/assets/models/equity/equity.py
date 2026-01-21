@@ -174,6 +174,12 @@ class EquityAsset(models.Model):
         ]
 
     def clean(self):
+        super().clean()
+
+        # Allow partial construction (factory/admin/migrations)
+        if not self.asset:
+            return
+
         if self.asset.asset_type.slug != "equity":
             raise ValidationError(
                 "Equity may only be attached to assets of type 'equity'."

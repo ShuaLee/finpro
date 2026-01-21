@@ -8,19 +8,26 @@ def recalc_holdings_for_fx_pair(from_fx: str, to_fx: str):
     """
     Called when an FX rate changes.
 
-    FX changes affect displayed values, NOT holdings themselves.
-    We therefore route through SCVRefreshService to ensure:
-      - user overrides are respected
-      - formulas recompute
-      - asset + FX-backed SCVs refresh
+    Finds all holdings whose asset currency matches either side
+    of the FX pair, across all asset subtypes, and refreshes SCVs.
     """
 
     affected = Holding.objects.filter(
-        Q(asset__currency=from_fx) | Q(asset__currency=to_fx)
-    )
+        Q(asset__equity__currency__code=from_fx)
+        | Q(asset__equity__currency__code=to_fx)
+
+        | Q(asset__crypto__currency__code=from_fx)
+        | Q(asset__crypto__currency__code=to_fx)
+
+        | Q(asset__real_estate__currency__code=from_fx)
+        | Q(asset__real_estate__currency__code=to_fx)
+
+        | Q(asset__custom__currency__code=from_fx)
+        | Q(asset__custom__currency__code=to_fx)
+
+        | Q(asset__commodity__currency__code=from_fx)
+        | Q(asset__commodity__currency__code=to_fx)
+    ).distinct()
 
     for holding in affected:
-        # SCVRefreshService already handles:
-        # - schema existence
-        # - recompute rules
         SCVRefreshService.holding_changed(holding)

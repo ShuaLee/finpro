@@ -92,6 +92,12 @@ class CryptoAsset(models.Model):
     # Validation
     # -------------------------
     def clean(self):
+        super().clean()
+
+        # Allow partial construction (factory/admin/migrations)
+        if not self.asset:
+            return
+
         if self.asset.asset_type.slug != "crypto":
             raise ValidationError(
                 "CryptoAsset may only attach to crypto assets."

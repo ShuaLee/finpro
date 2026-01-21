@@ -5,6 +5,22 @@ from accounts.models.account import Account
 
 
 class Holding(models.Model):
+
+    SOURCE_ASSET = "asset"
+    SOURCE_CUSTOM = "custom"
+
+    CUSTOM_REASON_USER = "user"
+    CUSTOM_REASON_MARKET = "market"
+
+    source = models.CharField(
+        max_length=20,
+        choices=[
+            (SOURCE_ASSET, "Market Asset"),
+            (SOURCE_CUSTOM, "Custom Asset"),
+        ],
+        default=SOURCE_ASSET,
+    )
+
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
@@ -13,8 +29,28 @@ class Holding(models.Model):
 
     asset = models.ForeignKey(
         "assets.Asset",
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="holdings",
+    )
+
+    original_ticker = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Ticker used when this holding was market-backed.",
+    )
+
+    custom_reason = models.CharField(
+        max_length=20,
+        choices=[
+            (CUSTOM_REASON_USER, "User initiated"),
+            (CUSTOM_REASON_MARKET, "Market unavailable"),
+        ],
+        null=True,
+        blank=True,
     )
 
     quantity = models.DecimalField(
@@ -48,18 +84,22 @@ class Holding(models.Model):
     def clean(self):
         super().clean()
 
+        # -------------------------------------------------
+        # Account invariant (always required)
+        # -------------------------------------------------
         if not self.account.active_schema:
             raise ValidationError(
                 "Account schema must exist before holdings can be created."
             )
 
-        # ---- Quantity rules ----
+        # -------------------------------------------------
+        # Quantity rules (always apply)
+        # -------------------------------------------------
         if self.quantity < 0:
             raise ValidationError(
                 {"quantity": "Holding quantity cannot be negative."}
             )
 
-        # ---- Average price rules ----
         if self.average_purchase_price is not None:
             if self.average_purchase_price < 0:
                 raise ValidationError(
@@ -77,7 +117,57 @@ class Holding(models.Model):
                     }
                 )
 
-        # ---- AssetType compatibility ----
+        # -------------------------------------------------
+        # SOURCE_CUSTOM: normalize + exit asset logic
+        # -------------------------------------------------
+        if self.source == self.SOURCE_CUSTOM:
+            # Custom holdings never reference assets
+            self.asset = None
+
+            # Ensure intent is recorded
+            if not self.custom_reason:
+                self.custom_reason = self.CUSTOM_REASON_USER
+
+            # Custom holdings do not participate in asset rules
+            return
+
+        # -------------------------------------------------
+        # SOURCE_ASSET: strict validation
+        # -------------------------------------------------
+        if not self.asset:
+            raise ValidationError(
+                "Asset-backed holdings must reference an asset."
+            )
+
+        # -------------------------------------------------
+        # Populate original_ticker (ALL asset types)
+        # -------------------------------------------------
+        if not self.original_ticker:
+            equity = getattr(self.asset, "equity", None)
+            crypto = getattr(self.asset, "crypto", None)
+            commodity = getattr(self.asset, "commodity", None)
+            custom = getattr(self.asset, "custom", None)
+
+            if equity and equity.ticker:
+                self.original_ticker = equity.ticker
+            elif crypto and crypto.base_symbol:
+                self.original_ticker = crypto.base_symbol
+            elif commodity and commodity.symbol:
+                self.original_ticker = commodity.symbol
+            elif custom and custom.name:
+                # Defensive fallback (should rarely happen)
+                self.original_ticker = custom.name
+            else:
+                raise ValidationError(
+                    "Asset-backed holdings must have original_ticker set."
+                )
+
+        # Asset-backed holdings cannot have custom_reason
+        self.custom_reason = None
+
+        # -------------------------------------------------
+        # AssetType compatibility (AccountType enforcement)
+        # -------------------------------------------------
         account_type = self.account.account_type
         asset_type = self.asset.asset_type
 
@@ -89,6 +179,9 @@ class Holding(models.Model):
             )
 
     def save(self, *args, **kwargs):
+        if self.source == self.SOURCE_CUSTOM:
+            self.asset = None
+
         self.full_clean()
         super().save(*args, **kwargs)
 

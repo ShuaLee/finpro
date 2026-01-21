@@ -3,7 +3,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from accounts.models.holding import Holding
-from accounts.services.holding_service import HoldingService
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 
 # =================================================
@@ -46,6 +46,9 @@ class HoldingAdmin(admin.ModelAdmin):
         "id",
         "account",
         "asset",
+        "source",
+        "original_ticker",
+        "custom_reason",
         "quantity",
         "average_purchase_price",
         "current_value_display",
@@ -72,6 +75,8 @@ class HoldingAdmin(admin.ModelAdmin):
     )
 
     readonly_fields = (
+        "original_ticker",
+        "custom_reason",
         "created_at",
         "updated_at",
         "current_value_display",
@@ -102,6 +107,14 @@ class HoldingAdmin(admin.ModelAdmin):
                 "updated_at",
             )
         }),
+        ("Sourcing", {
+            "fields": (
+                "source",
+                "original_ticker",
+                "custom_reason",
+            )
+        }),
+
     )
 
     # -------------------------------------------------
@@ -129,16 +142,7 @@ class HoldingAdmin(admin.ModelAdmin):
         return True
 
     def save_model(self, request, obj, form, change):
-        if change:
-            HoldingService.update(
-                holding=obj,
-                quantity=form.cleaned_data["quantity"],
-                average_purchase_price=form.cleaned_data["average_purchase_price"],
-            )
-        else:
-            HoldingService.create(
-                account=form.cleaned_data["account"],
-                asset=form.cleaned_data["asset"],
-                quantity=form.cleaned_data["quantity"],
-                average_purchase_price=form.cleaned_data["average_purchase_price"],
-            )
+        super().save_model(request, obj, form, change)
+
+        # After save, trigger domain reactions
+        SCVRefreshService.holding_changed(obj)
