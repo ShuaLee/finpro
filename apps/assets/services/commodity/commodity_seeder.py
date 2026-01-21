@@ -2,7 +2,12 @@ import uuid
 from django.db import transaction
 
 from accounts.models.holding import Holding
+from assets.models.core import Asset, AssetType
+from assets.models.commodity.precious_metal import PreciousMetalAsset
 from assets.services.commodity.commodity_factory import CommodityAssetFactory
+from assets.services.commodity.constants import (
+    PRECIOUS_METAL_COMMODITY_MAP,
+)
 from external_data.providers.fmp.client import FMP_PROVIDER
 from external_data.providers.fmp.commodity.parsers import (
     parse_commodity_list_row,
@@ -16,12 +21,12 @@ class CommoditySeederService:
     def run(self) -> uuid.UUID:
         snapshot_id = uuid.uuid4()
 
-        # --------------------------------------------------
+        # ==================================================
         # 1. Build fresh commodity universe
-        # --------------------------------------------------
+        # ==================================================
         rows = FMP_PROVIDER.get_commodities()
 
-        new_assets_by_symbol = {}  # symbol -> Asset
+        commodity_assets_by_symbol: dict[str, Asset] = {}
 
         for row in rows:
             parsed = parse_commodity_list_row(row)
@@ -45,12 +50,39 @@ class CommoditySeederService:
                 trade_month=parsed.get("trade_month"),
             )
 
-            # CommodityAssetFactory MUST return the Asset
-            new_assets_by_symbol[symbol] = commodity.asset
+            commodity_assets_by_symbol[symbol] = commodity.asset
 
-        # --------------------------------------------------
-        # 2. Reconcile holdings (asset-backed only)
-        # --------------------------------------------------
+        # ==================================================
+        # 2. Derive precious metals from commodities
+        # ==================================================
+        precious_metal_assets_by_symbol: dict[str, Asset] = {}
+
+        pm_asset_type = AssetType.objects.get(slug="precious-metal") \
+            if AssetType.objects.filter(slug="precious-metal").exists() \
+            else AssetType.objects.get(slug="precious_metal")
+
+        for metal, commodity_symbol in PRECIOUS_METAL_COMMODITY_MAP.items():
+            commodity_asset = commodity_assets_by_symbol.get(commodity_symbol)
+            if not commodity_asset:
+                continue  # metal unavailable this snapshot
+
+            asset = Asset.objects.create(
+                asset_type=pm_asset_type,
+            )
+
+            PreciousMetalAsset.objects.create(
+                asset=asset,
+                metal=metal,
+                commodity=commodity_asset.commodity,
+            )
+
+            # IMPORTANT:
+            # use metal name as the "ticker" for reconciliation
+            precious_metal_assets_by_symbol[metal] = asset
+
+        # ==================================================
+        # 3. Reconcile holdings (commodities + precious metals)
+        # ==================================================
         holdings = Holding.objects.select_for_update().filter(
             source=Holding.SOURCE_ASSET,
         )
@@ -59,26 +91,35 @@ class CommoditySeederService:
             symbol = holding.original_ticker
 
             if not symbol:
-                # Defensive: no symbol = cannot relink
-                holding.source = Holding.SOURCE_CUSTOM
-                holding.custom_reason = Holding.CUSTOM_REASON_MARKET
-                holding.asset = None
-                holding.save(update_fields=[
-                             "source", "custom_reason", "asset"])
+                self._fallback_to_custom(holding)
                 continue
 
-            new_asset = new_assets_by_symbol.get(symbol)
+            # Try commodity first
+            new_asset = commodity_assets_by_symbol.get(symbol)
+
+            # Then precious metal
+            if not new_asset:
+                new_asset = precious_metal_assets_by_symbol.get(symbol.lower())
 
             if new_asset:
                 if holding.asset_id != new_asset.id:
                     holding.asset = new_asset
                     holding.save(update_fields=["asset"])
             else:
-                # Commodity no longer active
-                holding.source = Holding.SOURCE_CUSTOM
-                holding.custom_reason = Holding.CUSTOM_REASON_MARKET
-                holding.asset = None
-                holding.save(update_fields=[
-                             "source", "custom_reason", "asset"])
+                self._fallback_to_custom(holding)
 
         return snapshot_id
+
+    # --------------------------------------------------
+    # Helpers
+    # --------------------------------------------------
+    @staticmethod
+    def _fallback_to_custom(holding: Holding):
+        holding.source = Holding.SOURCE_CUSTOM
+        holding.custom_reason = Holding.CUSTOM_REASON_MARKET
+        holding.asset = None
+        holding.save(update_fields=[
+            "source",
+            "custom_reason",
+            "asset",
+        ])

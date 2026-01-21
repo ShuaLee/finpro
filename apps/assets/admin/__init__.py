@@ -5,3 +5,4 @@ from .crypto import *
 from .commodity import *
 from .custom import *
 from .real_estate import *
+from .precious_metal import *
