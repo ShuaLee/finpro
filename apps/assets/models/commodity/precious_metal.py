@@ -96,3 +96,7 @@ class PreciousMetalAsset(models.Model):
 
     def __str__(self):
         return f"{self.get_metal_display()} ({self.unit})"
+    
+    @property
+    def reconciliation_key(self) -> str:
+        return self.metal.lower()

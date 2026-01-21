@@ -21,6 +21,8 @@ class Command(BaseCommand):
             "equity": AssetType.objects.get(slug="equity"),
             "cryptocurrency": AssetType.objects.get(slug="cryptocurrency"),
             "real_estate": AssetType.objects.get(slug="real-estate"),
+            "commodity": AssetType.objects.get(slug="commodity"),
+            "precious_metal": AssetType.objects.get(slug="precious-metal"),
         }
 
         account_types = [
@@ -38,6 +40,11 @@ class Command(BaseCommand):
                 "name": "Real Estate",
                 "slug": "real-estate",
                 "asset_types": ["real_estate"],
+            },
+            {
+                "name": "Precious Metal",
+                "slug": "precious-metal",
+                "asset_types": ["precious_metal"],
             },
         ]
 

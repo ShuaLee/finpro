@@ -146,6 +146,7 @@ class Holding(models.Model):
             equity = getattr(self.asset, "equity", None)
             crypto = getattr(self.asset, "crypto", None)
             commodity = getattr(self.asset, "commodity", None)
+            precious_metal = getattr(self.asset, "precious_metal", None)
             custom = getattr(self.asset, "custom", None)
 
             if equity and equity.ticker:
@@ -154,6 +155,9 @@ class Holding(models.Model):
                 self.original_ticker = crypto.base_symbol
             elif commodity and commodity.symbol:
                 self.original_ticker = commodity.symbol
+            elif precious_metal and precious_metal.metal:
+                # Stable reconciliation key (gold, silver, etc.)
+                self.original_ticker = precious_metal.reconciliation_key
             elif custom and custom.name:
                 # Defensive fallback (should rarely happen)
                 self.original_ticker = custom.name

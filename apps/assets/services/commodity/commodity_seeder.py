@@ -78,7 +78,8 @@ class CommoditySeederService:
 
             # IMPORTANT:
             # use metal name as the "ticker" for reconciliation
-            precious_metal_assets_by_symbol[metal] = asset
+            precious_metal_assets_by_symbol[metal.lower()] = asset
+
 
         # ==================================================
         # 3. Reconcile holdings (commodities + precious metals)
