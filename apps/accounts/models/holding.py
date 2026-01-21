@@ -87,7 +87,7 @@ class Holding(models.Model):
         # -------------------------------------------------
         # Account invariant (always required)
         # -------------------------------------------------
-        if not self.account.active_schema:
+        if not self.account or not self.account.active_schema:
             raise ValidationError(
                 "Account schema must exist before holdings can be created."
             )
@@ -121,14 +121,12 @@ class Holding(models.Model):
         # SOURCE_CUSTOM: normalize + exit asset logic
         # -------------------------------------------------
         if self.source == self.SOURCE_CUSTOM:
-            # Custom holdings never reference assets
             self.asset = None
 
-            # Ensure intent is recorded
             if not self.custom_reason:
                 self.custom_reason = self.CUSTOM_REASON_USER
 
-            # Custom holdings do not participate in asset rules
+            # Custom holdings do not participate in asset logic
             return
 
         # -------------------------------------------------
@@ -140,31 +138,52 @@ class Holding(models.Model):
             )
 
         # -------------------------------------------------
-        # Populate original_ticker (ALL asset types)
+        # Derive original_ticker from asset (single source of truth)
         # -------------------------------------------------
-        if not self.original_ticker:
-            equity = getattr(self.asset, "equity", None)
-            crypto = getattr(self.asset, "crypto", None)
-            commodity = getattr(self.asset, "commodity", None)
-            precious_metal = getattr(self.asset, "precious_metal", None)
-            custom = getattr(self.asset, "custom", None)
+        def derive_original_ticker(asset):
+            equity = getattr(asset, "equity", None)
+            crypto = getattr(asset, "crypto", None)
+            commodity = getattr(asset, "commodity", None)
+            precious_metal = getattr(asset, "precious_metal", None)
+            custom = getattr(asset, "custom", None)
 
             if equity and equity.ticker:
-                self.original_ticker = equity.ticker
-            elif crypto and crypto.base_symbol:
-                self.original_ticker = crypto.base_symbol
-            elif commodity and commodity.symbol:
-                self.original_ticker = commodity.symbol
-            elif precious_metal and precious_metal.metal:
-                # Stable reconciliation key (gold, silver, etc.)
-                self.original_ticker = precious_metal.reconciliation_key
-            elif custom and custom.name:
-                # Defensive fallback (should rarely happen)
-                self.original_ticker = custom.name
-            else:
-                raise ValidationError(
-                    "Asset-backed holdings must have original_ticker set."
-                )
+                return equity.ticker
+
+            if crypto and crypto.base_symbol:
+                return crypto.base_symbol
+
+            if commodity and commodity.symbol:
+                return commodity.symbol
+
+            if precious_metal:
+                return precious_metal.reconciliation_key
+
+            if custom and custom.name:
+                return custom.name
+
+            raise ValidationError(
+                "Asset-backed holdings must have a derivable original_ticker."
+            )
+
+        # -------------------------------------------------
+        # Refresh original_ticker if asset changed OR missing
+        # -------------------------------------------------
+        new_ticker = derive_original_ticker(self.asset)
+
+        if self.pk:
+            old_asset_id = (
+                type(self)
+                .objects
+                .filter(pk=self.pk)
+                .values_list("asset_id", flat=True)
+                .first()
+            )
+        else:
+            old_asset_id = None
+
+        if not self.original_ticker or old_asset_id != self.asset_id:
+            self.original_ticker = new_ticker
 
         # Asset-backed holdings cannot have custom_reason
         self.custom_reason = None
@@ -181,6 +200,7 @@ class Holding(models.Model):
                 f"Accounts of type '{account_type.name}' "
                 f"cannot hold assets of type '{asset_type.name}'."
             )
+
 
     def save(self, *args, **kwargs):
         if self.source == self.SOURCE_CUSTOM:
