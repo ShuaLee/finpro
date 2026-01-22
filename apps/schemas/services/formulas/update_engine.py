@@ -1,87 +1,75 @@
-from decimal import Decimal
+from typing import List, Set
 
 from schemas.services.formulas.resolver import FormulaDependencyResolver
-from schemas.services.formulas.precision import FormulaPrecisionResolver
 
 
 class FormulaUpdateEngine:
     """
-    Recalculates all formula-based column values for a single holding.
+    Dependency traversal engine for formula columns.
+
+    Responsibilities:
+        - Determine which formula columns depend on a changed identifier
+        - Traverse dependency graph safely
+        - Return ordered list of columns to recompute
+
+    NON-responsibilities:
+        ❌ Recompute values
+        ❌ Write SchemaColumnValues
+        ❌ Apply precision
+        ❌ Decide recompute rules
+
+    Actual recomputation is handled by:
+        → SchemaManager
     """
 
-    def __init__(self, holding, schema):
-        self.holding = holding
+    def __init__(self, schema):
         self.schema = schema
 
-    # ------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------
-    def update_dependent_formulas(self, changed_identifier: str):
-        visited = set()
-        self._recompute_recursive(changed_identifier, visited)
+    # ============================================================
+    # PUBLIC API
+    # ============================================================
+    def get_dependent_formula_columns(
+        self,
+        changed_identifier: str,
+    ) -> List:
+        """
+        Return all formula SchemaColumns that depend (directly or indirectly)
+        on the given identifier.
 
-    # ------------------------------------------------------------
-    # Recursive propagation
-    # ------------------------------------------------------------
-    def _recompute_recursive(self, identifier: str, visited: set):
-        dependent_cols = self._find_formula_columns_depending_on(identifier)
+        Order is safe for recomputation.
+        """
+        visited: Set[str] = set()
+        ordered = []
 
-        for col in dependent_cols:
-            if col.identifier in visited:
+        self._dfs(changed_identifier, visited, ordered)
+        return ordered
+
+    # ============================================================
+    # DEPTH-FIRST TRAVERSAL
+    # ============================================================
+    def _dfs(self, identifier: str, visited: Set[str], ordered: list):
+        for column in self._formula_columns_depending_on(identifier):
+            if column.identifier in visited:
                 continue
 
-            visited.add(col.identifier)
+            visited.add(column.identifier)
 
-            self._recompute_formula_column(col)
-            self._recompute_recursive(col.identifier, visited)
+            # Recurse first (topological-ish order)
+            self._dfs(column.identifier, visited, ordered)
 
-    # ------------------------------------------------------------
-    # Find formula columns depending on identifier
-    # ------------------------------------------------------------
-    def _find_formula_columns_depending_on(self, identifier: str):
-        result = []
+            ordered.append(column)
 
-        for col in self.schema.columns.filter(source="formula"):
-            if not col.formula:
+    # ============================================================
+    # DEPENDENCY LOOKUP
+    # ============================================================
+    def _formula_columns_depending_on(self, identifier: str):
+        """
+        Find formula columns whose formula references `identifier`.
+        """
+        for column in self.schema.columns.filter(source="formula"):
+            if not column.formula:
                 continue
 
-            resolver = FormulaDependencyResolver(col.formula)
-            deps = resolver.extract_identifiers()
-
-            if identifier in deps:
-                result.append(col)
-
-        return result
-
-    # ------------------------------------------------------------
-    # Recompute a formula column
-    # ------------------------------------------------------------
-    def _recompute_formula_column(self, column):
-        from schemas.models.schema import SchemaColumnValue
-        from schemas.services.formulas.evaluator import FormulaEvaluator
-
-        resolver = FormulaDependencyResolver(column.formula)
-        context = resolver.build_context(self.holding, self.schema)
-
-        precision = FormulaPrecisionResolver.get_precision(
-            formula=column.formula,
-            target_column=column,
-        )
-
-        try:
-            result = FormulaEvaluator(
-                formula=column.formula,
-                context=context,
-                precision=precision,
-            ).evaluate()
-        except Exception:
-            result = Decimal("0")
-
-        scv = SchemaColumnValue.objects.get(
-            column=column,
-            holding=self.holding,
-        )
-
-        scv.value = str(result)
-        scv.source = SchemaColumnValue.SOURCE_FORMULA
-        scv.save(update_fields=["value", "source"])
+            resolver = FormulaDependencyResolver(column.formula)
+            if identifier in resolver.extract_identifiers():
+                yield column

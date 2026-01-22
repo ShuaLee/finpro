@@ -3,7 +3,7 @@ from schemas.services.schema_column_value_manager import SchemaColumnValueManage
 from schemas.services.schema_generator import SchemaGenerator
 
 
-def can_recompute(scv: SchemaColumnValue) -> bool:
+def _can_recompute(scv: SchemaColumnValue) -> bool:
     """
     SCVs created or modified by the user must never be recomputed.
     """
@@ -12,11 +12,16 @@ def can_recompute(scv: SchemaColumnValue) -> bool:
 
 class SchemaManager:
     """
-    Manages a schema and keeps SchemaColumnValues (SCVs) in sync.
+    INTERNAL schema execution engine.
 
-    - Holding + asset values are RAW
-    - SCVs are formatted display values
-    - User edits are preserved
+    Responsibilities:
+        - Ensure SchemaColumnValues (SCVs) exist
+        - Recompute SCVs deterministically
+        - Preserve user overrides
+
+    IMPORTANT:
+        ❗ This class MUST NOT be called directly by domain code.
+        ❗ All recomputation must be routed via SCVRefreshService.
     """
 
     def __init__(self, schema: Schema):
@@ -24,19 +29,13 @@ class SchemaManager:
         self._columns_cache = None
 
     # ============================================================
-    # Cached Columns
-    # ============================================================
-    @property
-    def columns(self):
-        if self._columns_cache is None:
-            self._columns_cache = list(self.schema.columns.all())
-        return self._columns_cache
-
-    # ============================================================
-    # Schema bootstrap
+    # Schema bootstrap (PUBLIC)
     # ============================================================
     @staticmethod
     def ensure_for_account(account):
+        """
+        Ensure a schema exists for the given account.
+        """
         schema = Schema.objects.filter(
             portfolio=account.portfolio,
             account_type=account.account_type,
@@ -59,19 +58,36 @@ class SchemaManager:
 
     @classmethod
     def for_account(cls, account):
+        """
+        INTERNAL factory.
+        Used ONLY by SCVRefreshService.
+        """
         schema = account.active_schema
         if not schema:
             raise ValueError(
                 f"No active schema for account '{account.name}' "
-                f"(portfolio={account.portfolio.id}, account_type={account.account_type})"
+                f"(portfolio={account.portfolio.id}, "
+                f"account_type={account.account_type})"
             )
         return cls(schema)
 
     # ============================================================
-    # Core SCV recompute primitive (THE ONLY ONE)
+    # Cached columns (INTERNAL)
+    # ============================================================
+    @property
+    def _columns(self):
+        if self._columns_cache is None:
+            self._columns_cache = list(self.schema.columns.all())
+        return self._columns_cache
+
+    # ============================================================
+    # CORE RECOMPUTE PRIMITIVE (INTERNAL)
     # ============================================================
     def _recompute_scv(self, scv: SchemaColumnValue, column):
-        if not can_recompute(scv):
+        """
+        Recompute a single SCV if allowed.
+        """
+        if not _can_recompute(scv):
             return
 
         manager = SchemaColumnValueManager(scv)
@@ -86,96 +102,78 @@ class SchemaManager:
         scv.save(update_fields=["value", "source"])
 
     # ============================================================
-    # Ensure SCVs for holding
+    # HOLDING RECOMPUTE (INTERNAL)
     # ============================================================
-    def ensure_for_holding(self, holding):
-        for col in self.columns:
+    def sync_for_holding(self, holding):
+        """
+        Recompute all SCVs for a single holding.
+
+        CALLED ONLY BY SCVRefreshService.
+        """
+        for column in self._columns:
             scv, _ = SchemaColumnValue.objects.get_or_create(
-                column=col,
+                column=column,
                 holding=holding,
                 defaults={
                     "value": SchemaColumnValueManager.display_for_column(
-                        col, holding
+                        column, holding
                     ),
                     "source": SchemaColumnValue.SOURCE_SYSTEM,
                 },
             )
 
-            self._recompute_scv(scv, col)
-
-    def ensure_for_all_holdings(self, account):
-        for holding in account.holdings.all():
-            self.ensure_for_holding(holding)
+            self._recompute_scv(scv, column)
 
     # ============================================================
-    # Sync (called on holding updates)
+    # COLUMN LIFECYCLE HELPERS (INTERNAL)
     # ============================================================
-    def sync_for_holding(self, holding):
-        for col in self.columns:
-            scv = SchemaColumnValue.objects.filter(
-                column=col,
-                holding=holding,
-            ).first()
+    def ensure_column_values(self, column):
+        """
+        Ensure SCVs exist for a newly added column.
+        """
+        accounts = self.schema.portfolio.accounts.filter(
+            account_type=self.schema.account_type
+        ).prefetch_related("holdings")
 
-            if not scv:
-                self.ensure_for_holding(holding)
-                continue
-
-            self._recompute_scv(scv, col)
-
-    def sync_for_all_holdings(self, account):
-        for holding in account.holdings.all():
-            self.sync_for_holding(holding)
-
-    # ============================================================
-    # Full refresh (schema-wide)
-    # ============================================================
-    def refresh_all(self, account):
-        for holding in account.holdings.all():
-            for col in self.columns:
-                scv = SchemaColumnValue.objects.filter(
-                    column=col,
-                    holding=holding,
-                ).first()
-
-                if scv:
-                    self._recompute_scv(scv, col)
-
-    # ============================================================
-    # Column lifecycle
-    # ============================================================
-    def on_column_added(self, column, account):
         new_scvs = []
 
-        for holding in account.holdings.all():
-            if not SchemaColumnValue.objects.filter(
-                column=column,
-                holding=holding,
-            ).exists():
-                new_scvs.append(
-                    SchemaColumnValue(
-                        column=column,
-                        holding=holding,
-                        value=SchemaColumnValueManager.display_for_column(
-                            column, holding
-                        ),
-                        source=SchemaColumnValue.SOURCE_SYSTEM,
+        for account in accounts:
+            for holding in account.holdings.all():
+                if not SchemaColumnValue.objects.filter(
+                    column=column,
+                    holding=holding,
+                ).exists():
+                    new_scvs.append(
+                        SchemaColumnValue(
+                            column=column,
+                            holding=holding,
+                            value=SchemaColumnValueManager.display_for_column(
+                                column, holding
+                            ),
+                            source=SchemaColumnValue.SOURCE_SYSTEM,
+                        )
                     )
-                )
 
         if new_scvs:
             SchemaColumnValue.objects.bulk_create(new_scvs)
 
-    def on_column_deleted(self, column):
+    def delete_column_values(self, column):
+        """
+        Remove all SCVs for a deleted column.
+        """
         SchemaColumnValue.objects.filter(column=column).delete()
 
     # ============================================================
-    # Resequencing
+    # Resequencing (INTERNAL)
     # ============================================================
-    def resequence_for_schema(self, schema):
-        columns = schema.columns.order_by("display_order", "id")
-
-        for i, col in enumerate(columns, start=1):
+    def resequence(self):
+        """
+        Normalize display_order for schema columns.
+        """
+        for i, col in enumerate(
+            self.schema.columns.order_by("display_order", "id"),
+            start=1,
+        ):
             if col.display_order != i:
                 col.display_order = i
                 col.save(update_fields=["display_order"])

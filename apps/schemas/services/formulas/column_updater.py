@@ -28,6 +28,11 @@ class FormulaColumnUpdater:
         Attach a formula to an existing SchemaColumn.
         Does NOT auto-create dependency columns.
         """
+        if not self.formula.is_system:
+            raise ValidationError(
+                "FormulaColumnUpdater is only for system formulas."
+            )
+
         # Lazy imports (prevents circular import loops)
         from schemas.models.schema import SchemaColumn
 

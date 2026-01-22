@@ -5,28 +5,49 @@ class SCVRefreshService:
     """
     Central recomputation orchestrator.
 
-    Any domain mutation that *might* affect SCVs MUST
-    route through this service.
+    Any domain mutation that *might* affect SchemaColumnValues (SCVs)
+    MUST route through this service.
 
-    This guarantees:
+    Guarantees:
         ✔ Deterministic updates
         ✔ No signals
-        ✔ One recomputation path
+        ✔ Single recomputation authority
         ✔ Easy debugging
     """
+
+    # ==========================================================
+    # INTERNAL CORE
+    # ==========================================================
+    @staticmethod
+    def _recompute_holdings(holdings):
+        """
+        Recompute SCVs for a collection of holdings.
+
+        This is the ONLY place where SchemaManager.sync_for_holding
+        is called.
+        """
+        for holding in holdings:
+            account = holding.account
+            schema = account.active_schema
+
+            if not schema:
+                continue
+
+            manager = SchemaManager.for_account(account)
+            manager.sync_for_holding(holding)
 
     # ==========================================================
     # HOLDING MUTATIONS
     # ==========================================================
     @staticmethod
     def holding_changed(holding):
-        account = holding.account
-        schema = account.active_schema
-
-        if not schema:
-            return
-
-        SchemaManager.for_account(account).sync_for_holding(holding)
+        """
+        Called when a single holding changes:
+            - quantity
+            - cost basis
+            - manual field edits
+        """
+        SCVRefreshService._recompute_holdings([holding])
 
     # ==========================================================
     # ASSET MUTATIONS (PRICE, METADATA, SUB-ASSET)
@@ -36,9 +57,8 @@ class SCVRefreshService:
         """
         Called when:
             - AssetPrice updated
-            - EquityAsset updated
-            - CryptoAsset updated
-            - Asset.currency changed
+            - Equity / Crypto / Commodity metadata updated
+            - Asset currency changed
         """
         holdings = (
             asset.holdings
@@ -46,8 +66,7 @@ class SCVRefreshService:
             .all()
         )
 
-        for holding in holdings:
-            SCVRefreshService.holding_changed(holding)
+        SCVRefreshService._recompute_holdings(holdings)
 
     # ==========================================================
     # FX MUTATIONS
@@ -55,7 +74,7 @@ class SCVRefreshService:
     @staticmethod
     def fx_changed(currency):
         """
-        Recompute all holdings priced in this currency.
+        Recompute all holdings whose asset pricing depends on this currency.
         """
         holdings = (
             currency.equities
@@ -63,19 +82,25 @@ class SCVRefreshService:
             .values_list("asset__holdings", flat=True)
         )
 
-        for holding in holdings:
-            SCVRefreshService.holding_changed(holding)
+        SCVRefreshService._recompute_holdings(holdings)
 
     # ==========================================================
     # SCHEMA / COLUMN MUTATIONS
     # ==========================================================
     @staticmethod
     def schema_changed(schema):
+        """
+        Called when:
+            - SchemaColumn added / deleted
+            - Formula attached / detached
+            - Constraints changed
+        """
         accounts = schema.portfolio.accounts.filter(
             account_type=schema.account_type
-        )
+        ).prefetch_related("holdings")
 
+        holdings = []
         for account in accounts:
-            manager = SchemaManager.for_account(account)
-            for holding in account.holdings.all():
-                manager.sync_for_holding(holding)
+            holdings.extend(account.holdings.all())
+
+        SCVRefreshService._recompute_holdings(holdings)

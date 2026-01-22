@@ -37,6 +37,16 @@ class Formula(models.Model):
 
     decimal_places = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    supported_asset_types = models.ManyToManyField(
+        "assets.AssetType",
+        blank=True,
+        related_name="formulas",
+        help_text=(
+            "If empty, formula applies to all asset types. "
+            "Otherwise, restricted to these asset types."
+        ),
+    )
+
     is_system = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -47,6 +57,11 @@ class Formula(models.Model):
     # ======================================================
     def clean(self):
         super().clean()
+
+        if self.is_system and not self.supported_asset_types.exists():
+            raise ValidationError(
+                "System formulas must explicitly declare supported asset types."
+            )
 
         if not self.expression:
             raise ValidationError("Formula must define an expression.")

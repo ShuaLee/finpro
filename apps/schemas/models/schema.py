@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from schemas.services.formulas.resolver import FormulaDependencyResolver
+
 
 class Schema(models.Model):
     """
@@ -167,6 +169,20 @@ class SchemaColumn(models.Model):
                 f"Column '{self.title}' cannot be deleted — it is system-protected."
             )
 
+        # -------------------------------------------------
+        # Prevent deletion if required by any formula column
+        # -------------------------------------------------
+        for formula_col in self.schema.columns.filter(
+            source="formula",
+            formula__isnull=False,
+        ):
+            resolver = FormulaDependencyResolver(formula_col.formula)
+            if self.identifier in resolver.extract_identifiers():
+                raise ValidationError(
+                    f"Column '{self.title}' is required by calculated column "
+                    f"'{formula_col.title}' and cannot be deleted."
+                )
+
         schema = self.schema
         removed_order = self.display_order
 
@@ -177,6 +193,7 @@ class SchemaColumn(models.Model):
         ).update(
             display_order=models.F("display_order") - 1
         )
+
 
 
 class SchemaColumnValue(models.Model):

@@ -1,10 +1,10 @@
-# schemas/services/schema_generator.py
-
+from django.core.exceptions import ValidationError
 from django.db.models import Prefetch
 from django.utils.text import slugify
 
 from schemas.models.schema import Schema, SchemaColumn
 from schemas.models.template import SchemaTemplate, SchemaTemplateColumn
+from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
@@ -113,9 +113,29 @@ class SchemaGenerator:
                 display_order=tcol.display_order,
             )
 
+            # ✅ NEW: validate formula compatibility EARLY
+            if formula_obj:
+                resolver = FormulaDependencyResolver(formula_obj)
+                try:
+                    resolver.validate_schema_columns_exist(schema)
+                    if formula_obj.supported_asset_types.exists():
+                        if not formula_obj.supported_asset_types.filter(
+                            pk=schema.account_type.pk
+                        ).exists():
+                            raise ValidationError(
+                                f"Formula '{formula_obj.identifier}' does not support "
+                                f"asset type '{schema.account_type.slug}'."
+                            )
+                except ValidationError as e:
+                    raise ValidationError(
+                        f"SchemaTemplate '{template.identifier}' "
+                        f"is incompatible with formula '{formula_obj.identifier}': {e}"
+                    )
+
             overrides = dict(tcol.constraints or {})
             SchemaConstraintManager.create_from_master(column, overrides)
             SchemaColumnValueManager.ensure_for_column(column)
+
 
             logger.debug(
                 f"➕ Added column '{column.title}' (order {column.display_order})"
