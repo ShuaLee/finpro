@@ -55,11 +55,21 @@ class CommoditySeederService:
         # ==================================================
         # 2. Derive precious metals from commodities
         # ==================================================
-        precious_metal_assets_by_symbol: dict[str, Asset] = {}
 
-        pm_asset_type = AssetType.objects.get(slug="precious-metal") \
-            if AssetType.objects.filter(slug="precious-metal").exists() \
-            else AssetType.objects.get(slug="precious_metal")
+        # 🔥 IMPORTANT FIX:
+        # Precious metals are derived assets and MUST be deleted
+        # before recreating them, otherwise they PROTECT old commodities
+        # and orphaned PM assets can accumulate.
+
+        pm_asset_type = AssetType.objects.get(slug="precious-metal")
+
+        # 1️⃣ Delete PM detail rows (if any)
+        PreciousMetalAsset.objects.all().delete()
+
+        # 2️⃣ Delete ALL precious-metal Assets (including orphans)
+        Asset.objects.filter(asset_type=pm_asset_type).delete()
+
+        precious_metal_assets_by_symbol: dict[str, Asset] = {}
 
         for metal, commodity_symbol in PRECIOUS_METAL_COMMODITY_MAP.items():
             commodity_asset = commodity_assets_by_symbol.get(commodity_symbol)
@@ -76,10 +86,8 @@ class CommoditySeederService:
                 commodity=commodity_asset.commodity,
             )
 
-            # IMPORTANT:
-            # use metal name as the "ticker" for reconciliation
+            # use metal name as the reconciliation key
             precious_metal_assets_by_symbol[metal.lower()] = asset
-
 
         # ==================================================
         # 3. Reconcile holdings (commodities + precious metals)
