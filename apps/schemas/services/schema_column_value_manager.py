@@ -1,25 +1,25 @@
 from decimal import Decimal, ROUND_HALF_UP
-from schemas.models.schema import SchemaColumnValue
+from typing import Any
+
+from schemas.models.schema_column_value import SchemaColumnValue
+from formulas.services.formula_resolver import FormulaResolver
+from formulas.services.formula_evaluator import FormulaEvaluator
 
 
 class SchemaColumnValueManager:
     """
-    PURE SCV VALUE MANAGER.
+    PURE SCV computation manager.
 
     Responsibilities:
-        - Compute display values
-        - Apply formatting & constraints
-        - Persist SCV values
-        - Preserve SOURCE_USER overrides
+        - Compute the display value for ONE SchemaColumnValue
+        - Apply formatting and precision
+        - Invoke formula execution when needed
 
-    NON-responsibilities:
+    Non-responsibilities:
         ❌ Trigger recomputation
-        ❌ Traverse formula dependencies
-        ❌ Call FormulaUpdateEngine
-        ❌ Orchestrate schema refreshes
-
-    All recomputation MUST be handled by:
-        → SCVRefreshService → SchemaManager
+        ❌ Traverse schemas or holdings
+        ❌ Resolve schema dependencies
+        ❌ Persist SCVs outside the one managed instance
     """
 
     def __init__(self, scv: SchemaColumnValue):
@@ -28,167 +28,151 @@ class SchemaColumnValueManager:
         self.holding = scv.holding
 
     # ============================================================
-    # DISPLAY ENTRY POINT (PURE)
+    # PUBLIC ENTRY POINT
     # ============================================================
-    def refresh_display_value(self):
+    def refresh_display_value(self) -> None:
         """
-        Recompute this SCV's display value ONLY.
-        Caller decides whether this is allowed.
+        Recompute and assign this SCV's value.
+
+        Caller is responsible for:
+            - deciding whether recomputation is allowed
+            - persisting source changes
         """
-        self.scv.value = self.display_for_column(
-            self.column,
-            self.holding,
-        )
+        self.scv.value = self._compute_value()
 
     # ============================================================
-    # DISPLAY LOGIC (PURE)
+    # CORE COMPUTATION
     # ============================================================
-    @staticmethod
-    def display_for_column(column, holding):
-        from schemas.services.formulas.resolver import FormulaDependencyResolver
-        from schemas.services.formulas.evaluator import FormulaEvaluator
-        from schemas.services.formulas.precision import FormulaPrecisionResolver
+    def _compute_value(self) -> str | None:
+        column = self.column
 
         # ---------------- FORMULA ----------------
-        if column.source == "formula" and column.formula:
-            resolver = FormulaDependencyResolver(column.formula)
-            context = resolver.build_context(holding, column.schema)
-
-            precision = FormulaPrecisionResolver.get_precision(
-                formula=column.formula,
-                target_column=column,
-            )
-
-            return str(
-                FormulaEvaluator(
-                    formula=column.formula,
-                    context=context,
-                    precision=precision,
-                ).evaluate()
-            )
+        if column.source == "formula" and column.formula_definition:
+            return self._compute_formula_value()
 
         # ---------------- HOLDING ----------------
         if column.source == "holding" and column.source_field:
-            raw = SchemaColumnValueManager._resolve_path(
-                holding,
-                column.source_field,
-            )
-            return SchemaColumnValueManager._format(column, raw)
+            raw = self._resolve_path(self.holding, column.source_field)
+            return self._format_value(raw)
 
         # ---------------- ASSET ----------------
         if column.source == "asset" and column.source_field:
-            asset = holding.asset if holding else None
-            raw = (
-                SchemaColumnValueManager._resolve_path(asset, column.source_field)
-                if asset
-                else None
-            )
-            return SchemaColumnValueManager._format(column, raw)
+            asset = self.holding.asset if self.holding else None
+            raw = self._resolve_path(
+                asset, column.source_field) if asset else None
+            return self._format_value(raw)
 
         # ---------------- CUSTOM / EMPTY ----------------
-        return SchemaColumnValueManager._static_default(column)
+        return self._static_default()
+
+    # ============================================================
+    # FORMULA COMPUTATION
+    # ============================================================
+    def _compute_formula_value(self) -> str:
+        definition = self.column.formula_definition
+        formula = definition.formula
+
+        # Build evaluation context
+        context = FormulaResolver.resolve_inputs(
+            formula=formula,
+            context=self._build_context(),
+            allow_missing=(definition.dependency_policy == "auto_expand"),
+            default_missing=Decimal("0"),
+        )
+
+        result = FormulaEvaluator.evaluate(
+            formula=formula,
+            context=context,
+        )
+
+        return self._format_decimal(result)
+
+    def _build_context(self) -> dict[str, Any]:
+        """
+        Build identifier → raw value mapping for formula evaluation
+        from existing SCVs in the same schema.
+        """
+        schema = self.column.schema
+        holding = self.holding
+
+        context = {}
+
+        for scv in SchemaColumnValue.objects.filter(
+            holding=holding,
+            column__schema=schema,
+        ).select_related("column"):
+            identifier = scv.column.identifier
+            try:
+                context[identifier] = Decimal(str(scv.value))
+            except Exception:
+                context[identifier] = Decimal("0")
+
+        return context
 
     # ============================================================
     # FORMATTING
     # ============================================================
-    @staticmethod
-    def _format(column, raw):
+    def _format_value(self, raw: Any) -> str | None:
         if raw is None:
-            return SchemaColumnValueManager._static_default(column)
+            return self._static_default()
 
-        if column.data_type == "decimal":
+        if self.column.data_type == "decimal":
             try:
-                value = Decimal(str(raw))
+                return self._format_decimal(Decimal(str(raw)))
             except Exception:
-                return SchemaColumnValueManager._static_default(column)
+                return self._static_default()
 
-            dp = SchemaColumnValueManager._decimal_places(column)
-
-            try:
-                quant = Decimal("1").scaleb(-dp)
-                return str(value.quantize(quant, rounding=ROUND_HALF_UP))
-            except Exception:
-                return str(value)
-
-        if column.data_type == "integer":
+        if self.column.data_type == "integer":
             try:
                 return str(int(raw))
             except Exception:
                 return "0"
 
-        if column.data_type == "string":
-            s = str(raw)
-            max_len = SchemaColumnValueManager._max_length(column)
-            return s[:max_len] if max_len else s
+        if self.column.data_type == "string":
+            return str(raw)
 
-        return raw
+        if self.column.data_type == "boolean":
+            return str(bool(raw))
+
+        return str(raw)
+
+    def _format_decimal(self, value: Decimal) -> str:
+        places = self._decimal_places()
+        quant = Decimal("1").scaleb(-places)
+        return str(value.quantize(quant, rounding=ROUND_HALF_UP))
 
     # ============================================================
-    # CONSTRAINT HELPERS
+    # CONSTRAINT HELPERS (READ-ONLY)
     # ============================================================
-    @staticmethod
-    def _decimal_places(column):
-        constraint = column.constraints_set.filter(name="decimal_places").first()
+    def _decimal_places(self) -> int:
+        constraint = self.column.constraints_set.filter(
+            name="decimal_places"
+        ).first()
+
         try:
             return int(constraint.get_typed_value()) if constraint else 2
         except Exception:
             return 2
 
-    @staticmethod
-    def _max_length(column):
-        constraint = column.constraints_set.filter(name="max_length").first()
-        try:
-            return int(constraint.get_typed_value()) if constraint else 255
-        except Exception:
-            return 255
-
     # ============================================================
-    # USER EDIT API (NO CASCADE)
+    # DEFAULTS
     # ============================================================
-    def save_user_value(self, raw_value):
-        """
-        User explicitly overrides the SCV.
-
-        ❗ Does NOT trigger recomputation.
-        Caller must notify SCVRefreshService.
-        """
-        self.scv.value = self._format(self.column, raw_value)
-        self.scv.source = SchemaColumnValue.SOURCE_USER
-        self.scv.save(update_fields=["value", "source"])
-
-    def revert_to_system(self):
-        """
-        Clear manual override and recompute local value.
-
-        ❗ Does NOT trigger recomputation cascade.
-        """
-        self.refresh_display_value()
-
-        self.scv.source = (
-            SchemaColumnValue.SOURCE_FORMULA
-            if self.column.source == "formula"
-            else SchemaColumnValue.SOURCE_SYSTEM
-        )
-        self.scv.save(update_fields=["value", "source"])
-
-    # ============================================================
-    # STATIC DEFAULTS
-    # ============================================================
-    @staticmethod
-    def _static_default(column):
-        if column.data_type == "decimal":
+    def _static_default(self) -> str | None:
+        if self.column.data_type == "decimal":
             return "0.00"
-        if column.data_type == "integer":
+        if self.column.data_type == "integer":
             return "0"
-        if column.data_type == "string":
+        if self.column.data_type == "string":
             return "-"
+        if self.column.data_type == "boolean":
+            return "False"
         return None
 
     # ============================================================
-    # FIELD RESOLUTION (PURE)
+    # PATH RESOLUTION (PURE)
     # ============================================================
     @staticmethod
-    def _resolve_path(obj, path):
+    def _resolve_path(obj, path: str | None) -> Any:
         if not obj or not path:
             return None
 
@@ -197,18 +181,3 @@ class SchemaColumnValueManager:
             if obj is None:
                 return None
         return obj
-
-    # ============================================================
-    # SCV FACTORY
-    # ============================================================
-    @classmethod
-    def get_or_create(cls, holding, column):
-        scv, _ = SchemaColumnValue.objects.get_or_create(
-            column=column,
-            holding=holding,
-            defaults={
-                "value": cls.display_for_column(column, holding),
-                "source": SchemaColumnValue.SOURCE_SYSTEM,
-            },
-        )
-        return cls(scv)

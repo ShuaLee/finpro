@@ -1,26 +1,27 @@
-from schemas.models import Schema, SchemaColumnValue
+from schemas.models.schema import Schema, SchemaColumnValue
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from schemas.services.schema_generator import SchemaGenerator
 
 
 def _can_recompute(scv: SchemaColumnValue) -> bool:
     """
-    User-overridden SCVs must never be recomputed.
+    SCVs created or modified by the user must never be recomputed.
     """
-    return scv.source != SchemaColumnValue.Source.USER
+    return scv.source != SchemaColumnValue.SOURCE_USER
 
 
 class SchemaManager:
     """
-    Deterministic schema execution engine.
+    INTERNAL schema execution engine.
 
     Responsibilities:
-        - Ensure SCVs exist
+        - Ensure SchemaColumnValues (SCVs) exist
         - Recompute SCVs deterministically
         - Preserve user overrides
 
-    ❗ This class MUST NOT be called directly by domain code.
-    ❗ All calls must go through SCVRefreshService.
+    IMPORTANT:
+        ❗ This class MUST NOT be called directly by domain code.
+        ❗ All recomputation must be routed via SCVRefreshService.
     """
 
     def __init__(self, schema: Schema):
@@ -28,26 +29,12 @@ class SchemaManager:
         self._columns_cache = None
 
     # ============================================================
-    # FACTORIES
+    # Schema bootstrap (PUBLIC)
     # ============================================================
-    @classmethod
-    def for_account(cls, account):
-        """
-        INTERNAL factory.
-        Used ONLY by SCVRefreshService.
-        """
-        schema = getattr(account, "active_schema", None)
-        if not schema:
-            raise ValueError(
-                f"No active schema for account '{account}'."
-            )
-        return cls(schema)
-
     @staticmethod
     def ensure_for_account(account):
         """
-        Ensure a schema exists for an account.
-        Used during account creation / access.
+        Ensure a schema exists for the given account.
         """
         schema = Schema.objects.filter(
             portfolio=account.portfolio,
@@ -61,6 +48,7 @@ class SchemaManager:
             portfolio=account.portfolio,
             domain_type=account.account_type,
         )
+
         schemas = generator.initialize()
 
         return next(
@@ -68,8 +56,23 @@ class SchemaManager:
             None,
         )
 
+    @classmethod
+    def for_account(cls, account):
+        """
+        INTERNAL factory.
+        Used ONLY by SCVRefreshService.
+        """
+        schema = account.active_schema
+        if not schema:
+            raise ValueError(
+                f"No active schema for account '{account.name}' "
+                f"(portfolio={account.portfolio.id}, "
+                f"account_type={account.account_type})"
+            )
+        return cls(schema)
+
     # ============================================================
-    # INTERNAL HELPERS
+    # Cached columns (INTERNAL)
     # ============================================================
     @property
     def _columns(self):
@@ -78,9 +81,30 @@ class SchemaManager:
         return self._columns_cache
 
     # ============================================================
-    # CORE EXECUTION
+    # CORE RECOMPUTE PRIMITIVE (INTERNAL)
     # ============================================================
-    def sync_scvs_for_holding(self, holding):
+    def _recompute_scv(self, scv: SchemaColumnValue, column):
+        """
+        Recompute a single SCV if allowed.
+        """
+        if not _can_recompute(scv):
+            return
+
+        manager = SchemaColumnValueManager(scv)
+        manager.refresh_display_value()
+
+        scv.source = (
+            SchemaColumnValue.SOURCE_FORMULA
+            if column.source == "formula"
+            else SchemaColumnValue.SOURCE_SYSTEM
+        )
+
+        scv.save(update_fields=["value", "source"])
+
+    # ============================================================
+    # HOLDING RECOMPUTE (INTERNAL)
+    # ============================================================
+    def sync_for_holding(self, holding):
         """
         Recompute all SCVs for a single holding.
 
@@ -94,32 +118,14 @@ class SchemaManager:
                     "value": SchemaColumnValueManager.display_for_column(
                         column, holding
                     ),
-                    "source": SchemaColumnValue.Source.SYSTEM,
+                    "source": SchemaColumnValue.SOURCE_SYSTEM,
                 },
             )
 
             self._recompute_scv(scv, column)
 
-    def _recompute_scv(self, scv: SchemaColumnValue, column):
-        """
-        Recompute a single SCV if allowed.
-        """
-        if not _can_recompute(scv):
-            return
-
-        manager = SchemaColumnValueManager(scv)
-        manager.refresh_display_value()
-
-        scv.source = (
-            SchemaColumnValue.Source.FORMULA
-            if column.source == "formula"
-            else SchemaColumnValue.Source.SYSTEM
-        )
-
-        scv.save(update_fields=["value", "source"])
-
     # ============================================================
-    # COLUMN LIFECYCLE (INTERNAL)
+    # COLUMN LIFECYCLE HELPERS (INTERNAL)
     # ============================================================
     def ensure_column_values(self, column):
         """
@@ -144,7 +150,7 @@ class SchemaManager:
                             value=SchemaColumnValueManager.display_for_column(
                                 column, holding
                             ),
-                            source=SchemaColumnValue.Source.SYSTEM,
+                            source=SchemaColumnValue.SOURCE_SYSTEM,
                         )
                     )
 
@@ -158,7 +164,7 @@ class SchemaManager:
         SchemaColumnValue.objects.filter(column=column).delete()
 
     # ============================================================
-    # ORDER NORMALIZATION
+    # Resequencing (INTERNAL)
     # ============================================================
     def resequence(self):
         """

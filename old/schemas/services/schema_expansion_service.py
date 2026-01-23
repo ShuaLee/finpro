@@ -1,38 +1,30 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction, models
 
-from schemas.models.schema_column import SchemaColumn
-from schemas.models.template import SchemaColumnTemplate
+from schemas.models.schema import SchemaColumn
+from schemas.models.template import SchemaTemplateColumn
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+from schemas.services.formulas.resolver import FormulaDependencyResolver
 from schemas.services.scv_refresh_service import SCVRefreshService
-
-from formulas.services.formula_resolver import FormulaResolver
 
 
 class SchemaExpansionService:
     """
-    Expands a Schema by adding SYSTEM columns and their dependencies.
+    Explicitly expands a Schema by adding SYSTEM columns
+    defined by SchemaTemplateColumns.
 
     This is the ONLY place where:
-        - system columns are auto-created
-        - system formula dependencies are resolved structurally
-
-    This service does NOT compute values directly.
+      - system columns are created
+      - system formula dependencies are resolved
     """
-    # ==========================================================
-    # PUBLIC ENTRY POINT
-    # ==========================================================
+
     @staticmethod
     @transaction.atomic
-    def add_system_column(schema, template_column: SchemaColumnTemplate):
-        """
-        Ensure a system SchemaColumn (and its dependencies) exists.
-        """
-
-        # --------------------------------------------------
+    def add_system_column(schema, template_column: SchemaTemplateColumn):
+        # -------------------------------------------------
         # 1. Guardrails
-        # --------------------------------------------------
+        # -------------------------------------------------
         if not template_column.is_system:
             raise ValidationError(
                 "Only system template columns may be added via schema expansion."
@@ -50,22 +42,22 @@ class SchemaExpansionService:
         if existing:
             return existing
 
-        # --------------------------------------------------
-        # 2. Resolve formula dependencies FIRST (STRUCTURAL)
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # 2. Resolve formula dependencies FIRST
+        # -------------------------------------------------
         if template_column.source == "formula":
-            definition = template_column.formula_definition
-            if not definition:
+            formula = template_column.formula
+            if not formula:
                 raise ValidationError(
                     f"Template column '{template_column.identifier}' "
-                    f"is formula-based but has no FormulaDefinition attached."
+                    f"is formula-based but has no formula attached."
                 )
 
-            formula = definition.formula
-            resolver = FormulaResolver(formula=formula)
+            resolver = FormulaDependencyResolver(formula)
 
-            for dep_identifier in resolver.required_identifiers():
-                dep_template = SchemaColumnTemplate.objects.filter(
+            for dep_identifier in resolver.extract_identifiers():
+                # Find dependency template
+                dep_template = SchemaTemplateColumn.objects.filter(
                     template=template_column.template,
                     identifier=dep_identifier,
                 ).first()
@@ -78,17 +70,21 @@ class SchemaExpansionService:
 
                 # Recursive expansion
                 SchemaExpansionService.add_system_column(
-                    schema=schema,
-                    template_column=dep_template,
+                    schema,
+                    dep_template,
                 )
 
-        # --------------------------------------------------
-        # 3. Create SchemaColumn
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # 3. Create the SchemaColumn
+        # -------------------------------------------------
         max_order = (
-            schema.columns.aggregate(
-                max=models.Max("display_order")
-            ).get("max") or 0
+            schema.columns.aggregate_max_order()
+            if hasattr(schema.columns, "aggregate_max_order")
+            else (
+                schema.columns.aggregate(
+                    max=models.Max("display_order")
+                ).get("max") or 0
+            )
         )
 
         column = SchemaColumn.objects.create(
@@ -98,32 +94,33 @@ class SchemaExpansionService:
             data_type=template_column.data_type,
             source=template_column.source,
             source_field=(
-                None if template_column.source == "formula"
+                None
+                if template_column.source == "formula"
                 else template_column.source_field
             ),
-            formula_definition=template_column.formula_definition,
+            formula=template_column.formula,
             is_editable=template_column.is_editable,
             is_deletable=template_column.is_deletable,
             is_system=True,
             display_order=max_order + 1,
         )
 
-        # --------------------------------------------------
-        # 4. Attach constraints
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # 4. Create constraints
+        # -------------------------------------------------
         SchemaConstraintManager.create_from_master(
             column,
             overrides=template_column.constraints or {},
         )
 
-        # --------------------------------------------------
-        # 5. Ensure SCVs exist (NO recompute here)
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # 5. Ensure SCVs exist
+        # -------------------------------------------------
         SchemaColumnValueManager.ensure_for_column(column)
 
-        # --------------------------------------------------
-        # 6. Single schema-wide recompute
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # 6. Recompute centrally
+        # -------------------------------------------------
         SCVRefreshService.schema_changed(schema)
 
         return column

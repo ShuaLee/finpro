@@ -1,5 +1,3 @@
-from typing import Iterable
-
 from schemas.services.schema_manager import SchemaManager
 
 
@@ -7,66 +5,60 @@ class SCVRefreshService:
     """
     Central recomputation orchestrator.
 
-    ❗ This is the ONLY entry point for recomputing SchemaColumnValues (SCVs).
+    Any domain mutation that *might* affect SchemaColumnValues (SCVs)
+    MUST route through this service.
 
-    Responsibilities:
-        - Determine WHICH holdings must be recomputed
-        - Invoke SchemaManager deterministically
-        - Enforce a single recomputation pathway
-
-    Non-responsibilities:
-        ❌ Compute values
-        ❌ Resolve formula dependencies
-        ❌ Evaluate formulas
-        ❌ Create schema columns
-        ❌ Attach constraints
+    Guarantees:
+        ✔ Deterministic updates
+        ✔ No signals
+        ✔ Single recomputation authority
+        ✔ Easy debugging
     """
 
     # ==========================================================
     # INTERNAL CORE
     # ==========================================================
     @staticmethod
-    def _recompute_holdings(holdings: Iterable):
+    def _recompute_holdings(holdings):
         """
-        Recompute SCVs for the given holdings.
+        Recompute SCVs for a collection of holdings.
 
-        This is the ONLY place where SchemaManager.sync_scvs_for_holding
-        may be called.
+        This is the ONLY place where SchemaManager.sync_for_holding
+        is called.
         """
         for holding in holdings:
             account = holding.account
-            schema = getattr(account, "active_schema", None)
+            schema = account.active_schema
 
             if not schema:
                 continue
 
             manager = SchemaManager.for_account(account)
-            manager.sync_scvs_for_holding(holding)
+            manager.sync_for_holding(holding)
 
     # ==========================================================
-    # HOLDING-LEVEL EVENTS
+    # HOLDING MUTATIONS
     # ==========================================================
     @staticmethod
     def holding_changed(holding):
         """
-        Called when a single holding changes, including:
+        Called when a single holding changes:
             - quantity
             - cost basis
             - manual field edits
-            - holding metadata changes
         """
         SCVRefreshService._recompute_holdings([holding])
 
     # ==========================================================
-    # ASSET-LEVEL EVENTS
+    # ASSET MUTATIONS (PRICE, METADATA, SUB-ASSET)
     # ==========================================================
     @staticmethod
     def asset_changed(asset):
         """
-        Called when an asset changes, including:
-            - price updates
-            - metadata changes
-            - asset-level recalculations
+        Called when:
+            - AssetPrice updated
+            - Equity / Crypto / Commodity metadata updated
+            - Asset currency changed
         """
         holdings = (
             asset.holdings
@@ -77,35 +69,35 @@ class SCVRefreshService:
         SCVRefreshService._recompute_holdings(holdings)
 
     # ==========================================================
-    # FX / CURRENCY EVENTS
+    # FX MUTATIONS
     # ==========================================================
     @staticmethod
-    def fx_changed(holdings: Iterable):
+    def fx_changed(currency):
         """
-        Called when an FX rate changes.
+        Recompute all holdings whose asset pricing depends on this currency.
+        """
+        holdings = (
+            currency.equities
+            .prefetch_related("asset__holdings__account")
+            .values_list("asset__holdings", flat=True)
+        )
 
-        Caller is responsible for supplying the affected holdings.
-        """
         SCVRefreshService._recompute_holdings(holdings)
 
     # ==========================================================
-    # SCHEMA-LEVEL EVENTS
+    # SCHEMA / COLUMN MUTATIONS
     # ==========================================================
     @staticmethod
     def schema_changed(schema):
         """
-        Called when the schema structure changes, including:
-            - column added
-            - column deleted
-            - formula attached or detached
-            - constraints modified
-
-        Recomputes ALL holdings for accounts using this schema.
+        Called when:
+            - SchemaColumn added / deleted
+            - Formula attached / detached
+            - Constraints changed
         """
-        accounts = (
-            schema.portfolio.accounts.filter(
-                account_type=schema.account_type).prefetch_related("holdings")
-        )
+        accounts = schema.portfolio.accounts.filter(
+            account_type=schema.account_type
+        ).prefetch_related("holdings")
 
         holdings = []
         for account in accounts:

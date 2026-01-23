@@ -3,33 +3,44 @@ from django.db import models
 
 class SchemaTemplate(models.Model):
     """
-    A global blueprint defining the default schema for a specific AccountType.
-    Used when initializing new portfolio-level Schemas.
+    Defines a reusable schema blueprint for an account type.
     """
 
-    account_type = models.OneToOneField(   # unique FK → OneToOneField is correct
-        "accounts.AccountType",
-        on_delete=models.CASCADE,
-        related_name="schema_template",
-        db_index=True,
-        help_text="AccountType this template applies to.",
+    identifier = models.SlugField(
+        max_length=100,
+        unique=True,
+        help_text="Stable system identifier (e.g. equity_default)."
     )
 
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
+    name = models.CharField(
+        max_length=255,
+        help_text="Human-readable template name."
+    )
+
+    account_type = models.ForeignKey(
+        "accounts.AccountType",
+        on_delete=models.CASCADE,
+        related_name="schema_templates",
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this template can be used for generation."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["account_type__slug"]
+        ordering = ["account_type__slug", "identifier"]
 
     def __str__(self):
         return f"{self.name} ({self.account_type.slug})"
 
 
-class SchemaTemplateColumn(models.Model):
+class SchemaColumnTemplate(models.Model):
+    """
+    Blueprint for a SchemaColumn.
+    """
 
     template = models.ForeignKey(
         SchemaTemplate,
@@ -38,63 +49,71 @@ class SchemaTemplateColumn(models.Model):
     )
 
     title = models.CharField(max_length=255)
-    identifier = models.SlugField(max_length=100, db_index=True)
 
-    # Data type
+    identifier = models.SlugField(
+        max_length=100,
+        help_text="Must match formula dependency identifiers if formula-based."
+    )
+
     data_type = models.CharField(
         max_length=20,
         choices=[
             ("string", "String"),
             ("decimal", "Decimal"),
             ("integer", "Integer"),
-            ("date", "Date"),
             ("boolean", "Boolean"),
-            ("url", "URL"),
+            ("date", "Date"),
         ],
     )
 
-    # Source of the column value
     source = models.CharField(
         max_length=20,
         choices=[
             ("holding", "Holding"),
             ("asset", "Asset"),
             ("formula", "Formula"),
-            ("custom", "Custom"),
         ],
     )
 
-    # NEW — proper FK to Formula (required by admin UI)
-    formula = models.ForeignKey(
-        "schemas.Formula",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="template_columns",
-        help_text="Formula to use when source='formula'."
-    )
-
-    # String-based field for asset/holding/custom source fields
-    # (ignored if source='formula')
     source_field = models.CharField(
         max_length=100,
         null=True,
         blank=True,
-        help_text="Holding/Asset field name OR unused when formula is provided."
+        help_text="Attribute path for holding/asset OR formula identifier."
     )
 
-    constraints = models.JSONField(default=dict, blank=True)
+    formula_definition = models.ForeignKey(
+        "formulas.FormulaDefinition",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="template_columns",
+    )
 
-    is_editable = models.BooleanField(default=True)
-    is_deletable = models.BooleanField(default=True)
-    is_system = models.BooleanField(default=False)
-    is_default = models.BooleanField(default=False)
+    constraints = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Constraint overrides."
+    )
 
-    display_order = models.PositiveIntegerField(null=True, blank=True)
+    is_default = models.BooleanField(
+        default=True,
+        help_text="Added automatically on schema creation."
+    )
+
+    is_system = models.BooleanField(
+        default=True,
+        help_text="System-managed column."
+    )
+
+    is_editable = models.BooleanField(default=False)
+    is_deletable = models.BooleanField(default=False)
+
+    display_order = models.PositiveIntegerField(default=0)
 
     class Meta:
-        unique_together = ("template", "identifier")
         ordering = ["display_order", "id"]
+        unique_together = ("template", "identifier")
 
     def __str__(self):
-        return f"{self.title} ({self.template.account_type.slug})"
+        return f"{self.title} ({self.template.identifier})"
