@@ -51,7 +51,6 @@ class HoldingAdmin(admin.ModelAdmin):
         "custom_reason",
         "quantity",
         "average_purchase_price",
-        "current_value_display",
         "created_at",
         "updated_at",
     )
@@ -79,7 +78,6 @@ class HoldingAdmin(admin.ModelAdmin):
         "custom_reason",
         "created_at",
         "updated_at",
-        "current_value_display",
     )
 
     autocomplete_fields = (
@@ -98,7 +96,6 @@ class HoldingAdmin(admin.ModelAdmin):
             "fields": (
                 "quantity",
                 "average_purchase_price",
-                "current_value_display",
             )
         }),
         ("Timestamps", {
@@ -116,15 +113,6 @@ class HoldingAdmin(admin.ModelAdmin):
         }),
 
     )
-
-    # -------------------------------------------------
-    # Display helpers
-    # -------------------------------------------------
-    def current_value_display(self, obj):
-        value = obj.current_value
-        return value if value is not None else "—"
-
-    current_value_display.short_description = "Current Value"
 
     # -------------------------------------------------
     # Permissions

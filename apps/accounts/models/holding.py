@@ -72,7 +72,15 @@ class Holding(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("account", "asset")
+        constraints = [
+            # Asset-backed holdings: one per account-asset pair
+            models.UniqueConstraint(
+                fields=["account", "asset"],
+                condition=models.Q(source="asset"),
+                name="unique_account_asset_holding",
+            ),
+            # Custom holdings: no constraint here, uniqueness enforced via schema identifier column
+        ]
         ordering = ["account", "asset"]
 
     def __str__(self):
@@ -208,13 +216,3 @@ class Holding(models.Model):
 
         self.full_clean()
         super().save(*args, **kwargs)
-
-    # ------------------------
-    # Derived values
-    # ------------------------
-    @property
-    def current_value(self):
-        price = getattr(self.asset, "price", None)
-        if price and price.price is not None:
-            return self.quantity * price.price
-        return None

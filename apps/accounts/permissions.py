@@ -11,12 +11,12 @@ class IsAccountOwner(BasePermission):
     """
 
     def has_object_permission(self, request, view, obj):
-        # For SelfManagedAccount or ManagedAccount
-        if hasattr(obj, 'stock_portfolio'):
-            return obj.stock_portfolio.portfolio.profile.user == request.user
+        # If obj is Account
+        if hasattr(obj, 'portfolio'):
+            return obj.portfolio.profile.user == request.user
 
-        # For StorageFacility (metal account)
-        if hasattr(obj, 'metals_portfolio'):
-            return obj.metals_portfolio.portfolio.profile.user == request.user
+        # If obj is Holding
+        if hasattr(obj, 'account'):
+            return obj.account.portfolio.profile.user == request.user
 
         return False

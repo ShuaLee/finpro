@@ -28,6 +28,58 @@ class SchemaColumnValueManager:
         self.holding = scv.holding
 
     # ============================================================
+    # STATIC FACTORY METHODS
+    # ============================================================
+    @staticmethod
+    def display_for_column(column, holding) -> str:
+        """
+        Compute initial display value for a column/holding pair.
+        Used when creating new SCVs.
+        """
+        # Create temporary SCV to leverage existing computation logic
+        temp_scv = SchemaColumnValue(
+            column=column,
+            holding=holding,
+            value="",
+            source=SchemaColumnValue.Source.SYSTEM,
+        )
+        manager = SchemaColumnValueManager(temp_scv)
+        return manager._compute_value() or manager._static_default()
+
+    @staticmethod
+    def ensure_for_column(column):
+        """
+        Ensure SCVs exist for a newly added column across all holdings.
+        Creates SCVs without triggering recomputation (that's done separately).
+        """
+        schema = column.schema
+        accounts = schema.portfolio.accounts.filter(
+            account_type=schema.account_type
+        ).prefetch_related("holdings")
+
+        new_scvs = []
+
+        for account in accounts:
+            for holding in account.holdings.all():
+                if not SchemaColumnValue.objects.filter(
+                    column=column,
+                    holding=holding,
+                ).exists():
+                    new_scvs.append(
+                        SchemaColumnValue(
+                            column=column,
+                            holding=holding,
+                            value=SchemaColumnValueManager.display_for_column(
+                                column, holding
+                            ),
+                            source=SchemaColumnValue.Source.SYSTEM,
+                        )
+                    )
+
+        if new_scvs:
+            SchemaColumnValue.objects.bulk_create(new_scvs)
+
+    # ============================================================
     # PUBLIC ENTRY POINT
     # ============================================================
     def refresh_display_value(self) -> None:

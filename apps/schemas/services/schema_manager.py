@@ -59,14 +59,11 @@ class SchemaManager:
 
         generator = SchemaGenerator(
             portfolio=account.portfolio,
-            domain_type=account.account_type,
+            account_type=account.account_type,
         )
-        schemas = generator.initialize()
+        schema = generator.initialize()
 
-        return next(
-            (s for s in schemas if s.account_type == account.account_type),
-            None,
-        )
+        return schema
 
     # ============================================================
     # INTERNAL HELPERS
@@ -124,32 +121,9 @@ class SchemaManager:
     def ensure_column_values(self, column):
         """
         Ensure SCVs exist for a newly added column.
+        Delegates to SchemaColumnValueManager.
         """
-        accounts = self.schema.portfolio.accounts.filter(
-            account_type=self.schema.account_type
-        ).prefetch_related("holdings")
-
-        new_scvs = []
-
-        for account in accounts:
-            for holding in account.holdings.all():
-                if not SchemaColumnValue.objects.filter(
-                    column=column,
-                    holding=holding,
-                ).exists():
-                    new_scvs.append(
-                        SchemaColumnValue(
-                            column=column,
-                            holding=holding,
-                            value=SchemaColumnValueManager.display_for_column(
-                                column, holding
-                            ),
-                            source=SchemaColumnValue.Source.SYSTEM,
-                        )
-                    )
-
-        if new_scvs:
-            SchemaColumnValue.objects.bulk_create(new_scvs)
+        SchemaColumnValueManager.ensure_for_column(column)
 
     def delete_column_values(self, column):
         """
