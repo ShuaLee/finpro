@@ -11,13 +11,26 @@ class DependencyPolicy(models.TextChoices):
 
 class FormulaDefinition(models.Model):
     """
-    Defines the semantic meaning of a formula in a given context.
+    Semantic definition of a formula in a given context.
 
     Example:
         identifier = "current_value"
         asset_type = equity
         formula = quantity * price
+
+    Notes:
+    - Meaning lives here
+    - Schema existence DOES NOT live here
     """
+
+    owner = models.ForeignKey(
+        "users.Profile",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="formula_definitions",
+        help_text="Null = system definition, otherwise user-owned."
+    )
 
     identifier = models.SlugField(
         max_length=100,
@@ -55,7 +68,7 @@ class FormulaDefinition(models.Model):
 
     is_system = models.BooleanField(
         default=False,
-        help_text="System-defined and analytics-safe.",
+        help_text="System-defined and analytics-safe."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -64,11 +77,11 @@ class FormulaDefinition(models.Model):
         ordering = ["identifier"]
         constraints = [
             models.UniqueConstraint(
-                fields=["identifier", "asset_type"],
-                name="uniq_formula_definition_per_asset_type"
+                fields=["identifier", "asset_type", "owner"],
+                name="uniq_formula_definition_per_asset_type_owner"
             )
         ]
 
     def __str__(self):
-        return f"{self.identifier} [{self.asset_type.slug}]"
-    
+        scope = "system" if self.owner is None else f"user={self.owner_id}"
+        return f"{self.identifier} [{self.asset_type.slug}] ({scope})"

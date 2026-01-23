@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
+
 import ast
 
 
@@ -24,11 +25,23 @@ class Formula(models.Model):
     """
     Pure mathematical formula.
 
-    Contains NO schema, asset, or user knowledge.
+    - Contains NO schema knowledge
+    - Contains NO asset-type knowledge
+    - Dependencies are DERIVED from expression
     """
+
+    owner = models.ForeignKey(
+        "users.Profile",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="formulas",
+        help_text="Null = system formula, otherwise user-owned."
+    )
 
     title = models.CharField(
         max_length=100,
+        blank=True,
         help_text="Human-readable formula name."
     )
 
@@ -59,8 +72,8 @@ class Formula(models.Model):
         ordering = ["identifier"]
         constraints = [
             models.UniqueConstraint(
-                fields=["identifier"],
-                name="uniq_formula_identifier",
+                fields=["identifier", "owner"],
+                name="uniq_formula_identifier_per_owner",
             )
         ]
 
@@ -93,9 +106,13 @@ class Formula(models.Model):
         self.dependencies = sorted(referenced)
 
     def save(self, *args, **kwargs):
-        self.identifier = slugify(self.identifier or self.title)
+        if not self.identifier:
+            raise ValidationError("Identifier is required.")
+
+        self.identifier = slugify(self.identifier)
         self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Formula({self.identifier})"
+        scope = "system" if self.owner is None else f"user={self.owner_id}"
+        return f"Formula({self.identifier}, {scope})"
