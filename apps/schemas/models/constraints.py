@@ -92,21 +92,21 @@ class MasterConstraint(models.Model):
 
         if self.applies_to == self.AppliesTo.INTEGER:
             if self.default_integer is None:
-                raise ValidationError(
-                    "default_integer is required for integer constraints."
-                )
+                raise ValidationError("default_integer is required.")
+            if self.default_decimal is not None or self.default_string is not None:
+                raise ValidationError("Only default_integer may be set.")
 
         elif self.applies_to == self.AppliesTo.DECIMAL:
             if self.default_decimal is None:
-                raise ValidationError(
-                    "default_decimal is required for decimal constraints."
-                )
+                raise ValidationError("default_decimal is required.")
+            if self.default_integer is not None or self.default_string is not None:
+                raise ValidationError("Only default_decimal may be set.")
 
         elif self.applies_to == self.AppliesTo.STRING:
             if self.default_string is None:
-                raise ValidationError(
-                    "default_string is required for string constraints."
-                )
+                raise ValidationError("default_string is required.")
+            if self.default_integer is not None or self.default_decimal is not None:
+                raise ValidationError("Only default_string may be set.")
 
 
 class SchemaConstraint(models.Model):
@@ -119,7 +119,7 @@ class SchemaConstraint(models.Model):
     column = models.ForeignKey(
         "schemas.SchemaColumn",
         on_delete=models.CASCADE,
-        related_name="constraints_set",
+        related_name="constraints",
     )
 
     name = models.SlugField(
@@ -129,6 +129,16 @@ class SchemaConstraint(models.Model):
 
     label = models.CharField(
         max_length=255,
+    )
+
+    class Source(models.TextChoices):
+        SYSTEM = "system", "System"
+        USER = "user", "User"
+
+    source = models.CharField(
+        max_length=10,
+        choices=Source.choices,
+        default=Source.SYSTEM,
     )
 
     applies_to = models.CharField(
@@ -179,6 +189,41 @@ class SchemaConstraint(models.Model):
     class Meta:
         unique_together = ("column", "name")
         ordering = ["column_id", "name"]
+
+    def clean(self):
+        super().clean()
+
+        if self.applies_to == MasterConstraint.AppliesTo.INTEGER:
+            if self.value_integer is None:
+                raise ValidationError("value_integer is required.")
+            if self.value_decimal is not None or self.value_string is not None:
+                raise ValidationError("Only value_integer may be set.")
+
+            if self.min_integer is not None and self.value_integer < self.min_integer:
+                raise ValidationError(
+                    f"{self.value_integer} < minimum {self.min_integer}")
+            if self.max_integer is not None and self.value_integer > self.max_integer:
+                raise ValidationError(
+                    f"{self.value_integer} > maximum {self.max_integer}")
+
+        elif self.applies_to == MasterConstraint.AppliesTo.DECIMAL:
+            if self.value_decimal is None:
+                raise ValidationError("value_decimal is required.")
+            if self.value_integer is not None or self.value_string is not None:
+                raise ValidationError("Only value_decimal may be set.")
+
+            if self.min_decimal is not None and self.value_decimal < self.min_decimal:
+                raise ValidationError(
+                    f"{self.value_decimal} < minimum {self.min_decimal}")
+            if self.max_decimal is not None and self.value_decimal > self.max_decimal:
+                raise ValidationError(
+                    f"{self.value_decimal} > maximum {self.max_decimal}")
+
+        elif self.applies_to == MasterConstraint.AppliesTo.STRING:
+            if self.value_string is None:
+                raise ValidationError("value_string is required.")
+            if self.value_integer is not None or self.value_decimal is not None:
+                raise ValidationError("Only value_string may be set.")
 
     def __str__(self):
         return f"{self.column.identifier}.{self.name}"

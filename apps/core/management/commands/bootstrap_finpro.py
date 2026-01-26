@@ -7,7 +7,8 @@ class Command(BaseCommand):
     help = "🚀 Bootstrap the entire FinPro system (idempotent, ordered)"
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.SUCCESS("\n🚀 Starting FinPro bootstrap...\n"))
+        self.stdout.write(self.style.SUCCESS(
+            "\n🚀 Starting FinPro bootstrap...\n"))
 
         steps = [
             # -------------------------------------------------
@@ -30,17 +31,21 @@ class Command(BaseCommand):
             ("🏦 Account system", [
                 "seed_system_account_types",
             ]),
-            
+
             # -------------------------------------------------
-            # Schema system (MUST come early)
+            # Formula + Schema system (MUST come before assets)
             # -------------------------------------------------
-            ("🧬 Schema system", [
-                "seed_master_constraints",
+            ("🧮 Formula system", [
                 "seed_formulas",
-                "seed_schema_template",
-                "resequence_schema_columns",
             ]),
 
+            ("🧬 Schema system", [
+                "seed_master_constraints",
+                "seed_schema_column_templates",
+                "seed_schema_column_template_behaviours",
+                "seed_schema_templates",
+                "resequence_schema_columns",
+            ]),
 
             # -------------------------------------------------
             # Asset universes

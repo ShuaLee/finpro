@@ -1,9 +1,13 @@
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
+from django.core.exceptions import ValidationError
+
+from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.models.schema_column_value import SchemaColumnValue
 from formulas.services.formula_resolver import FormulaResolver
 from formulas.services.formula_evaluator import FormulaEvaluator
+from fx.models.fx import FXRate
 
 
 class SchemaColumnValueManager:
@@ -26,38 +30,32 @@ class SchemaColumnValueManager:
         self.scv = scv
         self.column = scv.column
         self.holding = scv.holding
+        self.asset = self.holding.asset if self.holding else None
+        self.asset_type = self.asset.asset_type if self.asset else None
 
     # ============================================================
-    # STATIC FACTORY METHODS
+    # STRUCTURAL HELPERS
     # ============================================================
-    @staticmethod
-    def display_for_column(column, holding) -> str:
-        """
-        Compute initial display value for a column/holding pair.
-        Used when creating new SCVs.
-        """
-        # Create temporary SCV to leverage existing computation logic
-        temp_scv = SchemaColumnValue(
-            column=column,
-            holding=holding,
-            value="",
-            source=SchemaColumnValue.Source.SYSTEM,
-        )
-        manager = SchemaColumnValueManager(temp_scv)
-        return manager._compute_value() or manager._static_default()
-
     @staticmethod
     def ensure_for_column(column):
         """
-        Ensure SCVs exist for a newly added column across all holdings.
-        Creates SCVs without triggering recomputation (that's done separately).
-        """
-        schema = column.schema
-        accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type
-        ).prefetch_related("holdings")
+        Ensure SchemaColumnValues exist for this column across all holdings.
 
-        new_scvs = []
+        - Structural only
+        - Idempotent
+        - Does NOT compute values
+        - Does NOT trigger recomputation
+        """
+
+        schema = column.schema
+
+        accounts = (
+            schema.portfolio.accounts
+            .filter(account_type=schema.account_type)
+            .prefetch_related("holdings")
+        )
+
+        scvs_to_create = []
 
         for account in accounts:
             for holding in account.holdings.all():
@@ -65,66 +63,67 @@ class SchemaColumnValueManager:
                     column=column,
                     holding=holding,
                 ).exists():
-                    new_scvs.append(
+                    scvs_to_create.append(
                         SchemaColumnValue(
                             column=column,
                             holding=holding,
-                            value=SchemaColumnValueManager.display_for_column(
-                                column, holding
-                            ),
+                            value=None,  # value will be computed later
                             source=SchemaColumnValue.Source.SYSTEM,
                         )
                     )
 
-        if new_scvs:
-            SchemaColumnValue.objects.bulk_create(new_scvs)
+        if scvs_to_create:
+            SchemaColumnValue.objects.bulk_create(scvs_to_create)
 
     # ============================================================
-    # PUBLIC ENTRY POINT
+    # PUBLIC
     # ============================================================
     def refresh_display_value(self) -> None:
-        """
-        Recompute and assign this SCV's value.
-
-        Caller is responsible for:
-            - deciding whether recomputation is allowed
-            - persisting source changes
-        """
         self.scv.value = self._compute_value()
 
     # ============================================================
-    # CORE COMPUTATION
+    # CORE
     # ============================================================
     def _compute_value(self) -> str | None:
-        column = self.column
+        if not self.asset_type:
+            return self._static_default()
+
+        behavior = self.column.behavior_for(self.asset_type)
+        if not behavior:
+            return self._static_default()
+
+        source = behavior.source
 
         # ---------------- FORMULA ----------------
-        if column.source == "formula" and column.formula_definition:
-            return self._compute_formula_value()
+        if source == "formula" and behavior.formula_definition:
+            return self._compute_formula_value(behavior)
 
         # ---------------- HOLDING ----------------
-        if column.source == "holding" and column.source_field:
-            raw = self._resolve_path(self.holding, column.source_field)
+        if source == "holding" and behavior.source_field:
+            raw = self._resolve_path(self.holding, behavior.source_field)
             return self._format_value(raw)
 
         # ---------------- ASSET ----------------
-        if column.source == "asset" and column.source_field:
-            asset = self.holding.asset if self.holding else None
-            raw = self._resolve_path(
-                asset, column.source_field) if asset else None
+        if source == "asset" and behavior.source_field:
+            raw = self._resolve_path(self.asset, behavior.source_field)
             return self._format_value(raw)
 
-        # ---------------- CUSTOM / EMPTY ----------------
+        # ---------------- CONSTANT ----------------
+        if source == "constant":
+            return self._format_value(behavior.constant_value)
+
+        # ---------------- USER / UNDEFINED ----------------
         return self._static_default()
 
     # ============================================================
-    # FORMULA COMPUTATION
+    # FORMULA
     # ============================================================
-    def _compute_formula_value(self) -> str:
-        definition = self.column.formula_definition
+    def _compute_formula_value(
+        self, behavior: SchemaColumnAssetBehaviour
+    ) -> str | None:
+        definition = behavior.formula_definition
         formula = definition.formula
 
-        # Build evaluation context
         context = FormulaResolver.resolve_inputs(
             formula=formula,
             context=self._build_context(),
@@ -139,54 +138,79 @@ class SchemaColumnValueManager:
 
         return self._format_decimal(result)
 
-    def _build_context(self) -> dict[str, Any]:
-        """
-        Build identifier → raw value mapping for formula evaluation
-        from existing SCVs in the same schema.
-        """
+    def _build_context(self) -> dict[str, Decimal]:
         schema = self.column.schema
         holding = self.holding
 
-        context = {}
+        context: dict[str, Decimal] = {}
 
-        for scv in SchemaColumnValue.objects.filter(
+        # --------------------------------------------------
+        # 1. Collect SCV-based identifiers
+        # --------------------------------------------------
+        scvs = SchemaColumnValue.objects.filter(
             holding=holding,
             column__schema=schema,
-        ).select_related("column"):
+        ).select_related("column")
+
+        for scv in scvs:
             identifier = scv.column.identifier
             try:
                 context[identifier] = Decimal(str(scv.value))
             except Exception:
                 context[identifier] = Decimal("0")
 
+        # --------------------------------------------------
+        # 2. Inject FX rate (asset currency → profile currency)
+        # --------------------------------------------------
+        asset = holding.asset
+        profile = holding.account.portfolio.profile
+
+        asset_currency = getattr(asset, "currency", None)
+        profile_currency = getattr(profile, "currency", None)
+
+        if asset_currency and profile_currency:
+            if asset_currency == profile_currency:
+                fx_rate = Decimal("1")
+            else:
+                fx = FXRate.objects.filter(
+                    from_currency__code=asset_currency,
+                    to_currency__code=profile_currency,
+                ).first()
+
+                if not fx:
+                    raise ValidationError(
+                        f"No FX rate found for {asset_currency} → {profile_currency}"
+                    )
+
+                fx_rate = Decimal(str(fx.rate))
+        else:
+            # No currency information → neutral FX
+            fx_rate = Decimal("1")
+
+        context["fx_rate"] = fx_rate
+
         return context
 
     # ============================================================
     # FORMATTING
     # ============================================================
+
     def _format_value(self, raw: Any) -> str | None:
         if raw is None:
             return self._static_default()
 
-        if self.column.data_type == "decimal":
-            try:
+        dt = self.column.data_type
+
+        try:
+            if dt == "decimal":
                 return self._format_decimal(Decimal(str(raw)))
-            except Exception:
-                return self._static_default()
-
-        if self.column.data_type == "integer":
-            try:
+            if dt == "integer":
                 return str(int(raw))
-            except Exception:
-                return "0"
-
-        if self.column.data_type == "string":
+            if dt == "boolean":
+                return str(bool(raw))
             return str(raw)
-
-        if self.column.data_type == "boolean":
-            return str(bool(raw))
-
-        return str(raw)
+        except Exception:
+            return self._static_default()
 
     def _format_decimal(self, value: Decimal) -> str:
         places = self._decimal_places()
@@ -194,10 +218,10 @@ class SchemaColumnValueManager:
         return str(value.quantize(quant, rounding=ROUND_HALF_UP))
 
     # ============================================================
-    # CONSTRAINT HELPERS (READ-ONLY)
+    # CONSTRAINTS
     # ============================================================
     def _decimal_places(self) -> int:
-        constraint = self.column.constraints_set.filter(
+        constraint = self.column.constraints.filter(
             name="decimal_places"
         ).first()
 
@@ -210,18 +234,19 @@ class SchemaColumnValueManager:
     # DEFAULTS
     # ============================================================
     def _static_default(self) -> str | None:
-        if self.column.data_type == "decimal":
+        dt = self.column.data_type
+        if dt == "decimal":
             return "0.00"
-        if self.column.data_type == "integer":
+        if dt == "integer":
             return "0"
-        if self.column.data_type == "string":
-            return "-"
-        if self.column.data_type == "boolean":
+        if dt == "boolean":
             return "False"
+        if dt == "string":
+            return "-"
         return None
 
     # ============================================================
-    # PATH RESOLUTION (PURE)
+    # PATH
     # ============================================================
     @staticmethod
     def _resolve_path(obj, path: str | None) -> Any:

@@ -94,7 +94,6 @@ class SchemaManager:
                     "source": SchemaColumnValue.Source.SYSTEM,
                 },
             )
-
             self._recompute_scv(scv, column)
 
     def _recompute_scv(self, scv: SchemaColumnValue, column):
@@ -107,17 +106,25 @@ class SchemaManager:
         manager = SchemaColumnValueManager(scv)
         manager.refresh_display_value()
 
-        scv.source = (
-            SchemaColumnValue.Source.FORMULA
-            if column.source == "formula"
-            else SchemaColumnValue.Source.SYSTEM
+        asset = scv.holding.asset if scv.holding else None
+        asset_type = asset.asset_type if asset else None
+
+        behavior = (
+            column.behavior_for(asset_type)
+            if asset_type else None
         )
+
+        if behavior and behavior.source == "formula":
+            scv.source = SchemaColumnValue.Source.FORMULA
+        else:
+            scv.source = SchemaColumnValue.Source.SYSTEM
 
         scv.save(update_fields=["value", "source"])
 
     # ============================================================
     # COLUMN LIFECYCLE (INTERNAL)
     # ============================================================
+
     def ensure_column_values(self, column):
         """
         Ensure SCVs exist for a newly added column.

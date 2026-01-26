@@ -1,10 +1,11 @@
 from django.db import transaction
 from django.db.models import Prefetch
+from django.core.exceptions import ValidationError
 
-from schemas.models import Schema, SchemaColumn, SchemaTemplate, SchemaColumnTemplate
-from schemas.services.schema_constraint_manager import SchemaConstraintManager
-from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.models import Schema
+from schemas.models.schema_column_template import SchemaColumnTemplate
+from schemas.models.template import SchemaTemplate
+from schemas.services.schema_expansion_service import SchemaExpansionService
 
 
 class SchemaGenerator:
@@ -13,7 +14,7 @@ class SchemaGenerator:
 
     Used ONLY when:
         - an account is created
-        - a schema does not yet exist
+        - no schema exists yet for (portfolio, account_type)
     """
 
     def __init__(self, *, portfolio, account_type):
@@ -24,10 +25,81 @@ class SchemaGenerator:
     # PUBLIC ENTRY
     # ==========================================================
     @transaction.atomic
-    def initialize(self):
+    def initialize(self) -> Schema:
+        """
+        Create schema if missing and populate from template.
+        """
+        from schemas.services.scv_refresh_service import SCVRefreshService
+
+        # --------------------------------------------------
+        # 1. Reuse schema if it already exists
+        # --------------------------------------------------
+        schema = Schema.objects.filter(
+            portfolio=self.portfolio,
+            account_type=self.account_type,
+        ).first()
+
+        if schema:
+            return schema
+
+        # --------------------------------------------------
+        # 2. Select SchemaTemplate
+        # --------------------------------------------------
+        template = self._select_template()
+        if not template:
+            raise ValidationError(
+                f"No SchemaTemplate available for account_type="
+                f"{self.account_type.slug}"
+            )
+
+        # --------------------------------------------------
+        # 3. Create Schema
+        # --------------------------------------------------
+        schema = Schema.objects.create(
+            portfolio=self.portfolio,
+            account_type=self.account_type,
+        )
+
+        # --------------------------------------------------
+        # 4. Expand DEFAULT system columns
+        # --------------------------------------------------
+        default_templates = (
+            template.columns
+            .filter(is_default=True, is_system=True)
+            .order_by("display_order", "id")
+        )
+
+        for template_column in default_templates:
+            SchemaExpansionService.add_system_column(
+                schema=schema,
+                template_column=template_column,
+            )
+
+        # --------------------------------------------------
+        # 5. Single recompute
+        # --------------------------------------------------
+        SCVRefreshService.schema_changed(schema)
+
+        return schema
+
+    # ==========================================================
+    # INTERNAL HELPERS
+    # ==========================================================
+    def _select_template(self) -> SchemaTemplate | None:
+        """
+        Select schema template in priority order:
+
+        1. Active template for account_type
+        2. Active BASE template (account_type is NULL)
+        """
+
+        # Exact match first
         template = (
             SchemaTemplate.objects
-            .filter(account_type=self.account_type, is_active=True)
+            .filter(
+                account_type=self.account_type,
+                is_active=True,
+            )
             .prefetch_related(
                 Prefetch(
                     "columns",
@@ -39,41 +111,24 @@ class SchemaGenerator:
             .first()
         )
 
-        if not template:
-            raise ValueError(
-                f"No active SchemaTemplate for account_type={self.account_type.slug}"
-            )
+        if template:
+            return template
 
-        schema, _ = Schema.objects.get_or_create(
-            portfolio=self.portfolio,
-            account_type=self.account_type,
+        # Fallback to BASE template
+        return (
+            SchemaTemplate.objects
+            .filter(
+                account_type__isnull=True,
+                is_active=True,
+                is_base=True,
+            )
+            .prefetch_related(
+                Prefetch(
+                    "columns",
+                    queryset=SchemaColumnTemplate.objects.order_by(
+                        "display_order", "id"
+                    ),
+                )
+            )
+            .first()
         )
-
-        for tcol in template.columns.filter(is_default=True):
-            column = SchemaColumn.objects.create(
-                schema=schema,
-                title=tcol.title,
-                identifier=tcol.identifier,
-                data_type=tcol.data_type,
-                source=tcol.source,
-                source_field=(
-                    None if tcol.source == "formula" else tcol.source_field
-                ),
-                formula_definition=tcol.formula_definition,
-                is_editable=tcol.is_editable,
-                is_deletable=tcol.is_deletable,
-                is_system=True,
-                display_order=tcol.display_order,
-            )
-
-            SchemaConstraintManager.create_from_master(
-                column,
-                overrides=tcol.constraints or {},
-            )
-
-            SchemaColumnValueManager.ensure_for_column(column)
-
-        # Single recompute after creation
-        SCVRefreshService.schema_changed(schema)
-
-        return schema

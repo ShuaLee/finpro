@@ -2,10 +2,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction, models
 
 from schemas.models.schema_column import SchemaColumn
-from schemas.models.template import SchemaColumnTemplate
+from schemas.models.schema_column_template import SchemaColumnTemplate
+from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
-from schemas.services.scv_refresh_service import SCVRefreshService
 
 from formulas.services.formula_resolver import FormulaResolver
 
@@ -14,14 +14,13 @@ class SchemaExpansionService:
     """
     Expands a Schema by adding SYSTEM columns and their dependencies.
 
-    This is the ONLY place where:
-        - system columns are auto-created
-        - system formula dependencies are resolved structurally
-
-    This service does NOT compute values directly.
+    Asset-type-aware.
+    Structural only.
+    Deterministic.
     """
+
     # ==========================================================
-    # PUBLIC ENTRY POINT
+    # PUBLIC ENTRY
     # ==========================================================
     @staticmethod
     @transaction.atomic
@@ -29,54 +28,56 @@ class SchemaExpansionService:
         """
         Ensure a system SchemaColumn (and its dependencies) exists.
         """
+        from schemas.services.scv_refresh_service import SCVRefreshService
 
-        # --------------------------------------------------
-        # 1. Guardrails
-        # --------------------------------------------------
         if not template_column.is_system:
             raise ValidationError(
-                "Only system template columns may be added via schema expansion."
+                "Only system template columns may be expanded."
             )
 
-        if schema.account_type != template_column.template.account_type:
-            raise ValidationError(
-                "Template column does not belong to this schema's account type."
-            )
-
-        # Already exists → no-op
+        # --------------------------------------------------
+        # 1. Already exists → no-op
+        # --------------------------------------------------
         existing = schema.columns.filter(
             identifier=template_column.identifier
         ).first()
+
         if existing:
             return existing
 
         # --------------------------------------------------
-        # 2. Resolve formula dependencies FIRST (STRUCTURAL)
+        # 2. Resolve dependencies PER ASSET TYPE
         # --------------------------------------------------
-        if template_column.source == "formula":
-            definition = template_column.formula_definition
+        for t_behavior in template_column.behaviors.select_related(
+            "asset_type", "formula_definition"
+        ):
+            if t_behavior.source != "formula":
+                continue
+
+            definition = t_behavior.formula_definition
             if not definition:
                 raise ValidationError(
                     f"Template column '{template_column.identifier}' "
-                    f"is formula-based but has no FormulaDefinition attached."
+                    f"has formula behavior without FormulaDefinition "
+                    f"for asset type '{t_behavior.asset_type.slug}'."
                 )
 
-            formula = definition.formula
-            resolver = FormulaResolver(formula=formula)
+            resolver = FormulaResolver(formula=definition.formula)
 
             for dep_identifier in resolver.required_identifiers():
                 dep_template = SchemaColumnTemplate.objects.filter(
-                    template=template_column.template,
                     identifier=dep_identifier,
+                    is_system=True,
                 ).first()
 
                 if not dep_template:
                     raise ValidationError(
-                        f"System formula '{formula.identifier}' depends on "
-                        f"'{dep_identifier}', but no SchemaTemplateColumn exists."
+                        f"System formula '{definition.formula.identifier}' "
+                        f"depends on '{dep_identifier}', but no system "
+                        f"SchemaColumnTemplate exists."
                     )
 
-                # Recursive expansion
+                # Recursive structural expansion
                 SchemaExpansionService.add_system_column(
                     schema=schema,
                     template_column=dep_template,
@@ -93,36 +94,45 @@ class SchemaExpansionService:
 
         column = SchemaColumn.objects.create(
             schema=schema,
-            title=template_column.title,
             identifier=template_column.identifier,
+            title=template_column.title,
             data_type=template_column.data_type,
-            source=template_column.source,
-            source_field=(
-                None if template_column.source == "formula"
-                else template_column.source_field
-            ),
-            formula_definition=template_column.formula_definition,
-            is_editable=template_column.is_editable,
-            is_deletable=template_column.is_deletable,
+            template=template_column,
             is_system=True,
+            is_editable=False,
+            is_deletable=False,
             display_order=max_order + 1,
         )
 
         # --------------------------------------------------
-        # 4. Attach constraints
+        # 4. Copy TEMPLATE BEHAVIORS → SCHEMA BEHAVIORS
+        # --------------------------------------------------
+        for t_behavior in template_column.behaviors.all():
+            SchemaColumnAssetBehaviour.objects.create(
+                column=column,
+                asset_type=t_behavior.asset_type,
+                source=t_behavior.source,
+                formula_definition=t_behavior.formula_definition,
+                source_field=t_behavior.source_field,
+                constant_value=t_behavior.constant_value,
+                is_override=False,
+            )
+
+        # --------------------------------------------------
+        # 5. Attach constraints
         # --------------------------------------------------
         SchemaConstraintManager.create_from_master(
             column,
-            overrides=template_column.constraints or {},
+            overrides=getattr(template_column, "constraints", None) or {},
         )
 
         # --------------------------------------------------
-        # 5. Ensure SCVs exist (NO recompute here)
+        # 6. Ensure SCVs exist (NO recompute)
         # --------------------------------------------------
         SchemaColumnValueManager.ensure_for_column(column)
 
         # --------------------------------------------------
-        # 6. Single schema-wide recompute
+        # 7. Single recompute
         # --------------------------------------------------
         SCVRefreshService.schema_changed(schema)
 

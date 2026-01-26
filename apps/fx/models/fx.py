@@ -76,17 +76,33 @@ class FXRate(models.Model):
     def save(self, *args, **kwargs):
         """
         Save the FX rate and trigger recalculation of SCVs
-        that depend on FX (current_value_profile_fx).
+        that depend on FX (e.g. current_value).
         """
 
         super().save(*args, **kwargs)
 
-        # We delay recalculation until transaction commits
         def _after_commit():
-            from schemas.services.recalc_triggers import recalc_holdings_for_fx_pair
-            recalc_holdings_for_fx_pair(
-                self.from_currency.code,
-                self.to_currency.code
+            from schemas.services.scv_refresh_service import SCVRefreshService
+            from accounts.models.holding import Holding
+
+            from_code = self.from_currency.code
+            to_code = self.to_currency.code
+
+            # Any holding whose asset currency OR profile currency
+            # participates in this FX pair may be affected.
+            holdings = (
+                Holding.objects.filter(
+                    asset__currency__in=[from_code, to_code],
+                    account__portfolio__profile__currency__in=[
+                        from_code, to_code],
+                )
+                .select_related(
+                    "asset",
+                    "account__portfolio__profile",
+                )
             )
+
+            if holdings.exists():
+                SCVRefreshService.fx_changed(holdings)
 
         transaction.on_commit(_after_commit)
