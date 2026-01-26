@@ -41,10 +41,7 @@ class Command(BaseCommand):
 
             ("🧬 Schema system", [
                 "seed_master_constraints",
-                "seed_schema_column_templates",
-                "seed_schema_column_template_behaviours",
-                "seed_schema_templates",
-                "resequence_schema_columns",
+                "seed_system_column_catalog",
             ]),
 
             # -------------------------------------------------

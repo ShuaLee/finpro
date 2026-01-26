@@ -7,31 +7,10 @@ from schemas.models import (
     MasterConstraint,
     SchemaConstraint,
 )
-from schemas.models.template import SchemaTemplate
 from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import SchemaColumnTemplateBehaviour
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 
-
-# ============================================================
-# SCHEMA TEMPLATES
-# ============================================================
-
-@admin.register(SchemaTemplate)
-class SchemaTemplateAdmin(admin.ModelAdmin):
-    list_display = (
-        "name",
-        "account_type",
-        "is_base",
-        "is_active",
-    )
-    list_filter = (
-        "is_base",
-        "is_active",
-        "account_type",
-    )
-    search_fields = ("name",)
-    ordering = ("account_type__slug", "name")
 
 
 # ============================================================

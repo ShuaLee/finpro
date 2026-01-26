@@ -46,7 +46,7 @@ def seed_system_formulas():
     # Asset Types
     # ==================================================
     equity_type = AssetType.objects.get(slug="equity")
-    crypto_type = AssetType.objects.get(slug="crypto")
+    crypto_type = AssetType.objects.get(slug="cryptocurrency")
 
     # ==================================================
     # FormulaDefinitions: market_value (asset currency)

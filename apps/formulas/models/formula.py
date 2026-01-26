@@ -17,6 +17,7 @@ ALLOWED_NODES = (
     ast.UAdd,
     ast.USub,
     ast.Name,
+    ast.Load,
     ast.Constant,
 )
 
