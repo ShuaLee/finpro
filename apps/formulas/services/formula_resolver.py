@@ -5,6 +5,8 @@ from django.core.exceptions import ValidationError
 
 from formulas.models.formula import Formula
 
+import ast
+
 
 class FormulaResolver:
     """
@@ -20,6 +22,14 @@ class FormulaResolver:
     - mutate schemas
     - access the database
     """
+
+    IMPLICIT_IDENTIFIERS = {
+        "fx_rate",
+    }
+
+    @classmethod
+    def is_implicit(cls, identifier: str) -> bool:
+        return identifier in cls.IMPLICIT_IDENTIFIERS
 
     @staticmethod
     def resolve_inputs(
@@ -78,3 +88,22 @@ class FormulaResolver:
                 )
 
         return resolved
+
+    @staticmethod
+    def required_identifiers(formula):
+        """
+        Return a set of variable identifiers required by this formula.
+        Example: "quantity * price" -> {"quantity", "price"}
+        """
+
+        tree = ast.parse(formula.expression, mode="eval")
+
+        identifiers = set()
+
+        class Visitor(ast.NodeVisitor):
+            def visit_Name(self, node):
+                identifiers.add(node.id)
+
+        Visitor().visit(tree)
+
+        return identifiers

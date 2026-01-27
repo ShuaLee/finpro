@@ -13,7 +13,7 @@ class SchemaColumnTemplateBehaviour(models.Model):
     template = models.ForeignKey(
         SchemaColumnTemplate,
         on_delete=models.CASCADE,
-        related_name="behavior"
+        related_name="behaviours"
     )
 
     asset_type = models.ForeignKey(

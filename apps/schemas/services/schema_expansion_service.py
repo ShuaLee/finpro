@@ -48,8 +48,9 @@ class SchemaExpansionService:
         # --------------------------------------------------
         # 2. Resolve dependencies PER ASSET TYPE
         # --------------------------------------------------
-        for t_behavior in template_column.behaviors.select_related(
-            "asset_type", "formula_definition"
+        for t_behavior in template_column.behaviours.select_related(
+            "asset_type",
+            "formula_definition",
         ):
             if t_behavior.source != "formula":
                 continue
@@ -62,9 +63,16 @@ class SchemaExpansionService:
                     f"for asset type '{t_behavior.asset_type.slug}'."
                 )
 
-            resolver = FormulaResolver(formula=definition.formula)
+            formula = definition.formula
 
-            for dep_identifier in resolver.required_identifiers():
+            for dep_identifier in FormulaResolver.required_identifiers(formula):
+
+                # --------------------------------------------------
+                # Skip implicit runtime identifiers (e.g. fx_rate)
+                # --------------------------------------------------
+                if FormulaResolver.is_implicit(dep_identifier):
+                    continue
+
                 dep_template = SchemaColumnTemplate.objects.filter(
                     identifier=dep_identifier,
                     is_system=True,
@@ -72,12 +80,11 @@ class SchemaExpansionService:
 
                 if not dep_template:
                     raise ValidationError(
-                        f"System formula '{definition.formula.identifier}' "
+                        f"System formula '{formula.identifier}' "
                         f"depends on '{dep_identifier}', but no system "
                         f"SchemaColumnTemplate exists."
                     )
 
-                # Recursive structural expansion
                 SchemaExpansionService.add_system_column(
                     schema=schema,
                     template_column=dep_template,
@@ -107,7 +114,7 @@ class SchemaExpansionService:
         # --------------------------------------------------
         # 4. Copy TEMPLATE BEHAVIORS → SCHEMA BEHAVIORS
         # --------------------------------------------------
-        for t_behavior in template_column.behaviors.all():
+        for t_behavior in template_column.behaviours.all():
             SchemaColumnAssetBehaviour.objects.create(
                 column=column,
                 asset_type=t_behavior.asset_type,

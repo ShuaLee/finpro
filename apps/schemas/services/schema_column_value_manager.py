@@ -145,7 +145,7 @@ class SchemaColumnValueManager:
         context: dict[str, Decimal] = {}
 
         # --------------------------------------------------
-        # 1. Collect SCV-based identifiers
+        # 1. SCV-based identifiers
         # --------------------------------------------------
         scvs = SchemaColumnValue.objects.filter(
             holding=holding,
@@ -153,14 +153,13 @@ class SchemaColumnValueManager:
         ).select_related("column")
 
         for scv in scvs:
-            identifier = scv.column.identifier
             try:
-                context[identifier] = Decimal(str(scv.value))
+                context[scv.column.identifier] = Decimal(str(scv.value))
             except Exception:
-                context[identifier] = Decimal("0")
+                context[scv.column.identifier] = Decimal("0")
 
         # --------------------------------------------------
-        # 2. Inject FX rate (asset currency → profile currency)
+        # 2. Inject FX rate (runtime-only)
         # --------------------------------------------------
         asset = holding.asset
         profile = holding.account.portfolio.profile
@@ -175,7 +174,7 @@ class SchemaColumnValueManager:
                 fx = FXRate.objects.filter(
                     from_currency__code=asset_currency,
                     to_currency__code=profile_currency,
-                ).first()
+                ).order_by("-created_at").first()
 
                 if not fx:
                     raise ValidationError(
@@ -184,7 +183,6 @@ class SchemaColumnValueManager:
 
                 fx_rate = Decimal(str(fx.rate))
         else:
-            # No currency information → neutral FX
             fx_rate = Decimal("1")
 
         context["fx_rate"] = fx_rate

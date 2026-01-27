@@ -8,68 +8,119 @@ from formulas.models.formula_definition import FormulaDefinition
 
 def seed_system_column_catalog():
     """
-    Seed system-wide, optional schema column templates.
+    Seed global system SchemaColumnTemplates.
 
-    These columns:
-    - are NOT default
-    - may be added to schemas by users
-    - may apply to multiple asset types
+    These define WHAT columns exist in the system.
+    Defaults are handled elsewhere (DefaultSchemaPolicy).
     """
 
-    # --------------------------------------------------
-    # Asset types
-    # --------------------------------------------------
-    equity_type = AssetType.objects.get(slug="equity")
-    crypto_type = AssetType.objects.get(slug="crypto")
+    equity = AssetType.objects.get(slug="equity")
+    crypto = AssetType.objects.get(slug="cryptocurrency")
+
+    # ==================================================
+    # Quantity
+    # ==================================================
+
+    quantity, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="quantity",
+        defaults={
+            "title": "Quantity",
+            "description": "Number of units held",
+            "data_type": "decimal",
+            "is_system": True,
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=quantity,
+            asset_type=asset_type,
+            defaults={
+                "source": "holding",
+                "source_field": "quantity",
+            },
+        )
+
+    # ==================================================
+    # Price
+    # ==================================================
+
+    price, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="price",
+        defaults={
+            "title": "Price",
+            "description": "Current asset price",
+            "data_type": "decimal",
+            "is_system": True,
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=price,
+            asset_type=asset_type,
+            defaults={
+                "source": "asset",
+                "source_field": "price",
+            },
+        )
 
     # ==================================================
     # Market Value (asset currency)
     # ==================================================
 
     market_value, _ = SchemaColumnTemplate.objects.update_or_create(
-        template=None,  # GLOBAL system column
         identifier="market_value",
         defaults={
             "title": "Market Value",
+            "description": "Market value in asset currency",
             "data_type": "decimal",
             "is_system": True,
-            "is_default": False,   # IMPORTANT
-            "display_order": 0,    # catalog-only
         },
     )
 
-    # ------------------------------
-    # Equity behaviour
-    # ------------------------------
-    equity_def = FormulaDefinition.objects.get(
-        identifier="market_value",
-        asset_type=equity_type,
-        owner__isnull=True,
-    )
+    for asset_type in (equity, crypto):
+        definition = FormulaDefinition.objects.get(
+            identifier="market_value",
+            asset_type=asset_type,
+            owner__isnull=True,
+        )
 
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=market_value,
-        asset_type=equity_type,
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=market_value,
+            asset_type=asset_type,
+            defaults={
+                "source": "formula",
+                "formula_definition": definition,
+            },
+        )
+
+    # ==================================================
+    # Current Value (profile currency)
+    # ==================================================
+
+    current_value, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="current_value",
         defaults={
-            "source": "formula",
-            "formula_definition": equity_def,
+            "title": "Current Value",
+            "description": "Market value converted to profile currency",
+            "data_type": "decimal",
+            "is_system": True,
         },
     )
 
-    # ------------------------------
-    # Crypto behaviour
-    # ------------------------------
-    crypto_def = FormulaDefinition.objects.get(
-        identifier="market_value",
-        asset_type=crypto_type,
-        owner__isnull=True,
-    )
+    for asset_type in (equity, crypto):
+        definition = FormulaDefinition.objects.get(
+            identifier="current_value",
+            asset_type=asset_type,
+            owner__isnull=True,
+        )
 
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=market_value,
-        asset_type=crypto_type,
-        defaults={
-            "source": "formula",
-            "formula_definition": crypto_def,
-        },
-    )
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=current_value,
+            asset_type=asset_type,
+            defaults={
+                "source": "formula",
+                "formula_definition": definition,
+            },
+        )
