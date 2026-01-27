@@ -1,24 +1,33 @@
-from django.db.models import Q
+from collections import defaultdict
+
+from django.db.models import Prefetch
 
 from schemas.models.schema_column_template import SchemaColumnTemplate
+from schemas.models.schema_column_template_behaviour import (
+    SchemaColumnTemplateBehaviour,
+)
 from assets.models.core import AssetType
 
 
 class SchemaColumnCatalogService:
     """
     Provides the catalog of available SchemaColumnTemplates
-    that may be added to a schema.
+    that may be added to a schema, grouped by category.
 
     Rules:
-    - Includes ALL system-defined column templates (default or optional)
+    - Includes ALL system-defined column templates
     - Excludes identifiers already present in the schema
-    - Filters by asset-type compatibility
+    - Filters by asset-type compatibility (via behaviours)
+    - Groups results by SchemaColumnCategory
     """
 
     @staticmethod
-    def list_available(*, schema):
+    def list_available_grouped(*, schema):
         """
-        Return SchemaColumnTemplates that may be added to this schema.
+        Return available SchemaColumnTemplates grouped by category.
+
+        Returns:
+            Dict[str, List[SchemaColumnTemplate]]
         """
 
         # --------------------------------------------------
@@ -31,30 +40,36 @@ class SchemaColumnCatalogService:
         # --------------------------------------------------
         # 2. Asset types allowed by this account type
         # --------------------------------------------------
-        account_type = schema.account_type
         allowed_asset_types = AssetType.objects.filter(
-            account_types=account_type
+            account_types=schema.account_type
         )
 
         # --------------------------------------------------
-        # 3. Base queryset: all system column templates
+        # 3. Base queryset: system templates with category
         # --------------------------------------------------
-        templates = SchemaColumnTemplate.objects.filter(
-            is_system=True
-        ).select_related("template")
-
-        # --------------------------------------------------
-        # 4. Restrict to:
-        #    - template-scoped columns for this account type
-        #    - OR global system columns (template=None)
-        # --------------------------------------------------
-        templates = templates.filter(
-            Q(template__account_type=account_type) |
-            Q(template__isnull=True)
+        templates = (
+            SchemaColumnTemplate.objects.filter(
+                is_system=True,
+                category__isnull=False,
+            )
+            .select_related("category")
+            .prefetch_related(
+                Prefetch(
+                    "behaviours",
+                    queryset=SchemaColumnTemplateBehaviour.objects.filter(
+                        asset_type__in=allowed_asset_types
+                    ),
+                )
+            )
+            .order_by(
+                "category__display_order",
+                "category__name",
+                "identifier",
+            )
         )
 
         # --------------------------------------------------
-        # 5. Exclude identifiers already in schema
+        # 4. Exclude identifiers already in schema
         # --------------------------------------------------
         if existing_identifiers:
             templates = templates.exclude(
@@ -62,16 +77,16 @@ class SchemaColumnCatalogService:
             )
 
         # --------------------------------------------------
-        # 6. Asset-type compatibility filter
+        # 5. Filter by asset-type compatibility
         # --------------------------------------------------
-        compatible_templates = []
+        grouped = defaultdict(list)
 
         for template in templates:
-            behaviours = template.behaviours.filter(
-                asset_type__in=allowed_asset_types
-            )
+            # behaviours are already prefiltered by asset type
+            if not template.behaviours.all():
+                continue
 
-            if behaviours.exists():
-                compatible_templates.append(template)
+            category_key = template.category.identifier
+            grouped[category_key].append(template)
 
-        return compatible_templates
+        return dict(grouped)

@@ -42,6 +42,11 @@ class SchemaColumn(models.Model):
         unique_together = ("schema", "identifier")
         ordering = ["display_order", "id"]
 
+    def delete(self, *args, **kwargs):
+        from schemas.policies.schema_column_deletion_policy import SchemaColumnDeletionPolicy
+        SchemaColumnDeletionPolicy.assert_deletable(column=self)
+        super().delete(*args, **kwargs)
+
     def __str__(self):
         return f"{self.identifier} ({self.schema_id})"
 

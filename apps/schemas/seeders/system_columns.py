@@ -2,6 +2,7 @@ from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import (
     SchemaColumnTemplateBehaviour,
 )
+from schemas.models.schema_column_category import SchemaColumnCategory
 from assets.models.core import AssetType
 from formulas.models.formula_definition import FormulaDefinition
 
@@ -11,14 +12,21 @@ def seed_system_column_catalog():
     Seed global system SchemaColumnTemplates.
 
     These define WHAT columns exist in the system.
-    Defaults are handled elsewhere (DefaultSchemaPolicy).
+    Asset-type applicability is defined exclusively
+    by SchemaColumnTemplateBehaviour.
     """
 
     equity = AssetType.objects.get(slug="equity")
     crypto = AssetType.objects.get(slug="cryptocurrency")
 
+    # --------------------------------------------------
+    # Categories (must already be seeded)
+    # --------------------------------------------------
+    meta = SchemaColumnCategory.objects.get(identifier="meta")
+    valuation = SchemaColumnCategory.objects.get(identifier="valuation")
+
     # ==================================================
-    # Quantity
+    # Quantity (Meta)
     # ==================================================
 
     quantity, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -28,6 +36,7 @@ def seed_system_column_catalog():
             "description": "Number of units held",
             "data_type": "decimal",
             "is_system": True,
+            "category": meta,
         },
     )
 
@@ -42,7 +51,7 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # Price
+    # Price (Valuation)
     # ==================================================
 
     price, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -52,6 +61,7 @@ def seed_system_column_catalog():
             "description": "Current asset price",
             "data_type": "decimal",
             "is_system": True,
+            "category": valuation,
         },
     )
 
@@ -66,7 +76,7 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # Market Value (asset currency)
+    # Market Value (asset currency) – Valuation
     # ==================================================
 
     market_value, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -76,6 +86,7 @@ def seed_system_column_catalog():
             "description": "Market value in asset currency",
             "data_type": "decimal",
             "is_system": True,
+            "category": valuation,
         },
     )
 
@@ -96,7 +107,7 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # Current Value (profile currency)
+    # Current Value (profile currency) – Valuation
     # ==================================================
 
     current_value, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -106,6 +117,7 @@ def seed_system_column_catalog():
             "description": "Market value converted to profile currency",
             "data_type": "decimal",
             "is_system": True,
+            "category": valuation,
         },
     )
 

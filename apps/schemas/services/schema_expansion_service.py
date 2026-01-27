@@ -4,6 +4,7 @@ from django.db import transaction, models
 from schemas.models.schema_column import SchemaColumn
 from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
+from schemas.services.account_column_visibility_service import AccountColumnVisibilityService
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 
@@ -137,6 +138,10 @@ class SchemaExpansionService:
         # 6. Ensure SCVs exist (NO recompute)
         # --------------------------------------------------
         SchemaColumnValueManager.ensure_for_column(column)
+
+        AccountColumnVisibilityService.initialize_for_schema_column(
+            column=column
+        )
 
         # --------------------------------------------------
         # 7. Single recompute

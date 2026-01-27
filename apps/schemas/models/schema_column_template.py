@@ -1,5 +1,6 @@
 from django.db import models
 
+from schemas.models.schema_column_category import SchemaColumnCategory
 
 class SchemaColumnTemplate(models.Model):
     """
@@ -26,6 +27,15 @@ class SchemaColumnTemplate(models.Model):
             ("boolean", "Boolean"),
             ("date", "Date"),
         ],
+    )
+
+    category = models.ForeignKey(
+        SchemaColumnCategory,
+        on_delete=models.PROTECT,
+        related_name="templates",
+        null=True,
+        blank=True,
+        help_text="Semantic category used for UI grouping.",
     )
 
     is_system = models.BooleanField(default=True)

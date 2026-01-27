@@ -12,6 +12,9 @@ from accounts.models.account_classification import (
 from accounts.services.account_service import AccountService
 from accounts.services.account_deletion_service import AccountDeletionService
 from fx.models.country import Country
+from schemas.services.account_column_visibility_service import (
+    AccountColumnVisibilityService,
+)
 
 
 # =================================================
@@ -206,6 +209,26 @@ class AccountAdmin(admin.ModelAdmin):
         "last_synced",
     )
 
+    actions = [
+        "reset_column_visibility",
+    ]
+
+    # -------------------------------------------------
+    # Admin action
+    # -------------------------------------------------
+    @admin.action(description="Reset column visibility to defaults")
+    def reset_column_visibility(self, request, queryset):
+        for account in queryset:
+            AccountColumnVisibilityService.reset_account_to_defaults(
+                account=account
+            )
+
+        self.message_user(
+            request,
+            "Column visibility reset to defaults.",
+            level=messages.SUCCESS,
+        )
+
     # -------------------------------------------------
     # Dynamic form
     # -------------------------------------------------
@@ -302,3 +325,4 @@ class AccountAdmin(admin.ModelAdmin):
             f"{count} account(s) deleted.",
             level=messages.SUCCESS,
         )
+

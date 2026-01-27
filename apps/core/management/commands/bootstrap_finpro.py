@@ -41,6 +41,7 @@ class Command(BaseCommand):
 
             ("🧬 Schema system", [
                 "seed_master_constraints",
+                "seed_schema_column_categories",
                 "seed_system_column_catalog",
             ]),
 

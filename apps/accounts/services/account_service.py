@@ -4,6 +4,7 @@ from django.db import transaction
 
 from accounts.exceptions import AccountInitializationError
 from accounts.models.account_classification import AccountClassification
+from schemas.services.account_column_visibility_service import AccountColumnVisibilityService
 from schemas.services.schema_manager import SchemaManager
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,11 @@ class AccountService:
 
             # 3️⃣ Ensure schema + SCVs are initialized
             schema = SchemaManager.ensure_for_account(account)
+
+            AccountColumnVisibilityService.initialize_for_account(
+                account=account
+            )
+
             logger.info(
                 f"Schema {schema.id} ensured for account {account.id} "
                 f"(portfolio: {account.portfolio.id}, type: {account.account_type.slug})"

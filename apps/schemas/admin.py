@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.http import HttpResponse
 
 from schemas.models import (
     Schema,
@@ -7,9 +8,11 @@ from schemas.models import (
     MasterConstraint,
     SchemaConstraint,
 )
+from schemas.models.account_column_visibility import AccountColumnVisibility
 from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import SchemaColumnTemplateBehaviour
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
+from schemas.services.schema_column_dependency_graph import SchemaColumnDependencyGraph
 
 
 
@@ -79,6 +82,31 @@ class SchemaAdmin(admin.ModelAdmin):
     list_filter = ("account_type",)
     search_fields = ("portfolio__profile__user__email",)
 
+    def dependency_graph(self, request, schema_id):
+        schema = Schema.objects.get(id=schema_id)
+
+        dot = SchemaColumnDependencyGraph.as_dot(schema=schema)
+
+        return HttpResponse(
+            dot,
+            content_type="text/plain",
+        )
+
+    def get_urls(self):
+        from django.urls import path
+
+        urls = super().get_urls()
+
+        custom = [
+            path(
+                "dependency-graph/<int:schema_id>/",
+                self.admin_site.admin_view(self.dependency_graph),
+                name="schema_dependency_graph",
+            ),
+        ]
+
+        return custom + urls
+
 
 # ============================================================
 # LIVE SCHEMA COLUMNS (STRUCTURE ONLY)
@@ -106,6 +134,22 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         "schema",
         "is_system",
     )
+
+    def delete_model(self, request, obj):
+        from schemas.services.schema_column_factory import SchemaColumnFactory
+
+        SchemaColumnFactory.delete_column(obj)
+
+    def delete_queryset(self, request, queryset):
+        from schemas.services.schema_column_factory import SchemaColumnFactory
+
+        for column in queryset:
+            SchemaColumnFactory.delete_column(column)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and not obj.is_deletable:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 # ============================================================
@@ -182,3 +226,29 @@ class SchemaConstraintAdmin(admin.ModelAdmin):
         "column__identifier",
         "name",
     )
+
+
+
+@admin.register(AccountColumnVisibility)
+class AccountColumnVisibilityAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "account",
+        "column",
+        "is_visible",
+    )
+
+    list_filter = (
+        "is_visible",
+        "account__account_type",
+    )
+
+    search_fields = (
+        "account__name",
+        "column__identifier",
+        "column__title",
+    )
+
+    list_editable = ("is_visible",)
+
+    ordering = ("account", "column__display_order")

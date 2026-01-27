@@ -4,6 +4,8 @@ from django.utils.text import slugify
 
 from schemas.models.schema_column import SchemaColumn
 from schemas.models.schema_column_template import SchemaColumnTemplate
+from schemas.policies.schema_column_deletion_policy import SchemaColumnDeletionPolicy
+from schemas.services.account_column_visibility_service import AccountColumnVisibilityService
 from schemas.services.schema_constraint_manager import SchemaConstraintManager
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from schemas.services.schema_expansion_service import SchemaExpansionService
@@ -122,6 +124,10 @@ class SchemaColumnFactory:
         # Ensure SCVs exist (no recompute here)
         SchemaColumnValueManager.ensure_for_column(column)
 
+        AccountColumnVisibilityService.initialize_for_schema_column(
+            column=column
+        )
+
         # Single recompute
         SCVRefreshService.schema_changed(schema)
 
@@ -160,16 +166,13 @@ class SchemaColumnFactory:
     # ==========================================================
     # DELETE COLUMN
     # ==========================================================
+    
     @staticmethod
     @transaction.atomic
     def delete_column(column: SchemaColumn):
-        """
-        Delete a column safely and trigger recomputation.
-        """
         from schemas.services.scv_refresh_service import SCVRefreshService
 
-        if not column.is_deletable:
-            raise ValidationError("This column cannot be deleted.")
+        SchemaColumnDeletionPolicy.assert_deletable(column=column)
 
         schema = column.schema
         column.delete()
