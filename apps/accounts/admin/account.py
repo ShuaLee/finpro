@@ -10,7 +10,7 @@ from accounts.models.account_classification import (
     AccountClassification,
 )
 from accounts.services.account_service import AccountService
-from assets.models.core import AssetType
+from accounts.services.account_deletion_service import AccountDeletionService
 from fx.models.country import Country
 
 
@@ -273,3 +273,32 @@ class AccountAdmin(admin.ModelAdmin):
                 f"Error creating account: {exc}",
                 level=messages.ERROR,
             )
+
+    def delete_model(self, request, obj):
+        """
+        Ensure schema cleanup when deleting a single account.
+        """
+        AccountDeletionService.delete_account(account=obj)
+
+        self.message_user(
+            request,
+            f"Account '{obj.name}' deleted.",
+            level=messages.SUCCESS,
+        )
+
+    def delete_queryset(self, request, queryset):
+        """
+        Ensure schema cleanup when deleting multiple accounts.
+        """
+        count = queryset.count()
+
+        for account in queryset.select_related(
+            "portfolio", "account_type"
+        ):
+            AccountDeletionService.delete_account(account=account)
+
+        self.message_user(
+            request,
+            f"{count} account(s) deleted.",
+            level=messages.SUCCESS,
+        )

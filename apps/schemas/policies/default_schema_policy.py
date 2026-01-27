@@ -5,7 +5,7 @@ class DefaultSchemaPolicy:
             "price",
             "current_value",
         ],
-        "crypto": [
+        "crypto-wallet": [
             "quantity",
             "price",
             "current_value",

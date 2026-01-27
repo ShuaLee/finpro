@@ -1,13 +1,16 @@
-from django.core.exceptions import ValidationError
 from django.db import models
 
 
 class Schema(models.Model):
     """
-    Defines the column layout for a given account type
-    within a portfolio.
+    Shared schema for a (portfolio, account_type).
 
-    One schema per (portfolio, account_type).
+    All accounts of the same account_type within a portfolio
+    share this schema.
+
+    Lifecycle:
+    - Created when first account of this type is created
+    - Deleted when last account of this type is deleted
     """
 
     portfolio = models.ForeignKey(
