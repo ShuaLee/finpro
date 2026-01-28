@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from assets.models.core import AssetType
@@ -60,3 +61,9 @@ class SchemaColumnAssetBehaviour(models.Model):
 
     class Meta:
         unique_together = ("column", "asset_type")
+
+    def clean(self):
+        if self.source == "holding" and not self.column.is_editable:
+            raise ValidationError(
+                "Holding-backed columns must be editable."
+            )

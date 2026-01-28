@@ -51,6 +51,41 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
+    # Asset Currency (Meta)
+    # ==================================================
+
+    asset_currency, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="asset_currency",
+        defaults={
+            "title": "Asset Currency",
+            "description": "Currency the asset is denominated in",
+            "data_type": "string",
+            "is_system": True,
+            "category": meta,
+        },
+    )
+
+    # Equity
+    SchemaColumnTemplateBehaviour.objects.update_or_create(
+        template=asset_currency,
+        asset_type=equity,
+        defaults={
+            "source": "asset",
+            "source_field": "equity__currency__code",
+        },
+    )
+
+    # Crypto
+    SchemaColumnTemplateBehaviour.objects.update_or_create(
+        template=asset_currency,
+        asset_type=crypto,
+        defaults={
+            "source": "asset",
+            "source_field": "crypto__currency__code",
+        },
+    )
+
+    # ==================================================
     # Price (Valuation)
     # ==================================================
 
@@ -71,7 +106,7 @@ def seed_system_column_catalog():
             asset_type=asset_type,
             defaults={
                 "source": "asset",
-                "source_field": "price",
+                "source_field": "price__price",
             },
         )
 

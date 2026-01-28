@@ -3,11 +3,15 @@ class DefaultSchemaPolicy:
         "brokerage": [
             "quantity",
             "price",
+            "asset_currency",
+            "market_value",
             "current_value",
         ],
         "crypto-wallet": [
             "quantity",
             "price",
+            "asset_currency",
+            "market_value",
             "current_value",
         ],
     }
