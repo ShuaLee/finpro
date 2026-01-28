@@ -88,9 +88,7 @@ class SchemaManager:
                 column=column,
                 holding=holding,
                 defaults={
-                    "value": SchemaColumnValueManager.display_for_column(
-                        column, holding
-                    ),
+                    "value": None,
                     "source": SchemaColumnValue.Source.SYSTEM,
                 },
             )
