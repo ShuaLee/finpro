@@ -2,6 +2,7 @@ from django.db import models
 
 from schemas.models.schema_column_category import SchemaColumnCategory
 
+
 class SchemaColumnTemplate(models.Model):
     """
     System-defined semantic column blueprint.
@@ -36,6 +37,12 @@ class SchemaColumnTemplate(models.Model):
         null=True,
         blank=True,
         help_text="Semantic category used for UI grouping.",
+    )
+
+    constraint_overrides = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Constraint overrides applied when this template is expanded into a schema column."
     )
 
     is_system = models.BooleanField(default=True)

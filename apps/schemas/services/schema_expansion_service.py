@@ -131,7 +131,7 @@ class SchemaExpansionService:
         # --------------------------------------------------
         SchemaConstraintManager.create_from_master(
             column,
-            overrides=getattr(template_column, "constraints", None) or {},
+            overrides=template_column.constraint_overrides or {},
         )
 
         # --------------------------------------------------

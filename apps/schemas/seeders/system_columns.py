@@ -62,6 +62,9 @@ def seed_system_column_catalog():
             "data_type": "string",
             "is_system": True,
             "category": meta,
+            "constraint_overrides": {
+                "enum": "fx_currency"
+            },
         },
     )
 

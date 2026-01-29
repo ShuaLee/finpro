@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 
 from schemas.models import (
     Schema,
@@ -13,9 +13,37 @@ from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import SchemaColumnTemplateBehaviour
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.services.schema_column_dependency_graph import SchemaColumnDependencyGraph
-from schemas.services.schema_column_value_edit_service import (
-    SchemaColumnValueEditService,
-)
+from schemas.services.schema_column_value_edit_service import SchemaColumnValueEditService
+from schemas.services.schema_constraint_enum_resolver import SchemaConstraintEnumResolver
+
+from django import forms
+
+
+class SchemaColumnValueAdminForm(forms.ModelForm):
+    class Meta:
+        model = SchemaColumnValue
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        scv = self.instance
+        if not scv.pk:
+            return
+
+        enum_constraint = scv.column.constraints.filter(name="enum").first()
+        if not enum_constraint:
+            return
+
+        choices = SchemaConstraintEnumResolver.resolve(
+            enum_constraint,
+            column=scv.column,
+            holding=scv.holding,
+        )
+
+        self.fields["value"].widget = forms.Select(
+            choices=[(c, c) for c in choices]
+        )
 
 
 # ============================================================
@@ -191,23 +219,63 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         "source",
     )
 
-    readonly_fields = (
-        "column",
-        "holding",
-        "source",
-        "value",
+    form = SchemaColumnValueAdminForm
+
+    # 👇 IMPORTANT
+    change_form_template = (
+        "admin/schemas/schemacolumnvalue/change_form.html"
     )
 
-    actions = ["revert_scvs"]
+    # --------------------------------------------------
+    # Readonly logic
+    # --------------------------------------------------
+    def get_readonly_fields(self, request, obj=None):
+        if not obj:
+            return ("column", "holding", "source")
 
-    @admin.action(description="Revert to system value")
-    def revert_scvs(self, request, queryset):
-        from schemas.services.schema_column_value_edit_service import (
-            SchemaColumnValueEditService,
-        )
+        enum_constraint = obj.column.constraints.filter(name="enum").exists()
 
-        for scv in queryset:
-            SchemaColumnValueEditService.revert(scv=scv)
+        if enum_constraint and obj.source != SchemaColumnValue.Source.FORMULA:
+            # allow editing value only
+            return ("column", "holding", "source")
+
+        return ("column", "holding", "source", "value")
+
+    # --------------------------------------------------
+    # Save handling
+    # --------------------------------------------------
+    def save_model(self, request, obj, form, change):
+        if change:
+            SchemaColumnValueEditService.update_value(
+                scv=obj,
+                raw_value=form.cleaned_data["value"],
+            )
+        else:
+            super().save_model(request, obj, form, change)
+
+    # --------------------------------------------------
+    # Handle "Revert to system" button
+    # --------------------------------------------------
+    def response_change(self, request, obj):
+        if "_revert_to_system" in request.POST:
+            SchemaColumnValueEditService.revert_to_system(scv=obj)
+            self.message_user(request, "Reverted to system value.")
+            return HttpResponseRedirect(".")
+
+        return super().response_change(request, obj)
+
+    # --------------------------------------------------
+    # Inject template context flag
+    # --------------------------------------------------
+    def render_change_form(self, request, context, *args, **kwargs):
+        context["show_revert_button"] = True
+        return super().render_change_form(request, context, *args, **kwargs)
+
+    # --------------------------------------------------
+    # Permissions
+    # --------------------------------------------------
+    def has_delete_permission(self, request, obj=None):
+        return True
 
 
 # ============================================================

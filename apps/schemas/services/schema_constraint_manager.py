@@ -51,6 +51,16 @@ class SchemaConstraintManager:
             return None
 
         try:
+            # ---------------- ENUM (string-only, semantic key) ----------------
+            if master.name == "enum":
+                if not isinstance(raw, str):
+                    raise ValidationError(
+                        "Enum constraint value must be a string key "
+                        "(e.g. 'fx_currency'), not a list or object."
+                    )
+                return raw
+
+            # ---------------- INTEGER ----------------
             if master.applies_to == "integer":
                 value = int(raw)
                 SchemaConstraintManager._check_bounds(
@@ -58,6 +68,7 @@ class SchemaConstraintManager:
                 )
                 return value
 
+            # ---------------- DECIMAL ----------------
             if master.applies_to == "decimal":
                 value = Decimal(str(raw))
                 SchemaConstraintManager._check_bounds(
@@ -65,8 +76,11 @@ class SchemaConstraintManager:
                 )
                 return value
 
-            return raw
+            # ---------------- STRING (non-enum) ----------------
+            return str(raw)
 
+        except ValidationError:
+            raise
         except Exception:
             raise ValidationError(
                 f"Invalid value for constraint '{master.name}': {raw}"

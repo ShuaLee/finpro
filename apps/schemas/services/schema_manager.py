@@ -1,5 +1,6 @@
 from schemas.models import Schema, SchemaColumnValue
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+from schemas.services.schema_constraint_enum_resolver import SchemaConstraintEnumResolver
 from schemas.services.schema_generator import SchemaGenerator
 
 
@@ -97,10 +98,40 @@ class SchemaManager:
     def _recompute_scv(self, scv: SchemaColumnValue, column):
         """
         Recompute a single SCV if allowed.
+
+        Invariants:
+        - USER overrides are preserved *only while valid*
+        - Invalid enum overrides auto-revert to SYSTEM
         """
-        if not _can_recompute(scv):
+
+        # --------------------------------------------------
+        # 0️⃣ Auto-revert INVALID enum overrides (ALWAYS RUNS)
+        # --------------------------------------------------
+        if scv.source == SchemaColumnValue.Source.USER:
+            enum_constraint = column.constraints.filter(name="enum").first()
+            if enum_constraint:
+                allowed = SchemaConstraintEnumResolver.resolve(
+                    enum_constraint,
+                    column=column,
+                    holding=scv.holding,
+                )
+
+                if scv.value not in allowed:
+                    # Auto-revert invalid override
+                    scv.value = None
+                    scv.source = SchemaColumnValue.Source.SYSTEM
+                    scv.save(update_fields=["value", "source"])
+                    # IMPORTANT: do NOT return — continue recompute
+
+        # --------------------------------------------------
+        # 1️⃣ Respect valid user overrides
+        # --------------------------------------------------
+        if scv.source == SchemaColumnValue.Source.USER:
             return
 
+        # --------------------------------------------------
+        # 2️⃣ Compute SYSTEM / FORMULA value
+        # --------------------------------------------------
         manager = SchemaColumnValueManager(scv)
         manager.refresh_display_value()
 
