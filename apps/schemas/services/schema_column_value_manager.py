@@ -161,13 +161,13 @@ class SchemaColumnValueManager:
         # --------------------------------------------------
         # 2. Inject FX rate (runtime-only)
         # --------------------------------------------------
-        asset = holding.asset
-        profile = holding.account.portfolio.profile
 
-        asset_currency = getattr(asset, "currency", None)
-        profile_currency = getattr(profile, "currency", None)
+        asset_currency = context.get("asset_currency")
+        profile_currency = holding.account.portfolio.profile.currency
 
-        if asset_currency and profile_currency:
+        if not asset_currency or not profile_currency:
+            fx_rate = Decimal("1")
+        else:
             if asset_currency == profile_currency:
                 fx_rate = Decimal("1")
             else:
@@ -182,8 +182,6 @@ class SchemaColumnValueManager:
                     )
 
                 fx_rate = Decimal(str(fx.rate))
-        else:
-            fx_rate = Decimal("1")
 
         context["fx_rate"] = fx_rate
 

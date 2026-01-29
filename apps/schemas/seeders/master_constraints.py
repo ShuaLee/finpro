@@ -39,6 +39,13 @@ def seed_master_constraints():
             "label": "Maximum Length",
             "default_string": "255",
         },
+        {
+            "name": "enum",
+            "applies_to": MasterConstraint.AppliesTo.STRING,
+            "label": "Allowed Values",
+            "default_string": None,
+        },
+
     ]
 
     for data in constraints:

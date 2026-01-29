@@ -65,23 +65,27 @@ def seed_system_column_catalog():
         },
     )
 
-    # Equity
+    # --------------------------------------------------
+    # Equity behavior
+    # --------------------------------------------------
     SchemaColumnTemplateBehaviour.objects.update_or_create(
         template=asset_currency,
         asset_type=equity,
         defaults={
             "source": "asset",
-            "source_field": "equity__currency__code",
+            "source_field": "extension__currency__code",
         },
     )
 
-    # Crypto
+    # --------------------------------------------------
+    # Crypto behavior
+    # --------------------------------------------------
     SchemaColumnTemplateBehaviour.objects.update_or_create(
         template=asset_currency,
         asset_type=crypto,
         defaults={
             "source": "asset",
-            "source_field": "crypto__currency__code",
+            "source_field": "extension__currency__code",
         },
     )
 

@@ -13,7 +13,9 @@ from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import SchemaColumnTemplateBehaviour
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.services.schema_column_dependency_graph import SchemaColumnDependencyGraph
-
+from schemas.services.schema_column_value_edit_service import (
+    SchemaColumnValueEditService,
+)
 
 
 # ============================================================
@@ -188,11 +190,24 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         "value",
         "source",
     )
-    list_filter = ("source",)
-    search_fields = (
-        "column__identifier",
-        "holding__asset__name",
+
+    readonly_fields = (
+        "column",
+        "holding",
+        "source",
+        "value",
     )
+
+    actions = ["revert_scvs"]
+
+    @admin.action(description="Revert to system value")
+    def revert_scvs(self, request, queryset):
+        from schemas.services.schema_column_value_edit_service import (
+            SchemaColumnValueEditService,
+        )
+
+        for scv in queryset:
+            SchemaColumnValueEditService.revert(scv=scv)
 
 
 # ============================================================
@@ -226,7 +241,6 @@ class SchemaConstraintAdmin(admin.ModelAdmin):
         "column__identifier",
         "name",
     )
-
 
 
 @admin.register(AccountColumnVisibility)
