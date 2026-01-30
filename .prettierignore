@@ -1,0 +1,5 @@
+# Ignore Django templates
+templates/**/*.html
+
+# Optional: ignore admin overrides
+**/templates/admin/**/*.html

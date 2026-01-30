@@ -1,0 +1,16 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block submit_buttons_bottom %}
+    {{ block.super }}
+
+    <button
+        type="submit"
+        name="_revert_to_system"
+        value="1"
+        class="button button-secondary"
+        style="margin-left: 10px;"
+    >
+        {% trans "Return to system value" %}
+    </button>
+{% endblock %}

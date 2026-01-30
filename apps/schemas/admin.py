@@ -220,15 +220,11 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     )
 
     form = SchemaColumnValueAdminForm
+    change_form_template = "admin/schemas/schemacolumnvalue/change_form.html"
 
-    # 👇 IMPORTANT
-    change_form_template = (
-        "admin/schemas/schemacolumnvalue/change_form.html"
-    )
-
-    # --------------------------------------------------
-    # Readonly logic
-    # --------------------------------------------------
+    # ----------------------------
+    # Read-only logic
+    # ----------------------------
     def get_readonly_fields(self, request, obj=None):
         if not obj:
             return ("column", "holding", "source")
@@ -236,14 +232,13 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         enum_constraint = obj.column.constraints.filter(name="enum").exists()
 
         if enum_constraint and obj.source != SchemaColumnValue.Source.FORMULA:
-            # allow editing value only
             return ("column", "holding", "source")
 
         return ("column", "holding", "source", "value")
 
-    # --------------------------------------------------
+    # ----------------------------
     # Save handling
-    # --------------------------------------------------
+    # ----------------------------
     def save_model(self, request, obj, form, change):
         if change:
             SchemaColumnValueEditService.update_value(
@@ -253,14 +248,22 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         else:
             super().save_model(request, obj, form, change)
 
-    # --------------------------------------------------
-    # Handle "Revert to system" button
-    # --------------------------------------------------
+    # ----------------------------
+    # Revert button handler
+    # ----------------------------
     def response_change(self, request, obj):
         if "_revert_to_system" in request.POST:
-            SchemaColumnValueEditService.revert_to_system(scv=obj)
-            self.message_user(request, "Reverted to system value.")
-            return HttpResponseRedirect(".")
+            if obj.source == SchemaColumnValue.Source.USER:
+                SchemaColumnValueEditService.revert_to_system(scv=obj)
+                self.message_user(request, "Reverted to system value.")
+            else:
+                self.message_user(
+                    request,
+                    "This value is already using the system source.",
+                    level="info",
+                )
+
+            return HttpResponseRedirect(request.path)
 
         return super().response_change(request, obj)
 
