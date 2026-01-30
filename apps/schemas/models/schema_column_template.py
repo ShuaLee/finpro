@@ -22,8 +22,7 @@ class SchemaColumnTemplate(models.Model):
     data_type = models.CharField(
         max_length=20,
         choices=[
-            ("decimal", "Decimal"),
-            ("integer", "Integer"),
+            ("decimal", "Number"),
             ("percent", "Percent"),
             ("string", "String"),
             ("boolean", "Boolean"),

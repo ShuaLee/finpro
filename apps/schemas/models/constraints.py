@@ -16,9 +16,9 @@ class MasterConstraint(models.Model):
     """
 
     class AppliesTo(models.TextChoices):
-        INTEGER = "integer", "Integer"
         DECIMAL = "decimal", "Decimal"
         STRING = "string", "String"
+        PERCENT = "percent", "Percent"
 
     name = models.SlugField(
         max_length=100,
