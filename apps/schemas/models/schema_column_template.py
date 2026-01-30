@@ -24,6 +24,7 @@ class SchemaColumnTemplate(models.Model):
         choices=[
             ("decimal", "Decimal"),
             ("integer", "Integer"),
+            ("percent", "Percent"),
             ("string", "String"),
             ("boolean", "Boolean"),
             ("date", "Date"),

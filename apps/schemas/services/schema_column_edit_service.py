@@ -32,10 +32,8 @@ class SchemaColumnValueEditService:
                 "Column has no behavior for this asset type."
             )
 
-        if behavior.source == "formula":
-            raise ValidationError(
-                "Formula-derived columns cannot be edited."
-            )
+        if not column.is_editable:
+            raise ValidationError("This column is not editable.")
 
         # 1️⃣ Validate input
         value = SchemaColumnValueEditService._validate_value(

@@ -1,4 +1,6 @@
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse, HttpResponseRedirect
 
 from schemas.models import (
@@ -16,7 +18,7 @@ from schemas.services.schema_column_dependency_graph import SchemaColumnDependen
 from schemas.services.schema_column_value_edit_service import SchemaColumnValueEditService
 from schemas.services.schema_constraint_enum_resolver import SchemaConstraintEnumResolver
 
-from django import forms
+from decimal import Decimal
 
 
 class SchemaColumnValueAdminForm(forms.ModelForm):
@@ -44,6 +46,56 @@ class SchemaColumnValueAdminForm(forms.ModelForm):
         self.fields["value"].widget = forms.Select(
             choices=[(c, c) for c in choices]
         )
+
+        if scv.column.data_type == "boolean":
+            self.fields["value"].widget = forms.CheckboxInput()
+
+    def clean_value(self):
+        value = self.cleaned_data.get("value")
+        scv = self.instance
+        column = scv.column
+
+        # Allow clearing value (used for revert logic)
+        if value in ("", None):
+            return None
+
+        # ---------------- ENUM ----------------
+        enum_constraint = column.constraints.filter(name="enum").first()
+        if enum_constraint:
+            allowed = SchemaConstraintEnumResolver.resolve(
+                enum_constraint,
+                column=column,
+                holding=scv.holding,
+            )
+            if value not in allowed:
+                raise forms.ValidationError(
+                    f"Value must be one of: {', '.join(allowed)}"
+                )
+
+        # ---------------- TYPE VALIDATION ----------------
+        try:
+            if column.data_type == "decimal":
+                Decimal(str(value))
+            elif column.data_type == "integer":
+                int(value)
+            elif column.data_type == "boolean":
+                if not isinstance(value, bool):
+                    raise ValueError()
+            else:
+                str(value)
+        except Exception:
+            raise forms.ValidationError(
+                f"Invalid value for type '{column.data_type}'."
+            )
+
+        # ---------------- CONSTRAINT VALIDATION ----------------
+        for constraint in column.constraints.all():
+            try:
+                constraint.validate(value)
+            except ValidationError as e:
+                raise forms.ValidationError(e.messages)
+
+        return value
 
 
 # ============================================================
@@ -229,9 +281,7 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         if not obj:
             return ("column", "holding", "source")
 
-        enum_constraint = obj.column.constraints.filter(name="enum").exists()
-
-        if enum_constraint and obj.source != SchemaColumnValue.Source.FORMULA:
+        if obj.column.is_editable:
             return ("column", "holding", "source")
 
         return ("column", "holding", "source", "value")
@@ -239,6 +289,7 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     # ----------------------------
     # Save handling
     # ----------------------------
+
     def save_model(self, request, obj, form, change):
         if change:
             SchemaColumnValueEditService.update_value(
