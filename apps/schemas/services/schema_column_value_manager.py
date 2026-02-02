@@ -9,6 +9,8 @@ from formulas.services.formula_resolver import FormulaResolver
 from formulas.services.formula_evaluator import FormulaEvaluator
 from fx.models.fx import FXRate
 
+from datetime import date
+
 
 class SchemaColumnValueManager:
     """
@@ -200,11 +202,27 @@ class SchemaColumnValueManager:
         try:
             if dt == "decimal":
                 return self._format_decimal(Decimal(str(raw)))
-            if dt == "integer":
-                return str(int(raw))
+
+            if dt == "percent":
+                return self._format_percent(Decimal(str(raw)))
+
+            if dt == "date":
+                return self._format_date(raw)
+
             if dt == "boolean":
-                return str(bool(raw))
+                if isinstance(raw, bool):
+                    return "True" if raw else "False"
+
+                val = str(raw).strip().lower()
+                if val in ("true", "1", "yes"):
+                    return "True"
+                if val in ("false", "0", "no"):
+                    return "False"
+
+                return self._static_default()
+
             return str(raw)
+
         except Exception:
             return self._static_default()
 
@@ -213,9 +231,30 @@ class SchemaColumnValueManager:
         quant = Decimal("1").scaleb(-places)
         return str(value.quantize(quant, rounding=ROUND_HALF_UP))
 
+    def _format_percent(self, value: Decimal) -> str:
+        places = self._decimal_places()
+        quant = Decimal("1").scaleb(-places)
+        percent_value = (value * Decimal("100")).quantize(
+            quant, rounding=ROUND_HALF_UP
+        )
+        return f"{percent_value}%"
+
+    def _format_date(self, raw) -> str:
+        if raw is None:
+            return self._static_default()
+
+        if isinstance(raw, date):
+            return raw.isoformat()
+
+        try:
+            return date.fromisoformat(str(raw)).isoformat()
+        except Exception:
+            return self._static_default()
+
     # ============================================================
     # CONSTRAINTS
     # ============================================================
+
     def _decimal_places(self) -> int:
         constraint = self.column.constraints.filter(
             name="decimal_places"
@@ -229,14 +268,17 @@ class SchemaColumnValueManager:
     # ============================================================
     # DEFAULTS
     # ============================================================
+
     def _static_default(self) -> str | None:
         dt = self.column.data_type
         if dt == "decimal":
             return "0.00"
-        if dt == "integer":
-            return "0"
+        if dt == "percent":
+            return "0.00%"
         if dt == "boolean":
             return "False"
+        if dt == "date":
+            return "-"
         if dt == "string":
             return "-"
         return None
@@ -244,6 +286,7 @@ class SchemaColumnValueManager:
     # ============================================================
     # PATH
     # ============================================================
+
     @staticmethod
     def _resolve_path(obj, path: str | None) -> Any:
         if not obj or not path:

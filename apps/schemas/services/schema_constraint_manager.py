@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 
 from schemas.models import MasterConstraint, SchemaConstraint
 
+from datetime import date
+
 
 class SchemaConstraintManager:
     """
@@ -25,7 +27,6 @@ class SchemaConstraintManager:
         for master in masters:
             raw_value = overrides.get(master.name, cls._default(master))
             typed_value = cls._cast(master, raw_value)
-
             defaults = cls._build_defaults(master, typed_value)
 
             SchemaConstraint.objects.get_or_create(
@@ -39,10 +40,12 @@ class SchemaConstraintManager:
     # ==========================================================
     @staticmethod
     def _default(master):
-        if master.applies_to == "integer":
-            return master.default_integer
-        if master.applies_to == "decimal":
+        if master.applies_to in ("decimal", "percent"):
             return master.default_decimal
+        if master.applies_to == "boolean":
+            return master.default_boolean
+        if master.applies_to == "date":
+            return master.default_date
         return master.default_string
 
     @staticmethod
@@ -51,32 +54,29 @@ class SchemaConstraintManager:
             return None
 
         try:
-            # ---------------- ENUM (string-only, semantic key) ----------------
             if master.name == "enum":
-                if not isinstance(raw, str):
-                    raise ValidationError(
-                        "Enum constraint value must be a string key "
-                        "(e.g. 'fx_currency'), not a list or object."
-                    )
-                return raw
+                return str(raw)
 
-            # ---------------- INTEGER ----------------
-            if master.applies_to == "integer":
-                value = int(raw)
-                SchemaConstraintManager._check_bounds(
-                    value, master.min_integer, master.max_integer
-                )
-                return value
-
-            # ---------------- DECIMAL ----------------
-            if master.applies_to == "decimal":
+            if master.applies_to in ("decimal", "percent"):
                 value = Decimal(str(raw))
                 SchemaConstraintManager._check_bounds(
                     value, master.min_decimal, master.max_decimal
                 )
                 return value
 
-            # ---------------- STRING (non-enum) ----------------
+            if master.applies_to == "boolean":
+                if isinstance(raw, bool):
+                    return raw
+                val = str(raw).lower()
+                if val in ("true", "1", "yes"):
+                    return True
+                if val in ("false", "0", "no"):
+                    return False
+                raise ValidationError("Invalid boolean value.")
+
+            if master.applies_to == "date":
+                return date.fromisoformat(str(raw))
+
             return str(raw)
 
         except ValidationError:
@@ -101,17 +101,19 @@ class SchemaConstraintManager:
             "is_editable": False,
         }
 
-        if master.applies_to == "integer":
-            defaults.update(
-                value_integer=value,
-                min_integer=master.min_integer,
-                max_integer=master.max_integer,
-            )
-        elif master.applies_to == "decimal":
+        if master.applies_to in ("decimal", "percent"):
             defaults.update(
                 value_decimal=value,
                 min_decimal=master.min_decimal,
                 max_decimal=master.max_decimal,
+            )
+        elif master.applies_to == "boolean":
+            defaults["value_boolean"] = value
+        elif master.applies_to == "date":
+            defaults.update(
+                value_date=value,
+                min_date=master.min_date,
+                max_date=master.max_date,
             )
         else:
             defaults["value_string"] = value
