@@ -43,6 +43,50 @@ def seed_system_formulas():
     )
 
     # ==================================================
+    # Dividend Formulas
+    # ==================================================
+
+    dividend_yield_trailing_formula, _ = Formula.objects.update_or_create(
+        owner=None,
+        identifier="dividend_yield_trailing",
+        defaults={
+            "title": "Trailing Dividend Yield",
+            "expression": "trailing_12m_dividend / price",
+            "decimal_places": 4,
+        },
+    )
+
+    dividend_yield_forward_formula, _ = Formula.objects.update_or_create(
+        owner=None,
+        identifier="dividend_yield_forward",
+        defaults={
+            "title": "Forward Dividend Yield",
+            "expression": "forward_annual_dividend / price",
+            "decimal_places": 4,
+        },
+    )
+
+    annual_dividend_income_formula, _ = Formula.objects.update_or_create(
+        owner=None,
+        identifier="annual_dividend_income",
+        defaults={
+            "title": "Annual Dividend Income",
+            "expression": "forward_annual_dividend * quantity",
+            "decimal_places": 2,
+        },
+    )
+
+    trailing_dividend_income_formula, _ = Formula.objects.update_or_create(
+        owner=None,
+        identifier="trailing_dividend_income",
+        defaults={
+            "title": "Trailing Dividend Income",
+            "expression": "trailing_12m_dividend * quantity",
+            "decimal_places": 2,
+        },
+    )
+
+    # ==================================================
     # Asset Types
     # ==================================================
     equity_type = AssetType.objects.get(slug="equity")
@@ -81,3 +125,59 @@ def seed_system_formulas():
                 "is_system": True,
             },
         )
+
+    # ==================================================
+    # FormulaDefinitions: DIVIDENDS (Equity only)
+    # ==================================================
+
+    FormulaDefinition.objects.update_or_create(
+        owner=None,
+        identifier="dividend_yield",
+        asset_type=equity_type,
+        defaults={
+            "name": "Dividend Yield (Trailing)",
+            "description": "Trailing 12-month dividend yield.",
+            "formula": dividend_yield_trailing_formula,
+            "dependency_policy": DependencyPolicy.AUTO_EXPAND,
+            "is_system": True,
+        },
+    )
+
+    FormulaDefinition.objects.update_or_create(
+        owner=None,
+        identifier="forward_dividend_yield",
+        asset_type=equity_type,
+        defaults={
+            "name": "Forward Dividend Yield",
+            "description": "Forward annual dividend yield.",
+            "formula": dividend_yield_forward_formula,
+            "dependency_policy": DependencyPolicy.AUTO_EXPAND,
+            "is_system": True,
+        },
+    )
+
+    FormulaDefinition.objects.update_or_create(
+        owner=None,
+        identifier="annual_dividend_income",
+        asset_type=equity_type,
+        defaults={
+            "name": "Annual Dividend Income",
+            "description": "Estimated annual dividend income.",
+            "formula": annual_dividend_income_formula,
+            "dependency_policy": DependencyPolicy.AUTO_EXPAND,
+            "is_system": True,
+        },
+    )
+
+    FormulaDefinition.objects.update_or_create(
+        owner=None,
+        identifier="trailing_dividend_income",
+        asset_type=equity_type,
+        defaults={
+            "name": "Trailing Dividend Income",
+            "description": "Trailing 12-month dividend income.",
+            "formula": trailing_dividend_income_formula,
+            "dependency_policy": DependencyPolicy.AUTO_EXPAND,
+            "is_system": True,
+        },
+    )
