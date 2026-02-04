@@ -105,8 +105,27 @@ class EquityDividendSnapshot(models.Model):
     )
 
     # =================================================
+    # YIELD
+    # =================================================
+
+    trailing_dividend_yield = models.DecimalField(
+        max_digits=10,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+
+    forward_dividend_yield = models.DecimalField(
+        max_digits=10,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+
+    # =================================================
     # CADENCE HEALTH (NEW — IMPORTANT)
     # =================================================
+
     class DividendCadenceStatus(models.TextChoices):
         ACTIVE = "ACTIVE", "Active"
         STALE = "STALE", "Stale"

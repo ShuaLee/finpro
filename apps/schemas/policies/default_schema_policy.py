@@ -6,6 +6,8 @@ class DefaultSchemaPolicy:
             "asset_currency",
             "market_value",
             "current_value",
+            "dividend_yield",
+            "trailing_12m_dividend",
         ],
         "crypto-wallet": [
             "quantity",

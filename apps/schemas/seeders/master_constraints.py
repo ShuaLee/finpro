@@ -2,6 +2,9 @@ from decimal import Decimal
 
 from schemas.models import MasterConstraint
 
+SAFE_DECIMAL_MIN = Decimal("-999999999999.99999999")
+SAFE_DECIMAL_MAX = Decimal("999999999999.99999999")
+
 
 def seed_master_constraints():
     """
@@ -16,9 +19,9 @@ def seed_master_constraints():
     """
 
     constraints = [
-        # ==================================================
-        # DECIMAL (Number)
-        # ==================================================
+        # ==========================
+        # DECIMAL / PERCENT
+        # ==========================
         {
             "name": "decimal_places",
             "label": "Decimal Places",
@@ -32,28 +35,16 @@ def seed_master_constraints():
             "label": "Minimum Value",
             "applies_to": MasterConstraint.AppliesTo.DECIMAL,
             "default_decimal": None,
-            "min_decimal": Decimal("-1e18"),
-            "max_decimal": Decimal("1e18"),
+            "min_decimal": SAFE_DECIMAL_MIN,
+            "max_decimal": SAFE_DECIMAL_MAX,
         },
         {
             "name": "max_value",
             "label": "Maximum Value",
             "applies_to": MasterConstraint.AppliesTo.DECIMAL,
             "default_decimal": None,
-            "min_decimal": Decimal("-1e18"),
-            "max_decimal": Decimal("1e18"),
-        },
-
-        # ==================================================
-        # PERCENT (stored as decimal, displayed as %)
-        # ==================================================
-        {
-            "name": "decimal_places",
-            "label": "Decimal Places",
-            "applies_to": MasterConstraint.AppliesTo.PERCENT,
-            "default_decimal": Decimal("2"),
-            "min_decimal": Decimal("0"),
-            "max_decimal": Decimal("6"),
+            "min_decimal": SAFE_DECIMAL_MIN,
+            "max_decimal": SAFE_DECIMAL_MAX,
         },
 
         # ==================================================

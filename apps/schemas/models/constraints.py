@@ -1,6 +1,9 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from datetime import date
+from decimal import Decimal
+
 
 class MasterConstraint(models.Model):
     """
@@ -294,3 +297,80 @@ class SchemaConstraint(models.Model):
         if self.applies_to == MasterConstraint.AppliesTo.DATE:
             return self.value_date
         return self.value_string
+
+    # ==========================================================
+    # VALIDATION (USER INPUT)
+    # ==========================================================
+    def validate(self, raw_value):
+        """
+        Validate a user-provided value against this constraint.
+        Raises ValidationError if invalid.
+        """
+
+        if raw_value in (None, "", "None"):
+            return  # allow empty; higher-level logic decides if required
+
+        # ---------------- DECIMAL / PERCENT ----------------
+        if self.applies_to in ("decimal", "percent"):
+            try:
+                value = Decimal(str(raw_value))
+            except Exception:
+                raise ValidationError(f"'{raw_value}' is not a valid number.")
+
+            if self.min_decimal is not None and value < self.min_decimal:
+                raise ValidationError(
+                    f"Value {value} is less than minimum {self.min_decimal}."
+                )
+
+            if self.max_decimal is not None and value > self.max_decimal:
+                raise ValidationError(
+                    f"Value {value} is greater than maximum {self.max_decimal}."
+                )
+
+            return
+
+        # ---------------- STRING ----------------
+        if self.applies_to == "string":
+            value = str(raw_value)
+
+            if self.name == "max_length":
+                max_len = int(self.value_string)
+                if len(value) > max_len:
+                    raise ValidationError(
+                        f"Length {len(value)} exceeds maximum {max_len}."
+                    )
+
+            if self.name == "enum":
+                # enum resolution is handled elsewhere (you already do this)
+                return
+
+            return
+
+        # ---------------- BOOLEAN ----------------
+        if self.applies_to == "boolean":
+            val = str(raw_value).strip().lower()
+            if val not in ("true", "false", "1", "0", "yes", "no"):
+                raise ValidationError("Invalid boolean value.")
+            return
+
+        # ---------------- DATE ----------------
+        if self.applies_to == "date":
+            try:
+                if not isinstance(raw_value, date):
+                    value = date.fromisoformat(str(raw_value))
+                else:
+                    value = raw_value
+            except Exception:
+                raise ValidationError("Invalid date format (YYYY-MM-DD).")
+
+            if self.min_date and value < self.min_date:
+                raise ValidationError(
+                    f"Date {value} is before minimum {self.min_date}."
+                )
+
+            if self.max_date and value > self.max_date:
+                raise ValidationError(
+                    f"Date {value} is after maximum {self.max_date}."
+                )
+
+            return
