@@ -91,6 +91,21 @@ class MasterConstraint(models.Model):
     class Meta:
         ordering = ["applies_to", "name"]
 
+    def default_value(self):
+        if self.applies_to in ("decimal", "percent"):
+            return self.default_decimal
+
+        if self.applies_to == "string":
+            return self.default_string
+
+        if self.applies_to == "boolean":
+            return self.default_boolean
+
+        if self.applies_to == "date":
+            return self.default_date
+
+        return None
+
     def __str__(self):
         return f"{self.name} ({self.applies_to})"
 

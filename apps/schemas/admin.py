@@ -16,7 +16,10 @@ from schemas.models.schema_column_template_behaviour import SchemaColumnTemplate
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.services.schema_column_dependency_graph import SchemaColumnDependencyGraph
 from schemas.services.schema_column_value_edit_service import SchemaColumnValueEditService
+from schemas.services.schema_column_value_manager import SchemaColumnValueManager
+from schemas.services.schema_constraint_edit_service import SchemaConstraintEditService
 from schemas.services.schema_constraint_enum_resolver import SchemaConstraintEnumResolver
+from schemas.services.scv_refresh_service import SCVRefreshService
 
 from decimal import Decimal
 
@@ -267,12 +270,20 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     list_display = (
         "column",
         "holding",
-        "value",
+        "display_value",  # ✅ formatted value
         "source",
     )
 
     form = SchemaColumnValueAdminForm
     change_form_template = "admin/schemas/schemacolumnvalue/change_form.html"
+
+    # ----------------------------
+    # Display
+    # ----------------------------
+    def display_value(self, obj):
+        return SchemaColumnValueManager(obj).get_display_value()
+
+    display_value.short_description = "Value"
 
     # ----------------------------
     # Read-only logic
@@ -289,23 +300,33 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     # ----------------------------
     # Save handling
     # ----------------------------
-
     def save_model(self, request, obj, form, change):
-        if change:
-            SchemaColumnValueEditService.update_value(
-                scv=obj,
-                raw_value=form.cleaned_data["value"],
-            )
-        else:
+        if not change:
             super().save_model(request, obj, form, change)
+            return
+
+        # ----------------------------------
+        # Guard: column must be editable
+        # ----------------------------------
+        if not obj.column.is_editable:
+            raise ValidationError("This column is not editable.")
+
+        # ----------------------------------
+        # Delegate ALL mutation to service
+        # ----------------------------------
+        SchemaColumnValueEditService.set_value(
+            scv=obj,
+            raw_value=form.cleaned_data["value"],
+        )
 
     # ----------------------------
     # Revert button handler
     # ----------------------------
+
     def response_change(self, request, obj):
         if "_revert_to_system" in request.POST:
             if obj.source == SchemaColumnValue.Source.USER:
-                SchemaColumnValueEditService.revert_to_system(scv=obj)
+                SchemaColumnValueEditService.revert(scv=obj)
                 self.message_user(request, "Reverted to system value.")
             else:
                 self.message_user(
@@ -363,6 +384,18 @@ class SchemaConstraintAdmin(admin.ModelAdmin):
         "column__identifier",
         "name",
     )
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.save()
+            return
+
+        SchemaConstraintEditService.update_constraint(
+            constraint=obj,
+            user=request.user,
+            changed_fields=form.changed_data,
+            updates=form.cleaned_data,
+        )
 
 
 @admin.register(AccountColumnVisibility)

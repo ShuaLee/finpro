@@ -81,45 +81,47 @@ class SchemaColumnValueManager:
     # PUBLIC
     # ============================================================
     def refresh_display_value(self) -> None:
-        self.scv.value = self._compute_value()
+        """
+        Recompute canonical value for SYSTEM / FORMULA columns only.
+        USER overrides must NEVER be overwritten here.
+        """
+        if self.scv.source == SchemaColumnValue.Source.USER:
+            return
+
+        self.scv.value = self._compute_raw_value()
 
     # ============================================================
     # CORE
     # ============================================================
-    def _compute_value(self) -> str | None:
+
+    def _compute_raw_value(self) -> Any | None:
         if not self.asset_type:
-            return self._static_default()
+            return None
 
         behavior = self.column.behavior_for(self.asset_type)
         if not behavior:
-            return self._static_default()
+            return None
 
         source = behavior.source
 
-        # ---------------- FORMULA ----------------
         if source == "formula" and behavior.formula_definition:
-            return self._compute_formula_value(behavior)
+            return self._compute_formula_raw_value(behavior)
 
-        # ---------------- HOLDING ----------------
         if source == "holding" and behavior.source_field:
-            raw = self._resolve_path(self.holding, behavior.source_field)
-            return self._format_value(raw)
+            return self._resolve_path(self.holding, behavior.source_field)
 
-        # ---------------- ASSET ----------------
         if source == "asset" and behavior.source_field:
-            raw = self._resolve_path(self.asset, behavior.source_field)
-            return self._format_value(raw)
+            return self._resolve_path(self.asset, behavior.source_field)
 
-        # ---------------- CONSTANT ----------------
         if source == "constant":
-            return self._format_value(behavior.constant_value)
+            return behavior.constant_value
 
-        # ---------------- USER / UNDEFINED ----------------
-        return self._static_default()
+        return None
 
     # ============================================================
     # FORMULA
     # ============================================================
+
     def _compute_formula_value(
         self, behavior: SchemaColumnAssetBehaviour
     ) -> str | None:
@@ -297,3 +299,62 @@ class SchemaColumnValueManager:
             if obj is None:
                 return None
         return obj
+
+    def _compute_formula_raw_value(
+        self, behavior: SchemaColumnAssetBehaviour
+    ) -> Decimal | None:
+        """
+        Compute the RAW (unformatted) value of a formula-based column.
+
+        - Returns a Decimal or None
+        - NEVER formats
+        - NEVER appends % or rounds
+        """
+
+        definition = behavior.formula_definition
+        if not definition:
+            return None
+
+        formula = definition.formula
+
+        # --------------------------------------------------
+        # Build evaluation context
+        # --------------------------------------------------
+        context = FormulaResolver.resolve_inputs(
+            formula=formula,
+            context=self._build_context(),
+            allow_missing=(definition.dependency_policy == "auto_expand"),
+            default_missing=Decimal("0"),
+        )
+
+        # --------------------------------------------------
+        # Evaluate formula
+        # --------------------------------------------------
+        try:
+            result = FormulaEvaluator.evaluate(
+                formula=formula,
+                context=context,
+            )
+        except Exception:
+            return None
+
+        # --------------------------------------------------
+        # Normalize result
+        # --------------------------------------------------
+        if result is None:
+            return None
+
+        try:
+            return Decimal(str(result))
+        except Exception:
+            return None
+
+    def get_display_value(self) -> str | None:
+        """
+        Return the formatted display value for this SCV,
+        regardless of source.
+        """
+        if self.scv.value is None:
+            return self._static_default()
+
+        return self._format_value(self.scv.value)

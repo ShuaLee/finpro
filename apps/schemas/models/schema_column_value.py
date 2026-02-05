@@ -40,5 +40,44 @@ class SchemaColumnValue(models.Model):
     class Meta:
         unique_together = ("column", "holding")
 
+    # --------------------------------------------------
+    # String representation (SAFE)
+    # --------------------------------------------------
     def __str__(self):
-        return f"{self.column.identifier} = {self.value}"
+        # Never leak raw values via __str__
+        return f"{self.column.identifier} [{self.get_source_display()}]"
+
+    # --------------------------------------------------
+    # Explicit accessors
+    # --------------------------------------------------
+    @property
+    def canonical_value(self):
+        """
+        Canonical stored value.
+
+        ✔ Safe for:
+          - services
+          - formula evaluation
+          - recomputation
+
+        ❌ NEVER use for display.
+        """
+        return self.value
+
+    @property
+    def display_value(self):
+        """
+        Formatted display value.
+
+        ✔ Safe for:
+          - admin
+          - API responses
+          - UI
+
+        Delegates ALL formatting logic to SchemaColumnValueManager.
+        """
+        from schemas.services.schema_column_value_manager import (
+            SchemaColumnValueManager,
+        )
+
+        return SchemaColumnValueManager(self).get_display_value()
