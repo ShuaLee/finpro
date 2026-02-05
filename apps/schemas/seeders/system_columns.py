@@ -27,7 +27,7 @@ def seed_system_column_catalog():
     cash_flow = SchemaColumnCategory.objects.get(identifier="cash_flow")
 
     # ==================================================
-    # Quantity (Meta)
+    # QUANTITY (META)
     # ==================================================
 
     quantity, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -52,7 +52,7 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # Asset Currency (Meta)
+    # ASSET CURRENCY (META)
     # ==================================================
 
     asset_currency, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -63,38 +63,22 @@ def seed_system_column_catalog():
             "data_type": "string",
             "is_system": True,
             "category": meta,
-            "constraint_overrides": {
-                "enum": "fx_currency"
+            "constraint_overrides": {"enum": "fx_currency"},
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=asset_currency,
+            asset_type=asset_type,
+            defaults={
+                "source": "asset",
+                "source_field": "extension__currency__code",
             },
-        },
-    )
-
-    # --------------------------------------------------
-    # Equity behavior
-    # --------------------------------------------------
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=asset_currency,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "extension__currency__code",
-        },
-    )
-
-    # --------------------------------------------------
-    # Crypto behavior
-    # --------------------------------------------------
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=asset_currency,
-        asset_type=crypto,
-        defaults={
-            "source": "asset",
-            "source_field": "extension__currency__code",
-        },
-    )
+        )
 
     # ==================================================
-    # Price (Valuation)
+    # PRICE (VALUATION)
     # ==================================================
 
     price, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -119,7 +103,7 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # Market Value (asset currency) – Valuation
+    # MARKET VALUE (FORMULA)
     # ==================================================
 
     market_value, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -150,7 +134,7 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # Current Value (profile currency) – Valuation
+    # CURRENT VALUE (FORMULA)
     # ==================================================
 
     current_value, _ = SchemaColumnTemplate.objects.update_or_create(
@@ -181,295 +165,122 @@ def seed_system_column_catalog():
         )
 
     # ==================================================
-    # DIVIDENDS / CASH FLOW (Equity only)
+    # DIVIDENDS / CASH FLOW (EQUITY ONLY — NO FORMULAS)
     # ==================================================
 
-    # -------------------------
-    # Last Dividend
-    # -------------------------
+    def asset_column(identifier, title, description, data_type, source_field):
+        template, _ = SchemaColumnTemplate.objects.update_or_create(
+            identifier=identifier,
+            defaults={
+                "title": title,
+                "description": description,
+                "data_type": data_type,
+                "is_system": True,
+                "category": cash_flow,
+            },
+        )
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=template,
+            asset_type=equity,
+            defaults={
+                "source": "asset",
+                "source_field": source_field,
+            },
+        )
 
-    last_dividend_amount, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="last_dividend_amount",
-        defaults={
-            "title": "Last Dividend",
-            "description": "Most recent dividend payment",
-            "data_type": "decimal",
-            "is_system": True,
-            "category": cash_flow,
-        },
+    # ---- Last Dividend ----
+    asset_column(
+        "last_dividend_amount",
+        "Last Dividend",
+        "Most recent dividend payment",
+        "decimal",
+        "equity_dividend__last_dividend_amount",
+    )
+    asset_column(
+        "last_dividend_date",
+        "Last Dividend Date",
+        "Date of the most recent dividend",
+        "date",
+        "equity_dividend__last_dividend_date",
+    )
+    asset_column(
+        "last_dividend_frequency",
+        "Dividend Frequency",
+        "Frequency of the most recent dividend",
+        "string",
+        "equity_dividend__last_dividend_frequency",
+    )
+    asset_column(
+        "last_dividend_is_special",
+        "Special Dividend",
+        "Whether the last dividend was special or irregular",
+        "boolean",
+        "equity_dividend__last_dividend_is_special",
     )
 
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=last_dividend_amount,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__last_dividend_amount",
-        },
+    # ---- Regular Dividend ----
+    asset_column(
+        "regular_dividend_amount",
+        "Regular Dividend",
+        "Most recent regular dividend amount",
+        "decimal",
+        "equity_dividend__regular_dividend_amount",
+    )
+    asset_column(
+        "regular_dividend_date",
+        "Regular Dividend Date",
+        "Date of the most recent regular dividend",
+        "date",
+        "equity_dividend__regular_dividend_date",
+    )
+    asset_column(
+        "regular_dividend_frequency",
+        "Regular Dividend Frequency",
+        "Frequency of regular dividend payments",
+        "string",
+        "equity_dividend__regular_dividend_frequency",
     )
 
-    last_dividend_date, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="last_dividend_date",
-        defaults={
-            "title": "Last Dividend Date",
-            "description": "Date of the most recent dividend",
-            "data_type": "date",
-            "is_system": True,
-            "category": cash_flow,
-        },
+    # ---- Trailing / Forward ----
+    asset_column(
+        "trailing_12m_dividend",
+        "Trailing 12M Dividend",
+        "Sum of regular dividends over the last 12 months",
+        "decimal",
+        "equity_dividend__trailing_12m_dividend",
     )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=last_dividend_date,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__last_dividend_date",
-        },
+    asset_column(
+        "trailing_12m_cashflow",
+        "Trailing 12M Cash Flow",
+        "Total dividends paid in the last 12 months",
+        "decimal",
+        "equity_dividend__trailing_12m_cashflow",
     )
-
-    last_dividend_frequency, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="last_dividend_frequency",
-        defaults={
-            "title": "Dividend Frequency",
-            "description": "Frequency of the most recent dividend",
-            "data_type": "string",
-            "is_system": True,
-            "category": cash_flow,
-        },
+    asset_column(
+        "forward_annual_dividend",
+        "Forward Annual Dividend",
+        "Estimated forward 12-month dividend",
+        "decimal",
+        "equity_dividend__forward_annual_dividend",
     )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=last_dividend_frequency,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__last_dividend_frequency",
-        },
+    asset_column(
+        "dividend_yield",
+        "Dividend Yield (Trailing)",
+        "Trailing 12-month dividend yield",
+        "percent",
+        "equity_dividend__trailing_dividend_yield",
     )
-
-    last_dividend_is_special, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="last_dividend_is_special",
-        defaults={
-            "title": "Special Dividend",
-            "description": "Whether the last dividend was special/irregular",
-            "data_type": "boolean",
-            "is_system": True,
-            "category": cash_flow,
-        },
+    asset_column(
+        "forward_dividend_yield",
+        "Forward Dividend Yield",
+        "Estimated forward dividend yield",
+        "percent",
+        "equity_dividend__forward_dividend_yield",
     )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=last_dividend_is_special,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__last_dividend_is_special",
-        },
-    )
-
-    # -------------------------
-    # Regular Dividend (Normalized)
-    # -------------------------
-
-    regular_dividend_amount, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="regular_dividend_amount",
-        defaults={
-            "title": "Regular Dividend",
-            "description": "Most recent regular dividend amount",
-            "data_type": "decimal",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=regular_dividend_amount,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__regular_dividend_amount",
-        },
-    )
-
-    regular_dividend_date, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="regular_dividend_date",
-        defaults={
-            "title": "Regular Dividend Date",
-            "description": "Date of the most recent regular dividend",
-            "data_type": "date",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=regular_dividend_date,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__regular_dividend_date",
-        },
-    )
-
-    regular_dividend_frequency, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="regular_dividend_frequency",
-        defaults={
-            "title": "Regular Dividend Frequency",
-            "description": "Frequency of regular dividend payments",
-            "data_type": "string",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=regular_dividend_frequency,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__regular_dividend_frequency",
-        },
-    )
-
-    # -------------------------
-    # Trailing / Forward Cash Flow
-    # -------------------------
-
-    trailing_12m_dividend, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="trailing_12m_dividend",
-        defaults={
-            "title": "Trailing 12M Dividend",
-            "description": "Sum of dividends over the last 12 months (regular only)",
-            "data_type": "decimal",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=trailing_12m_dividend,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__trailing_12m_dividend",
-        },
-    )
-
-    trailing_12m_cashflow, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="trailing_12m_cashflow",
-        defaults={
-            "title": "Trailing 12M Cash Flow",
-            "description": "Total cash dividends paid in the last 12 months",
-            "data_type": "decimal",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=trailing_12m_cashflow,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__trailing_12m_cashflow",
-        },
-    )
-
-    forward_annual_dividend, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="forward_annual_dividend",
-        defaults={
-            "title": "Forward Annual Dividend",
-            "description": "Estimated forward 12-month dividend",
-            "data_type": "decimal",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=forward_annual_dividend,
-        asset_type=equity,
-        defaults={
-            "source": "asset",
-            "source_field": "dividend_snapshot__forward_annual_dividend",
-        },
-    )
-
-    dividend_yield, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="dividend_yield",
-        defaults={
-            "title": "Dividend Yield (Trailing)",
-            "description": "Trailing 12-month dividend yield",
-            "data_type": "percent",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    definition = FormulaDefinition.objects.get(
-        identifier="dividend_yield",
-        asset_type=equity,
-        owner__isnull=True,
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=dividend_yield,
-        asset_type=equity,
-        defaults={
-            "source": "formula",
-            "formula_definition": definition,
-        },
-    )
-
-    forward_dividend_yield, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="forward_dividend_yield",
-        defaults={
-            "title": "Forward Dividend Yield",
-            "description": "Estimated forward annual dividend yield",
-            "data_type": "percent",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    definition = FormulaDefinition.objects.get(
-        identifier="forward_dividend_yield",
-        asset_type=equity,
-        owner__isnull=True,
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=forward_dividend_yield,
-        asset_type=equity,
-        defaults={
-            "source": "formula",
-            "formula_definition": definition,
-        },
-    )
-
-    trailing_dividend_income, _ = SchemaColumnTemplate.objects.update_or_create(
-        identifier="trailing_dividend_income",
-        defaults={
-            "title": "Trailing Dividend Income",
-            "description": "Dividend income over the last 12 months",
-            "data_type": "decimal",
-            "is_system": True,
-            "category": cash_flow,
-        },
-    )
-
-    definition = FormulaDefinition.objects.get(
-        identifier="trailing_dividend_income",
-        asset_type=equity,
-        owner__isnull=True,
-    )
-
-    SchemaColumnTemplateBehaviour.objects.update_or_create(
-        template=trailing_dividend_income,
-        asset_type=equity,
-        defaults={
-            "source": "formula",
-            "formula_definition": definition,
-        },
+    asset_column(
+        "trailing_dividend_income",
+        "Trailing Dividend Income",
+        "Dividend income over the last 12 months",
+        "decimal",
+        "equity_dividend__trailing_dividend_income",
     )
