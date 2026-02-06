@@ -2,6 +2,8 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from accounts.models.holding import Holding
+
 from schemas.models.schema_column_value import SchemaColumnValue
 from schemas.services.schema_constraint_enum_resolver import (
     SchemaConstraintEnumResolver,
@@ -22,11 +24,42 @@ class SchemaColumnValueEditService:
     def set_value(*, scv: SchemaColumnValue, raw_value):
         column = scv.column
         holding = scv.holding
+
+        # --------------------------------------------------
+        # Custom asset detection
+        # --------------------------------------------------
+        is_custom_asset = (
+            holding is not None
+            and holding.source == Holding.SOURCE_CUSTOM
+        )
+
+        # --------------------------------------------------
+        # Editability rule
+        # --------------------------------------------------
+        if not column.is_editable and not is_custom_asset:
+            raise ValidationError("This column is not editable.")
+
+        # --------------------------------------------------
+        # CUSTOM ASSET PATH (NO BEHAVIOR REQUIRED)
+        # --------------------------------------------------
+        if is_custom_asset:
+            value = SchemaColumnValueEditService._validate_value(
+                column=column,
+                raw_value=raw_value,
+            )
+
+            scv.value = value
+            scv.source = SchemaColumnValue.Source.USER
+            scv.save(update_fields=["value", "source"])
+
+            SCVRefreshService.holding_changed(holding)
+            return
+
+        # --------------------------------------------------
+        # MARKET / SYSTEM PATH (behavior REQUIRED)
+        # --------------------------------------------------
         asset = holding.asset if holding else None
         asset_type = asset.asset_type if asset else None
-
-        if not column.is_editable:
-            raise ValidationError("This column is not editable.")
 
         behavior = column.behavior_for(asset_type)
         if not behavior:
@@ -34,13 +67,11 @@ class SchemaColumnValueEditService:
                 "Column has no behavior for this asset type."
             )
 
-        # 1️⃣ Validate + normalize input
         value = SchemaColumnValueEditService._validate_value(
             column=column,
             raw_value=raw_value,
         )
 
-        # 2️⃣ Apply edit
         if behavior.source == "holding":
             SchemaColumnValueEditService._write_to_holding(
                 scv=scv,
@@ -53,9 +84,7 @@ class SchemaColumnValueEditService:
                 value=value,
             )
 
-        # 3️⃣ Recompute dependents
-        if holding:
-            SCVRefreshService.holding_changed(holding)
+        SCVRefreshService.holding_changed(holding)
 
     # ======================================================
     # VALIDATION / NORMALIZATION

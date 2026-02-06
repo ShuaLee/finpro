@@ -1,7 +1,9 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse, HttpResponseRedirect
+
+from accounts.models.holding import Holding
 
 from schemas.models import (
     Schema,
@@ -15,11 +17,12 @@ from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import SchemaColumnTemplateBehaviour
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.services.schema_column_dependency_graph import SchemaColumnDependencyGraph
+from schemas.services.schema_column_edit_service import SchemaColumnEditService
 from schemas.services.schema_column_value_edit_service import SchemaColumnValueEditService
 from schemas.services.schema_column_value_manager import SchemaColumnValueManager
 from schemas.services.schema_constraint_edit_service import SchemaConstraintEditService
 from schemas.services.schema_constraint_enum_resolver import SchemaConstraintEnumResolver
-from schemas.services.scv_refresh_service import SCVRefreshService
+
 
 from decimal import Decimal
 
@@ -220,6 +223,35 @@ class SchemaColumnAdmin(admin.ModelAdmin):
         "is_system",
     )
 
+    def save_model(self, request, obj, form, change):
+        if not change:
+            super().save_model(request, obj, form, change)
+            return
+
+        # ----------------------------------
+        # Load PREVIOUS state
+        # ----------------------------------
+        previous = SchemaColumn.objects.get(pk=obj.pk)
+
+        # Save the column (admin already mutated obj)
+        super().save_model(request, obj, form, change)
+
+        # ----------------------------------
+        # Detect changed fields
+        # ----------------------------------
+        changed_fields = [
+            field
+            for field in form.changed_data
+        ]
+
+        # ----------------------------------
+        # Delegate to service
+        # ----------------------------------
+        SchemaColumnEditService.update_column(
+            column=obj,
+            changed_fields=changed_fields,
+        )
+
     def delete_model(self, request, obj):
         from schemas.services.schema_column_factory import SchemaColumnFactory
 
@@ -292,6 +324,18 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         if not obj:
             return ("column", "holding", "source")
 
+        holding = obj.holding
+
+        is_custom_asset = (
+            holding is not None
+            and holding.source == Holding.SOURCE_CUSTOM
+        )
+
+        # Custom holdings: ALWAYS editable
+        if is_custom_asset:
+            return ("column", "holding", "source")
+
+        # Market-backed holdings: respect column editability
         if obj.column.is_editable:
             return ("column", "holding", "source")
 
@@ -300,24 +344,25 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
     # ----------------------------
     # Save handling
     # ----------------------------
+
     def save_model(self, request, obj, form, change):
         if not change:
             super().save_model(request, obj, form, change)
             return
 
-        # ----------------------------------
-        # Guard: column must be editable
-        # ----------------------------------
-        if not obj.column.is_editable:
-            raise ValidationError("This column is not editable.")
-
-        # ----------------------------------
-        # Delegate ALL mutation to service
-        # ----------------------------------
-        SchemaColumnValueEditService.set_value(
-            scv=obj,
-            raw_value=form.cleaned_data["value"],
-        )
+        try:
+            SchemaColumnValueEditService.set_value(
+                scv=obj,
+                raw_value=form.cleaned_data["value"],
+            )
+        except ValidationError as e:
+            # Properly surface service-level errors in admin
+            self.message_user(
+                request,
+                e.messages[0],
+                level=messages.ERROR,
+            )
+            return
 
     # ----------------------------
     # Revert button handler
