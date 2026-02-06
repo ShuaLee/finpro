@@ -209,7 +209,6 @@ class Holding(models.Model):
                 f"cannot hold assets of type '{asset_type.name}'."
             )
 
-
     def save(self, *args, **kwargs):
         if self.source == self.SOURCE_CUSTOM:
             self.asset = None
