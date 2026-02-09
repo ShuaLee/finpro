@@ -21,28 +21,47 @@ class HoldingService:
         average_purchase_price=None,
     ):
         # --------------------------------------------------
-        # 1️⃣ Resolve / create Asset
+        # 1️⃣ Resolve / validate Asset
         # --------------------------------------------------
+        allowed_types = account.allowed_asset_types
+
+        if not allowed_types.exists():
+            raise ValidationError(
+                "Account does not allow any asset types."
+            )
+
+        # ----------------------------------------------
+        # Existing asset path
+        # ----------------------------------------------
         if asset:
-            resolved_asset = asset
-
-        else:
-            # ---- Custom asset path ----
-            allowed = account.allowed_asset_types
-
-            if not allowed.exists():
+            # AssetType must be allowed
+            if asset.asset_type not in allowed_types:
                 raise ValidationError(
-                    "Account does not allow any asset types."
+                    f"Asset type '{asset.asset_type}' not allowed for this account."
                 )
 
-            if allowed.count() == 1:
-                resolved_type = allowed.first()
+            # Custom asset ownership check
+            if hasattr(asset, "custom"):
+                if asset.custom.owner != account.profile:
+                    raise ValidationError(
+                        "You do not own this custom asset."
+                    )
+
+            resolved_asset = asset
+
+        # ----------------------------------------------
+        # Custom asset creation path
+        # ----------------------------------------------
+        else:
+            # Resolve asset type
+            if allowed_types.count() == 1:
+                resolved_type = allowed_types.first()
             else:
                 if not asset_type:
                     raise ValidationError(
                         "Asset type must be specified for custom holdings."
                     )
-                if asset_type not in allowed:
+                if not allowed_types.filter(pk=asset_type.pk).exists():
                     raise ValidationError(
                         f"Asset type '{asset_type}' not allowed for this account."
                     )
@@ -58,15 +77,18 @@ class HoldingService:
                     "Currency is required for custom assets."
                 )
 
+            # Create Asset
             resolved_asset = Asset.objects.create(
                 asset_type=resolved_type,
             )
 
+            # Create CustomAsset extension
             CustomAsset.objects.create(
                 asset=resolved_asset,
                 owner=account.profile,
                 name=custom_name,
                 currency=currency,
+                reason=CustomAsset.Reason.USER,
             )
 
         # --------------------------------------------------
@@ -82,7 +104,8 @@ class HoldingService:
         # --------------------------------------------------
         # 3️⃣ Trigger schema recompute
         # --------------------------------------------------
-        SCVRefreshService.holding_changed(holding)
+        if account.active_schema:
+            SCVRefreshService.holding_changed(holding)
 
         return holding
 
@@ -95,9 +118,7 @@ class HoldingService:
 
         holding.save()
 
-        # Sync SCVs after update
-        account = holding.account
-        if account.active_schema:
+        if holding.account.active_schema:
             SCVRefreshService.holding_changed(holding)
 
         return holding

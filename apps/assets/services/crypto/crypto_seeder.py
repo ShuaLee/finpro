@@ -1,7 +1,6 @@
 import uuid
 from django.db import transaction
 
-from accounts.models.holding import Holding
 from assets.services.crypto.crypto_factory import CryptoAssetFactory
 from external_data.providers.fmp.client import FMP_PROVIDER
 from external_data.providers.fmp.crypto.parsers import parse_crypto_list_row
@@ -9,17 +8,19 @@ from fx.models.fx import FXCurrency
 
 
 class CryptoSeederService:
+    """
+    Rebuilds the ENTIRE crypto universe using a snapshot strategy.
+
+    Responsibilities:
+    - Build a fresh snapshot of CryptoAsset + Asset rows
+    - NOTHING ELSE
+    """
 
     @transaction.atomic
     def run(self) -> uuid.UUID:
         snapshot_id = uuid.uuid4()
 
-        # --------------------------------------------------
-        # 1. Build fresh crypto universe
-        # --------------------------------------------------
         rows = FMP_PROVIDER.get_cryptocurrencies()
-
-        new_assets_by_symbol = {}  # base_symbol -> Asset
 
         for row in rows:
             parsed = parse_crypto_list_row(row)
@@ -35,7 +36,7 @@ class CryptoSeederService:
             if not currency:
                 continue
 
-            crypto = CryptoAssetFactory.create(
+            CryptoAssetFactory.create(
                 snapshot_id=snapshot_id,
                 base_symbol=base_symbol,
                 pair_symbol=pair_symbol,
@@ -45,41 +46,5 @@ class CryptoSeederService:
                 total_supply=parsed.get("total_supply"),
                 ico_date=parsed.get("ico_date"),
             )
-
-            # CryptoAssetFactory MUST return the Asset
-            new_assets_by_symbol[base_symbol] = crypto.asset
-
-        # --------------------------------------------------
-        # 2. Reconcile holdings (asset-backed only)
-        # --------------------------------------------------
-        holdings = Holding.objects.select_for_update().filter(
-            source=Holding.SOURCE_ASSET,
-        )
-
-        for holding in holdings:
-            symbol = holding.original_ticker
-
-            if not symbol:
-                # Defensive: no symbol = cannot relink
-                holding.source = Holding.SOURCE_CUSTOM
-                holding.custom_reason = Holding.CUSTOM_REASON_MARKET
-                holding.asset = None
-                holding.save(update_fields=[
-                             "source", "custom_reason", "asset"])
-                continue
-
-            new_asset = new_assets_by_symbol.get(symbol)
-
-            if new_asset:
-                if holding.asset_id != new_asset.id:
-                    holding.asset = new_asset
-                    holding.save(update_fields=["asset"])
-            else:
-                # Asset disappeared from active universe
-                holding.source = Holding.SOURCE_CUSTOM
-                holding.custom_reason = Holding.CUSTOM_REASON_MARKET
-                holding.asset = None
-                holding.save(update_fields=[
-                             "source", "custom_reason", "asset"])
 
         return snapshot_id

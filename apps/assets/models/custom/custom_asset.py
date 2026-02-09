@@ -12,6 +12,10 @@ class CustomAsset(models.Model):
     Schema / attributes live elsewhere (SchemaColumnValue).
     """
 
+    class Reason(models.TextChoices):
+        USER = "user", "User created"
+        MARKET = "market", "Market removed"
+
     asset = models.OneToOneField(
         Asset,
         on_delete=models.CASCADE,
@@ -36,8 +40,15 @@ class CustomAsset(models.Model):
         related_name="custom_assets",
     )
 
+    reason = models.CharField(
+        max_length=20,
+        choices=Reason.choices,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    frozen_at = models.DateTimeField(null=True, blank=True)
 
     # -------------------------
     # Validation

@@ -33,3 +33,21 @@ class Asset(models.Model):
     @property
     def extension(self):
         return getattr(self, self.asset_type.slug, None)
+
+    @property
+    def is_custom(self) -> bool:
+        return hasattr(self, "custom")
+
+    @property
+    def display_name(self) -> str:
+        if hasattr(self, "equity"):
+            return self.equity.ticker
+        if hasattr(self, "crypto"):
+            return self.crypto.base_symbol
+        if hasattr(self, "commodity"):
+            return self.commodity.symbol
+        if hasattr(self, "precious_metal"):
+            return self.precious_metal.reconciliation_key
+        if hasattr(self, "custom"):
+            return self.custom.name
+        return str(self.id)
