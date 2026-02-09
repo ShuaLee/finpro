@@ -3,7 +3,7 @@ from assets.services.base.snapshot_cleanup_base import SnapshotCleanupBaseServic
 
 
 class EquitySnapshotCleanupService(SnapshotCleanupBaseService):
-    asset_extension_model = EquityAsset
-    snapshot_id_model = EquitySnapshotID
+    extension_model = EquityAsset
+    snapshot_model = EquitySnapshotID
     name_attr = "ticker"
     currency_attr = "currency"

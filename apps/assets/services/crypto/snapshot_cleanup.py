@@ -3,7 +3,7 @@ from assets.services.base.snapshot_cleanup_base import SnapshotCleanupBaseServic
 
 
 class CryptoSnapshotCleanupService(SnapshotCleanupBaseService):
-    asset_extension_model = CryptoAsset
-    snapshot_id_model = CryptoSnapshotID
-    name_attr = "symbol"
+    extension_model = CryptoAsset
+    snapshot_model = CryptoSnapshotID
+    name_attr = "base_symbol"
     currency_attr = "currency"

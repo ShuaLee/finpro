@@ -3,7 +3,7 @@ from assets.services.base.snapshot_cleanup_base import SnapshotCleanupBaseServic
 
 
 class CommoditySnapshotCleanupService(SnapshotCleanupBaseService):
-    asset_extension_model = CommodityAsset
-    snapshot_id_model = CommoditySnapshotID
-    name_attr = "symbol"   # or "name" if you have one
+    extension_model = CommodityAsset
+    snapshot_model = CommoditySnapshotID
+    name_attr = "symbol"
     currency_attr = "currency"

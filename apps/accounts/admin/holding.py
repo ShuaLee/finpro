@@ -46,9 +46,7 @@ class HoldingAdmin(admin.ModelAdmin):
         "id",
         "account",
         "asset",
-        "source",
         "original_ticker",
-        "custom_reason",
         "quantity",
         "average_purchase_price",
         "created_at",
@@ -62,8 +60,7 @@ class HoldingAdmin(admin.ModelAdmin):
     )
 
     search_fields = (
-        "asset__name",
-        "asset__identifiers__value",
+        "asset__id",
         "account__name",
         "account__portfolio__name",
     )
@@ -75,7 +72,6 @@ class HoldingAdmin(admin.ModelAdmin):
 
     readonly_fields = (
         "original_ticker",
-        "custom_reason",
         "created_at",
         "updated_at",
     )
@@ -104,23 +100,12 @@ class HoldingAdmin(admin.ModelAdmin):
                 "updated_at",
             )
         }),
-        ("Sourcing", {
-            "fields": (
-                "source",
-                "original_ticker",
-                "custom_reason",
-            )
-        }),
-
     )
 
     # -------------------------------------------------
     # Permissions
     # -------------------------------------------------
     def has_add_permission(self, request):
-        """
-        Allow creation via admin, but enforce uniqueness via model constraint.
-        """
         return True
 
     def has_change_permission(self, request, obj=None):
@@ -131,6 +116,4 @@ class HoldingAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-
-        # After save, trigger domain reactions
         SCVRefreshService.holding_changed(obj)
