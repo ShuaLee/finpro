@@ -115,8 +115,5 @@ class Holding(models.Model):
             )
 
     def save(self, *args, **kwargs):
-        if self.source == self.SOURCE_CUSTOM:
-            self.asset = None
-
         self.full_clean()
         super().save(*args, **kwargs)

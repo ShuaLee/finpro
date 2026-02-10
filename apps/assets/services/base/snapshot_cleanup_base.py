@@ -40,6 +40,7 @@ class SnapshotCleanupBaseService:
             cls.extension_model.objects
             .exclude(snapshot_id=snapshot.current_snapshot)
             .select_related("asset")
+            .order_by("id")  # deterministic + safer
         )
 
         for extension in stale_extensions:
@@ -72,19 +73,25 @@ class SnapshotCleanupBaseService:
     def _handle_stale_extension(cls, extension):
         asset = extension.asset
 
-        has_holdings = Holding.objects.filter(asset=asset).exists()
+        holdings = (
+            Holding.objects
+            .select_for_update()
+            .filter(asset=asset)
+        )
 
-        if not has_holdings:
+        if not holdings.exists():
+            # Truly unused → safe delete
+            extension.delete()
             asset.delete()
             return
 
-        # Holdings exist → split per profile
+        # Holdings exist → MUST convert
         cls._convert_asset_per_profile(extension)
 
-        # Remove market extension AFTER split
+        # Remove market extension
         extension.delete()
 
-        # Delete original asset if no longer referenced
+        # If no holdings remain on original asset → delete it
         if not Holding.objects.filter(asset=asset).exists():
             asset.delete()
 
@@ -94,6 +101,7 @@ class SnapshotCleanupBaseService:
 
         profile_ids = (
             Holding.objects
+            .select_for_update()
             .filter(asset=asset)
             .values_list("account__portfolio__profile_id", flat=True)
             .distinct()
@@ -109,35 +117,55 @@ class SnapshotCleanupBaseService:
     def _clone_asset_for_profile(cls, *, extension, profile_id):
         asset = extension.asset
 
-        try:
-            name = getattr(extension, cls.name_attr)
-            currency = getattr(extension, cls.currency_attr)
-        except AttributeError as e:
-            raise ImproperlyConfigured(
-                f"{cls.__name__}: extension missing required attribute ({e})"
+        name = getattr(extension, cls.name_attr, None)
+        currency = getattr(extension, cls.currency_attr, None)
+
+        if not name:
+            raise RuntimeError(
+                f"{cls.__name__}: Missing name for asset {asset.id}"
             )
 
-        # 1️⃣ Create or reuse CustomAsset
-        custom_asset, created = CustomAsset.objects.get_or_create(
-            owner_id=profile_id,
-            name=name,
-            defaults={
-                "asset": Asset.objects.create(
-                    asset_type=asset.asset_type
-                ),
-                "currency": currency,
-                "reason": CustomAsset.Reason.MARKET,
-            },
+        if not currency:
+            raise RuntimeError(
+                f"{cls.__name__}: Missing currency for asset {asset.id}"
+            )
+
+        # Reuse existing MARKET custom asset if present
+        custom_asset = (
+            CustomAsset.objects
+            .select_related("asset")
+            .filter(
+                owner_id=profile_id,
+                name=name,
+                reason=CustomAsset.Reason.MARKET,
+            )
+            .first()
         )
 
-        # 2️⃣ Re-point holdings
-        holdings = Holding.objects.filter(
+        if custom_asset:
+            new_asset = custom_asset.asset
+        else:
+            new_asset = Asset.objects.create(
+                asset_type=asset.asset_type
+            )
+
+            CustomAsset.objects.create(
+                asset=new_asset,
+                owner_id=profile_id,
+                name=name,
+                currency=currency,
+                reason=CustomAsset.Reason.MARKET,
+            )
+
+        # Re-point holdings
+        Holding.objects.filter(
             asset=asset,
             account__portfolio__profile_id=profile_id,
-        )
+        ).update(asset=new_asset)
 
-        holdings.update(asset=custom_asset.asset)
-
-        # 3️⃣ Recompute schema values
-        for holding in holdings:
+        # Trigger SCV refresh AFTER migration
+        for holding in Holding.objects.filter(
+            asset=new_asset,
+            account__portfolio__profile_id=profile_id,
+        ):
             SCVRefreshService.holding_changed(holding)
