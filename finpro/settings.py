@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.postgres',
     'accounts',
+    'analytics',
     'assets',
     'core',
     'formulas',
@@ -63,7 +64,6 @@ INSTALLED_APPS = [
     'subscriptions',
     'portfolios',
     'schemas',
-    'analytics',
     'fx',
 ]
 
