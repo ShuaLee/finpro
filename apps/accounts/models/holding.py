@@ -8,7 +8,7 @@ class Holding(models.Model):
 
     account = models.ForeignKey(
         Account,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="holdings",
     )
 

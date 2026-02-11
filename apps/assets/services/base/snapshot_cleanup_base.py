@@ -40,7 +40,7 @@ class SnapshotCleanupBaseService:
             cls.extension_model.objects
             .exclude(snapshot_id=snapshot.current_snapshot)
             .select_related("asset")
-            .order_by("id")  # deterministic + safer
+            .order_by("pk")  # deterministic + safer
         )
 
         for extension in stale_extensions:
@@ -155,6 +155,7 @@ class SnapshotCleanupBaseService:
                 name=name,
                 currency=currency,
                 reason=CustomAsset.Reason.MARKET,
+                requires_review=True,
             )
 
         # Re-point holdings

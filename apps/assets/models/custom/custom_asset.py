@@ -45,6 +45,11 @@ class CustomAsset(models.Model):
         choices=Reason.choices,
     )
 
+    requires_review = models.BooleanField(
+        default=False,
+        help_text="Indicates this asset was auto-created due to a market change and requires user review."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
