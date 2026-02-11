@@ -38,7 +38,7 @@ class PreciousMetalAsset(models.Model):
     # -------------------------------------------------
     commodity = models.ForeignKey(
         CommodityAsset,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="precious_metals",
         help_text="Commodity spot price used for valuation (e.g. GCUSD).",
     )

@@ -56,7 +56,10 @@ class Holding(models.Model):
         ordering = ["account", "asset"]
 
     def __str__(self):
+        if not self.asset:
+            return f"{self.quantity} [MISSING ASSET] in {self.account.name}"
         return f"{self.quantity} {self.asset.display_name} in {self.account.name}"
+
 
     # ------------------------
     # Validation
