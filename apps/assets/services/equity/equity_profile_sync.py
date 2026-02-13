@@ -4,7 +4,7 @@ from external_data.providers.fmp.client import FMP_PROVIDER
 from fx.models.fx import FXCurrency
 from fx.models.country import Country
 from assets.models.equity.exchange import Exchange
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.services.orchestration import SchemaOrchestrationService
 
 
 class EquityProfileSyncService:
@@ -89,7 +89,7 @@ class EquityProfileSyncService:
         if updated_fields:
             equity.save(update_fields=updated_fields)
 
-            SCVRefreshService.asset_changed(equity.asset)
+            SchemaOrchestrationService.asset_changed(equity.asset)
 
         return {
             "ticker": equity.ticker,

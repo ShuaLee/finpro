@@ -66,18 +66,5 @@ class SchemaColumnValue(models.Model):
 
     @property
     def display_value(self):
-        """
-        Formatted display value.
-
-        ✔ Safe for:
-          - admin
-          - API responses
-          - UI
-
-        Delegates ALL formatting logic to SchemaColumnValueManager.
-        """
-        from schemas.services.schema_column_value_manager import (
-            SchemaColumnValueManager,
-        )
-
-        return SchemaColumnValueManager(self).get_display_value()
+        from schemas.services.queries import SchemaQueryService
+        return SchemaQueryService.display_value_for_scv(self)

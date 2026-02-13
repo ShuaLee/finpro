@@ -3,7 +3,8 @@ from django.db import transaction
 from assets.models.core import AssetPrice
 from assets.models.commodity import CommodityAsset, CommoditySnapshotID
 from external_data.providers.fmp.client import FMP_PROVIDER
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.services.orchestration import SchemaOrchestrationService
+
 
 class CommodityPriceSyncService:
     """
@@ -47,8 +48,7 @@ class CommodityPriceSyncService:
                 },
             )
 
-            
-            SCVRefreshService.asset_changed(commodity.asset)
+            SchemaOrchestrationService.asset_changed(commodity.asset)
 
             updated += 1
 
