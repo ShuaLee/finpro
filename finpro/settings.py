@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.postgres',
     'accounts',
     'analytics',
+    'allocations',
     'assets',
     'core',
     'formulas',
@@ -250,3 +251,4 @@ CSRF_TRUSTED_ORIGINS = [
     "https://yourdomain.com",
 ]
 """
+

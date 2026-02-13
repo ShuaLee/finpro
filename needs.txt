@@ -1,0 +1,177 @@
+Yes. You’re close, but a few structural refinements would make it much more “production-grade”.
+
+Split profiles out of users (recommended).
+users: auth identity only.
+profiles: app-level preferences, subscription link, country/currency.
+This keeps auth concerns isolated and reduces circular coupling.
+Add a dedicated valuation app.
+Put numeraire logic, FX conversion, as-of valuation runs, and cached holding valuations here.
+analytics and allocations should consume valuation outputs, not duplicate conversion logic.
+Add a dedicated transactions app.
+Ledger models and reconciliation services should not live inside accounts.
+accounts/holdings = current state.
+transactions = event history + adjustments + audit.
+Keep fx standalone.
+Correct as-is. Don’t merge into assets.
+It is foundational infrastructure used by many domains.
+Keep subscriptions separate, but make entitlement checks centralized.
+Add one EntitlementService and stop ad hoc plan checks across apps.
+Keep analytics and allocations separate.
+Correct split.
+analytics answers “what is”.
+allocations answers “what should be” + gap/rebalance.
+Create a small platform or bootstrap app for seeding/orchestration commands.
+Move cross-domain bootstrap flow there instead of anchoring in core.
+core can be removed if empty or kept truly minimal for shared abstractions only.
+Normalize package conventions across apps.
+Use consistent module layouts:
+models/, services/, admin/, api/ (or views/serializers/urls), selectors/ (optional).
+Remove commented legacy endpoints and dead files to reduce ambiguity.
+Enforce one-way dependency rules.
+Foundation: users/profiles/subscriptions/portfolios/fx/assets/accounts/transactions/valuation
+Then schemas
+Then analytics
+Then allocations
+Never import “up” the stack.
+Add explicit app contracts.
+For each app: define public service entrypoints and avoid cross-app direct model mutation where possible.
+This makes refactors safer and team scaling easier.
+If you want, I can give you a concrete target folder tree for all apps (with exact module names) so you can standardize the whole repo in one pass.
+
+
+users
+
+Goal
+Keep signup minimal, keep auth secure, and move all non-auth concerns to profiles.
+
+1. App boundaries
+users app should own
+
+Authentication identity
+Credentials and security state
+Email verification lifecycle
+Login/session metadata
+profiles app should own
+
+Preferences and personalization
+Financial defaults (base currency, country/timezone)
+Onboarding progression
+Optional demographics/user metadata
+Terms/marketing preferences (if not strictly auth/compliance)
+2. Minimal signup flow (best practice)
+At signup ask only:
+
+email
+password
+accept_terms (if required in your jurisdiction)
+Everything else deferred to profile onboarding after verification.
+
+3. users model contract
+Use custom user with email as identifier.
+
+Required fields
+id (UUID or bigint; UUID preferred for APIs)
+email (unique, normalized/lowercased)
+password (hashed)
+is_active
+is_staff
+is_superuser
+date_joined
+last_login
+Strongly recommended auth/security fields
+email_verified_at (nullable datetime)
+failed_login_count (int, optional if using middleware/provider)
+locked_until (nullable datetime, optional)
+must_change_password (bool, optional for admin resets)
+Don’t put in users
+Country, currency, language, plan, full name, onboarding flags
+4. Email verification structure (users)
+Use a dedicated token model/service (don’t overload user table).
+
+EmailVerificationToken model
+user FK
+token_hash (store hash, not raw token)
+purpose (verify_email)
+expires_at
+consumed_at nullable
+created_at
+optional sent_to_email_snapshot
+Flow
+Signup creates inactive/active user (your choice) + token.
+Send verification email with raw token link.
+Verify endpoint validates hash + expiry + unused, marks email_verified_at.
+Consume token (set consumed_at).
+Optionally issue session/jwt.
+For password reset, use parallel token model or shared token model with purpose.
+
+5. profiles model contract
+Profile is 1:1 with User.
+
+Required for portfolio product
+user O2O
+base_currency FK (fx.FXCurrency) required
+country FK (fx.Country) nullable initially
+language (default en)
+timezone (default UTC)
+created_at, updated_at
+Onboarding fields (recommended)
+onboarding_status (not_started, in_progress, completed)
+onboarding_step (small int or slug step id)
+Optional preferences
+display_currency FK nullable (if different from base)
+theme/number_format/date_format (optional)
+receive_product_updates bool
+receive_marketing_emails bool (separate from product emails)
+Keep optional early
+full_name, birth_date (only add if needed now)
+6. Profile bootstrap policy
+On User creation:
+
+Create Profile
+Set base_currency default (USD fallback configured)
+Set country optional or default (US) depending on product decision
+Ensure main portfolio exists (if you keep that behavior)
+Use one service: ProfileBootstrapService.bootstrap(user).
+
+7. API structure
+users endpoints
+
+POST /auth/register
+POST /auth/login
+POST /auth/logout
+POST /auth/refresh
+POST /auth/verify-email
+POST /auth/resend-verification
+POST /auth/forgot-password
+POST /auth/reset-password
+GET /auth/me (minimal auth identity + verified flag)
+profiles endpoints
+
+GET /profile
+PATCH /profile (preferences only)
+PATCH /profile/onboarding
+8. Validation rules worth enforcing
+Users
+Email normalization and uniqueness (case-insensitive)
+Password policy at API boundary
+Block login if account locked / verification required (if policy)
+Profiles
+base_currency always valid and non-null post-bootstrap
+country optional but validated FK
+Onboarding transitions only forward (optional strict FSM)
+9. Suggested ownership with subscriptions
+Keep subscription relationship off users.
+Attach subscription to profile (or future org/account entity).
+Entitlements read from profile -> active_subscription.
+10. Practical “v1 now, v2 later”
+V1 now
+Minimal user fields
+Email verification tokens
+Profile with base currency + country + language + onboarding
+Bootstrap service
+V2 later
+account lockout controls
+MFA
+audit/security events
+richer preference schema
+If you want, next I can give you a concrete file-by-file blueprint for both apps (models/, services/, serializers/, views/, urls/) with exact class names and responsibilities so implementation is straightforward.

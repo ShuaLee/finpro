@@ -1,6 +1,0 @@
-{% extends "admin/change_form.html" %} {% load i18n %} {% block object-tools %}
-{{ block.super }} {% if add_from_template_url %}
-<li><a href="{{ add_from_template_url }}">➕ Add from Template</a></li>
-{% endif %} {% if add_custom_column_url %}
-<li><a href="{{ add_custom_column_url }}">🧩 Add Custom Column</a></li>
-{% endif %} {% endblock %}
