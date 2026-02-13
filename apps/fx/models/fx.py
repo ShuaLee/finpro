@@ -82,7 +82,7 @@ class FXRate(models.Model):
         super().save(*args, **kwargs)
 
         def _after_commit():
-            from schemas.services.scv_refresh_service import SCVRefreshService
+            from schemas.services.orchestration import SchemaOrchestrationService
             from accounts.models.holding import Holding
 
             from_code = self.from_currency.code
@@ -103,6 +103,6 @@ class FXRate(models.Model):
             )
 
             if holdings.exists():
-                SCVRefreshService.fx_changed(holdings)
+                SchemaOrchestrationService.fx_changed(holdings)
 
         transaction.on_commit(_after_commit)

@@ -3,7 +3,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from accounts.models.holding import Holding
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.services.orchestration import SchemaOrchestrationService
 
 
 # =================================================
@@ -116,4 +116,4 @@ class HoldingAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        SCVRefreshService.holding_changed(obj)
+        SchemaOrchestrationService.holding_changed(obj)

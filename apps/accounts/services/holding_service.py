@@ -4,7 +4,7 @@ from django.db import transaction
 from accounts.models import Holding
 from assets.models.core import Asset
 from assets.models.custom.custom_asset import CustomAsset
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.services.orchestration import SchemaOrchestrationService
 
 
 class HoldingService:
@@ -105,7 +105,7 @@ class HoldingService:
         # 3️⃣ Trigger schema recompute
         # --------------------------------------------------
         if account.active_schema:
-            SCVRefreshService.holding_changed(holding)
+            SchemaOrchestrationService.holding_changed(holding)
 
         return holding
 
@@ -119,6 +119,6 @@ class HoldingService:
         holding.save()
 
         if holding.account.active_schema:
-            SCVRefreshService.holding_changed(holding)
+            SchemaOrchestrationService.holding_changed(holding)
 
         return holding

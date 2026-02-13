@@ -4,8 +4,8 @@ from django.db import transaction
 
 from accounts.exceptions import AccountInitializationError
 from accounts.models.account_classification import AccountClassification
-from schemas.services.account_column_visibility_service import AccountColumnVisibilityService
-from schemas.services.schema_manager import SchemaManager
+from schemas.services.mutations import SchemaMutationService
+from schemas.services.bootstrap import SchemaBootstrapService
 
 logger = logging.getLogger(__name__)
 
@@ -72,20 +72,21 @@ class AccountService:
             )
 
             if created:
-                logger.info(f"Created new classification {classification.id} for profile {profile.id}")
+                logger.info(
+                    f"Created new classification {classification.id} for profile {profile.id}")
 
             # 2️⃣ Attach classification if not already present
             if account.classification_id != classification.id:
                 account.classification = classification
                 account.save(update_fields=["classification"])
-                logger.info(f"Attached classification {classification.id} to account {account.id}")
+                logger.info(
+                    f"Attached classification {classification.id} to account {account.id}")
 
             # 3️⃣ Ensure schema + SCVs are initialized
-            schema = SchemaManager.ensure_for_account(account)
+            schema = SchemaBootstrapService.ensure_for_account(account)
 
-            AccountColumnVisibilityService.initialize_for_account(
-                account=account
-            )
+            SchemaMutationService.initialize_visibility_for_account(
+                account=account)
 
             logger.info(
                 f"Schema {schema.id} ensured for account {account.id} "

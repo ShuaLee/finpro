@@ -7,7 +7,7 @@ from django.utils import timezone
 from assets.models.core import Asset
 from assets.models.equity import EquityDividendSnapshot
 from external_data.providers.fmp.client import FMP_PROVIDER
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.services.orchestration import SchemaOrchestrationService
 
 
 # ============================================================
@@ -125,7 +125,8 @@ class EquityDividendSyncService:
                     "cadence_status": EquityDividendSnapshot.DividendCadenceStatus.NONE,
                 },
             )
-            SCVRefreshService.asset_changed(asset)
+            SchemaOrchestrationService.asset_changed(equity.asset)
+
             return
 
         events.sort(key=lambda e: e["date"], reverse=True)
@@ -189,4 +190,4 @@ class EquityDividendSyncService:
             },
         )
 
-        SCVRefreshService.asset_changed(asset)
+        SchemaOrchestrationService.asset_changed(equity.asset)

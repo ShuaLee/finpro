@@ -4,7 +4,7 @@ from django.core.exceptions import ImproperlyConfigured
 from assets.models.core import Asset
 from assets.models.custom.custom_asset import CustomAsset
 from accounts.models import Holding
-from schemas.services.scv_refresh_service import SCVRefreshService
+from schemas.services.orchestration import SchemaOrchestrationService
 
 
 class SnapshotCleanupBaseService:
@@ -165,8 +165,10 @@ class SnapshotCleanupBaseService:
         ).update(asset=new_asset)
 
         # Trigger SCV refresh AFTER migration
-        for holding in Holding.objects.filter(
+        migrated_holdings = Holding.objects.filter(
             asset=new_asset,
             account__portfolio__profile_id=profile_id,
-        ):
-            SCVRefreshService.holding_changed(holding)
+        ).select_related("account")
+
+        if migrated_holdings.exists():
+            SchemaOrchestrationService.holdings_changed(migrated_holdings)
