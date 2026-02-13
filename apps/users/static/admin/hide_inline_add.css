@@ -1,9 +1,0 @@
-/* Remove "Add another" buttons in nested inlines */
-.inline-group .add-row,
-.inline-group .add-handler,
-.inline-group .button.add-related,
-.inline-group .add-item,
-.inline-related .add-row,
-.inline-related .add-item {
-  display: none !important;
-}

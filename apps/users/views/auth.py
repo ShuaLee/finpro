@@ -1,128 +1,102 @@
-# from django.conf import settings
-# from django.contrib.auth import authenticate, get_user_model
-# from django.http import JsonResponse
-# from django.utils.decorators import method_decorator
-# from django.views.decorators.csrf import ensure_csrf_cookie
-# from rest_framework import generics, status
-# from rest_framework.permissions import AllowAny, IsAuthenticated
-# from rest_framework.response import Response
-# from rest_framework.views import APIView
-# from rest_framework_simplejwt.tokens import RefreshToken
-# from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
-# from rest_framework_simplejwt.exceptions import TokenError
-# from users.serializers import SignupSerializer, LoginSerializer
-# from users.utils.cookie import set_auth_cookies
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-# User = get_user_model()
+from users.serializers.auth import (
+    RegisterSerializer,
+    LoginSerializer,
+    VerifyEmailSerializer,
+    ResendVerificationSerializer,
+)
+from users.services import AuthService, EmailVerificationService
+from users.cookie import set_auth_cookies, clear_auth_cookies
 
 
-# class SignupView(generics.CreateAPIView):
-#     serializer_class = SignupSerializer
-#     permission_classes = [AllowAny]
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
 
-#     def create(self, request, *args, **kwargs):
-#         serializer = self.get_serializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-#         user = serializer.save()
-#         refresh = RefreshToken.for_user(user)
-#         response = Response({
-#             "detail": "Signup successful",
-#             "user": {
-#                 "id": user.id,
-#                 "email": user.email,
-#                 "is_profile_complete": user.profile.is_profile_complete  # ✅ Include this
-#             }
-#         }, status=status.HTTP_201_CREATED)
-#         return set_auth_cookies(response, refresh.access_token, refresh)
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            user = AuthService.register_user(**serializer.validated_data)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {"detail": "Registration successful. Check your email for verification.", "email": user.email},
+            status=status.HTTP_201_CREATED,
+        )
 
 
-# @method_decorator(ensure_csrf_cookie, name='dispatch')
-# class CSRFTokenView(APIView):
-#     permission_classes = [AllowAny]
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
 
-#     def get(self, request):
-#         return JsonResponse({"detail": "CSRF cookie set"})
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
+        try:
+            user = EmailVerificationService.verify_raw_token(raw_token=serializer.validated_data["token"])
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-# class CookieLoginView(APIView):
-#     permission_classes = [AllowAny]
-
-#     def post(self, request):
-#         serializer = LoginSerializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-#         email = serializer.validated_data["email"]
-#         password = serializer.validated_data["password"]
-
-#         user = authenticate(request, email=email, password=password)
-#         if user is None:
-#             return Response({"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-
-#         refresh = RefreshToken.for_user(user)
-#         response = Response({
-#             "detail": "Login successful",
-#             "user": {
-#                 "id": user.id,
-#                 "email": user.email,
-#                 "is_profile_complete": user.profile.is_profile_complete  # ✅ Include this
-#             }
-#         }, status=status.HTTP_200_OK)
-#         return set_auth_cookies(response, refresh.access_token, refresh)
+        return Response({"detail": "Email verified.", "email": user.email}, status=status.HTTP_200_OK)
 
 
-# class CookieLogoutView(APIView):
-#     permission_classes = [IsAuthenticated]
+class ResendVerificationView(APIView):
+    permission_classes = [AllowAny]
 
-#     def post(self, request):
-#         # Get refresh token from cookies
-#         refresh_token = request.COOKIES.get("refresh")
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-#         if refresh_token:
-#             try:
-#                 token = RefreshToken(refresh_token)
-#                 # Blacklist the token
-#                 token.blacklist()
-#             except TokenError:
-#                 pass  # Token already invalid or expired
+        email = serializer.validated_data.get("email")
+        if not email:
+            return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-#         # Clear all cookies
-#         response = Response({"detail": "Logged out"},
-#                             status=status.HTTP_200_OK)
-#         response.delete_cookie("access")
-#         response.delete_cookie("refresh")
-#         response.delete_cookie("csrftoken")
+        from users.models import User
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return Response({"detail": "If this email exists, a verification email was sent."}, status=status.HTTP_200_OK)
 
-#         return response
+        try:
+            EmailVerificationService.resend_for_user(user=user)
+        except DjangoValidationError:
+            pass
+
+        return Response({"detail": "If this email exists, a verification email was sent."}, status=status.HTTP_200_OK)
 
 
-# class CookieRefreshView(APIView):
-#     permission_classes = [AllowAny]
+class LoginView(APIView):
+    permission_classes = [AllowAny]
 
-#     def post(self, request):
-#         refresh_token = request.COOKIES.get("refresh")
-#         if not refresh_token:
-#             return Response({"detail": "Refresh token missing"}, status=status.HTTP_401_UNAUTHORIZED)
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-#         try:
-#             token = RefreshToken(refresh_token)
-#             if BlacklistedToken.objects.filter(token__jti=token["jti"]).exists():
-#                 return Response({"detail": "Token blacklisted"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            user, access, refresh = AuthService.login_user(**serializer.validated_data)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
 
-#             if getattr(settings, "SIMPLE_JWT", {}).get("BLACKLIST_AFTER_ROTATION", False):
-#                 token.blacklist()
+        response = Response(
+            {"detail": "Login successful.", "email": user.email},
+            status=status.HTTP_200_OK,
+        )
+        return set_auth_cookies(response, access, refresh)
 
-#             user_id = token.get("user_id")
-#             if not user_id:
-#                 return Response({"detail": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
 
-#             user = User.objects.filter(id=user_id).first()
-#             if not user:
-#                 return Response({"detail": "User not found"}, status=status.HTTP_401_UNAUTHORIZED)
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
 
-#             new_refresh = RefreshToken.for_user(user)
-#             new_access = new_refresh.access_token
-#             response = Response({"detail": "Token refreshed"},
-#                                 status=status.HTTP_200_OK)
-#             return set_auth_cookies(response, new_access, new_refresh)
+    def post(self, request):
+        refresh = request.COOKIES.get("refresh")
+        AuthService.logout_with_refresh_token(refresh_token=refresh)
 
-#         except TokenError:
-#             return Response({"detail": "Invalid or blacklisted token"}, status=status.HTTP_401_UNAUTHORIZED)
+        response = Response({"detail": "Logged out."}, status=status.HTTP_200_OK)
+        clear_auth_cookies(response)
+        return response

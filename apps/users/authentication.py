@@ -1,10 +1,4 @@
-"""
-users.authentication
-~~~~~~~~~~~~~~~~~~~~
-Provides custom authentication classes for JWT-based login using cookies.
-This helps implement secure session-like behavior for APIs.
-"""
-
+from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -23,22 +17,11 @@ class JWTFromCookieAuthentication(JWTAuthentication):
     """
 
     def authenticate(self, request):
-        """
-        Authenticate the request using the JWT access token stored in cookies.
+        cookie_key = settings.SIMPLE_JWT.get("AUTH_COOKIE", "access")
+        access_token = request.COOKIES.get(cookie_key)
 
-        Args:
-            request (Request): The incoming DRF request object.
-
-        Returns:
-            tuple: (user, validated_token) if authentication succeeds.
-            None: If no token is found (authentication will be skipped).
-
-        Raises:
-            AuthenticationFailed: If the token exists but is invalid.
-        """
-        access_token = request.COOKIES.get("access")
         if not access_token:
-            return None  # No token found in cookie
+            return None  # No token cookie -> unauthenticated request
 
         try:
             validated_token = self.get_validated_token(access_token)

@@ -1,4 +1,4 @@
 from .user import User
-from .profile import Profile
+from .email_verification import EmailVerificationToken
 
-__all__ = ["User", "Profile"]
+__all__ = ["User", "EmailVerificationToken"]
