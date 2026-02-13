@@ -1,4 +1,4 @@
-from analytics.models import AnalyticResult
+from analytics.models.result import AnalyticResult
 
 
 class ResultWriterService:

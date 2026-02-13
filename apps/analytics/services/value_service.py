@@ -15,7 +15,7 @@ class ValueResolverService:
             return None
 
         return scv.value
-
+    
     @staticmethod
     def get_decimal(*, holding, identifier):
         raw = ValueResolverService.get_text(

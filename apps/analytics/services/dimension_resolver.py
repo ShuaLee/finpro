@@ -1,16 +1,14 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from analytics.models import AssetDimensionExposure, HoldingDimensionExposureOverride
+from analytics.models.exposure import AssetDimensionExposure, HoldingDimensionExposureOverride
 from analytics.services.value_service import ValueResolverService
-
 
 @dataclass
 class BucketContribution:
     bucket_id: int | None
     label: str
     weight: Decimal
-
 
 class DimensionResolverService:
     UNKNOWN_LABEL = "Unknown"

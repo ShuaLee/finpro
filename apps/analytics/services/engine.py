@@ -1,9 +1,9 @@
 from django.db import transaction
 
 from accounts.models import Holding
-from analytics.models import Analytic
+from analytics.models.analytic import Analytic
 from analytics.services.aggregation_service import AggregationService
-from analytics.services.result_writer import ResultWriterService
+from analytics.services.results_writer import ResultWriterService
 from analytics.services.run_service import AnalyticRunService
 
 
