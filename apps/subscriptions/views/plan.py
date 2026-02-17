@@ -49,7 +49,4 @@ class PlanListView(generics.ListAPIView):
     serializer_class = PlanSerializer
 
     def get_queryset(self):
-        """
-        Return all active plans sorted by price.
-        """
-        return Plan.objects.filter(is_active=True).order_by('price_per_month')
+        return Plan.objects.filter(is_active=True, is_public=True).order_by("price_per_month")

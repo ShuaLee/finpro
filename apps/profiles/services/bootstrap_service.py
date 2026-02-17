@@ -5,6 +5,7 @@ from fx.models.country import Country
 from fx.models.fx import FXCurrency
 from profiles.models import Profile
 from subscriptions.models import AccountType, Plan
+from subscriptions.services import SubscriptionService
 
 
 class ProfileBootstrapService:
@@ -66,6 +67,11 @@ class ProfileBootstrapService:
 
         if updated_fields:
             profile.save(update_fields=updated_fields + ["updated_at"])
+
+        SubscriptionService.ensure_default_subscription(
+            profile=profile,
+            default_plan=free_plan,
+        )
 
         # Ensure main portfolio exists
         try:

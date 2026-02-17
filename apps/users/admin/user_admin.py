@@ -2,12 +2,21 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from users.models import User
+from users.services.email_verification_service import EmailVerificationService
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     ordering = ["-date_joined"]
-    list_display = ("email", "is_email_verified", "is_active", "is_staff", "date_joined")
+    list_display = (
+        "email",
+        "is_email_verified",
+        "is_active",
+        "is_staff",
+        "failed_login_count",
+        "locked_until",
+        "date_joined",
+    )
     search_fields = ("email",)
 
     fieldsets = (
@@ -27,7 +36,30 @@ class UserAdmin(BaseUserAdmin):
 
     readonly_fields = ("date_joined", "last_login")
     filter_horizontal = ("groups", "user_permissions")
+    actions = ["unlock_accounts", "resend_verification_email"]
 
     def is_email_verified(self, obj):
         return obj.is_email_verified
     is_email_verified.boolean = True
+
+    @admin.action(description="Unlock selected accounts")
+    def unlock_accounts(self, request, queryset):
+        count = queryset.update(failed_login_count=0, locked_until=None)
+        self.message_user(request, f"Unlocked {count} account(s).")
+
+    @admin.action(description="Resend verification email")
+    def resend_verification_email(self, request, queryset):
+        sent = 0
+        for user in queryset:
+            if user.is_email_verified:
+                continue
+            try:
+                raw, _ = EmailVerificationService.issue_token(user=user)
+                EmailVerificationService.send_verification_email(
+                    user=user,
+                    raw_token=raw,
+                )
+                sent += 1
+            except Exception:
+                continue
+        self.message_user(request, f"Verification emails sent: {sent}")

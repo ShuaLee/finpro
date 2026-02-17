@@ -12,6 +12,9 @@ from users.models import EmailVerificationToken
 
 class EmailVerificationService:
     TOKEN_TTL_HOURS = 24
+    RESEND_COOLDOWN_SECONDS = getattr(
+        settings, "AUTH_RESEND_VERIFICATION_COOLDOWN_SECONDS", 60
+    )
 
     @staticmethod
     def _hash_token(raw_token: str) -> str:
@@ -19,6 +22,27 @@ class EmailVerificationService:
 
     @staticmethod
     def issue_token(*, user):
+        cutoff = timezone.now() - timedelta(
+            seconds=EmailVerificationService.RESEND_COOLDOWN_SECONDS
+        )
+
+        recent = EmailVerificationToken.objects.filter(
+            user=user,
+            purpose=EmailVerificationToken.Purpose.VERIFY_EMAIL,
+            consumed_at__isnull=True,
+            created_at__gte=cutoff,
+        ).exists()
+        if recent:
+            raise ValidationError(
+                "Please wait before requesting another verification email."
+            )
+
+        EmailVerificationToken.objects.filter(
+            user=user,
+            purpose=EmailVerificationToken.Purpose.VERIFY_EMAIL,
+            consumed_at__isnull=True,
+        ).update(consumed_at=timezone.now())
+
         raw = secrets.token_urlsafe(48)
         token_hash = EmailVerificationService._hash_token(raw)
 

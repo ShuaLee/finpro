@@ -4,18 +4,18 @@ from portfolios.models.portfolio import Portfolio
 
 @admin.register(Portfolio)
 class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ("id", "profile", "name", "is_main", "created_at")
-    list_filter = ("is_main", "created_at")
+    list_display = ("id", "profile", "name", "kind", "client_name", "is_main", "created_at")
+    list_filter = ("kind", "is_main", "created_at")
     search_fields = (
         "name",
-        "profile__user__username",
         "profile__user__email",
+        "client_name",
     )
     ordering = ("-created_at",)
 
     fieldsets = (
         (None, {
-            "fields": ("profile", "name", "is_main")
+            "fields": ("profile", "name", "kind", "client_name", "is_main")
         }),
         ("Timestamps", {
             "fields": ("created_at",),

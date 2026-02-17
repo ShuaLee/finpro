@@ -1,9 +1,10 @@
+from zoneinfo import available_timezones
+
 from rest_framework import serializers
 
-from profiles.models import Profile
 from fx.models.country import Country
 from fx.models.fx import FXCurrency
-from subscriptions.models import Plan, AccountType
+from profiles.models import Profile
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -20,18 +21,10 @@ class ProfileSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=False,
     )
-    plan = serializers.SlugRelatedField(
-        slug_field="slug",
-        queryset=Plan.objects.filter(is_active=True),
-        required=False,
-        allow_null=True,
-    )
-    account_type = serializers.SlugRelatedField(
-        slug_field="slug",
-        queryset=AccountType.objects.all(),
-        required=False,
-        allow_null=True,
-    )
+
+    # Never user-editable directly from profile patch endpoint.
+    plan = serializers.SlugRelatedField(slug_field="slug", read_only=True)
+    account_type = serializers.SlugRelatedField(slug_field="slug", read_only=True)
 
     class Meta:
         model = Profile
@@ -53,7 +46,28 @@ class ProfileSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "email", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "email",
+            "plan",
+            "account_type",
+            "onboarding_status",
+            "onboarding_step",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_language(self, value):
+        normalized = (value or "").strip().lower()
+        if len(normalized) < 2 or len(normalized) > 16:
+            raise serializers.ValidationError("Language must be between 2 and 16 chars.")
+        return normalized
+
+    def validate_timezone(self, value):
+        tz = (value or "").strip()
+        if tz not in available_timezones():
+            raise serializers.ValidationError("Invalid timezone.")
+        return tz
 
 
 class OnboardingCompleteSerializer(serializers.Serializer):

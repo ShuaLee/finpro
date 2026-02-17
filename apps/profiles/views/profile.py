@@ -1,23 +1,34 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from profiles.serializers import ProfileSerializer, OnboardingCompleteSerializer
 from fx.models.country import Country
 from fx.models.fx import FXCurrency
+from profiles.serializers import OnboardingCompleteSerializer, ProfileSerializer
+from profiles.services import ProfileBootstrapService
 
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _get_profile(user):
+        try:
+            return user.profile
+        except ObjectDoesNotExist:
+            return ProfileBootstrapService.bootstrap(user=user)
+
     def get(self, request):
-        serializer = ProfileSerializer(request.user.profile)
+        profile = self._get_profile(request.user)
+        serializer = ProfileSerializer(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request):
+        profile = self._get_profile(request.user)
         serializer = ProfileSerializer(
-            request.user.profile,
+            profile,
             data=request.data,
             partial=True,
         )
@@ -29,8 +40,15 @@ class ProfileView(APIView):
 class CompleteOnboardingView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _get_profile(user):
+        try:
+            return user.profile
+        except ObjectDoesNotExist:
+            return ProfileBootstrapService.bootstrap(user=user)
+
     def post(self, request):
-        profile = request.user.profile
+        profile = self._get_profile(request.user)
         serializer = OnboardingCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

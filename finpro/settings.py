@@ -160,6 +160,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'users.User'
 
+# Auth flow toggles (dev convenience)
+AUTH_REQUIRE_EMAIL_VERIFICATION = False
+
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'users.authentication.JWTFromCookieAuthentication',
@@ -252,4 +256,5 @@ CSRF_TRUSTED_ORIGINS = [
     "https://yourdomain.com",
 ]
 """
+
 

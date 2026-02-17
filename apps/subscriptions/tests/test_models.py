@@ -31,10 +31,12 @@ class PlanModelTests(TestCase):
         """
         __str__ method should return name and price.
         """
-        plan = Plan.objects.create(
+        plan, _ = Plan.objects.update_or_create(
             name="Free",
-            slug="free",
-            description="Free plan",
-            price_per_month=0
+            defaults={
+                "slug": "free",
+                "description": "Free plan",
+                "price_per_month": 0,
+            },
         )
         self.assertIn("Free", str(plan))

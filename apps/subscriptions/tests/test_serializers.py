@@ -18,14 +18,16 @@ class PlanSerializerTests(TestCase):
         """
         Ensure serializer includes all expected fields.
         """
-        plan = Plan.objects.create(
+        plan, _ = Plan.objects.update_or_create(
             name="Free",
-            slug="free",
-            description="Basic free plan",
-            max_stocks=10,
-            allow_crypto=False,
-            allow_metals=False,
-            price_per_month=0.00
+            defaults={
+                "slug": "free",
+                "description": "Basic free plan",
+                "max_stocks": 10,
+                "allow_crypto": False,
+                "allow_metals": False,
+                "price_per_month": 0.00,
+            },
         )
 
         serializer = PlanSerializer(plan)

@@ -14,6 +14,7 @@ from profiles.services.bootstrap_service import ProfileBootstrapService
 class AuthService:
     MAX_FAILED_LOGIN_ATTEMPTS = getattr(settings, "AUTH_MAX_FAILED_LOGIN_ATTEMPTS", 5)
     LOCKOUT_MINUTES = getattr(settings, "AUTH_LOCKOUT_MINUTES", 15)
+    REQUIRE_EMAIL_VERIFICATION = getattr(settings, "AUTH_REQUIRE_EMAIL_VERIFICATION", True)
 
     @staticmethod
     @transaction.atomic
@@ -60,7 +61,7 @@ class AuthService:
         if not user.is_active:
             raise ValidationError("Invalid credentials.")
 
-        if not user.is_email_verified:
+        if AuthService.REQUIRE_EMAIL_VERIFICATION and not user.is_email_verified:
             raise ValidationError("Please verify your email first.")
 
         if user.failed_login_count != 0 or user.locked_until is not None:
@@ -81,3 +82,16 @@ class AuthService:
             token.blacklist()
         except Exception:
             return
+
+    @staticmethod
+    def change_password(*, user, current_password: str, new_password: str):
+        if not user.check_password(current_password):
+            raise ValidationError("Current password is incorrect.")
+
+        from django.contrib.auth.password_validation import validate_password
+
+        validate_password(new_password, user=user)
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        return user
+
