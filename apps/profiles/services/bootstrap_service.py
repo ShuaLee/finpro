@@ -11,34 +11,48 @@ class ProfileBootstrapService:
     @staticmethod
     @transaction.atomic
     def bootstrap(*, user):
-        profile, _ = Profile.objects.get_or_create(user=user)
+        usd = FXCurrency.objects.filter(code="USD").first()
+        if not usd:
+            raise ValidationError("Default currency USD not found.")
+
+        free_plan = Plan.objects.filter(slug="free", is_active=True).first()
+        if not free_plan:
+            raise ValidationError("Default plan 'free' not found.")
+
+        default_account_type = AccountType.objects.filter(slug="individual").first()
+        if not default_account_type:
+            raise ValidationError("Default account type 'individual' not found.")
+
+        us = Country.objects.filter(code="US").first()
+
+        # currency is required; include it in defaults so initial create is valid
+        profile, _ = Profile.objects.get_or_create(
+            user=user,
+            defaults={
+                "currency": usd,
+                "country": us,
+                "plan": free_plan,
+                "account_type": default_account_type,
+                "language": "en",
+                "timezone": "UTC",
+            },
+        )
 
         updated_fields = []
 
         if not profile.currency:
-            usd = FXCurrency.objects.filter(code="USD").first()
-            if not usd:
-                raise ValidationError("Default currency USD not found.")
             profile.currency = usd
             updated_fields.append("currency")
 
-        if not profile.country:
-            us = Country.objects.filter(code="US").first()
-            if us:
-                profile.country = us
-                updated_fields.append("country")
+        if not profile.country and us:
+            profile.country = us
+            updated_fields.append("country")
 
         if not profile.plan:
-            free_plan = Plan.objects.filter(slug="free", is_active=True).first()
-            if not free_plan:
-                raise ValidationError("Default plan 'free' not found.")
             profile.plan = free_plan
             updated_fields.append("plan")
 
         if not profile.account_type:
-            default_account_type = AccountType.objects.filter(slug="individual").first()
-            if not default_account_type:
-                raise ValidationError("Default account type 'individual' not found.")
             profile.account_type = default_account_type
             updated_fields.append("account_type")
 

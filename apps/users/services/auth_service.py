@@ -1,6 +1,9 @@
-from django.contrib.auth import authenticate
+from datetime import timedelta
+
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from users.models import User
@@ -9,6 +12,9 @@ from profiles.services.bootstrap_service import ProfileBootstrapService
 
 
 class AuthService:
+    MAX_FAILED_LOGIN_ATTEMPTS = getattr(settings, "AUTH_MAX_FAILED_LOGIN_ATTEMPTS", 5)
+    LOCKOUT_MINUTES = getattr(settings, "AUTH_LOCKOUT_MINUTES", 15)
+
     @staticmethod
     @transaction.atomic
     def register_user(*, email: str, password: str, accept_terms: bool):
@@ -30,15 +36,37 @@ class AuthService:
 
     @staticmethod
     def login_user(*, email: str, password: str):
-        user = authenticate(username=email, password=password)
+        normalized_email = (email or "").strip().lower()
+        user = User.objects.filter(email__iexact=normalized_email).first()
+
         if not user:
             raise ValidationError("Invalid credentials.")
 
         if user.is_locked:
             raise ValidationError("Account is temporarily locked.")
 
+        if not user.check_password(password):
+            user.failed_login_count += 1
+            update_fields = ["failed_login_count"]
+
+            if user.failed_login_count >= AuthService.MAX_FAILED_LOGIN_ATTEMPTS:
+                user.failed_login_count = 0
+                user.locked_until = timezone.now() + timedelta(minutes=AuthService.LOCKOUT_MINUTES)
+                update_fields.append("locked_until")
+
+            user.save(update_fields=update_fields)
+            raise ValidationError("Invalid credentials.")
+
+        if not user.is_active:
+            raise ValidationError("Invalid credentials.")
+
         if not user.is_email_verified:
             raise ValidationError("Please verify your email first.")
+
+        if user.failed_login_count != 0 or user.locked_until is not None:
+            user.failed_login_count = 0
+            user.locked_until = None
+            user.save(update_fields=["failed_login_count", "locked_until"])
 
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token

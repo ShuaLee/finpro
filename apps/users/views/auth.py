@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -94,7 +95,8 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh = request.COOKIES.get("refresh")
+        refresh_cookie_key = settings.SIMPLE_JWT.get("AUTH_COOKIE_REFRESH", "refresh")
+        refresh = request.COOKIES.get(refresh_cookie_key)
         AuthService.logout_with_refresh_token(refresh_token=refresh)
 
         response = Response({"detail": "Logged out."}, status=status.HTTP_200_OK)

@@ -243,4 +243,96 @@ Priority for subscriptions completion:
 
 ---
 
+## 11. Update From Today (February 17, 2026)
+
+### 11.1 What was completed today
+- Rebuilt and hardened `users` + `profiles` flow to production-ready baseline.
+- Added login lockout behavior in `AuthService`:
+  - tracks failed attempts
+  - locks after threshold (default 5 attempts)
+  - lock duration default 15 minutes
+  - resets counters on successful login
+- Fixed logout flow to read refresh cookie key from settings (`AUTH_COOKIE_REFRESH`) instead of hardcoded `"refresh"`.
+- Fixed portfolio/profile dependency bug for bootstrap path:
+  - changed portfolio imports from `users.models.Profile` to `profiles.models.Profile`.
+- Fixed `ProfileBootstrapService` creation bug:
+  - `currency` is required, so bootstrap now resolves defaults first and passes them into `get_or_create(defaults=...)`.
+  - this removed `IntegrityError: Column 'currency_id' cannot be null` during registration/tests.
+
+### 11.2 Tests run and status
+Command run:
+- `python manage.py test apps.users.tests.test_auth_flow apps.profiles.tests -v 2`
+
+Result:
+- `Ran 6 tests ... OK`
+- Verified flows:
+  - register -> profile bootstrap -> main portfolio creation
+  - unverified login blocked
+  - failed login lockout
+  - profile get/patch
+  - onboarding completion
+
+Known warning:
+- MySQL warning `models.W036` on `portfolios.Portfolio` conditional unique constraint.
+- Not a blocker for current users/profiles completion.
+- Expected to be resolved naturally when moving to PostgreSQL.
+
+### 11.3 Users/Profiles status after today
+- `users` and `profiles` are considered complete for this rebuild phase.
+- Core lifecycle is now test-backed and passing.
+
+---
+
+## 12. Subscriptions Planning Notes (next build focus)
+
+### 12.1 Product direction agreed
+Planned plan tiers:
+- `free`
+- paid main tier (individual advanced)
+- `wealth_manager`
+
+Entitlements should cover:
+- holdings limits
+- custom asset/custom type permissions
+- number/type of portfolios (personal + client portfolios for wealth manager)
+
+### 12.2 Recommended subscriptions design
+1. Keep `Plan` as a catalog of available plan definitions.
+2. Add a profile-scoped `Subscription` lifecycle model (current/effective state):
+- status (`active`, `past_due`, `canceled`, etc.)
+- current plan
+- period start/end
+- cancel-at-period-end flag
+- ended/reactivated timestamps
+3. Move feature/limit logic into centralized entitlement resolution service:
+- one place to answer "can user do X?" and "what are limits?"
+
+### 12.3 Wealth manager recommendation
+- Do **not** fork into a separate portfolio model yet.
+- Keep portfolio model extensible; add portfolio role/kind semantics later if needed (personal vs client).
+- Gate manager capabilities through subscription entitlements first.
+
+### 12.4 Cancel / downgrade / reactivate policy
+- Never delete user data on cancel/downgrade.
+- On loss of paid access:
+  - block creation of new paid-only resources
+  - block actions requiring paid entitlements
+  - keep existing data readable
+- On reactivation:
+  - restore entitlements immediately
+  - existing data becomes usable again without restoration jobs
+
+### 12.5 Important dependency cleanup before deep subscription gating
+While reviewing `assets`, several inconsistencies were found that should be cleaned before strict entitlement enforcement:
+- Legacy profile imports still point at `users.Profile` in multiple assets/accounts files (needs migration to `profiles.Profile` references).
+- Crypto asset type mismatch:
+  - factory uses `asset_type_slug = "cryptocurrency"`
+  - model validation expects slug `"crypto"`.
+- Real estate factory passes `estimated_value` but model does not define that field.
+- Custom asset validation references `asset.owner_id`, but `Asset` model has no owner field.
+
+These are not part of users/profiles completion, but they will affect subscription-driven feature gating in assets/accounts flows.
+
+---
+
 End of handoff notes.

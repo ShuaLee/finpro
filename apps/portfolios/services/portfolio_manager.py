@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from users.models import Profile
+from profiles.models import Profile
 from portfolios.models.portfolio import Portfolio
 
 

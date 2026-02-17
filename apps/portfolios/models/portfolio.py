@@ -14,7 +14,7 @@ Business Rules:
 """
 
 from django.db import models
-from users.models import Profile
+from profiles.models import Profile
 
 
 class Portfolio(models.Model):
