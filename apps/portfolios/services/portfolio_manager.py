@@ -11,37 +11,17 @@ class PortfolioManager:
     Service class to handle lifecycle operations for user portfolios.
     """
 
-    # -------------------------------
-    # Main Portfolio Methods
-    # -------------------------------
-    # @staticmethod
-    # def create_main_portfolio(profile: Profile, name: str = "Main Portfolio") -> Portfolio:
-    #     """
-    #     Creates the main Portfolio for the given profile.
-    #     Raises ValidationError if one already exists.
-    #     """
-    #     if Portfolio.objects.filter(profile=profile, is_main=True).exists():
-    #         raise ValidationError(
-    #             f"Profile {profile.id} already has a main portfolio.")
-    #     with transaction.atomic():
-    #         return Portfolio.objects.create(
-    #             profile=profile,
-    #             name=name,
-    #             is_main=True,
-    #         )
-
     @staticmethod
-    def ensure_main_portfolio(profile: Profile) -> Portfolio:
+    def ensure_personal_portfolio(profile: Profile) -> Portfolio:
         """
-        Ensures the profile has a main portfolio (idempotent).
-        Returns existing or newly created main portfolio.
+        Ensures the profile has a personal portfolio (idempotent).
+        Returns existing or newly created personal portfolio.
         """
         portfolio, _ = Portfolio.objects.get_or_create(
             profile=profile,
-            is_main=True,
+            kind=Portfolio.Kind.PERSONAL,
             defaults={
                 "name": "Main Portfolio",
-                "kind": Portfolio.Kind.PERSONAL,
                 "client_name": None,
             },
         )
@@ -57,16 +37,15 @@ class PortfolioManager:
         return portfolio
 
     @staticmethod
-    def get_main_portfolio(profile: Profile) -> Portfolio:
+    def get_personal_portfolio(profile: Profile) -> Portfolio:
         """
-        Fetch the main Portfolio for a profile.
+        Fetch the personal portfolio for a profile.
         Raises ValidationError if not found.
         """
         try:
-            return Portfolio.objects.get(profile=profile, is_main=True)
+            return Portfolio.objects.get(profile=profile, kind=Portfolio.Kind.PERSONAL)
         except Portfolio.DoesNotExist:
-            raise ValidationError(
-                f"No main portfolio exists for profile {profile.id}")
+            raise ValidationError(f"No personal portfolio exists for profile {profile.id}")
 
     @staticmethod
     @transaction.atomic
@@ -86,6 +65,8 @@ class PortfolioManager:
 
         if kind == Portfolio.Kind.CLIENT and not (client_name or "").strip():
             raise ValidationError("Client name is required for client portfolios.")
+        if kind == Portfolio.Kind.PERSONAL:
+            raise ValidationError("Only one personal portfolio is allowed per profile.")
 
         existing_count = Portfolio.objects.filter(profile=profile).count()
         SubscriptionAccessService.assert_can_create_portfolio(
@@ -99,5 +80,4 @@ class PortfolioManager:
             name=normalized_name,
             kind=kind,
             client_name=(client_name or "").strip() or None,
-            is_main=False,
         )

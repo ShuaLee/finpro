@@ -1,7 +1,7 @@
-from django.db import models, transaction
-from django.utils import timezone
-
 from datetime import timedelta
+
+from django.db import models
+from django.utils import timezone
 
 
 class FXCurrency(models.Model):
@@ -11,7 +11,7 @@ class FXCurrency(models.Model):
     Example: "USD" → "US Dollar".
     """
     code = models.CharField(
-        max_length=6,
+        max_length=3,
         primary_key=True,
         help_text="ISO-like currency code (derived from FX pairs)"
     )
@@ -19,8 +19,10 @@ class FXCurrency(models.Model):
         max_length=150,
         help_text="Human-readable currency name from FMP"
     )
+    is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["code"]
@@ -56,53 +58,23 @@ class FXRate(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = [("from_currency", "to_currency")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["from_currency", "to_currency"],
+                name="unique_fxrate_from_to",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(from_currency=models.F("to_currency")),
+                name="fxrate_from_currency_not_equal_to_to_currency",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["updated_at"]),
+        ]
         ordering = ["from_currency__code", "to_currency__code"]
 
     def __str__(self):
         return f"{self.from_currency.code} → {self.to_currency.code}: {self.rate}"
 
-    # ---------------------------
-    # Helpers
-    # ---------------------------
-
     def is_stale(self, max_age_hours=24):
         return self.updated_at < timezone.now() - timedelta(hours=max_age_hours)
-
-    # ---------------------------
-    # FX-dependent recalculation
-    # ---------------------------
-
-    def save(self, *args, **kwargs):
-        """
-        Save the FX rate and trigger recalculation of SCVs
-        that depend on FX (e.g. current_value).
-        """
-
-        super().save(*args, **kwargs)
-
-        def _after_commit():
-            from schemas.services.orchestration import SchemaOrchestrationService
-            from accounts.models.holding import Holding
-
-            from_code = self.from_currency.code
-            to_code = self.to_currency.code
-
-            # Any holding whose asset currency OR profile currency
-            # participates in this FX pair may be affected.
-            holdings = (
-                Holding.objects.filter(
-                    asset__currency__in=[from_code, to_code],
-                    account__portfolio__profile__currency__in=[
-                        from_code, to_code],
-                )
-                .select_related(
-                    "asset",
-                    "account__portfolio__profile",
-                )
-            )
-
-            if holdings.exists():
-                SchemaOrchestrationService.fx_changed(holdings)
-
-        transaction.on_commit(_after_commit)

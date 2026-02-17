@@ -45,13 +45,6 @@ class Profile(models.Model):
         on_delete=models.SET_NULL,
         related_name="profiles",
     )
-    account_type = models.ForeignKey(
-        "subscriptions.AccountType",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="profiles",
-    )
 
     receive_email_updates = models.BooleanField(default=True)
     receive_marketing_emails = models.BooleanField(default=False)

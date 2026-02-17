@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 from fx.models.country import Country
 from fx.models.fx import FXCurrency
 from portfolios.models.portfolio import Portfolio
-from subscriptions.models import AccountType, Plan
+from subscriptions.models import Plan
 from users.models import EmailVerificationToken, User
 from users.services.auth_service import AuthService
 
@@ -27,14 +27,6 @@ class AuthFlowTests(APITestCase):
                 "is_active": True,
             },
         )
-        AccountType.objects.get_or_create(
-            slug="individual",
-            defaults={
-                "name": "Individual Investor",
-                "description": "Default account type",
-            },
-        )
-
     def test_register_bootstraps_profile_and_main_portfolio(self):
         response = self.client.post(
             reverse("auth-register"),
@@ -52,9 +44,8 @@ class AuthFlowTests(APITestCase):
         self.assertTrue(hasattr(user, "profile"))
         self.assertEqual(user.profile.currency.code, "USD")
         self.assertEqual(user.profile.plan.slug, "free")
-        self.assertEqual(user.profile.account_type.slug, "individual")
         self.assertTrue(
-            Portfolio.objects.filter(profile=user.profile, is_main=True).exists()
+            Portfolio.objects.filter(profile=user.profile, kind="personal").exists()
         )
         self.assertTrue(
             EmailVerificationToken.objects.filter(

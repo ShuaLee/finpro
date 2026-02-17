@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from fx.services.fx_rate_fetcher import FXRateFetcherService
 from external_data.exceptions import ExternalDataEmptyResult
+from fx.services.fx_rate_fetcher import FXRateFetcherService
 
 
 class Command(BaseCommand):
@@ -17,17 +17,17 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         symbol = options["symbol"]
 
-        self.stdout.write(f"💱 Fetching FX rate for {symbol}...")
+        self.stdout.write(f"Fetching FX rate for {symbol}...")
 
         try:
             fx_rate = FXRateFetcherService().run(symbol)
-        except ExternalDataEmptyResult as e:
-            raise CommandError(str(e))
-        except Exception as e:
-            raise CommandError(f"Failed to fetch FX rate: {e}")
+        except ExternalDataEmptyResult as exc:
+            raise CommandError(str(exc))
+        except Exception as exc:
+            raise CommandError(f"Failed to fetch FX rate: {exc}")
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"✅ {fx_rate.from_currency.code} → {fx_rate.to_currency.code} = {fx_rate.rate}"
+                f"{fx_rate.from_currency.code} -> {fx_rate.to_currency.code} = {fx_rate.rate}"
             )
         )

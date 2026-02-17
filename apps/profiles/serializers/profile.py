@@ -11,20 +11,19 @@ class ProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     country = serializers.SlugRelatedField(
         slug_field="code",
-        queryset=Country.objects.all(),
+        queryset=Country.objects.filter(is_active=True),
         required=False,
         allow_null=True,
     )
     currency = serializers.SlugRelatedField(
         slug_field="code",
-        queryset=FXCurrency.objects.all(),
+        queryset=FXCurrency.objects.filter(is_active=True),
         required=False,
         allow_null=False,
     )
 
     # Never user-editable directly from profile patch endpoint.
     plan = serializers.SlugRelatedField(slug_field="slug", read_only=True)
-    account_type = serializers.SlugRelatedField(slug_field="slug", read_only=True)
 
     class Meta:
         model = Profile
@@ -38,7 +37,6 @@ class ProfileSerializer(serializers.ModelSerializer):
             "country",
             "currency",
             "plan",
-            "account_type",
             "receive_email_updates",
             "receive_marketing_emails",
             "onboarding_status",
@@ -50,7 +48,6 @@ class ProfileSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "plan",
-            "account_type",
             "onboarding_status",
             "onboarding_step",
             "created_at",
@@ -76,11 +73,11 @@ class OnboardingCompleteSerializer(serializers.Serializer):
     currency = serializers.SlugField(required=False)
 
     def validate_country(self, value):
-        if not Country.objects.filter(code=value.upper()).exists():
+        if not Country.objects.filter(code=value.upper(), is_active=True).exists():
             raise serializers.ValidationError("Invalid country code.")
         return value.upper()
 
     def validate_currency(self, value):
-        if not FXCurrency.objects.filter(code=value.upper()).exists():
+        if not FXCurrency.objects.filter(code=value.upper(), is_active=True).exists():
             raise serializers.ValidationError("Invalid currency code.")
         return value.upper()

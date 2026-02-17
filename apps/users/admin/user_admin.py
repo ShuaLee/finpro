@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
+from profiles.services.bootstrap_service import ProfileBootstrapService
 from users.models import User
 from users.services.email_verification_service import EmailVerificationService
 
@@ -37,6 +38,11 @@ class UserAdmin(BaseUserAdmin):
     readonly_fields = ("date_joined", "last_login")
     filter_horizontal = ("groups", "user_permissions")
     actions = ["unlock_accounts", "resend_verification_email"]
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not change:
+            ProfileBootstrapService.bootstrap(user=obj)
 
     def is_email_verified(self, obj):
         return obj.is_email_verified

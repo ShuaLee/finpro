@@ -2,6 +2,7 @@ from django.db import transaction
 
 from fx.models.fx import FXCurrency
 from external_data.providers.fmp.fx.fetchers import fetch_fx_universe
+from external_data.providers.fmp.client import FMP_PROVIDER
 
 
 class FXCurrencySeederService:
@@ -10,8 +11,8 @@ class FXCurrencySeederService:
     """
 
     @transaction.atomic
-    def run(self):
-        rows = fetch_fx_universe()
+    def run(self, *, deactivate_missing: bool = False):
+        rows = FMP_PROVIDER.request(fetch_fx_universe)
 
         seen: dict[str, str | None] = {}
 
@@ -31,23 +32,45 @@ class FXCurrencySeederService:
 
                 seen.setdefault(code, name)
 
-        created = updated = 0
+        created = updated = reactivated = 0
 
         for code, name in seen.items():
             obj, was_created = FXCurrency.objects.get_or_create(
                 code=code,
-                defaults={"name": name[:150] if name else code},
+                defaults={
+                    "name": name[:150] if name else code,
+                    "is_active": True,
+                },
             )
 
             if was_created:
                 created += 1
-            elif not obj.name and name:
-                obj.name = name[:150]
-                obj.save(update_fields=["name"])
+                continue
+
+            changed_fields = []
+            next_name = name[:150] if name else code
+            if obj.name != next_name:
+                obj.name = next_name
+                changed_fields.append("name")
+            if not obj.is_active:
+                obj.is_active = True
+                changed_fields.append("is_active")
+                reactivated += 1
+
+            if changed_fields:
+                obj.save(update_fields=changed_fields + ["updated_at"])
                 updated += 1
+
+        deactivated = 0
+        if deactivate_missing and seen:
+            deactivated = FXCurrency.objects.exclude(code__in=seen.keys()).filter(
+                is_active=True
+            ).update(is_active=False)
 
         return {
             "created": created,
             "updated": updated,
+            "reactivated": reactivated,
+            "deactivated": deactivated,
             "total": len(seen),
         }

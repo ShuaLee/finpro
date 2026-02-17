@@ -11,7 +11,6 @@ class ProfileAdmin(admin.ModelAdmin):
         "currency",
         "country",
         "plan",
-        "account_type",
         "onboarding_status",
         "created_at",
     )
@@ -19,7 +18,6 @@ class ProfileAdmin(admin.ModelAdmin):
         "currency",
         "country",
         "plan",
-        "account_type",
         "onboarding_status",
     )
     search_fields = ("user__email", "full_name")

@@ -5,8 +5,11 @@ from fx.models.fx import FXCurrency, FXRate
 
 @admin.register(FXCurrency)
 class FXCurrencyAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "created_at")
+    list_display = ("code", "name", "is_active", "created_at", "updated_at")
+    list_filter = ("is_active",)
     search_fields = ("code", "name")
+    ordering = ("code",)
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(FXRate)
@@ -18,8 +21,8 @@ class FXRateAdmin(admin.ModelAdmin):
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "region", "updated_at")
-    list_filter = ("region",)
+    list_display = ("code", "name", "region", "is_active", "updated_at")
+    list_filter = ("region", "is_active")
     search_fields = ("code", "name")
     ordering = ("code",)
     readonly_fields = ("created_at", "updated_at")

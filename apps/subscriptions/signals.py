@@ -5,12 +5,12 @@ subscriptions.signals
 Defines signal handlers for the Subscriptions app.
 
 Responsibilities:
-- Create default subscription plans and account types after migrations are applied.
+- Create default subscription plans after migrations are applied.
 - Ensure database initialization logic runs safely and only after schema setup.
 
 Why:
 - Avoids performing database operations in AppConfig.ready() (which runs too early).
-- Guarantees required defaults (e.g., Free plan, Premium plan, account types) exist for proper app functionality.
+- Guarantees required default plans exist for proper app functionality.
 
 Implementation Details:
 - Connected via Django's `post_migrate` signal in `apps.py`.
@@ -23,10 +23,10 @@ Usage:
 
 from django.db import transaction
 
-from subscriptions.models import AccountType, Plan
+from subscriptions.models import Plan
 
 
-def create_default_plans_and_account_types(sender, **kwargs):
+def create_default_plans(sender, **kwargs):
     plans = [
         {
             "slug": "free",
@@ -107,22 +107,6 @@ def create_default_plans_and_account_types(sender, **kwargs):
             "is_public": True,
         },
     ]
-    account_types = [
-        {
-            "slug": "individual",
-            "name": "Individual Investor",
-            "description": "For personal investment tracking.",
-        },
-        {
-            "slug": "wealth_manager",
-            "name": "Wealth Manager",
-            "description": "For managing investments on behalf of clients.",
-        },
-    ]
-
     with transaction.atomic():
         for data in plans:
             Plan.objects.update_or_create(slug=data["slug"], defaults=data)
-
-        for data in account_types:
-            AccountType.objects.update_or_create(slug=data["slug"], defaults=data)

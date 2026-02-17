@@ -19,7 +19,10 @@ def resolve_fx_currency(code: str | None) -> FXCurrency | None:
     if not code:
         return None
 
-    return FXCurrency.objects.filter(code=code.upper().strip()).first()
+    return FXCurrency.objects.filter(
+        code=code.upper().strip(),
+        is_active=True,
+    ).first()
 
 
 def validate_fx_currency(code: str) -> FXCurrency:
@@ -53,7 +56,10 @@ def resolve_country(code: str | None) -> Country | None:
     if not code:
         return None
 
-    return Country.objects.filter(code=code.upper().strip()).first()
+    return Country.objects.filter(
+        code=code.upper().strip(),
+        is_active=True,
+    ).first()
 
 
 def validate_country(code: str) -> Country:

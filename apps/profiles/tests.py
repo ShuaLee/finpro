@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 from fx.models.country import Country
 from fx.models.fx import FXCurrency
 from profiles.services.bootstrap_service import ProfileBootstrapService
-from subscriptions.models import AccountType, Plan
+from subscriptions.models import Plan
 from users.models import User
 
 
@@ -28,14 +28,6 @@ class ProfileAPITests(APITestCase):
                 "is_active": True,
             },
         )
-        AccountType.objects.get_or_create(
-            slug="individual",
-            defaults={
-                "name": "Individual Investor",
-                "description": "Default account type",
-            },
-        )
-
         self.user = User.objects.create_user(
             email="profileuser@example.com",
             password="StrongPass123!",

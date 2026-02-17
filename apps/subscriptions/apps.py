@@ -16,6 +16,6 @@ class SubscriptionsConfig(AppConfig):
     name = 'subscriptions'
 
     def ready(self):
-        from .signals import create_default_plans_and_account_types
+        from .signals import create_default_plans
         post_migrate.connect(
-            create_default_plans_and_account_types, sender=self)
+            create_default_plans, sender=self)

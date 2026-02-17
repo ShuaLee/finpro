@@ -27,7 +27,13 @@ class UserManager(BaseUserManager):
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
 
-        return self.create_user(email=email, password=password, **extra_fields)
+        user = self.create_user(email=email, password=password, **extra_fields)
+
+        # Ensure superusers created via `createsuperuser` get full foundations.
+        from profiles.services.bootstrap_service import ProfileBootstrapService
+
+        ProfileBootstrapService.bootstrap(user=user)
+        return user
     
 
 class User(AbstractBaseUser, PermissionsMixin):

@@ -58,10 +58,10 @@ class CompleteOnboardingView(APIView):
             profile.full_name = data["full_name"]
 
         if "country" in data:
-            profile.country = Country.objects.get(code=data["country"])
+            profile.country = Country.objects.get(code=data["country"], is_active=True)
 
         if "currency" in data:
-            profile.currency = FXCurrency.objects.get(code=data["currency"])
+            profile.currency = FXCurrency.objects.get(code=data["currency"], is_active=True)
 
         profile.onboarding_status = profile.OnboardingStatus.COMPLETED
         profile.onboarding_step = 100

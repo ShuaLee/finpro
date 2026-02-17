@@ -23,6 +23,7 @@ class Country(models.Model):
         blank=True,
         help_text="Optional region grouping (e.g., Europe, APAC).",
     )
+    is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

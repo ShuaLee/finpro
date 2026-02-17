@@ -5,7 +5,7 @@ from users.models import User
 
 
 class Command(BaseCommand):
-    help = "Backfill missing profile/subscription/main portfolio for all users."
+    help = "Backfill missing profile/subscription/personal portfolio for all users."
 
     def handle(self, *args, **options):
         total = 0
@@ -18,4 +18,3 @@ class Command(BaseCommand):
                 f"Backfill complete. Processed {total} user(s).",
             )
         )
-

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from subscriptions.models import AccountType, Plan, Subscription
+from subscriptions.models import Plan, Subscription
 from subscriptions.services import SubscriptionService
 
 
@@ -10,15 +10,6 @@ class PlanAdmin(admin.ModelAdmin):
     search_fields = ["name", "slug", "tier"]
     readonly_fields = ["slug"]
     ordering = ["price_per_month"]
-
-
-@admin.register(AccountType)
-class AccountTypeAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug"]
-    search_fields = ["name", "slug"]
-    readonly_fields = ["slug"]
-    ordering = ["name"]
-
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
