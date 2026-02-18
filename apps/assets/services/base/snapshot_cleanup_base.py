@@ -1,32 +1,27 @@
-from django.db import transaction
+import logging
+
+from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
+from django.db import transaction
 
 from assets.models.core import Asset
 from assets.models.custom.custom_asset import CustomAsset
-from accounts.models import Holding
-from schemas.services.orchestration import SchemaOrchestrationService
+
+logger = logging.getLogger(__name__)
 
 
 class SnapshotCleanupBaseService:
     """
-    Base service for cleaning up stale market assets.
+    Base service for cleaning stale market assets.
 
-    Rules:
-    - If an asset has NO holdings → delete Asset
-    - If an asset HAS holdings → convert to CustomAsset
-      - One CustomAsset PER profile
-      - Re-point holdings
-      - Remove market extension
+    If accounts/schemas apps are disabled, cleanup becomes a safe no-op.
     """
 
-    extension_model = None        # e.g. EquityAsset
-    snapshot_model = None         # e.g. EquitySnapshotID
-    name_attr = None              # e.g. "ticker"
-    currency_attr = None          # e.g. "currency"
+    extension_model = None
+    snapshot_model = None
+    name_attr = None
+    currency_attr = None
 
-    # --------------------------------------------------
-    # Entry
-    # --------------------------------------------------
     @classmethod
     @transaction.atomic
     def run(cls):
@@ -36,72 +31,72 @@ class SnapshotCleanupBaseService:
         if not snapshot:
             return
 
+        holding_model = cls._get_holding_model()
+        if holding_model is None:
+            logger.warning(
+                "%s skipped: accounts app unavailable; cannot evaluate holdings.",
+                cls.__name__,
+            )
+            return
+
         stale_extensions = (
-            cls.extension_model.objects
-            .exclude(snapshot_id=snapshot.current_snapshot)
+            cls.extension_model.objects.exclude(snapshot_id=snapshot.current_snapshot)
             .select_related("asset")
-            .order_by("pk")  # deterministic + safer
+            .order_by("pk")
         )
 
         for extension in stale_extensions:
-            cls._handle_stale_extension(extension)
+            cls._handle_stale_extension(extension, holding_model)
 
-    # --------------------------------------------------
-    # Validation
-    # --------------------------------------------------
     @classmethod
     def _validate_configuration(cls):
         missing = [
-            name for name in (
-                "extension_model",
-                "snapshot_model",
-                "name_attr",
-                "currency_attr",
-            )
+            name
+            for name in ("extension_model", "snapshot_model", "name_attr", "currency_attr")
             if getattr(cls, name) is None
         ]
-
         if missing:
             raise ImproperlyConfigured(
                 f"{cls.__name__} missing configuration: {', '.join(missing)}"
             )
 
-    # --------------------------------------------------
-    # Core logic
-    # --------------------------------------------------
-    @classmethod
-    def _handle_stale_extension(cls, extension):
-        asset = extension.asset
+    @staticmethod
+    def _get_holding_model():
+        try:
+            return apps.get_model("accounts", "Holding")
+        except (LookupError, ValueError):
+            return None
 
-        holdings = (
-            Holding.objects
-            .select_for_update()
-            .filter(asset=asset)
-        )
+    @staticmethod
+    def _notify_holdings_changed(holdings_qs):
+        try:
+            from schemas.services.orchestration import SchemaOrchestrationService
+        except Exception:
+            return
+        SchemaOrchestrationService.holdings_changed(holdings_qs)
+
+    @classmethod
+    def _handle_stale_extension(cls, extension, holding_model):
+        asset = extension.asset
+        holdings = holding_model.objects.select_for_update().filter(asset=asset)
 
         if not holdings.exists():
-            # Truly unused → safe delete
             extension.delete()
             asset.delete()
             return
 
-        # Holdings exist → MUST convert
-        cls._convert_asset_per_profile(extension)
-
-        # Remove market extension
+        cls._convert_asset_per_profile(extension, holding_model)
         extension.delete()
 
-        # If no holdings remain on original asset → delete it
-        if not Holding.objects.filter(asset=asset).exists():
+        if not holding_model.objects.filter(asset=asset).exists():
             asset.delete()
 
     @classmethod
-    def _convert_asset_per_profile(cls, extension):
+    def _convert_asset_per_profile(cls, extension, holding_model):
         asset = extension.asset
 
         profile_ids = (
-            Holding.objects
-            .select_for_update()
+            holding_model.objects.select_for_update()
             .filter(asset=asset)
             .values_list("account__portfolio__profile_id", flat=True)
             .distinct()
@@ -111,44 +106,31 @@ class SnapshotCleanupBaseService:
             cls._clone_asset_for_profile(
                 extension=extension,
                 profile_id=profile_id,
+                holding_model=holding_model,
             )
 
     @classmethod
-    def _clone_asset_for_profile(cls, *, extension, profile_id):
+    def _clone_asset_for_profile(cls, *, extension, profile_id, holding_model):
         asset = extension.asset
 
         name = getattr(extension, cls.name_attr, None)
         currency = getattr(extension, cls.currency_attr, None)
 
         if not name:
-            raise RuntimeError(
-                f"{cls.__name__}: Missing name for asset {asset.id}"
-            )
-
+            raise RuntimeError(f"{cls.__name__}: Missing name for asset {asset.id}")
         if not currency:
-            raise RuntimeError(
-                f"{cls.__name__}: Missing currency for asset {asset.id}"
-            )
+            raise RuntimeError(f"{cls.__name__}: Missing currency for asset {asset.id}")
 
-        # Reuse existing MARKET custom asset if present
         custom_asset = (
-            CustomAsset.objects
-            .select_related("asset")
-            .filter(
-                owner_id=profile_id,
-                name=name,
-                reason=CustomAsset.Reason.MARKET,
-            )
+            CustomAsset.objects.select_related("asset")
+            .filter(owner_id=profile_id, name=name, reason=CustomAsset.Reason.MARKET)
             .first()
         )
 
         if custom_asset:
             new_asset = custom_asset.asset
         else:
-            new_asset = Asset.objects.create(
-                asset_type=asset.asset_type
-            )
-
+            new_asset = Asset.objects.create(asset_type=asset.asset_type)
             CustomAsset.objects.create(
                 asset=new_asset,
                 owner_id=profile_id,
@@ -158,17 +140,15 @@ class SnapshotCleanupBaseService:
                 requires_review=True,
             )
 
-        # Re-point holdings
-        Holding.objects.filter(
+        holding_model.objects.filter(
             asset=asset,
             account__portfolio__profile_id=profile_id,
         ).update(asset=new_asset)
 
-        # Trigger SCV refresh AFTER migration
-        migrated_holdings = Holding.objects.filter(
+        migrated_holdings = holding_model.objects.filter(
             asset=new_asset,
             account__portfolio__profile_id=profile_id,
         ).select_related("account")
 
         if migrated_holdings.exists():
-            SchemaOrchestrationService.holdings_changed(migrated_holdings)
+            cls._notify_holdings_changed(migrated_holdings)

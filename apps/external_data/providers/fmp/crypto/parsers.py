@@ -76,10 +76,3 @@ def parse_crypto_list_row(raw: dict) -> dict:
         "total_supply": _dec(raw.get("totalSupply")),
     }
 
-
-def parse_crypto_quote_short(raw: dict) -> dict:
-    return {
-        "price": _dec(raw.get("price")),
-        "change": _dec(raw.get("change")),
-        "volume": _dec(raw.get("volume")),
-    }

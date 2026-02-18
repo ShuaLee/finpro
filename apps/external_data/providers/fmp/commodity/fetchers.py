@@ -1,29 +1,25 @@
-from external_data.exceptions import ExternalDataEmptyResult
-from external_data.providers.fmp.constants import (
-    FMP_BASE_URL,
-    FMP_API_KEY,
-    COMMODITIES_LIST,
-    COMMODITIES_QUOTE_SHORT
-)
-from external_data.shared.http import get_json
+from external_data.exceptions import ExternalDataEmptyResult, ExternalDataInvalidResponse
+from external_data.providers.fmp.constants import COMMODITIES_LIST, COMMODITIES_QUOTE_SHORT
+from external_data.providers.fmp.request import fmp_get_json
 
 
 def fetch_commodity_list() -> list[dict]:
-    """
-    Fetch the full commodity universe from FMP.
-    """
-    url = f"{FMP_BASE_URL}{COMMODITIES_LIST}?apikey={FMP_API_KEY}"
-    return get_json(url) or []
+    data = fmp_get_json(COMMODITIES_LIST)
+    if not isinstance(data, list):
+        raise ExternalDataInvalidResponse("Invalid commodity list response.")
+    return data
 
 
 def fetch_commodity_quote_short(symbol: str) -> dict:
-    """
-    Fetch a fast quote for a single commodity.
-    """
-    url = f"{FMP_BASE_URL}{COMMODITIES_QUOTE_SHORT}?symbol={symbol}&apikey={FMP_API_KEY}"
-    data = get_json(url)
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        raise ExternalDataInvalidResponse("Symbol is required for commodity quote.")
 
-    if not data:
-        raise ExternalDataEmptyResult(f"No commodity quote for {symbol}")
+    data = fmp_get_json(COMMODITIES_QUOTE_SHORT, symbol=symbol)
+    if not isinstance(data, list) or not data:
+        raise ExternalDataEmptyResult(f"No commodity quote for {symbol}.")
 
-    return data[0]
+    row = data[0]
+    if not isinstance(row, dict):
+        raise ExternalDataInvalidResponse(f"Malformed commodity quote payload for {symbol}.")
+    return row

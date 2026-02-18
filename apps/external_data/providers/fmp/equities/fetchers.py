@@ -1,123 +1,69 @@
-from external_data.exceptions import (
-    ExternalDataEmptyResult,
-)
+from external_data.exceptions import ExternalDataEmptyResult, ExternalDataInvalidResponse
 from external_data.providers.fmp.constants import (
-    FMP_BASE_URL,
-    FMP_API_KEY,
+    ACTIVELY_TRADING_LIST,
+    DIVIDENDS,
     PROFILE,
     QUOTE_SHORT,
-    SEARCH_ISIN,
-    SEARCH_CUSIP,
-    SEARCH_CIK,
-    DIVIDENDS,
-    STOCK_LIST,
-    ACTIVELY_TRADING_LIST,
 )
-from external_data.shared.http import get_json
-from external_data.shared.normalize import normalize_fmp_data
 from external_data.providers.fmp.equities.parsers import (
     EQUITY_PROFILE_MAP,
-    parse_identifiers,
-    parse_equity_quote,
     parse_dividend_event,
+    parse_equity_quote,
+    parse_identifiers,
 )
+from external_data.providers.fmp.request import fmp_get_json
+from external_data.shared.normalize import normalize_fmp_data
 
-
-# --------------------------------------------------
-# Profile / identity
-# --------------------------------------------------
 
 def fetch_equity_profile(symbol: str) -> dict:
-    url = f"{FMP_BASE_URL}{PROFILE}?symbol={symbol}&apikey={FMP_API_KEY}"
-    data = get_json(url)
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        raise ExternalDataInvalidResponse("Symbol is required for equity profile.")
 
-    if not data:
-        raise ExternalDataEmptyResult(f"No profile for symbol {symbol}")
+    data = fmp_get_json(PROFILE, symbol=symbol)
+
+    if not isinstance(data, list) or not data:
+        raise ExternalDataEmptyResult(f"No profile for symbol {symbol}.")
 
     row = data[0]
+    if not isinstance(row, dict):
+        raise ExternalDataInvalidResponse(f"Malformed profile payload for {symbol}.")
 
     return {
         "profile": normalize_fmp_data(row, EQUITY_PROFILE_MAP),
         "identifiers": parse_identifiers(row),
     }
 
-# --------------------------------------------------
-# Identifiers
-# --------------------------------------------------
-
-
-def fetch_equity_by_isin(isin: str) -> dict:
-    url = f"{FMP_BASE_URL}{SEARCH_ISIN}?isin={isin}&apikey={FMP_API_KEY}"
-    data = get_json(url)
-
-    if not data:
-        raise ExternalDataEmptyResult(f"No equity found for ISIN {isin}")
-
-    row = data[0]
-
-    return {
-        "symbol": row.get("symbol"),
-        "identifiers": parse_identifiers(row),
-    }
-
-
-def fetch_equity_by_cusip(cusip: str) -> dict:
-    url = f"{FMP_BASE_URL}{SEARCH_CUSIP}?cusip={cusip}&apikey={FMP_API_KEY}"
-    data = get_json(url)
-
-    if not data:
-        raise ExternalDataEmptyResult(f"No equity found for CUSIP {cusip}")
-
-    row = data[0]
-
-    return {
-        "symbol": row.get("symbol"),
-        "identifiers": parse_identifiers(row),
-    }
-
-
-def fetch_equity_by_cik(cik: str) -> dict:
-    url = f"{FMP_BASE_URL}{SEARCH_CIK}?cik={cik}&apikey={FMP_API_KEY}"
-    data = get_json(url)
-
-    if not data:
-        raise ExternalDataEmptyResult(f"No equity found for CIK {cik}")
-
-    row = data[0]
-
-    return {
-        "symbol": row.get("symbol"),
-        "identifiers": parse_identifiers(row),
-    }
-
-# --------------------------------------------------
-# Quotes
-# --------------------------------------------------
-
 
 def fetch_equity_quote_short(symbol: str) -> dict:
-    url = f"{FMP_BASE_URL}{QUOTE_SHORT}?symbol={symbol}&apikey={FMP_API_KEY}"
-    data = get_json(url)
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        raise ExternalDataInvalidResponse("Symbol is required for equity quote.")
 
-    if not data:
-        raise ExternalDataEmptyResult(f"No quote for symbol {symbol}")
+    data = fmp_get_json(QUOTE_SHORT, symbol=symbol)
+    if not isinstance(data, list) or not data:
+        raise ExternalDataEmptyResult(f"No quote for symbol {symbol}.")
 
-    return parse_equity_quote(data[0])
+    row = data[0]
+    if not isinstance(row, dict):
+        raise ExternalDataInvalidResponse(f"Malformed quote payload for {symbol}.")
 
-# --------------------------------------------------
-# Dividends
-# --------------------------------------------------
+    return parse_equity_quote(row)
 
 
 def fetch_equity_dividends(symbol: str) -> list[dict]:
-    url = f"{FMP_BASE_URL}{DIVIDENDS}?symbol={symbol}&apikey={FMP_API_KEY}"
-    data = get_json(url)
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        raise ExternalDataInvalidResponse("Symbol is required for equity dividends.")
 
+    data = fmp_get_json(DIVIDENDS, symbol=symbol)
     if not isinstance(data, list):
         return []
 
-    events = []
+    events: list[dict] = []
     for row in data:
+        if not isinstance(row, dict):
+            continue
         parsed = parse_dividend_event(row)
         if parsed:
             events.append(parsed)
@@ -125,16 +71,15 @@ def fetch_equity_dividends(symbol: str) -> list[dict]:
     return events
 
 
-# --------------------------------------------------
-# Universes
-# --------------------------------------------------
-
-def fetch_equity_list() -> list[dict]:
-    url = f"{FMP_BASE_URL}{STOCK_LIST}?apikey={FMP_API_KEY}"
-    return get_json(url)
-
-
 def fetch_actively_trading_equity_symbols() -> set[str]:
-    url = f"{FMP_BASE_URL}{ACTIVELY_TRADING_LIST}?apikey={FMP_API_KEY}"
-    data = get_json(url)
-    return {row["symbol"].upper() for row in data if "symbol" in row}
+    data = fmp_get_json(ACTIVELY_TRADING_LIST)
+    if not isinstance(data, list):
+        raise ExternalDataInvalidResponse("Malformed actively trading list payload.")
+
+    symbols = {
+        (row.get("symbol") or "").upper().strip()
+        for row in data
+        if isinstance(row, dict)
+    }
+    symbols.discard("")
+    return symbols

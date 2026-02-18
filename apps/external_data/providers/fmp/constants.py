@@ -1,111 +1,35 @@
 from django.conf import settings
 
 
-# --------------------------------------------------
-# Provider identity
-# --------------------------------------------------
-
 PROVIDER_NAME = "FMP"
-
-
-# --------------------------------------------------
-# Base configuration
-# --------------------------------------------------
-
 FMP_BASE_URL = "https://financialmodelingprep.com/stable"
-
 FMP_API_KEY = settings.FMP_API_KEY
 
+# Transport defaults
+FMP_TIMEOUT_SECONDS = getattr(settings, "EXTERNAL_DATA_TIMEOUT_SECONDS", 10)
+FMP_MAX_RETRIES = getattr(settings, "EXTERNAL_DATA_MAX_RETRIES", 2)
+FMP_RETRY_BACKOFF_SECONDS = getattr(settings, "EXTERNAL_DATA_RETRY_BACKOFF_SECONDS", 0.5)
 
-# --------------------------------------------------
-# Common query parameters
-# --------------------------------------------------
-
-DEFAULT_LIMIT = 1000
-DEFAULT_PAGE = 0
-
-
-# ==================================================
-# Identity & Identifier Resolution
-# ==================================================
-
-SEARCH_CIK = "/search-cik"
-SEARCH_CUSIP = "/search-cusip"
-SEARCH_ISIN = "/search-isin"
-
-PROFILE = "/profile"
-PROFILE_BY_CIK = "/profile-cik"
-
-
-# ==================================================
-# Symbol Discovery & Resolution
-# ==================================================
-
-SEARCH_SYMBOL = "/search-symbol"
-SEARCH_NAME = "/search-name"
-SYMBOL_CHANGES = "/symbol-change"
-EXCHANGE_VARIANTS = "/search-exchange-variants"
-
-
-# ==================================================
-# Equity Quotes
-# ==================================================
-
-QUOTE = "/quote"
+# Shared quote endpoint
 QUOTE_SHORT = "/quote-short"
 
-BATCH_QUOTE = "/batch-quote"
-BATCH_QUOTE_SHORT = "/batch-quote-short"
-
-
-# ==================================================
-# Dividends & Corporate Actions
-# ==================================================
-
+# Equities
+PROFILE = "/profile"
 DIVIDENDS = "/dividends"
-HISTORICAL_DIVIDENDS = "/historical-dividends"
-
-
-# ==================================================
-# Universes / Listings
-# ==================================================
-
-STOCK_LIST = "/stock-list"
-FINANCIAL_STATEMENT_SYMBOL_LIST = "/financial-statement-symbol-list"
 ACTIVELY_TRADING_LIST = "/actively-trading-list"
-DELISTED_COMPANIES = "/delisted-companies"
-
-
-# ==================================================
-# Reference Metadata
-# ==================================================
-
 AVAILABLE_EXCHANGES = "/available-exchanges"
 AVAILABLE_SECTORS = "/available-sectors"
 AVAILABLE_INDUSTRIES = "/available-industries"
-AVAILABLE_COUNTRIES = "/available-countries"
 
-
-# ==================================================
-# Forex
-# ==================================================
-
+# FX
 FOREX_LIST = "/forex-list"
 FOREX_BATCH_QUOTES = "/batch-forex-quotes"
+AVAILABLE_COUNTRIES = "/available-countries"
 
-
-# ==================================================
-# Cryptocurrencies
-# ==================================================
-
+# Crypto
 CRYPTO_LIST = "/cryptocurrency-list"
 CRYPTO_BATCH_QUOTES = "/batch-crypto-quotes"
 
-
-# ==================================================
 # Commodities
-# ==================================================
-
 COMMODITIES_LIST = "/commodities-list"
-COMMODITIES_BATCH_QUOTES = "/batch-commodity-quotes"
 COMMODITIES_QUOTE_SHORT = "/quote-short"

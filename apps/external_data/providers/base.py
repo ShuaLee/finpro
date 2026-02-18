@@ -135,3 +135,53 @@ class ExternalDataProvider(ABC):
         - delay (optional)
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def get_available_countries(self) -> list[str]:
+        """
+        Return ISO-3166 alpha-2 country codes supported by the provider.
+        """
+        raise NotImplementedError
+
+    # --------------------------------------------------
+    # Crypto
+    # --------------------------------------------------
+
+    @abstractmethod
+    def get_cryptocurrencies(self) -> list[dict]:
+        """
+        Return available crypto instruments for discovery/seeding.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_crypto_quote(self, pair_symbol: str) -> dict:
+        """
+        Return a quote payload for a single crypto pair.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_crypto_quotes_bulk(self) -> list[dict]:
+        """
+        Return bulk crypto quotes where supported.
+        """
+        raise NotImplementedError
+
+    # --------------------------------------------------
+    # Commodities
+    # --------------------------------------------------
+
+    @abstractmethod
+    def get_commodities(self) -> list[dict]:
+        """
+        Return available commodity instruments for discovery/seeding.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_commodity_quote(self, symbol: str) -> QuoteSnapshot:
+        """
+        Return a quote for a single commodity symbol.
+        """
+        raise NotImplementedError

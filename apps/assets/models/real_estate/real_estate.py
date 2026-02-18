@@ -1,10 +1,10 @@
-from django.db import models, transaction
 from django.core.exceptions import ValidationError
+from django.db import models, transaction
 
 from assets.models.core import Asset, AssetType
 from assets.models.real_estate.real_estate_type import RealEstateType
-from fx.models.fx import FXCurrency
 from fx.models.country import Country
+from fx.models.fx import FXCurrency
 from profiles.models import Profile
 
 
@@ -48,28 +48,21 @@ class RealEstateAsset(models.Model):
 
     notes = models.TextField(blank=True)
 
-    # -------------------------------------------------
-    # Lifecycle
-    # -------------------------------------------------
     def save(self, *args, **kwargs):
         if not self.asset_id:
             with transaction.atomic():
                 asset_type = AssetType.objects.get(slug="real_estate")
                 asset = Asset.objects.create(asset_type=asset_type)
                 self.asset = asset
-
         super().save(*args, **kwargs)
 
-    # -------------------------------------------------
-    # Validation
-    # -------------------------------------------------
     def clean(self):
-        # asset may not exist yet during admin add
-        if self.asset_id:
-            if self.asset.asset_type.slug != "real_estate":
-                raise ValidationError(
-                    "RealEstateAsset may only attach to real_estate assets."
-                )
+        super().clean()
+
+        if self.asset_id and self.asset.asset_type.slug != "real_estate":
+            raise ValidationError(
+                "RealEstateAsset may only attach to real_estate assets."
+            )
 
         if self.property_type.created_by and self.property_type.created_by != self.owner:
             raise ValidationError(
@@ -77,4 +70,4 @@ class RealEstateAsset(models.Model):
             )
 
     def __str__(self):
-        return f"{self.property_type} – {self.city or '—'}"
+        return f"{self.property_type} - {self.city or '-'}"

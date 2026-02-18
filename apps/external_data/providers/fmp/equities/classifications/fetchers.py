@@ -1,77 +1,39 @@
-from external_data.shared.http import get_json
-from external_data.exceptions import ExternalDataEmptyResult
-
+from external_data.exceptions import ExternalDataInvalidResponse
 from external_data.providers.fmp.constants import (
-    FMP_BASE_URL,
-    FMP_API_KEY,
-    AVAILABLE_SECTORS,
-    AVAILABLE_INDUSTRIES,
     AVAILABLE_EXCHANGES,
+    AVAILABLE_INDUSTRIES,
+    AVAILABLE_SECTORS,
 )
-
-from .parsers import (
-    parse_sector,
-    parse_industry,
+from external_data.providers.fmp.equities.classifications.parsers import (
     parse_exchange,
+    parse_industry,
+    parse_sector,
 )
+from external_data.providers.fmp.request import fmp_get_json
 
-
-# --------------------------------------------------
-# Sectors
-# --------------------------------------------------
 
 def fetch_available_sectors() -> list[str]:
-    url = f"{FMP_BASE_URL}{AVAILABLE_SECTORS}?apikey={FMP_API_KEY}"
-    data = get_json(url)
-
+    data = fmp_get_json(AVAILABLE_SECTORS)
     if not isinstance(data, list):
-        raise ExternalDataEmptyResult("Invalid available-sectors response")
+        raise ExternalDataInvalidResponse("Invalid available-sectors response.")
+    return [sector for row in data if (sector := parse_sector(row))]
 
-    return [
-        sector
-        for row in data
-        if (sector := parse_sector(row))
-    ]
-
-
-# --------------------------------------------------
-# Industries
-# --------------------------------------------------
 
 def fetch_available_industries() -> list[str]:
-    url = f"{FMP_BASE_URL}{AVAILABLE_INDUSTRIES}?apikey={FMP_API_KEY}"
-    data = get_json(url)
-
+    data = fmp_get_json(AVAILABLE_INDUSTRIES)
     if not isinstance(data, list):
-        raise ExternalDataEmptyResult("Invalid available-industries response")
+        raise ExternalDataInvalidResponse("Invalid available-industries response.")
+    return [industry for row in data if (industry := parse_industry(row))]
 
-    return [
-        industry
-        for row in data
-        if (industry := parse_industry(row))
-    ]
-
-
-# --------------------------------------------------
-# Exchanges
-# --------------------------------------------------
 
 def fetch_available_exchanges() -> list[dict]:
-    """
-    Fetch exchange metadata from FMP.
-
-    Normalization / DB mapping happens in the service or seeder layer.
-    """
-    url = f"{FMP_BASE_URL}{AVAILABLE_EXCHANGES}?apikey={FMP_API_KEY}"
-    data = get_json(url)
-
+    data = fmp_get_json(AVAILABLE_EXCHANGES)
     if not isinstance(data, list):
-        raise ExternalDataEmptyResult("Invalid available-exchanges response")
+        raise ExternalDataInvalidResponse("Invalid available-exchanges response.")
 
-    exchanges = []
+    exchanges: list[dict] = []
     for row in data:
         parsed = parse_exchange(row)
         if parsed:
             exchanges.append(parsed)
-
     return exchanges

@@ -50,15 +50,34 @@ class RealEstateType(models.Model):
 
     def clean(self):
         super().clean()
+        if self.name:
+            self.name = self.name.strip()
+        if not self.name:
+            raise ValidationError("Property type name is required.")
+
+        queryset = RealEstateType.objects.exclude(pk=self.pk)
 
         # Prevent user from duplicating a system-defined type
-        if self.created_by and RealEstateType.objects.filter(
-            name=self.name,
+        if self.created_by:
+            if queryset.filter(
+                name__iexact=self.name,
+                created_by__isnull=True,
+            ).exists():
+                raise ValidationError(
+                    f"'{self.name}' is a system-defined property type."
+                )
+            if queryset.filter(
+                name__iexact=self.name,
+                created_by=self.created_by,
+            ).exists():
+                raise ValidationError(
+                    "You already have a property type with this name."
+                )
+        elif queryset.filter(
+            name__iexact=self.name,
             created_by__isnull=True,
         ).exists():
-            raise ValidationError(
-                f"'{self.name}' is a system-defined property type."
-            )
+            raise ValidationError("System property type name must be unique.")
 
     @property
     def is_system(self) -> bool:

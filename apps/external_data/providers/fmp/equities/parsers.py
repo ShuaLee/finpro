@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 
@@ -12,18 +12,6 @@ def _dec(val):
     except (InvalidOperation, TypeError, ValueError):
         return None
 
-
-def _parse_date(val):
-    if not val:
-        return None
-    if hasattr(val, "year"):
-        return val
-    return datetime.strptime(val, "%Y-%m-%d").date()
-
-
-# --------------------------------------------------
-# Parsers
-# --------------------------------------------------
 
 def parse_identifiers(raw: dict) -> dict:
     return {

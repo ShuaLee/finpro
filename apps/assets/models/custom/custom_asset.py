@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from assets.models.core import Asset
+from assets.services import AssetPolicyService
 from fx.models.fx import FXCurrency
 from profiles.models import Profile
 
@@ -62,14 +63,23 @@ class CustomAsset(models.Model):
         super().clean()
 
         # Admin / service creates Asset later
-        if not self.asset_id:
+        if not self.asset_id or not self.owner_id:
             return
 
-        # Custom assets can only use system types or owner-defined types.
-        created_by_id = self.asset.asset_type.created_by_id
-        if created_by_id is not None and created_by_id != self.owner_id:
+        AssetPolicyService.assert_asset_type_usable_by_profile(
+            profile=self.owner,
+            asset_type=self.asset.asset_type,
+        )
+
+        # Avoid duplicate custom labels under same owner + asset type.
+        duplicate_exists = CustomAsset.objects.filter(
+            owner=self.owner,
+            asset__asset_type=self.asset.asset_type,
+            name__iexact=self.name,
+        ).exclude(pk=self.pk).exists()
+        if duplicate_exists:
             raise ValidationError(
-                "Custom assets cannot use another user's asset type."
+                "You already have a custom asset with this name for that asset type."
             )
 
     def __str__(self):

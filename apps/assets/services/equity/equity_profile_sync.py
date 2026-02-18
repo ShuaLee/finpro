@@ -4,7 +4,14 @@ from external_data.providers.fmp.client import FMP_PROVIDER
 from fx.models.fx import FXCurrency
 from fx.models.country import Country
 from assets.models.equity.exchange import Exchange
-from schemas.services.orchestration import SchemaOrchestrationService
+
+
+def _notify_asset_changed(asset):
+    try:
+        from schemas.services.orchestration import SchemaOrchestrationService
+    except Exception:
+        return
+    SchemaOrchestrationService.asset_changed(asset)
 
 
 class EquityProfileSyncService:
@@ -89,7 +96,7 @@ class EquityProfileSyncService:
         if updated_fields:
             equity.save(update_fields=updated_fields)
 
-            SchemaOrchestrationService.asset_changed(equity.asset)
+            _notify_asset_changed(equity.asset)
 
         return {
             "ticker": equity.ticker,

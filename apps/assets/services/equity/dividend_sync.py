@@ -7,7 +7,14 @@ from django.utils import timezone
 from assets.models.core import Asset
 from assets.models.equity import EquityDividendSnapshot
 from external_data.providers.fmp.client import FMP_PROVIDER
-from schemas.services.orchestration import SchemaOrchestrationService
+
+
+def _notify_asset_changed(asset):
+    try:
+        from schemas.services.orchestration import SchemaOrchestrationService
+    except Exception:
+        return
+    SchemaOrchestrationService.asset_changed(asset)
 
 
 # ============================================================
@@ -125,7 +132,7 @@ class EquityDividendSyncService:
                     "cadence_status": EquityDividendSnapshot.DividendCadenceStatus.NONE,
                 },
             )
-            SchemaOrchestrationService.asset_changed(equity.asset)
+            _notify_asset_changed(equity.asset)
 
             return
 
@@ -190,4 +197,4 @@ class EquityDividendSyncService:
             },
         )
 
-        SchemaOrchestrationService.asset_changed(equity.asset)
+        _notify_asset_changed(equity.asset)

@@ -2,8 +2,16 @@ from django.db import transaction
 
 from assets.models.core import AssetPrice
 from assets.models.commodity import CommodityAsset, CommoditySnapshotID
+from external_data.exceptions import ExternalDataError
 from external_data.providers.fmp.client import FMP_PROVIDER
-from schemas.services.orchestration import SchemaOrchestrationService
+
+
+def _notify_asset_changed(asset):
+    try:
+        from schemas.services.orchestration import SchemaOrchestrationService
+    except Exception:
+        return
+    SchemaOrchestrationService.asset_changed(asset)
 
 
 class CommodityPriceSyncService:
@@ -31,7 +39,7 @@ class CommodityPriceSyncService:
         for commodity in qs.select_related("asset"):
             try:
                 quote = FMP_PROVIDER.get_commodity_quote(commodity.symbol)
-            except Exception:
+            except ExternalDataError:
                 skipped += 1
                 continue
 
@@ -48,7 +56,7 @@ class CommodityPriceSyncService:
                 },
             )
 
-            SchemaOrchestrationService.asset_changed(commodity.asset)
+            _notify_asset_changed(commodity.asset)
 
             updated += 1
 

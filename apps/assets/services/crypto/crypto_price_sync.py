@@ -2,8 +2,16 @@ from django.db import transaction
 
 from assets.models.core import AssetPrice
 from assets.models.crypto import CryptoAsset, CryptoSnapshotID
+from external_data.exceptions import ExternalDataError
 from external_data.providers.fmp.client import FMP_PROVIDER
-from schemas.services.orchestration import SchemaOrchestrationService
+
+
+def _notify_asset_changed(asset):
+    try:
+        from schemas.services.orchestration import SchemaOrchestrationService
+    except Exception:
+        return
+    SchemaOrchestrationService.asset_changed(asset)
 
 
 class CryptoPriceSyncService:
@@ -31,7 +39,7 @@ class CryptoPriceSyncService:
         for crypto in qs.select_related("asset"):
             try:
                 quote = FMP_PROVIDER.get_crypto_quote(crypto.pair_symbol)
-            except Exception:
+            except ExternalDataError:
                 skipped += 1
                 continue
 
@@ -48,7 +56,7 @@ class CryptoPriceSyncService:
                 },
             )
 
-            SchemaOrchestrationService.asset_changed(crypto.asset)
+            _notify_asset_changed(crypto.asset)
 
             updated += 1
 

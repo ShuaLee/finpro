@@ -31,6 +31,12 @@ sys.path.insert(0, str(BASE_DIR / "apps"))
 SECRET_KEY = 'django-insecure-rwt2!_cv%dsrqt@qfa(crx%z%g85mzml7k58r5^0)y%qj3nd*4'
 
 FMP_API_KEY = os.getenv("FMP_API_KEY", "OUhgmsouzr7iyAeEf0ktRtn69OfjF7W4")
+EXTERNAL_DATA_TIMEOUT_SECONDS = int(
+    os.getenv("EXTERNAL_DATA_TIMEOUT_SECONDS", "10"))
+EXTERNAL_DATA_MAX_RETRIES = int(os.getenv("EXTERNAL_DATA_MAX_RETRIES", "2"))
+EXTERNAL_DATA_RETRY_BACKOFF_SECONDS = float(
+    os.getenv("EXTERNAL_DATA_RETRY_BACKOFF_SECONDS", "0.5")
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -59,13 +65,14 @@ INSTALLED_APPS = [
     # 'accounts',
     # 'analytics',
     # 'allocations',
-    # 'assets',
+    'assets',
     'core',
     'profiles',
     # 'formulas',
     'users',
     'subscriptions',
     'portfolios',
+    'external_data',
     # 'schemas',
     'fx',
 ]
@@ -257,5 +264,3 @@ CSRF_TRUSTED_ORIGINS = [
     "https://yourdomain.com",
 ]
 """
-
-

@@ -1,4 +1,3 @@
-
 class ExternalDataError(Exception):
     """
     Base exception for all external data-related failures.
@@ -69,5 +68,23 @@ class ExternalDataRateLimited(ExternalDataProviderUnavailable):
 
     Subclass of ProviderUnavailable because behavior is the same,
     but allows finer-grained logging and metrics.
+    """
+    pass
+
+
+class ExternalDataAccessDenied(ExternalDataError):
+    """
+    Raised when credentials are valid but endpoint access is forbidden.
+
+    Common causes:
+    - Plan does not include the endpoint
+    - Region/instrument coverage not included in current tier
+    """
+    pass
+
+
+class ExternalDataUnauthorized(ExternalDataError):
+    """
+    Raised when provider credentials are missing/invalid.
     """
     pass

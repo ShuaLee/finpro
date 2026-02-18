@@ -2,8 +2,16 @@ from django.db import transaction
 
 from assets.models.core import AssetPrice
 from assets.models.equity import EquityAsset, EquitySnapshotID
+from external_data.exceptions import ExternalDataError
 from external_data.providers.fmp.client import FMP_PROVIDER
-from schemas.services.orchestration import SchemaOrchestrationService
+
+
+def _notify_asset_changed(asset):
+    try:
+        from schemas.services.orchestration import SchemaOrchestrationService
+    except Exception:
+        return
+    SchemaOrchestrationService.asset_changed(asset)
 
 
 class EquityPriceSyncService:
@@ -25,7 +33,11 @@ class EquityPriceSyncService:
         skipped = 0
 
         for equity in qs.select_related("asset"):
-            quote = FMP_PROVIDER.get_equity_quote(equity.ticker)
+            try:
+                quote = FMP_PROVIDER.get_equity_quote(equity.ticker)
+            except ExternalDataError:
+                skipped += 1
+                continue
 
             if not quote or quote.price is None:
                 skipped += 1
@@ -39,7 +51,7 @@ class EquityPriceSyncService:
                 },
             )
 
-            SchemaOrchestrationService.asset_changed(equity.asset)
+            _notify_asset_changed(equity.asset)
 
             updated += 1
 
