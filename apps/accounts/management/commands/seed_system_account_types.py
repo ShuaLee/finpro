@@ -10,19 +10,25 @@ from fx.models.country import Country
 class Command(BaseCommand):
     help = "Seed system AccountTypes and ClassificationDefinitions"
 
+    @staticmethod
+    def _get_asset_type(*slugs):
+        found = AssetType.objects.filter(slug__in=slugs).first()
+        if not found:
+            raise AssetType.DoesNotExist(
+                f"AssetType not found for any of: {', '.join(slugs)}"
+            )
+        return found
+
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write("🌱 Seeding system AccountTypes...")
+        self.stdout.write("Seeding system AccountTypes...")
 
-        # -------------------------------------------------
-        # AssetType lookup (MATCHES EXISTING SYSTEM TYPES)
-        # -------------------------------------------------
         asset_types = {
-            "equity": AssetType.objects.get(slug="equity"),
-            "cryptocurrency": AssetType.objects.get(slug="cryptocurrency"),
-            "real_estate": AssetType.objects.get(slug="real-estate"),
-            "commodity": AssetType.objects.get(slug="commodity"),
-            "precious_metal": AssetType.objects.get(slug="precious-metal"),
+            "equity": self._get_asset_type("equity"),
+            "crypto": self._get_asset_type("crypto", "cryptocurrency"),
+            "real_estate": self._get_asset_type("real_estate", "real-estate"),
+            "commodity": self._get_asset_type("commodity"),
+            "precious_metal": self._get_asset_type("precious_metal", "precious-metal"),
         }
 
         account_types = [
@@ -34,7 +40,7 @@ class Command(BaseCommand):
             {
                 "name": "Cryptocurrency Wallet",
                 "slug": "crypto-wallet",
-                "asset_types": ["cryptocurrency"],
+                "asset_types": ["crypto"],
             },
             {
                 "name": "Real Estate",
@@ -57,18 +63,15 @@ class Command(BaseCommand):
                 },
             )
 
-            if created:
-                obj.allowed_asset_types.set(
-                    [asset_types[key] for key in data["asset_types"]]
-                )
-                self.stdout.write(f"  ✅ Created AccountType: {obj.name}")
-            else:
-                self.stdout.write(f"  ↪ Skipped (exists): {obj.name}")
+            desired_assets = [asset_types[key] for key in data["asset_types"]]
+            obj.allowed_asset_types.set(desired_assets)
 
-        # -------------------------------------------------
-        # Classification Definitions
-        # -------------------------------------------------
-        self.stdout.write("🌱 Seeding ClassificationDefinitions...")
+            if created:
+                self.stdout.write(f"  Created AccountType: {obj.name}")
+            else:
+                self.stdout.write(f"  Updated AccountType: {obj.name}")
+
+        self.stdout.write("Seeding ClassificationDefinitions...")
 
         canada = Country.objects.get(code="CA")
 
@@ -101,11 +104,12 @@ class Command(BaseCommand):
                 obj.countries.set(data["countries"])
 
             if created:
-                self.stdout.write(f"  ✅ Created Classification: {obj.name}")
+                self.stdout.write(f"  Created Classification: {obj.name}")
             else:
-                self.stdout.write(f"  ↪ Skipped (exists): {obj.name}")
+                self.stdout.write(f"  Exists Classification: {obj.name}")
 
         self.stdout.write(
             self.style.SUCCESS(
-                "✅ System AccountTypes and Classifications seeded")
+                "System AccountTypes and Classifications seeded"
+            )
         )

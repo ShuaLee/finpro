@@ -4,7 +4,6 @@ from django import forms
 
 from assets.models.custom.custom_asset import CustomAsset
 from assets.models.core import Asset, AssetType
-from users.models.profile import Profile
 
 
 # =====================================================

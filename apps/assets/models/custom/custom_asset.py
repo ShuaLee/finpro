@@ -3,7 +3,7 @@ from django.db import models
 
 from assets.models.core import Asset
 from fx.models.fx import FXCurrency
-from users.models import Profile
+from profiles.models import Profile
 
 
 class CustomAsset(models.Model):
@@ -65,10 +65,11 @@ class CustomAsset(models.Model):
         if not self.asset_id:
             return
 
-        # Ownership consistency (important)
-        if self.asset.owner_id and self.asset.owner_id != self.owner_id:
+        # Custom assets can only use system types or owner-defined types.
+        created_by_id = self.asset.asset_type.created_by_id
+        if created_by_id is not None and created_by_id != self.owner_id:
             raise ValidationError(
-                "Asset owner and CustomAsset owner must match."
+                "Custom assets cannot use another user's asset type."
             )
 
     def __str__(self):

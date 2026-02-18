@@ -5,7 +5,7 @@ from assets.models.core import Asset, AssetType
 from assets.models.real_estate.real_estate_type import RealEstateType
 from fx.models.fx import FXCurrency
 from fx.models.country import Country
-from users.models import Profile
+from profiles.models import Profile
 
 
 class RealEstateAsset(models.Model):

@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 
-from users.models.profile import Profile
+from profiles.models import Profile
 
 
 class RealEstateType(models.Model):

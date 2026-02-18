@@ -32,7 +32,15 @@ class Asset(models.Model):
 
     @property
     def extension(self):
-        return getattr(self, self.asset_type.slug, None)
+        slug = self.asset_type.slug
+        alias_map = {
+            # Backward compatibility for pre-stage-2 slugs
+            "cryptocurrency": "crypto",
+            "real-estate": "real_estate",
+            "precious-metal": "precious_metal",
+        }
+        related_name = alias_map.get(slug, slug.replace("-", "_"))
+        return getattr(self, related_name, None)
 
     @property
     def is_custom(self) -> bool:

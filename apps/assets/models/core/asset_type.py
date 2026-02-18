@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
-from users.models.profile import Profile
+from profiles.models import Profile
 
 
 class AssetType(models.Model):
@@ -32,7 +32,7 @@ class AssetType(models.Model):
                 fields=["created_by", "name"],
                 name="unique_asset_type_name_per_user",
             ),
-            # Same user cannot create suplicate slugs
+            # Same user cannot create duplicate slugs
             models.UniqueConstraint(
                 fields=["created_by", "slug"],
                 name="unique_asset_Type_slug_per_user",
@@ -45,7 +45,7 @@ class AssetType(models.Model):
     def clean(self):
         super().clean()
 
-        # Prevent user asset types from colldiing with system ones
+        # Prevent user asset types from colliding with system ones
         if self.created_by:
             if AssetType.objects.filter(
                 created_by__isnull=True,
@@ -65,8 +65,18 @@ class AssetType(models.Model):
                     )
 
     def save(self, *args, **kwargs):
-        # Auto-generate slug from name
-        if not self.slug or (
+        # System types use canonical code-safe slugs.
+        system_slug_overrides = {
+            "Equity": "equity",
+            "Cryptocurrency": "crypto",
+            "Commodity": "commodity",
+            "Precious Metal": "precious_metal",
+            "Real Estate": "real_estate",
+        }
+
+        if self.created_by is None and self.name in system_slug_overrides:
+            self.slug = system_slug_overrides[self.name]
+        elif not self.slug or (
             self.pk
             and self.created_by is not None
             and self.name != AssetType.objects.get(pk=self.pk).name

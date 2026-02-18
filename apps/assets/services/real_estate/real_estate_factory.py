@@ -4,7 +4,7 @@ from assets.models.real_estate import RealEstateAsset, RealEstateType
 from assets.services.base import BaseAssetFactory
 from fx.models.fx import FXCurrency
 from fx.models.country import Country
-from users.models.profile import Profile
+from profiles.models import Profile
 
 
 class RealEstateAssetFactory(BaseAssetFactory):
@@ -18,7 +18,6 @@ class RealEstateAssetFactory(BaseAssetFactory):
         owner: Profile,
         property_type: RealEstateType,
         country: Country,
-        estimated_value,
         currency: FXCurrency,
         city: str = "",
         address: str = "",
@@ -31,7 +30,6 @@ class RealEstateAssetFactory(BaseAssetFactory):
             owner=owner,
             property_type=property_type,
             country=country,
-            estimated_value=estimated_value,
             currency=currency,
             city=city,
             address=address,

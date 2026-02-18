@@ -41,7 +41,7 @@ class Command(BaseCommand):
 
 
     def _sync_precious_metals(self):
-        pm_asset_type = AssetType.objects.get(slug="precious-metal")
+        pm_asset_type = AssetType.objects.get(slug="precious_metal")
 
         snapshot = CommoditySnapshotID.objects.first()
         if not snapshot:
