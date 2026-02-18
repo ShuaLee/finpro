@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -64,3 +65,16 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.user.email
+
+    def clean(self):
+        super().clean()
+        if not self.pk:
+            return
+
+        original = Profile.objects.only("user_id").filter(pk=self.pk).first()
+        if original and original.user_id != self.user_id:
+            raise ValidationError("Profile owner cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

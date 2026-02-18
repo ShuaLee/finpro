@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.core.exceptions import ValidationError
 
 from accounts.models.holding import Holding
+from accounts.models.holding_snapshot import HoldingSnapshot
 
 
 def _notify_holding_changed(holding):
@@ -57,3 +58,19 @@ class HoldingAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         _notify_holding_changed(obj)
+
+
+@admin.register(HoldingSnapshot)
+class HoldingSnapshotAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "holding",
+        "as_of",
+        "quantity",
+        "price",
+        "value_profile_currency",
+        "source",
+    )
+    list_filter = ("source",)
+    search_fields = ("holding__account__name", "holding__asset__id")
+    ordering = ("-as_of", "-id")

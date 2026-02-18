@@ -10,5 +10,6 @@ urlpatterns = [
 
     # Plan metadata
     path("api/v1/subscriptions/", include("subscriptions.urls")),
+    path("api/v1/accounts/", include("accounts.urls")),
     path("api/v1/assets/", include("assets.urls")),
 ]

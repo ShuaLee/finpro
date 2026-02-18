@@ -6,6 +6,12 @@ from accounts.models.account_type import AccountType
 
 
 class Account(models.Model):
+    class PositionMode(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        SYNCED = "synced", "Synced"
+        LEDGER = "ledger", "Ledger"
+        HYBRID = "hybrid", "Hybrid"
+
     portfolio = models.ForeignKey(
         "portfolios.Portfolio",
         on_delete=models.CASCADE,
@@ -39,6 +45,16 @@ class Account(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     last_synced = models.DateTimeField(null=True, blank=True)
+    position_mode = models.CharField(
+        max_length=20,
+        choices=PositionMode.choices,
+        default=PositionMode.MANUAL,
+        help_text="How holdings are maintained for this account.",
+    )
+    allow_manual_overrides = models.BooleanField(
+        default=True,
+        help_text="Whether users can manually adjust holdings when account is synced.",
+    )
 
     class Meta:
         constraints = [
@@ -69,6 +85,11 @@ class Account(models.Model):
     # ---------- Validation ----------
     def clean(self):
         super().clean()
+
+        if self.pk:
+            original = Account.objects.only("portfolio_id").filter(pk=self.pk).first()
+            if original and original.portfolio_id != self.portfolio_id:
+                raise ValidationError("Account owner portfolio cannot be changed.")
 
         # Classification must match profile
         if self.classification and self.classification.profile != self.profile:

@@ -49,12 +49,13 @@ class RealEstateAsset(models.Model):
     notes = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        if not self.asset_id:
-            with transaction.atomic():
+        with transaction.atomic():
+            if not self.asset_id:
                 asset_type = AssetType.objects.get(slug="real_estate")
                 asset = Asset.objects.create(asset_type=asset_type)
                 self.asset = asset
-        super().save(*args, **kwargs)
+            self.full_clean()
+            super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -69,5 +70,18 @@ class RealEstateAsset(models.Model):
                 "You cannot use another user's custom property type."
             )
 
+        if self.pk:
+            original = RealEstateAsset.objects.only("asset_id", "owner_id").filter(pk=self.pk).first()
+            if original and original.asset_id != self.asset_id:
+                raise ValidationError("Real estate asset link cannot be changed.")
+            if original and original.owner_id != self.owner_id:
+                raise ValidationError("Real estate asset owner cannot be changed.")
+
     def __str__(self):
         return f"{self.property_type} - {self.city or '-'}"
+
+    def delete(self, *args, **kwargs):
+        asset = self.asset
+        with transaction.atomic():
+            super().delete(*args, **kwargs)
+            asset.delete()

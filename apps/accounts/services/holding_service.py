@@ -5,6 +5,7 @@ from accounts.models import Holding
 from assets.models.core import Asset
 from assets.models.custom.custom_asset import CustomAsset
 
+from .audit_service import AccountAuditService
 
 def _notify_holding_changed(holding):
     try:
@@ -27,6 +28,9 @@ class HoldingService:
         currency=None,
         average_purchase_price=None,
     ):
+        if account.position_mode == account.PositionMode.SYNCED and not account.allow_manual_overrides:
+            raise ValidationError("Manual holding changes are disabled for this synced account.")
+
         allowed_types = account.allowed_asset_types
 
         if not allowed_types.exists():
@@ -77,10 +81,19 @@ class HoldingService:
             average_purchase_price=average_purchase_price,
         )
         _notify_holding_changed(holding)
+        AccountAuditService.log(
+            account=account,
+            action="holding.created",
+            metadata={"holding_id": holding.id},
+        )
         return holding
 
     @staticmethod
     def update(*, holding, quantity=None, average_purchase_price=None):
+        account = holding.account
+        if account.position_mode == account.PositionMode.SYNCED and not account.allow_manual_overrides:
+            raise ValidationError("Manual holding changes are disabled for this synced account.")
+
         if quantity is not None:
             holding.quantity = quantity
         if average_purchase_price is not None:
@@ -88,4 +101,9 @@ class HoldingService:
 
         holding.save()
         _notify_holding_changed(holding)
+        AccountAuditService.log(
+            account=holding.account,
+            action="holding.updated",
+            metadata={"holding_id": holding.id},
+        )
         return holding

@@ -79,9 +79,26 @@ class RealEstateType(models.Model):
         ).exists():
             raise ValidationError("System property type name must be unique.")
 
+        if self.pk:
+            old = RealEstateType.objects.get(pk=self.pk)
+            if old.created_by is None:
+                if self.name != old.name:
+                    raise ValidationError("System property types cannot be renamed.")
+                if self.created_by_id is not None:
+                    raise ValidationError("System property types cannot be reassigned.")
+
     @property
     def is_system(self) -> bool:
         return self.created_by is None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.created_by is None:
+            raise ValidationError("System property types are immutable.")
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         return self.name

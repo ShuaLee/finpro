@@ -31,6 +31,11 @@ sys.path.insert(0, str(BASE_DIR / "apps"))
 SECRET_KEY = 'django-insecure-rwt2!_cv%dsrqt@qfa(crx%z%g85mzml7k58r5^0)y%qj3nd*4'
 
 FMP_API_KEY = os.getenv("FMP_API_KEY", "OUhgmsouzr7iyAeEf0ktRtn69OfjF7W4")
+PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")
+PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID", "")
+PLAID_SECRET = os.getenv("PLAID_SECRET", "")
+PLAID_WEBHOOK_SECRET = os.getenv("PLAID_WEBHOOK_SECRET", "")
+BROKERAGE_SECRET_KEY = os.getenv("BROKERAGE_SECRET_KEY", SECRET_KEY)
 EXTERNAL_DATA_TIMEOUT_SECONDS = int(
     os.getenv("EXTERNAL_DATA_TIMEOUT_SECONDS", "10"))
 EXTERNAL_DATA_MAX_RETRIES = int(os.getenv("EXTERNAL_DATA_MAX_RETRIES", "2"))

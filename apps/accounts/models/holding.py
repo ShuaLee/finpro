@@ -112,6 +112,16 @@ class Holding(models.Model):
                 f"cannot hold assets of type '{self.asset.asset_type.name}'."
             )
 
+        # -----------------------------
+        # Private asset ownership
+        # -----------------------------
+        extension = self.asset.extension
+        if extension is not None and hasattr(extension, "owner_id"):
+            if extension.owner_id != self.account.profile.id:
+                raise ValidationError(
+                    "You cannot attach another user's private asset to this holding."
+                )
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)

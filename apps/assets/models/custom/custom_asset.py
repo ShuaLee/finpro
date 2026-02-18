@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
 from assets.models.core import Asset
 from assets.services import AssetPolicyService
@@ -81,6 +81,23 @@ class CustomAsset(models.Model):
             raise ValidationError(
                 "You already have a custom asset with this name for that asset type."
             )
+
+        if self.pk:
+            original = CustomAsset.objects.only("asset_id", "owner_id").filter(pk=self.pk).first()
+            if original and original.asset_id != self.asset_id:
+                raise ValidationError("Custom asset link cannot be changed.")
+            if original and original.owner_id != self.owner_id:
+                raise ValidationError("Custom asset owner cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        asset = self.asset
+        with transaction.atomic():
+            super().delete(*args, **kwargs)
+            asset.delete()
 
     def __str__(self):
         return self.name

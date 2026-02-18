@@ -1,7 +1,61 @@
-# from django.urls import include, path
+from django.urls import path
 
-# urlpatterns = [
-#     path("stocks/", include("accounts.urls.stocks")),
-#     # Future: path("metals/", include("accounts.urls.metals")),
-#     # Future: path("crypto/", include("accounts.urls.crypto")),
-# ]
+from accounts.views import (
+    AccountDetailView,
+    AccountListCreateView,
+    AccountSnapshotView,
+    AccountsSidebarView,
+    AccountTypeListView,
+    BrokerageConnectionLinkSessionView,
+    BrokerageConnectionListCreateView,
+    BrokerageConnectionSyncTransactionsView,
+    BrokerageConnectionSyncPayloadView,
+    BrokerageConnectionSyncView,
+    CustomAccountTypeCreateView,
+    HoldingDetailView,
+    HoldingListCreateView,
+    ReconciliationIssueListView,
+    ReconciliationIssueDetailView,
+    ReconciliationRunView,
+    PlaidWebhookView,
+    JobListView,
+    JobDetailView,
+    TransactionDetailView,
+    TransactionListCreateView,
+)
+
+urlpatterns = [
+    path("account-types/", AccountTypeListView.as_view(), name="account-type-list"),
+    path("account-types/custom/", CustomAccountTypeCreateView.as_view(), name="account-type-custom-create"),
+    path("", AccountListCreateView.as_view(), name="account-list-create"),
+    path("<int:account_id>/", AccountDetailView.as_view(), name="account-detail"),
+    path("<int:account_id>/holdings/", HoldingListCreateView.as_view(), name="holding-list-create"),
+    path("<int:account_id>/transactions/", TransactionListCreateView.as_view(), name="transaction-list-create"),
+    path("<int:account_id>/snapshots/capture/", AccountSnapshotView.as_view(), name="account-snapshot-capture"),
+    path("<int:account_id>/reconciliation/issues/", ReconciliationIssueListView.as_view(), name="reconciliation-issue-list"),
+    path("reconciliation/issues/<int:issue_id>/", ReconciliationIssueDetailView.as_view(), name="reconciliation-issue-detail"),
+    path("holdings/<int:holding_id>/", HoldingDetailView.as_view(), name="holding-detail"),
+    path("transactions/<int:transaction_id>/", TransactionDetailView.as_view(), name="transaction-detail"),
+    path("sidebar/", AccountsSidebarView.as_view(), name="accounts-sidebar"),
+    path("connections/", BrokerageConnectionListCreateView.as_view(), name="brokerage-connection-list-create"),
+    path("jobs/", JobListView.as_view(), name="account-job-list"),
+    path("jobs/<int:job_id>/", JobDetailView.as_view(), name="account-job-detail"),
+    path("connections/link-session/", BrokerageConnectionLinkSessionView.as_view(), name="brokerage-connection-link-session"),
+    path("connections/<int:connection_id>/sync/", BrokerageConnectionSyncView.as_view(), name="brokerage-connection-sync"),
+    path(
+        "connections/<int:connection_id>/sync-transactions/",
+        BrokerageConnectionSyncTransactionsView.as_view(),
+        name="brokerage-connection-sync-transactions",
+    ),
+    path(
+        "connections/<int:connection_id>/reconcile/",
+        ReconciliationRunView.as_view(),
+        name="brokerage-connection-reconcile",
+    ),
+    path("connections/plaid/webhook/", PlaidWebhookView.as_view(), name="plaid-webhook"),
+    path(
+        "connections/<int:connection_id>/sync-payload/",
+        BrokerageConnectionSyncPayloadView.as_view(),
+        name="brokerage-connection-sync-payload",
+    ),
+]

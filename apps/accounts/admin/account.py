@@ -9,6 +9,12 @@ from accounts.models.account_classification import (
     ClassificationDefinition,
 )
 from accounts.models.account_type import AccountType
+from accounts.models.audit import AccountAuditEvent
+from accounts.models.brokerage import BrokerageConnection
+from accounts.models.reconciliation import ReconciliationIssue
+from accounts.models.secret import BrokerageSecret
+from accounts.models.transaction import AccountTransaction
+from accounts.models.job import AccountJob
 from accounts.services.account_deletion_service import AccountDeletionService
 from accounts.services.account_service import AccountService
 from fx.models.country import Country
@@ -145,6 +151,8 @@ class AccountAdmin(admin.ModelAdmin):
         "portfolio",
         "name",
         "account_type",
+        "position_mode",
+        "allow_manual_overrides",
         "classification",
         "created_at",
         "last_synced",
@@ -189,7 +197,15 @@ class AccountAdmin(admin.ModelAdmin):
 
             class Meta:
                 model = Account
-                fields = ("portfolio", "name", "account_type", "broker", "definition")
+                fields = (
+                    "portfolio",
+                    "name",
+                    "account_type",
+                    "broker",
+                    "position_mode",
+                    "allow_manual_overrides",
+                    "definition",
+                )
 
         kwargs["form"] = AccountForm
         return super().get_form(request, obj, **kwargs)
@@ -238,3 +254,84 @@ class AccountAdmin(admin.ModelAdmin):
             f"{count} account(s) deleted.",
             level=messages.SUCCESS,
         )
+
+
+@admin.register(BrokerageConnection)
+class BrokerageConnectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "account",
+        "source_type",
+        "provider",
+        "status",
+        "last_synced_at",
+        "updated_at",
+    )
+    list_filter = ("source_type", "provider", "status")
+    search_fields = ("account__name", "account__portfolio__profile__user__email", "external_account_id", "connection_label")
+    ordering = ("-updated_at",)
+    readonly_fields = ("access_token_ref", "last_synced_at", "last_error", "created_at", "updated_at")
+
+
+@admin.register(AccountTransaction)
+class AccountTransactionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "account",
+        "event_type",
+        "source",
+        "external_transaction_id",
+        "traded_at",
+        "created_at",
+    )
+    list_filter = ("event_type", "source")
+    search_fields = ("account__name", "external_transaction_id", "note")
+    ordering = ("-traded_at", "-id")
+
+
+@admin.register(ReconciliationIssue)
+class ReconciliationIssueAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "account",
+        "issue_code",
+        "severity",
+        "status",
+        "created_at",
+    )
+    list_filter = ("issue_code", "severity", "status")
+    search_fields = ("account__name", "message")
+    ordering = ("-created_at",)
+
+
+@admin.register(AccountAuditEvent)
+class AccountAuditEventAdmin(admin.ModelAdmin):
+    list_display = ("id", "account", "actor", "action", "created_at")
+    list_filter = ("action",)
+    search_fields = ("account__name", "action")
+    ordering = ("-created_at",)
+
+
+@admin.register(AccountJob)
+class AccountJobAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "account",
+        "connection",
+        "job_type",
+        "status",
+        "attempts",
+        "max_attempts",
+        "created_at",
+    )
+    list_filter = ("job_type", "status")
+    search_fields = ("account__name", "idempotency_key")
+    ordering = ("created_at", "id")
+
+
+@admin.register(BrokerageSecret)
+class BrokerageSecretAdmin(admin.ModelAdmin):
+    list_display = ("id", "reference", "provider", "is_active", "created_at")
+    list_filter = ("provider", "is_active")
+    search_fields = ("reference",)
+    readonly_fields = ("reference", "provider", "secret_ciphertext", "created_at", "updated_at")

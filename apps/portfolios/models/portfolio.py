@@ -78,6 +78,13 @@ class Portfolio(models.Model):
         return f"{self.profile.user.email} - {self.name}"
 
     def clean(self):
+        super().clean()
+
+        if self.pk:
+            original = Portfolio.objects.only("profile_id").filter(pk=self.pk).first()
+            if original and original.profile_id != self.profile_id:
+                raise ValidationError("Portfolio owner cannot be changed.")
+
         if self.kind == self.Kind.PERSONAL and self.client_name:
             raise ValidationError("Personal portfolio cannot have a client name.")
 
