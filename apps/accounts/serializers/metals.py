@@ -1,16 +1,10 @@
-from rest_framework import serializers
-from accounts.models.metals import StorageFacility
+"""
+Legacy module kept to avoid import breakage.
 
+The previous metals-specific account models were removed in favor of the
+generic Account/Holding model set.
+"""
 
-class StorageFacilitySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = StorageFacility
-        fields = ['id', 'name', 'is_lending_account',
-                  'is_insured', 'interest_rate', 'created_at']
-        read_only_fields = ['id', 'created_at']
+from accounts.serializers.stocks import AccountSerializer, HoldingSerializer
 
-
-class StorageFacilityCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = StorageFacility
-        fields = ['name', 'is_lending_account', 'is_insured', 'interest_rate']
+__all__ = ["AccountSerializer", "HoldingSerializer"]

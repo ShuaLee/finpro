@@ -1,16 +1,3 @@
-from .stocks import (
-    SelfManagedAccountSerializer, SelfManagedAccountCreateSerializer,
-    ManagedAccountSerializer, ManagedAccountCreateSerializer
-)
-from .metals import (
-    StorageFacilitySerializer, StorageFacilityCreateSerializer
-)
+from .stocks import AccountSerializer, HoldingSerializer
 
-__all__ = [
-    "SelfManagedAccountSerializer",
-    "SelfManagedAccountCreateSerializer",
-    "ManagedAccountSerializer",
-    "ManagedAccountCreateSerializer",
-    "StorageFacilitySerializer",
-    "StorageFacilityCreateSerializer"
-]
+__all__ = ["AccountSerializer", "HoldingSerializer"]

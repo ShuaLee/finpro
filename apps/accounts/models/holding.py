@@ -68,13 +68,8 @@ class Holding(models.Model):
     def clean(self):
         super().clean()
 
-        # -----------------------------
-        # Account invariant
-        # -----------------------------
-        if not self.account or not self.account.active_schema:
-            raise ValidationError(
-                "Account schema must exist before holdings can be created."
-            )
+        if not self.account:
+            raise ValidationError("Holding must belong to an account.")
 
         # -----------------------------
         # Asset required

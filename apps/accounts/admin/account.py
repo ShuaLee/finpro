@@ -4,30 +4,28 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 from accounts.models.account import Account
-from accounts.models.account_type import AccountType
 from accounts.models.account_classification import (
-    ClassificationDefinition,
     AccountClassification,
+    ClassificationDefinition,
 )
-from accounts.services.account_service import AccountService
+from accounts.models.account_type import AccountType
 from accounts.services.account_deletion_service import AccountDeletionService
+from accounts.services.account_service import AccountService
 from fx.models.country import Country
-from schemas.services.mutations import SchemaMutationService
 
-# =================================================
-# Forms
-# =================================================
+
+def _reset_column_visibility_for_account(account):
+    try:
+        from schemas.services.mutations import SchemaMutationService
+    except Exception:
+        return False
+    SchemaMutationService.reset_account_to_defaults(account=account)
+    return True
 
 
 class ClassificationDefinitionForm(forms.ModelForm):
-    """
-    Admin-safe form:
-    - Country queryset injected at runtime
-    - Avoids app-registry import issues
-    """
-
     countries = forms.ModelMultipleChoiceField(
-        queryset=Country.objects.none(),  # placeholder
+        queryset=Country.objects.none(),
         required=False,
         widget=forms.SelectMultiple(attrs={"size": 12}),
         help_text="Countries where this classification applies.",
@@ -61,7 +59,6 @@ class AccountTypeForm(forms.ModelForm):
         if not asset_types:
             return asset_types
 
-        # System AccountTypes may ONLY use system AssetTypes
         if is_system:
             invalid = asset_types.exclude(created_by__isnull=True)
             if invalid.exists():
@@ -69,8 +66,6 @@ class AccountTypeForm(forms.ModelForm):
                 raise ValidationError(
                     f"System account types cannot use user asset types: {names}"
                 )
-
-        # User AccountTypes may use system OR owned AssetTypes
         else:
             invalid = asset_types.exclude(
                 Q(created_by__isnull=True) | Q(created_by=owner)
@@ -80,43 +75,20 @@ class AccountTypeForm(forms.ModelForm):
                 raise ValidationError(
                     f"You cannot use asset types you do not own: {names}"
                 )
-
         return asset_types
 
 
-# =================================================
-# Admin
-# =================================================
-
 @admin.register(AccountType)
 class AccountTypeAdmin(admin.ModelAdmin):
-    """
-    AccountType admin rules:
-    - slug is never editable
-    - is_system is editable on CREATE, immutable on EDIT
-    """
-
     form = AccountTypeForm
     exclude = ("slug",)
-
-    list_display = (
-        "id",
-        "name",
-        "slug",
-        "is_system",
-    )
-
-    list_filter = (
-        "is_system",
-    )
-
+    list_display = ("id", "name", "slug", "is_system")
+    list_filter = ("is_system",)
     search_fields = ("name",)
     ordering = ("name",)
-
     filter_horizontal = ("allowed_asset_types",)
 
     def get_readonly_fields(self, request, obj=None):
-        # is_system locked after creation
         if obj:
             return ("is_system",)
         return ()
@@ -125,7 +97,6 @@ class AccountTypeAdmin(admin.ModelAdmin):
 @admin.register(ClassificationDefinition)
 class ClassificationDefinitionAdmin(admin.ModelAdmin):
     form = ClassificationDefinitionForm
-
     list_display = (
         "id",
         "name",
@@ -134,7 +105,6 @@ class ClassificationDefinitionAdmin(admin.ModelAdmin):
         "is_system",
         "created_at",
     )
-
     list_filter = ("tax_status", "is_system")
     search_fields = ("name",)
     readonly_fields = ("created_at",)
@@ -143,7 +113,6 @@ class ClassificationDefinitionAdmin(admin.ModelAdmin):
     def display_scope(self, obj):
         if obj.all_countries:
             return "All Countries"
-
         codes = list(obj.countries.values_list("code", flat=True))
         return ", ".join(codes) if codes else "N/A"
 
@@ -160,26 +129,17 @@ class AccountClassificationAdmin(admin.ModelAdmin):
         "carry_forward_room",
         "created_at",
     )
-
     list_filter = ("definition__tax_status",)
     search_fields = (
         "definition__name",
-        "profile__user__username",
         "profile__user__email",
     )
-
     ordering = ("profile", "definition__name")
     readonly_fields = ("created_at",)
 
 
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
-    """
-    Account admin:
-    - Classification definition chosen at creation
-    - Classification initialized via AccountService
-    """
-
     list_display = (
         "id",
         "portfolio",
@@ -189,116 +149,80 @@ class AccountAdmin(admin.ModelAdmin):
         "created_at",
         "last_synced",
     )
-
     list_filter = ("account_type", "created_at")
-
-    search_fields = (
-        "name",
-        "portfolio__name",
-        "portfolio__profile__user__username",
-        "portfolio__profile__user__email",
-    )
-
+    search_fields = ("name", "portfolio__name", "portfolio__profile__user__email")
     ordering = ("portfolio", "name")
+    readonly_fields = ("created_at", "classification", "last_synced")
+    actions = ["reset_column_visibility"]
 
-    readonly_fields = (
-        "created_at",
-        "classification",
-        "last_synced",
-    )
-
-    actions = [
-        "reset_column_visibility",
-    ]
-
-    # -------------------------------------------------
-    # Admin action
-    # -------------------------------------------------
     @admin.action(description="Reset column visibility to defaults")
     def reset_column_visibility(self, request, queryset):
+        updated = 0
+        skipped = 0
         for account in queryset:
-            SchemaMutationService.reset_account_to_defaults(account=account)
+            ok = _reset_column_visibility_for_account(account)
+            if ok:
+                updated += 1
+            else:
+                skipped += 1
+        if updated:
+            self.message_user(
+                request,
+                f"Column visibility reset for {updated} account(s).",
+                level=messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f"Skipped {skipped} account(s): schemas app unavailable.",
+                level=messages.WARNING,
+            )
 
-        self.message_user(
-            request,
-            "Column visibility reset to defaults.",
-            level=messages.SUCCESS,
-        )
-
-    # -------------------------------------------------
-    # Dynamic form
-    # -------------------------------------------------
     def get_form(self, request, obj=None, **kwargs):
-        """
-        Dynamic form avoids circular imports and
-        ensures definition is only used on create.
-        """
-
         class AccountForm(forms.ModelForm):
             definition = forms.ModelChoiceField(
                 queryset=ClassificationDefinition.objects.all(),
-                required=True,
+                required=obj is None,
                 label="Account Definition",
                 help_text="Select a classification definition (e.g. TFSA, RRSP).",
             )
 
             class Meta:
                 model = Account
-                fields = (
-                    "portfolio",
-                    "name",
-                    "account_type",
-                    "broker",
-                    "definition",
-                )
+                fields = ("portfolio", "name", "account_type", "broker", "definition")
 
         kwargs["form"] = AccountForm
         return super().get_form(request, obj, **kwargs)
 
-    # -------------------------------------------------
-    # Save logic
-    # -------------------------------------------------
     def save_model(self, request, obj, form, change):
         definition = form.cleaned_data.get("definition")
 
-        if not definition:
+        if not change and not definition:
             self.message_user(
                 request,
-                "A classification definition is required.",
+                "A classification definition is required on creation.",
                 level=messages.ERROR,
             )
             return
 
         try:
-            # 1️⃣ Save the Account itself
             super().save_model(request, obj, form, change)
-
-            # 2️⃣ Initialize ONLY on creation
             if not change:
-                AccountService.initialize_account(
-                    account=obj,
-                    definition=definition,
-                )
-
+                AccountService.initialize_account(account=obj, definition=definition)
                 self.message_user(
                     request,
                     f"Account '{obj.name}' initialized with '{definition.name}'.",
                     level=messages.SUCCESS,
                 )
-
         except Exception as exc:
             self.message_user(
                 request,
-                f"Error creating account: {exc}",
+                f"Error creating/updating account: {exc}",
                 level=messages.ERROR,
             )
 
     def delete_model(self, request, obj):
-        """
-        Ensure schema cleanup when deleting a single account.
-        """
         AccountDeletionService.delete_account(account=obj)
-
         self.message_user(
             request,
             f"Account '{obj.name}' deleted.",
@@ -306,16 +230,9 @@ class AccountAdmin(admin.ModelAdmin):
         )
 
     def delete_queryset(self, request, queryset):
-        """
-        Ensure schema cleanup when deleting multiple accounts.
-        """
         count = queryset.count()
-
-        for account in queryset.select_related(
-            "portfolio", "account_type"
-        ):
+        for account in queryset.select_related("portfolio", "account_type"):
             AccountDeletionService.delete_account(account=account)
-
         self.message_user(
             request,
             f"{count} account(s) deleted.",

@@ -87,7 +87,12 @@ class Account(models.Model):
 
     @property
     def active_schema(self):
-        from schemas.models.schema import Schema
+        from django.apps import apps
+
+        try:
+            Schema = apps.get_model("schemas", "Schema")
+        except (LookupError, ValueError):
+            return None
 
         return Schema.objects.filter(
             portfolio=self.portfolio,

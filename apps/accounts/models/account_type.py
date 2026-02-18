@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q, Value
+from django.db.models import Q
 from django.utils.text import slugify
 
 from assets.models.core import AssetType
@@ -19,7 +19,7 @@ class AccountType(models.Model):
     is_system = models.BooleanField(default=False)
 
     owner = models.ForeignKey(
-        "users.Profile",
+        "profiles.Profile",
         null=True,
         blank=True,
         on_delete=models.CASCADE,
@@ -35,6 +35,7 @@ class AccountType(models.Model):
     description = models.TextField(blank=True, null=True)
 
     class Meta:
+        ordering = ["name"]
         constraints = [
             # Enforce namespace-level name uniqueness
             models.UniqueConstraint(
@@ -59,6 +60,10 @@ class AccountType(models.Model):
     # -------------------------------------------------
     def clean(self):
         super().clean()
+        if self.name:
+            self.name = self.name.strip()
+        if not self.name:
+            raise ValidationError("Account type name is required.")
 
         if self.is_system and self.owner is not None:
             raise ValidationError("System account types cannot have an owner.")
@@ -68,7 +73,7 @@ class AccountType(models.Model):
                 "User-defined account types must have an owner.")
 
         if not self.is_system:
-            if AccountType.objects.filter(
+            if AccountType.objects.exclude(pk=self.pk).filter(
                 is_system=True,
                 name__iexact=self.name,
             ).exists():
@@ -76,14 +81,23 @@ class AccountType(models.Model):
                     f"'{self.name}' is a reserved system account type name."
                 )
 
+        query = AccountType.objects.exclude(pk=self.pk)
+        if self.is_system:
+            if query.filter(is_system=True, name__iexact=self.name).exists():
+                raise ValidationError("System account type name must be unique.")
+            if self.slug and query.filter(is_system=True, slug__iexact=self.slug).exists():
+                raise ValidationError("System account type slug must be unique.")
+        else:
+            if query.filter(is_system=False, owner=self.owner, name__iexact=self.name).exists():
+                raise ValidationError("You already have an account type with this name.")
+
     # -------------------------------------------------
     # Save logic
     # -------------------------------------------------
 
     def save(self, *args, **kwargs):
         if self.is_system:
-            if not self.slug:
-                self.slug = slugify(self.name)
+            self.slug = slugify(self.slug or self.name)
         else:
             self.slug = None
 

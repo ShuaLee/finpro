@@ -65,7 +65,7 @@ class AccountClassification(models.Model):
     """
 
     profile = models.ForeignKey(
-        "users.Profile",
+        "profiles.Profile",
         on_delete=models.CASCADE,
         related_name="account_classifications",
     )
