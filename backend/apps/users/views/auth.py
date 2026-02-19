@@ -1,21 +1,41 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from users.cookie import clear_auth_cookies, set_auth_cookies
+from users.cookie import clear_auth_cookies, set_auth_cookies, set_trusted_device_cookie
 from users.serializers.auth import (
     ChangePasswordSerializer,
     ForgotPasswordSerializer,
+    LoginCodeVerifySerializer,
     LoginSerializer,
     RegisterSerializer,
     ResendVerificationSerializer,
     ResetPasswordSerializer,
     VerifyEmailSerializer,
 )
-from users.services import AuthService, EmailVerificationService, PasswordResetService
+from users.services import (
+    AuthService,
+    EmailVerificationService,
+    LoginSecurityCodeService,
+    PasswordResetService,
+    TrustedDeviceService,
+)
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class CSRFTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"csrfToken": get_token(request)}, status=status.HTTP_200_OK)
 
 
 class RegisterView(APIView):
@@ -32,7 +52,7 @@ class RegisterView(APIView):
 
         return Response(
             {
-                "detail": "Registration successful. Check your email for verification.",
+                "detail": "Registration successful. Enter the verification code sent to your email.",
                 "email": user.email,
             },
             status=status.HTTP_201_CREATED,
@@ -47,13 +67,20 @@ class VerifyEmailView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            user = EmailVerificationService.verify_raw_token(
-                raw_token=serializer.validated_data["token"]
+            user = EmailVerificationService.verify_email_code(
+                email=serializer.validated_data["email"],
+                code=serializer.validated_data["code"],
             )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response({"detail": "Email verified.", "email": user.email}, status=status.HTTP_200_OK)
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+        response = Response(
+            {"detail": "Email verified.", "email": user.email},
+            status=status.HTTP_200_OK,
+        )
+        return set_auth_cookies(response, access, refresh)
 
 
 class ResendVerificationView(APIView):
@@ -138,14 +165,87 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            user, access, refresh = AuthService.login_user(**serializer.validated_data)
+            user = AuthService.authenticate_user(
+                email=serializer.validated_data["email"],
+                password=serializer.validated_data["password"],
+            )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
 
+        if TrustedDeviceService.is_request_trusted_for_user(request=request, user=user):
+            refresh = RefreshToken.for_user(user)
+            access = refresh.access_token
+            response = Response(
+                {"detail": "Login successful.", "email": user.email},
+                status=status.HTTP_200_OK,
+            )
+            return set_auth_cookies(response, access, refresh)
+
+        try:
+            LoginSecurityCodeService.issue_and_send(user=user)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "detail": "Security code sent to your email.",
+                "requires_login_code": True,
+                "email": user.email,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class VerifyLoginCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginCodeVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            user = LoginSecurityCodeService.verify_code(
+                email=serializer.validated_data["email"],
+                code=serializer.validated_data["code"],
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
         response = Response(
             {"detail": "Login successful.", "email": user.email},
             status=status.HTTP_200_OK,
         )
+        set_auth_cookies(response, access, refresh)
+
+        if serializer.validated_data.get("remember_device"):
+            trusted_raw = TrustedDeviceService.issue_for_user(user=user)
+            set_trusted_device_cookie(response, trusted_raw)
+
+        return response
+
+
+class RefreshSessionView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_cookie_key = settings.SIMPLE_JWT.get("AUTH_COOKIE_REFRESH", "refresh")
+        refresh_token = request.COOKIES.get(refresh_cookie_key)
+
+        if not refresh_token:
+            return Response({"detail": "No refresh token provided."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            return Response({"detail": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        access = serializer.validated_data["access"]
+        refresh = serializer.validated_data.get("refresh", refresh_token)
+
+        response = Response({"detail": "Session refreshed."}, status=status.HTTP_200_OK)
         return set_auth_cookies(response, access, refresh)
 
 

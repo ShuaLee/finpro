@@ -5,6 +5,7 @@ from django.utils import timezone
 class EmailVerificationToken(models.Model):
     class Purpose(models.TextChoices):
         VERIFY_EMAIL = "verify_email", "Verify Email"
+        LOGIN_SECURITY = "login_security", "Login Security"
 
     user = models.ForeignKey(
         "users.User",

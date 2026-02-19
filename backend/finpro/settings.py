@@ -44,7 +44,7 @@ EXTERNAL_DATA_RETRY_BACKOFF_SECONDS = float(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
 ALLOWED_HOSTS = []
 
@@ -174,7 +174,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.User'
 
 # Auth flow toggles (dev convenience)
-AUTH_REQUIRE_EMAIL_VERIFICATION = False
+AUTH_REQUIRE_EMAIL_VERIFICATION = True
+AUTH_TRUSTED_DEVICE_COOKIE = "trusted_device"
+AUTH_TRUSTED_DEVICE_DAYS = 30
 
 
 REST_FRAMEWORK = {
@@ -186,7 +188,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("JWT",),
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=120),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_COOKIE": "access",  # cookie key for access token
@@ -225,6 +227,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # your React frontend
+    "http://127.0.0.1:5173",
 ]
 
 # ===============================
@@ -234,20 +237,20 @@ CORS_ALLOWED_ORIGINS = [
 # CSRF cookie should always be HttpOnly for security
 CSRF_COOKIE_HTTPONLY = True
 
-# ---- Development (React on http://localhost:5173, Django on http://127.0.0.1:8000) ----
-# Allow cross-origin cookies for local dev
+# SameSite policy
 CSRF_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SAMESITE = "Lax"
-SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "Lax"  # -- lax works on laptop??
+SIMPLE_JWT["AUTH_COOKIE_SAMESITE"] = "Lax"
 
-# No HTTPS in dev
-CSRF_COOKIE_SECURE = False
-SESSION_COOKIE_SECURE = False
-COOKIE_SECURE = False
+# Secure cookies in production, relaxed in local development
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+COOKIE_SECURE = not DEBUG
 
 # CSRF trusted origin (React dev server)
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 # ---- Production (Same origin, HTTPS) ----

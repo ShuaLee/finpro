@@ -60,10 +60,10 @@ class UserAdmin(BaseUserAdmin):
             if user.is_email_verified:
                 continue
             try:
-                raw, _ = EmailVerificationService.issue_token(user=user)
+                code, _ = EmailVerificationService.issue_token(user=user)
                 EmailVerificationService.send_verification_email(
                     user=user,
-                    raw_token=raw,
+                    verification_code=code,
                 )
                 sent += 1
             except Exception:

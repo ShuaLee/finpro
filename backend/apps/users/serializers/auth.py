@@ -15,10 +15,18 @@ class RegisterSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+    remember_device = serializers.BooleanField(required=False, default=False)
+
+
+class LoginCodeVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.RegexField(regex=r"^\d{6}$")
+    remember_device = serializers.BooleanField(required=False, default=False)
 
 
 class VerifyEmailSerializer(serializers.Serializer):
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    code = serializers.RegexField(regex=r"^\d{6}$")
 
 
 class ResendVerificationSerializer(serializers.Serializer):

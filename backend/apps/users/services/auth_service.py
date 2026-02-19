@@ -30,13 +30,20 @@ class AuthService:
         # Ensure foundational user context exists immediately
         ProfileBootstrapService.bootstrap(user=user)
 
-        raw, _ = EmailVerificationService.issue_token(user=user)
-        EmailVerificationService.send_verification_email(user=user, raw_token=raw)
+        code, _ = EmailVerificationService.issue_token(user=user)
+        EmailVerificationService.send_verification_email(user=user, verification_code=code)
 
         return user
 
     @staticmethod
     def login_user(*, email: str, password: str):
+        user = AuthService.authenticate_user(email=email, password=password)
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+        return user, access, refresh
+
+    @staticmethod
+    def authenticate_user(*, email: str, password: str):
         normalized_email = (email or "").strip().lower()
         user = User.objects.filter(email__iexact=normalized_email).first()
 
@@ -69,9 +76,7 @@ class AuthService:
             user.locked_until = None
             user.save(update_fields=["failed_login_count", "locked_until"])
 
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-        return user, access, refresh
+        return user
 
     @staticmethod
     def logout_with_refresh_token(*, refresh_token: str | None):

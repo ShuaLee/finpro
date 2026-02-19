@@ -11,14 +11,28 @@ from users.models import EmailVerificationToken
 
 
 class EmailVerificationService:
-    TOKEN_TTL_HOURS = 24
+    CODE_TTL_MINUTES = getattr(settings, "AUTH_EMAIL_VERIFICATION_TTL_MINUTES", 10)
+    CODE_LENGTH = 6
     RESEND_COOLDOWN_SECONDS = getattr(
         settings, "AUTH_RESEND_VERIFICATION_COOLDOWN_SECONDS", 60
     )
 
     @staticmethod
-    def _hash_token(raw_token: str) -> str:
-        return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    def _hash_code(*, salt: str, code: str) -> str:
+        digest = hashlib.sha256(f"{salt}:{code}".encode("utf-8")).hexdigest()
+        return f"{salt}${digest}"
+
+    @staticmethod
+    def _is_code_match(*, code: str, stored_hash: str) -> bool:
+        salt, _, digest = stored_hash.partition("$")
+        if not salt or not digest:
+            return False
+        expected = hashlib.sha256(f"{salt}:{code}".encode("utf-8")).hexdigest()
+        return secrets.compare_digest(digest, expected)
+
+    @staticmethod
+    def _generate_code() -> str:
+        return f"{secrets.randbelow(10 ** EmailVerificationService.CODE_LENGTH):0{EmailVerificationService.CODE_LENGTH}d}"
 
     @staticmethod
     def issue_token(*, user):
@@ -43,27 +57,25 @@ class EmailVerificationService:
             consumed_at__isnull=True,
         ).update(consumed_at=timezone.now())
 
-        raw = secrets.token_urlsafe(48)
-        token_hash = EmailVerificationService._hash_token(raw)
+        code = EmailVerificationService._generate_code()
+        salt = secrets.token_hex(8)
+        token_hash = EmailVerificationService._hash_code(salt=salt, code=code)
 
         token = EmailVerificationToken.objects.create(
             user=user,
             purpose=EmailVerificationToken.Purpose.VERIFY_EMAIL,
             token_hash=token_hash,
-            expires_at=timezone.now() + timedelta(hours=EmailVerificationService.TOKEN_TTL_HOURS),
+            expires_at=timezone.now() + timedelta(minutes=EmailVerificationService.CODE_TTL_MINUTES),
         )
-        return raw, token
+        return code, token
 
     @staticmethod
-    def send_verification_email(*, user, raw_token: str):
-        frontend_base = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-        verify_url = f"{frontend_base}/verify-email?token={raw_token}"
-
-        subject = "Verify your email"
+    def send_verification_email(*, user, verification_code: str):
+        subject = "Your FinPro verification code"
         message = (
-            "Click to verify your email:\n\n"
-            f"{verify_url}\n\n"
-            "This link expires in 24 hours."
+            "Use this 6-digit code to verify your FinPro account:\n\n"
+            f"{verification_code}\n\n"
+            f"This code expires in {EmailVerificationService.CODE_TTL_MINUTES} minutes."
         )
 
         send_mail(
@@ -75,23 +87,35 @@ class EmailVerificationService:
         )
 
     @staticmethod
-    def verify_raw_token(*, raw_token: str):
-        token_hash = EmailVerificationService._hash_token(raw_token)
-        token = EmailVerificationToken.objects.select_related("user").filter(
-            token_hash=token_hash,
+    def verify_email_code(*, email: str, code: str):
+        normalized_email = (email or "").strip().lower()
+
+        from users.models import User
+
+        user = User.objects.filter(email__iexact=normalized_email).first()
+        if not user:
+            raise ValidationError("Invalid verification code.")
+
+        active_tokens = EmailVerificationToken.objects.select_related("user").filter(
+            user=user,
             purpose=EmailVerificationToken.Purpose.VERIFY_EMAIL,
-        ).first()
+            consumed_at__isnull=True,
+        ).order_by("-created_at")
 
-        if not token:
-            raise ValidationError("Invalid verification token.")
+        token = None
+        for candidate in active_tokens:
+            if candidate.is_expired:
+                continue
+            if EmailVerificationService._is_code_match(
+                code=code,
+                stored_hash=candidate.token_hash,
+            ):
+                token = candidate
+                break
 
-        if token.is_consumed:
-            raise ValidationError("Verification token already used.")
+        if token is None:
+            raise ValidationError("Invalid verification code.")
 
-        if token.is_expired:
-            raise ValidationError("Verification token expired.")
-
-        user = token.user
         now = timezone.now()
 
         if user.email_verified_at is None:
@@ -108,6 +132,6 @@ class EmailVerificationService:
         if user.is_email_verified:
             raise ValidationError("Email already verified.")
 
-        raw, _ = EmailVerificationService.issue_token(user=user)
-        EmailVerificationService.send_verification_email(user=user, raw_token=raw)
+        code, _ = EmailVerificationService.issue_token(user=user)
+        EmailVerificationService.send_verification_email(user=user, verification_code=code)
         return True

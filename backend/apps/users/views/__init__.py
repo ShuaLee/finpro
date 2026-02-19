@@ -5,8 +5,10 @@ from .auth import (
     LoginView,
     LogoutView,
     MeView,
+    RefreshSessionView,
     RegisterView,
     ResendVerificationView,
+    VerifyLoginCodeView,
     ResetPasswordView,
     VerifyEmailView,
 )
@@ -14,10 +16,12 @@ from .auth import (
 __all__ = [
     "RegisterView",
     "VerifyEmailView",
+    "VerifyLoginCodeView",
     "ResendVerificationView",
     "ForgotPasswordView",
     "ResetPasswordView",
     "LoginView",
+    "RefreshSessionView",
     "LogoutView",
     "ChangePasswordView",
     "MeView",
