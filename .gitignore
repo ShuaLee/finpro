@@ -1,0 +1,56 @@
+############################
+# Python / Django
+############################
+
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+backend/.env
+backend/.venv/
+backend/env/
+backend/venv/
+backend/ENV/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+backend/Pipfile.lock
+
+############################
+# Django runtime files
+############################
+
+backend/*.log
+backend/*.pot
+backend/*.sqlite3
+backend/db.sqlite3
+backend/staticfiles/
+backend/media/
+
+############################
+# Node / React / Vite
+############################
+
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.next/
+frontend/coverage/
+
+############################
+# OS / Editor junk
+############################
+
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+############################
+# Misc
+############################
+
+*.swp
+*.swo

@@ -1,0 +1,12 @@
+# Ignore Django templates
+backend/templates/**/*.html
+
+# Ignore admin overrides
+backend/**/templates/admin/**/*.html
+
+# Monorepo dependencies/build output
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.next/
+backend/staticfiles/
