@@ -1,91 +1,35 @@
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
-from django.db import transaction
+
+from core.services import FinproBootstrapOrchestrator
 
 
 class Command(BaseCommand):
-    help = "🚀 Bootstrap the entire FinPro system (idempotent, ordered)"
+    help = "Bootstrap FinPro in dependency order (idempotent)."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--with-migrate",
+            action="store_true",
+            help="Run `migrate` as the first bootstrap step.",
+        )
+        parser.add_argument(
+            "--skip-market-data",
+            action="store_true",
+            help="Skip network-heavy asset universe refresh during assets bootstrap.",
+        )
+        parser.add_argument(
+            "--portfolio-id",
+            action="append",
+            type=int,
+            dest="portfolio_ids",
+            help="Limit portfolio/analytics bootstrap to specific portfolio id(s).",
+        )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.SUCCESS(
-            "\n🚀 Starting FinPro bootstrap...\n"))
-
-        steps = [
-            # -------------------------------------------------
-            # FX / Reference Data
-            # -------------------------------------------------
-            ("🌍 FX reference data (countries & currencies)", [
-                "bootstrap_fx",
-            ]),
-
-            # -------------------------------------------------
-            # Core system definitions
-            # -------------------------------------------------
-            ("📦 System AssetTypes", [
-                "seed_asset_types",
-            ]),
-
-            # -------------------------------------------------
-            # Account system
-            # -------------------------------------------------
-            ("🏦 Account system", [
-                "seed_system_account_types",
-            ]),
-
-            # -------------------------------------------------
-            # Formula + Schema system (MUST come before assets)
-            # -------------------------------------------------
-            ("🧮 Formula system", [
-                "seed_formulas",
-            ]),
-
-            ("🧬 Schema system", [
-                "seed_master_constraints",
-                "seed_schema_column_categories",
-                "seed_system_column_catalog",
-            ]),
-
-            # -------------------------------------------------
-            # Asset universes
-            # -------------------------------------------------
-            ("🪙 Cryptocurrency universe", [
-                "seed_cryptos",
-            ]),
-
-            ("📈 Equity universe", [
-                "seed_equities",
-            ]),
-
-            ("🧱 Commodity universe", [
-                "seed_commodities",
-            ]),
-
-            # -------------------------------------------------
-            # Real estate reference data
-            # -------------------------------------------------
-            ("🏠 Real estate reference data", [
-                "seed_real_estate_types",
-            ]),
-        ]
-
-        for section_label, commands in steps:
-            self.stdout.write(self.style.NOTICE(f"\n➡️  {section_label}"))
-
-            for cmd in commands:
-                self.stdout.write(f"   • Running `{cmd}`...")
-                try:
-                    with transaction.atomic():
-                        call_command(cmd)
-                except Exception as exc:
-                    self.stdout.write(
-                        self.style.ERROR(
-                            f"\n❌ Bootstrap failed during `{cmd}`:\n{exc}"
-                        )
-                    )
-                    raise  # fail fast, do NOT continue
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                "\n✅ FinPro bootstrap complete. System is ready.\n"
-            )
+        FinproBootstrapOrchestrator.run(
+            stdout=self.stdout,
+            style=self.style,
+            include_migrate=options["with_migrate"],
+            skip_market_data=options["skip_market_data"],
+            portfolio_ids=options.get("portfolio_ids") or [],
         )
