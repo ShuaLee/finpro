@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class SchemaColumnValue(models.Model):
@@ -40,6 +41,22 @@ class SchemaColumnValue(models.Model):
     class Meta:
         unique_together = ("column", "holding")
 
+    def clean(self):
+        super().clean()
+        if self.column_id and self.holding_id:
+            account = self.holding.account
+            schema = getattr(account, "active_schema", None)
+            if not schema:
+                raise ValidationError("Holding account has no active schema.")
+            if self.column.schema_id != schema.id:
+                raise ValidationError(
+                    "SchemaColumnValue column must belong to the holding account's active schema."
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     # --------------------------------------------------
     # String representation (SAFE)
     # --------------------------------------------------
@@ -55,12 +72,12 @@ class SchemaColumnValue(models.Model):
         """
         Canonical stored value.
 
-        ✔ Safe for:
+        Safe for:
           - services
           - formula evaluation
           - recomputation
 
-        ❌ NEVER use for display.
+        Never use for display.
         """
         return self.value
 

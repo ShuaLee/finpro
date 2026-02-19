@@ -5,10 +5,10 @@ from formulas.seeders.formulas import seed_system_formulas
 
 
 class Command(BaseCommand):
-    help = "Seed system formulas and formula definitions"
+    help = "Seed system formulas and formula definitions."
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write("🧮 Seeding system formulas...")
+        self.stdout.write("Seeding system formulas...")
         seed_system_formulas()
-        self.stdout.write(self.style.SUCCESS("✅ Formula seeding complete"))
+        self.stdout.write(self.style.SUCCESS("System formulas seeded."))

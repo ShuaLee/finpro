@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 
 from schemas.models import MasterConstraint
 
@@ -34,7 +35,7 @@ def seed_master_constraints():
             "name": "min_value",
             "label": "Minimum Value",
             "applies_to": MasterConstraint.AppliesTo.DECIMAL,
-            "default_decimal": None,
+            "default_decimal": SAFE_DECIMAL_MIN,
             "min_decimal": SAFE_DECIMAL_MIN,
             "max_decimal": SAFE_DECIMAL_MAX,
         },
@@ -42,7 +43,7 @@ def seed_master_constraints():
             "name": "max_value",
             "label": "Maximum Value",
             "applies_to": MasterConstraint.AppliesTo.DECIMAL,
-            "default_decimal": None,
+            "default_decimal": SAFE_DECIMAL_MAX,
             "min_decimal": SAFE_DECIMAL_MIN,
             "max_decimal": SAFE_DECIMAL_MAX,
         },
@@ -60,7 +61,7 @@ def seed_master_constraints():
             "name": "enum",
             "label": "Allowed Values",
             "applies_to": MasterConstraint.AppliesTo.STRING,
-            "default_string": None,
+            "default_string": "",
         },
 
         # ==================================================
@@ -70,7 +71,7 @@ def seed_master_constraints():
             "name": "boolean",
             "label": "Boolean",
             "applies_to": MasterConstraint.AppliesTo.BOOLEAN,
-            "default_string": None,
+            "default_boolean": False,
         },
 
         # ==================================================
@@ -80,13 +81,17 @@ def seed_master_constraints():
             "name": "min_date",
             "label": "Minimum Date",
             "applies_to": MasterConstraint.AppliesTo.DATE,
-            "default_date": None,
+            "default_date": date(1900, 1, 1),
+            "min_date": date(1900, 1, 1),
+            "max_date": date(2999, 12, 31),
         },
         {
             "name": "max_date",
             "label": "Maximum Date",
             "applies_to": MasterConstraint.AppliesTo.DATE,
-            "default_date": None,
+            "default_date": date(2999, 12, 31),
+            "min_date": date(1900, 1, 1),
+            "max_date": date(2999, 12, 31),
         },
     ]
 

@@ -1,5 +1,4 @@
 
-
 class SystemFormulaRegistry:
     """
     Central registry for system-reserved formula identifiers.
@@ -10,12 +9,21 @@ class SystemFormulaRegistry:
     - are relied upon by schemas and analytics
     """
 
-    SYSTEM_IDENTIFERS = {
-        # Core valuation
+    SYSTEM_IDENTIFIERS = {
+        # Base computations used by schemas
+        "quantity_times_price",
+        "market_value_times_fx",
+        "quantity_times_avg_price_times_fx",
+        "current_value_minus_cost_basis",
+        "unrealized_gain_over_cost_basis",
+        "market_value",
         "current_value",
         "cost_basis",
-        "open_pnl",
         "unrealized_gain",
+        "unrealized_gain_pct",
+
+        # Core valuation
+        "open_pnl",
 
         # Allocation / weighting
         "portfolio_weight",
@@ -34,7 +42,7 @@ class SystemFormulaRegistry:
         """
         if not identifier:
             return False
-        return identifier in cls.SYSTEM_IDENTIFERS
+        return identifier in cls.SYSTEM_IDENTIFIERS
 
     @classmethod
     def all(cls) -> set[str]:

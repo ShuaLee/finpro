@@ -44,6 +44,6 @@ class SchemaColumnAdmin(admin.ModelAdmin):
 @admin.register(SchemaColumnAssetBehaviour)
 class SchemaColumnAssetBehaviourAdmin(admin.ModelAdmin):
     list_display = ("column", "asset_type", "source",
-                    "formula_definition", "is_override")
+                    "formula_identifier", "is_override")
     list_filter = ("asset_type", "source", "is_override")
-    search_fields = ("column__identifier", "formula_definition__identifier")
+    search_fields = ("column__identifier", "formula_identifier")

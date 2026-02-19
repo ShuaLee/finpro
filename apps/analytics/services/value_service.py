@@ -1,26 +1,19 @@
 from decimal import Decimal, InvalidOperation
 
-from schemas.models import SchemaColumnValue
-
 
 class ValueResolverService:
     @staticmethod
-    def get_text(*, holding, identifier):
-        scv = SchemaColumnValue.objects.filter(
-            holding=holding,
-            column__identifier=identifier,
-        ).first()
-
-        if not scv:
+    def get_text(*, holding_id, identifier, values_by_holding):
+        if not identifier:
             return None
+        return values_by_holding.get(holding_id, {}).get(identifier)
 
-        return scv.value
-    
     @staticmethod
-    def get_decimal(*, holding, identifier):
+    def get_decimal(*, holding_id, identifier, values_by_holding):
         raw = ValueResolverService.get_text(
-            holding=holding,
+            holding_id=holding_id,
             identifier=identifier,
+            values_by_holding=values_by_holding,
         )
         if raw in (None, ""):
             return Decimal("0")

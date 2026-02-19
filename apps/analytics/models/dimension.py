@@ -1,7 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-class AnalyticalDimension(models.Model):
+
+class AnalyticDimension(models.Model):
     class DimensionType(models.TextChoices):
         CATEGORICAL = "categorical", "Categorical"
         WEIGHTED = "weighted", "Weighted"
@@ -33,12 +34,7 @@ class AnalyticalDimension(models.Model):
         default=SourceType.SCV_IDENTIFIER,
     )
 
-    # Used when source_type == scv_identifier
-    source_identifier = models.SlugField(
-        max_length=100,
-        blank=True,
-        null=True,
-    )
+    source_identifier = models.SlugField(max_length=100, blank=True, null=True)
 
     is_active = models.BooleanField(default=True)
     display_order = models.PositiveIntegerField(default=0)
@@ -54,25 +50,37 @@ class AnalyticalDimension(models.Model):
             )
         ]
         ordering = ["display_order", "name"]
+        indexes = [models.Index(fields=["analytic", "is_active", "display_order"]) ]
 
     def clean(self):
         super().clean()
-        if (
-            self.source_type == self.SourceType.SCV_IDENTIFIER
-            and not self.source_identifier
-        ):
-            raise ValidationError(
-                "source_identifier is required when source_type='scv_identifier'."
-            )
+        if self.dimension_type == self.DimensionType.CATEGORICAL:
+            if self.source_type != self.SourceType.SCV_IDENTIFIER:
+                raise ValidationError("Categorical dimensions must use source_type='scv_identifier'.")
+            if not self.source_identifier:
+                raise ValidationError("source_identifier is required for categorical dimensions.")
+        else:
+            if self.source_type == self.SourceType.SCV_IDENTIFIER:
+                raise ValidationError("Weighted dimensions cannot use source_type='scv_identifier'.")
+            if self.source_identifier:
+                raise ValidationError("source_identifier must be empty for weighted dimensions.")
+
+        if self.pk:
+            original = AnalyticDimension.objects.only("analytic_id").filter(pk=self.pk).first()
+            if original and original.analytic_id != self.analytic_id:
+                raise ValidationError("Dimension analytic cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.analytic.name}:{self.name}"
-    
-    
+
+
 class DimensionBucket(models.Model):
     """
     Bucket options inside a dimension.
-    Example: coal -> coking coal / thermal coal (parent-child hierarchy).
     """
 
     dimension = models.ForeignKey(
@@ -101,19 +109,32 @@ class DimensionBucket(models.Model):
             models.UniqueConstraint(
                 fields=["dimension", "key"],
                 name="uniq_bucket_key_per_dimension",
-            ),
-            models.UniqueConstraint(
-                fields=["dimension"],
-                condition=models.Q(is_unknown_bucket=True),
-                name="uniq_unknown_bucket_per_dimension",
-            ),
+            )
         ]
         ordering = ["display_order", "label"]
+        indexes = [models.Index(fields=["dimension", "is_active", "display_order"]) ]
 
     def clean(self):
         super().clean()
+
         if self.parent and self.parent.dimension_id != self.dimension_id:
             raise ValidationError("Bucket parent must belong to the same dimension.")
+
+        if self.pk:
+            original = DimensionBucket.objects.only("dimension_id").filter(pk=self.pk).first()
+            if original and original.dimension_id != self.dimension_id:
+                raise ValidationError("Bucket dimension cannot be changed.")
+
+        if self.is_unknown_bucket:
+            qs = DimensionBucket.objects.filter(dimension=self.dimension, is_unknown_bucket=True)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise ValidationError("Only one unknown bucket is allowed per dimension.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.dimension.name}:{self.label}"

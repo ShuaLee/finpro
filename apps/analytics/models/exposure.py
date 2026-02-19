@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Sum
 
 
 class AssetDimensionExposure(models.Model):
@@ -58,6 +61,20 @@ class AssetDimensionExposure(models.Model):
         if self.dimension.dimension_type != self.dimension.DimensionType.WEIGHTED:
             raise ValidationError("Asset exposures are only valid for weighted dimensions.")
 
+        total = (
+            AssetDimensionExposure.objects.filter(dimension=self.dimension, asset=self.asset)
+            .exclude(pk=self.pk)
+            .aggregate(total=Sum("weight"))["total"]
+            or Decimal("0")
+        )
+        total = Decimal(str(total)) + Decimal(str(self.weight or 0))
+        if total > Decimal("1"):
+            raise ValidationError("Asset exposure weights per asset must not exceed 1.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.dimension.name}:{self.asset_id}->{self.bucket.key} ({self.weight})"
 
@@ -112,6 +129,26 @@ class HoldingDimensionExposureOverride(models.Model):
             raise ValidationError("Bucket must belong to the same dimension.")
         if self.dimension.dimension_type != self.dimension.DimensionType.WEIGHTED:
             raise ValidationError("Holding overrides are only valid for weighted dimensions.")
+
+        if self.holding.account.portfolio_id != self.dimension.analytic.portfolio_id:
+            raise ValidationError("Holding must belong to the same portfolio as the analytic.")
+
+        total = (
+            HoldingDimensionExposureOverride.objects.filter(
+                dimension=self.dimension,
+                holding=self.holding,
+            )
+            .exclude(pk=self.pk)
+            .aggregate(total=Sum("weight"))["total"]
+            or Decimal("0")
+        )
+        total = Decimal(str(total)) + Decimal(str(self.weight or 0))
+        if total > Decimal("1"):
+            raise ValidationError("Holding override weights per holding must not exceed 1.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.dimension.name}:{self.holding_id}->{self.bucket.key} ({self.weight})"

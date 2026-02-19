@@ -4,12 +4,15 @@ from collections import defaultdict, deque
 from decimal import Decimal
 from typing import Any
 
-from django.core.exceptions import ValidationError
-
-from formulas.services.formula_evaluator import FormulaEvaluator
-from formulas.services.formula_resolver import FormulaResolver
 from fx.models.fx import FXCurrency, FXRate
 from schemas.models import Schema, SchemaColumnValue
+from schemas.services.formula_bridge import (
+    evaluate_formula,
+    formula_dependencies,
+    is_implicit_identifier,
+    resolve_formula_definition,
+    resolve_inputs,
+)
 
 
 class SchemaEngine:
@@ -128,7 +131,13 @@ class SchemaEngine:
     # ---------------------------------------------------------
 
     def _compute_formula_raw_value(self, *, scv: SchemaColumnValue, behavior):
-        definition = behavior.formula_definition
+        if not behavior.formula_identifier:
+            return None
+
+        definition = resolve_formula_definition(
+            identifier=behavior.formula_identifier,
+            asset_type=behavior.asset_type,
+        )
         if not definition:
             return None
 
@@ -139,7 +148,7 @@ class SchemaEngine:
             holding=scv.holding,
         )
 
-        resolved = FormulaResolver.resolve_inputs(
+        resolved = resolve_inputs(
             formula=formula,
             context=context,
             allow_missing=(definition.dependency_policy == "auto_expand"),
@@ -147,7 +156,7 @@ class SchemaEngine:
         )
 
         try:
-            result = FormulaEvaluator.evaluate(
+            result = evaluate_formula(
                 formula=formula,
                 context=resolved,
             )
@@ -176,7 +185,7 @@ class SchemaEngine:
         scv_by_identifier = {scv.column.identifier: scv.value for scv in scvs}
 
         for identifier in formula.dependencies:
-            if FormulaResolver.is_implicit(identifier):
+            if is_implicit_identifier(identifier):
                 continue
 
             raw = scv_by_identifier.get(identifier)
@@ -224,9 +233,7 @@ class SchemaEngine:
             .first()
         )
         if not fx:
-            raise ValidationError(
-                f"No FX rate found for {asset_currency} -> {profile_currency_code}"
-            )
+            return Decimal("1")
 
         return Decimal(str(fx.rate))
 
@@ -244,14 +251,17 @@ class SchemaEngine:
 
         for column in columns:
             behaviors = list(column.asset_behaviors.select_related(
-                "formula_definition__formula"))
+                "asset_type"))
             for behavior in behaviors:
-                if behavior.source != "formula" or not behavior.formula_definition:
+                if behavior.source != "formula" or not behavior.formula_identifier:
                     continue
 
-                formula = behavior.formula_definition.formula
-                for dep in formula.dependencies:
-                    if FormulaResolver.is_implicit(dep):
+                deps = formula_dependencies(
+                    identifier=behavior.formula_identifier,
+                    asset_type=behavior.asset_type,
+                )
+                for dep in deps:
+                    if is_implicit_identifier(dep):
                         continue
                     if dep not in by_identifier:
                         continue

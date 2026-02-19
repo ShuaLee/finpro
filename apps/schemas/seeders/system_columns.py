@@ -4,7 +4,6 @@ from schemas.models.schema_column_template_behaviour import (
 )
 from schemas.models.schema_column_category import SchemaColumnCategory
 from assets.models.core import AssetType
-from formulas.models.formula_definition import FormulaDefinition
 
 
 def seed_system_column_catalog():
@@ -17,7 +16,7 @@ def seed_system_column_catalog():
     """
 
     equity = AssetType.objects.get(slug="equity")
-    crypto = AssetType.objects.get(slug="cryptocurrency")
+    crypto = AssetType.objects.get(slug="crypto")
 
     # --------------------------------------------------
     # Categories (must already be seeded)
@@ -47,7 +46,9 @@ def seed_system_column_catalog():
             asset_type=asset_type,
             defaults={
                 "source": "holding",
+                "formula_identifier": None,
                 "source_field": "quantity",
+                "constant_value": None,
             },
         )
 
@@ -73,7 +74,9 @@ def seed_system_column_catalog():
             asset_type=asset_type,
             defaults={
                 "source": "asset",
+                "formula_identifier": None,
                 "source_field": "extension__currency__code",
+                "constant_value": None,
             },
         )
 
@@ -98,7 +101,36 @@ def seed_system_column_catalog():
             asset_type=asset_type,
             defaults={
                 "source": "asset",
+                "formula_identifier": None,
                 "source_field": "price__price",
+                "constant_value": None,
+            },
+        )
+
+    # ==================================================
+    # AVERAGE PURCHASE PRICE (VALUATION)
+    # ==================================================
+
+    average_purchase_price, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="average_purchase_price",
+        defaults={
+            "title": "Average Purchase Price",
+            "description": "Average purchase price per unit in asset currency.",
+            "data_type": "decimal",
+            "is_system": True,
+            "category": valuation,
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=average_purchase_price,
+            asset_type=asset_type,
+            defaults={
+                "source": "holding",
+                "formula_identifier": None,
+                "source_field": "average_purchase_price",
+                "constant_value": None,
             },
         )
 
@@ -118,18 +150,14 @@ def seed_system_column_catalog():
     )
 
     for asset_type in (equity, crypto):
-        definition = FormulaDefinition.objects.get(
-            identifier="market_value",
-            asset_type=asset_type,
-            owner__isnull=True,
-        )
-
         SchemaColumnTemplateBehaviour.objects.update_or_create(
             template=market_value,
             asset_type=asset_type,
             defaults={
                 "source": "formula",
-                "formula_definition": definition,
+                "formula_identifier": "market_value",
+                "source_field": None,
+                "constant_value": None,
             },
         )
 
@@ -149,23 +177,100 @@ def seed_system_column_catalog():
     )
 
     for asset_type in (equity, crypto):
-        definition = FormulaDefinition.objects.get(
-            identifier="current_value",
-            asset_type=asset_type,
-            owner__isnull=True,
-        )
-
         SchemaColumnTemplateBehaviour.objects.update_or_create(
             template=current_value,
             asset_type=asset_type,
             defaults={
                 "source": "formula",
-                "formula_definition": definition,
+                "formula_identifier": "current_value",
+                "source_field": None,
+                "constant_value": None,
             },
         )
 
     # ==================================================
-    # DIVIDENDS / CASH FLOW (EQUITY ONLY — NO FORMULAS)
+    # COST BASIS (FORMULA, PROFILE CURRENCY)
+    # ==================================================
+
+    cost_basis, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="cost_basis",
+        defaults={
+            "title": "Cost Basis",
+            "description": "Cost basis converted to profile currency.",
+            "data_type": "decimal",
+            "is_system": True,
+            "category": valuation,
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=cost_basis,
+            asset_type=asset_type,
+            defaults={
+                "source": "formula",
+                "formula_identifier": "cost_basis",
+                "source_field": None,
+                "constant_value": None,
+            },
+        )
+
+    # ==================================================
+    # UNREALIZED GAIN (FORMULA, PROFILE CURRENCY)
+    # ==================================================
+
+    unrealized_gain, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="unrealized_gain",
+        defaults={
+            "title": "Unrealized Gain",
+            "description": "Current value minus cost basis in profile currency.",
+            "data_type": "decimal",
+            "is_system": True,
+            "category": valuation,
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=unrealized_gain,
+            asset_type=asset_type,
+            defaults={
+                "source": "formula",
+                "formula_identifier": "unrealized_gain",
+                "source_field": None,
+                "constant_value": None,
+            },
+        )
+
+    # ==================================================
+    # UNREALIZED GAIN PERCENT (FORMULA)
+    # ==================================================
+
+    unrealized_gain_pct, _ = SchemaColumnTemplate.objects.update_or_create(
+        identifier="unrealized_gain_pct",
+        defaults={
+            "title": "Unrealized Gain %",
+            "description": "Unrealized gain divided by cost basis.",
+            "data_type": "percent",
+            "is_system": True,
+            "category": valuation,
+        },
+    )
+
+    for asset_type in (equity, crypto):
+        SchemaColumnTemplateBehaviour.objects.update_or_create(
+            template=unrealized_gain_pct,
+            asset_type=asset_type,
+            defaults={
+                "source": "formula",
+                "formula_identifier": "unrealized_gain_pct",
+                "source_field": None,
+                "constant_value": None,
+            },
+        )
+
+    # ==================================================
+    # DIVIDENDS / CASH FLOW (EQUITY ONLY - NO FORMULAS)
     # ==================================================
 
     def asset_column(identifier, title, description, data_type, source_field):
@@ -184,7 +289,9 @@ def seed_system_column_catalog():
             asset_type=equity,
             defaults={
                 "source": "asset",
+                "formula_identifier": None,
                 "source_field": source_field,
+                "constant_value": None,
             },
         )
 
@@ -282,5 +389,5 @@ def seed_system_column_catalog():
         "Trailing Dividend Income",
         "Dividend income over the last 12 months",
         "decimal",
-        "equity_dividend__trailing_dividend_income",
+        "equity_dividend__trailing_12m_cashflow",
     )

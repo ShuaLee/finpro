@@ -5,10 +5,10 @@ from schemas.seeders.system_columns import seed_system_column_catalog
 
 
 class Command(BaseCommand):
-    help = "Seed system-wide optional schema column templates"
+    help = "Seed system-wide schema column templates and behaviors."
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write("📊 Seeding system column catalog...")
+        self.stdout.write("Seeding system column catalog...")
         seed_system_column_catalog()
-        self.stdout.write(self.style.SUCCESS("✅ System columns seeded"))
+        self.stdout.write(self.style.SUCCESS("System column catalog seeded."))

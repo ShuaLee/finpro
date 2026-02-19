@@ -15,7 +15,11 @@ class SchemaColumnTemplateAdmin(admin.ModelAdmin):
     list_filter = ("data_type", "is_system")
     search_fields = ("identifier", "title")
     ordering = ("identifier",)
-    readonly_fields = ("identifier", "is_system")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.is_system:
+            return ("identifier", "is_system")
+        return ()
 
     def has_delete_permission(self, request, obj=None):
         if obj and obj.is_system:
@@ -25,9 +29,9 @@ class SchemaColumnTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(SchemaColumnTemplateBehaviour)
 class SchemaColumnTemplateBehaviourAdmin(admin.ModelAdmin):
-    list_display = ("template", "asset_type", "source", "formula_definition")
+    list_display = ("template", "asset_type", "source", "formula_identifier")
     list_filter = ("asset_type", "source")
-    search_fields = ("template__identifier", "formula_definition__identifier")
+    search_fields = ("template__identifier", "formula_identifier")
 
 
 @admin.register(Schema)

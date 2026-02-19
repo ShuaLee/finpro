@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from assets.models.core import Asset
-from assets.services import AssetPolicyService
+from assets.services.policy import AssetPolicyService
 from fx.models.fx import FXCurrency
 from profiles.models import Profile
 

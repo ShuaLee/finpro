@@ -7,11 +7,14 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db.models import Prefetch
 
 from assets.models.core import AssetType
-from formulas.services.formula_resolver import FormulaResolver
 from fx.models.fx import FXCurrency
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.models.schema_column_template import SchemaColumnTemplate
 from schemas.models.schema_column_template_behaviour import SchemaColumnTemplateBehaviour
+from schemas.services.formula_bridge import (
+    formula_dependencies,
+    is_implicit_identifier,
+)
 
 
 class SchemaQueryService:
@@ -39,17 +42,21 @@ class SchemaQueryService:
         behaviors = SchemaColumnAssetBehaviour.objects.filter(
             column__schema=schema,
             source="formula",
-        ).select_related("column", "formula_definition__formula")
+        ).select_related("column", "asset_type")
 
         for behavior in behaviors:
-            if not behavior.formula_definition:
+            if not behavior.formula_identifier:
                 continue
 
-            formula = behavior.formula_definition.formula
             dependent = behavior.column.identifier
 
-            for dep in formula.dependencies:
-                if FormulaResolver.is_implicit(dep):
+            deps = formula_dependencies(
+                identifier=behavior.formula_identifier,
+                asset_type=behavior.asset_type,
+            )
+
+            for dep in deps:
+                if is_implicit_identifier(dep):
                     continue
                 graph[dep].add(dependent)
 

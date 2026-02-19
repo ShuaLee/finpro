@@ -1,3 +1,5 @@
-from django.shortcuts import render
+"""
+Formulas app currently exposes domain services and admin operations only.
 
-# Create your views here.
+API endpoints can be added later once formula/scoped-definition UX is finalized.
+"""

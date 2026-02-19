@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from django.utils.text import slugify
 
 from assets.models.core import AssetType
 from formulas.models.formula import Formula
@@ -24,7 +26,7 @@ class FormulaDefinition(models.Model):
     """
 
     owner = models.ForeignKey(
-        "users.Profile",
+        "profiles.Profile",
         null=True,
         blank=True,
         on_delete=models.CASCADE,
@@ -81,6 +83,56 @@ class FormulaDefinition(models.Model):
                 name="uniq_formula_definition_per_asset_type_owner"
             )
         ]
+
+    def clean(self):
+        super().clean()
+
+        if not self.identifier:
+            raise ValidationError("Identifier is required.")
+
+        if self.is_system and self.owner_id is not None:
+            raise ValidationError("System definitions cannot have an owner.")
+
+        if not self.is_system and self.owner_id is None:
+            raise ValidationError("User definitions must have an owner.")
+
+        if self.formula_id is None:
+            raise ValidationError("formula is required.")
+
+        if self.owner_id is not None:
+            if self.formula.owner_id not in (None, self.owner_id):
+                raise ValidationError(
+                    "You can only use system formulas or formulas you own."
+                )
+
+        if self.pk:
+            previous = FormulaDefinition.objects.filter(pk=self.pk).first()
+            if previous and previous.is_system:
+                immutable_fields = (
+                    "owner_id",
+                    "identifier",
+                    "asset_type_id",
+                    "formula_id",
+                    "dependency_policy",
+                    "is_system",
+                )
+                for field in immutable_fields:
+                    if getattr(self, field) != getattr(previous, field):
+                        raise ValidationError(
+                            f"System definition field '{field}' cannot be changed."
+                        )
+
+    def save(self, *args, **kwargs):
+        self.identifier = slugify(self.identifier).replace("-", "_")
+        if self.owner_id is None:
+            self.is_system = True
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_system:
+            raise ValidationError("System formula definitions cannot be deleted.")
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         scope = "system" if self.owner is None else f"user={self.owner_id}"

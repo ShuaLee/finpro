@@ -5,7 +5,6 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
-from formulas.services.formula_resolver import FormulaResolver
 from schemas.models import (
     MasterConstraint,
     Schema,
@@ -16,6 +15,10 @@ from schemas.models import (
 )
 from schemas.models.schema_column_asset_behaviour import SchemaColumnAssetBehaviour
 from schemas.policies.default_schema_policy import DefaultSchemaPolicy
+from schemas.services.formula_bridge import (
+    formula_dependencies,
+    is_implicit_identifier,
+)
 
 
 class SchemaBootstrapService:
@@ -98,19 +101,22 @@ class SchemaBootstrapService:
 
         # Expand formula dependencies first.
         for t_behavior in template_column.behaviours.select_related(
-            "asset_type", "formula_definition__formula"
+            "asset_type"
         ):
             if t_behavior.source != "formula":
                 continue
 
-            if not t_behavior.formula_definition:
+            if not t_behavior.formula_identifier:
                 raise ValidationError(
-                    f"Template '{template_column.identifier}' has formula behavior without formula definition."
+                    f"Template '{template_column.identifier}' has formula behavior without formula_identifier."
                 )
 
-            formula = t_behavior.formula_definition.formula
-            for dep_identifier in formula.dependencies:
-                if FormulaResolver.is_implicit(dep_identifier):
+            dependencies = formula_dependencies(
+                identifier=t_behavior.formula_identifier,
+                asset_type=t_behavior.asset_type,
+            )
+            for dep_identifier in dependencies:
+                if is_implicit_identifier(dep_identifier):
                     continue
 
                 dep_template = SchemaColumnTemplate.objects.filter(
@@ -135,6 +141,10 @@ class SchemaBootstrapService:
                 "display_order")).get("max") or 0
         )
 
+        is_editable = template_column.behaviours.filter(
+            source__in=["holding", "user"]
+        ).exists()
+
         column = SchemaColumn.objects.create(
             schema=schema,
             identifier=template_column.identifier,
@@ -142,7 +152,7 @@ class SchemaBootstrapService:
             data_type=template_column.data_type,
             template=template_column,
             is_system=True,
-            is_editable=False,
+            is_editable=is_editable,
             is_deletable=False,
             display_order=max_order + 1,
         )
@@ -152,7 +162,7 @@ class SchemaBootstrapService:
                 column=column,
                 asset_type=t_behavior.asset_type,
                 source=t_behavior.source,
-                formula_definition=t_behavior.formula_definition,
+                formula_identifier=t_behavior.formula_identifier,
                 source_field=t_behavior.source_field,
                 constant_value=t_behavior.constant_value,
                 is_override=False,
@@ -219,13 +229,21 @@ class SchemaBootstrapService:
             account_type=schema.account_type
         ).prefetch_related("holdings")
 
+        holding_ids = []
+        for account in accounts:
+            holding_ids.extend([h.id for h in account.holdings.all()])
+
+        existing_holding_ids = set(
+            SchemaColumnValue.objects.filter(
+                column=column,
+                holding_id__in=holding_ids,
+            ).values_list("holding_id", flat=True)
+        )
+
         to_create = []
         for account in accounts:
             for holding in account.holdings.all():
-                if not SchemaColumnValue.objects.filter(
-                    column=column,
-                    holding=holding,
-                ).exists():
+                if holding.id not in existing_holding_ids:
                     to_create.append(
                         SchemaColumnValue(
                             column=column,

@@ -24,6 +24,7 @@ class AllocationGapResultAdmin(admin.ModelAdmin):
     list_display = (
         "run",
         "dimension",
+        "bucket_key_snapshot",
         "bucket_label_snapshot",
         "actual_value",
         "target_value",
@@ -33,12 +34,13 @@ class AllocationGapResultAdmin(admin.ModelAdmin):
         "gap_percent",
         "holding_count",
     )
-    search_fields = ("bucket_label_snapshot", "dimension__name", "run__scenario__name")
+    search_fields = ("bucket_key_snapshot", "bucket_label_snapshot", "dimension__name", "run__scenario__name")
     list_filter = ("dimension",)
     readonly_fields = (
         "run",
         "dimension",
         "target",
+        "bucket_key_snapshot",
         "bucket_label_snapshot",
         "actual_value",
         "target_value",

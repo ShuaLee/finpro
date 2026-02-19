@@ -1,6 +1,6 @@
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.utils.text import slugify
 
 from formulas.models.formula_definition import FormulaDefinition, DependencyPolicy
 from formulas.models.formula import Formula
@@ -47,9 +47,11 @@ class FormulaDefinitionService:
         if not identifier:
             raise ValidationError("Identifier is required.")
 
-        if SystemFormulaRegistry.is_reserved(identifier):
+        normalized_identifier = slugify(identifier).replace("-", "_")
+
+        if SystemFormulaRegistry.is_reserved(normalized_identifier):
             raise ValidationError(
-                f"'{identifier}' is a reserved system formula identifier."
+                f"'{normalized_identifier}' is a reserved system formula identifier."
             )
 
         # User must own the formula
@@ -58,7 +60,7 @@ class FormulaDefinitionService:
 
         definition = FormulaDefinition(
             owner=user.profile,
-            identifier=identifier,
+            identifier=normalized_identifier,
             name=name,
             description=description,
             asset_type=asset_type,
@@ -128,17 +130,18 @@ class FormulaDefinitionService:
         Raises ValidationError if no definition exists.
         """
 
+        normalized_identifier = slugify(identifier).replace("-", "_")
+
         qs = FormulaDefinition.objects.filter(
-            identifier=identifier,
+            identifier=normalized_identifier,
             asset_type=asset_type,
         )
 
         if user:
-            qs = qs.filter(
-                Q(owner=user.profile) | Q(owner__isnull=True)
-            ).order_by(
-                Q(owner=user.profile).desc()
-            )
+            owned = qs.filter(owner=user.profile).first()
+            if owned:
+                return owned
+            qs = qs.filter(owner__isnull=True)
         else:
             qs = qs.filter(owner__isnull=True)
 

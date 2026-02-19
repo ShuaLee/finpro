@@ -7,30 +7,41 @@ from analytics.services.value_service import ValueResolverService
 
 class AggregationService:
     @staticmethod
-    def aggregate_dimension(*, analytic, dimension, holdings):
+    def aggregate_dimension(
+        *,
+        analytic,
+        dimension,
+        holdings,
+        values_by_holding,
+        asset_exposures_by_asset,
+        override_exposures_by_holding,
+    ):
         bucket_totals = defaultdict(Decimal)
         bucket_holding_ids = defaultdict(set)
 
         for holding in holdings:
             base_value = ValueResolverService.get_decimal(
-                holding=holding,
+                holding_id=holding.id,
                 identifier=analytic.value_identifier,
+                values_by_holding=values_by_holding,
             )
-
             if base_value == 0:
                 continue
 
             contributions = DimensionResolverService.resolve_contributions(
                 holding=holding,
                 dimension=dimension,
+                values_by_holding=values_by_holding,
+                asset_exposures_by_asset=asset_exposures_by_asset,
+                override_exposures_by_holding=override_exposures_by_holding,
             )
 
             for item in contributions:
                 key = (item.bucket_id, item.label)
-                bucket_totals[key] += (base_value * item.weight)
+                bucket_totals[key] += base_value * item.weight
                 bucket_holding_ids[key].add(holding.id)
 
-        grand_total = sum(bucket_totals.values())
+        grand_total = sum(bucket_totals.values(), Decimal("0"))
 
         rows = []
         for (bucket_id, label), total in bucket_totals.items():
@@ -42,7 +53,7 @@ class AggregationService:
                 {
                     "bucket_id": bucket_id,
                     "bucket_label": label,
-                    "total_value": total,
+                    "total_value": total.quantize(Decimal("0.01")),
                     "percentage": percentage,
                     "holding_count": len(bucket_holding_ids[(bucket_id, label)]),
                 }

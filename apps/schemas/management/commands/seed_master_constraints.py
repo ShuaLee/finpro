@@ -5,10 +5,10 @@ from schemas.seeders.master_constraints import seed_master_constraints
 
 
 class Command(BaseCommand):
-    help = "Seed system-level MasterConstraints (idempotent)"
+    help = "Seed system-level master constraints."
 
     @transaction.atomic
     def handle(self, *args, **options):
-        self.stdout.write("🔧 Seeding master constraints...")
+        self.stdout.write("Seeding master constraints...")
         seed_master_constraints()
-        self.stdout.write(self.style.SUCCESS("✅ Master constraints seeded"))
+        self.stdout.write(self.style.SUCCESS("Master constraints seeded."))

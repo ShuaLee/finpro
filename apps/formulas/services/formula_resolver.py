@@ -65,7 +65,7 @@ class FormulaResolver:
                         f"for formula '{formula.identifier}'."
                     )
 
-                resolved[identifier] = Decimal(default_missing or 0)
+                resolved[identifier] = Decimal(str(default_missing or 0))
                 continue
 
             value = context[identifier]
@@ -77,15 +77,15 @@ class FormulaResolver:
                         f"for formula '{formula.identifier}'."
                     )
 
-                resolved[identifier] = Decimal(default_missing or 0)
+                resolved[identifier] = Decimal(str(default_missing or 0))
                 continue
 
             try:
-                resolved[identifier] = Decimal(value)
-            except Exception:
+                resolved[identifier] = Decimal(str(value))
+            except Exception as exc:
                 raise ValidationError(
                     f"Invalid value for dependency '{identifier}': {value}"
-                )
+                ) from exc
 
         return resolved
 

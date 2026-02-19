@@ -133,4 +133,4 @@ class SchemaColumnValueAdmin(admin.ModelAdmin):
         return super().render_change_form(request, context, *args, **kwargs)
 
     def has_delete_permission(self, request, obj=None):
-        return True
+        return False

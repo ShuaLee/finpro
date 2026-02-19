@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class SchemaColumnCategory(models.Model):
@@ -42,6 +43,29 @@ class SchemaColumnCategory(models.Model):
 
     class Meta:
         ordering = ["display_order", "name"]
+
+    def clean(self):
+        super().clean()
+        if self.pk:
+            previous = SchemaColumnCategory.objects.filter(pk=self.pk).first()
+            if previous and previous.is_system:
+                if self.identifier != previous.identifier:
+                    raise ValidationError(
+                        "System category identifier cannot be changed."
+                    )
+                if self.name != previous.name:
+                    raise ValidationError(
+                        "System category name cannot be changed."
+                    )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_system:
+            raise ValidationError("System categories cannot be deleted.")
+        super().delete(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name

@@ -10,10 +10,11 @@ class AllocationDimensionAdmin(admin.ModelAdmin):
         "label",
         "scenario",
         "source_identifier",
+        "source_analytic_name",
         "denominator_mode",
         "is_active",
     )
-    search_fields = ("name", "label", "source_identifier", "scenario__name")
+    search_fields = ("name", "label", "source_identifier", "source_analytic_name", "scenario__name")
     list_filter = ("denominator_mode", "is_active")
 
 

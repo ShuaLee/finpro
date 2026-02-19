@@ -42,9 +42,7 @@ class AnalyticResult(models.Model):
             )
         ]
         ordering = ["-total_value"]
-        indexes = [
-            models.Index(fields=["run", "dimension"]),
-        ]
+        indexes = [models.Index(fields=["run", "dimension"])]
 
     def __str__(self):
         return f"{self.run_id}:{self.bucket_label_snapshot}:{self.total_value}"

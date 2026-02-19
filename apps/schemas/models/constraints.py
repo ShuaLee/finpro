@@ -109,19 +109,26 @@ class MasterConstraint(models.Model):
     def __str__(self):
         return f"{self.name} ({self.applies_to})"
 
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     # ==========================================================
     # VALIDATION
     # ==========================================================
     def clean(self):
         super().clean()
 
+        def _is_set(value):
+            return value is not None and value != ""
+
         if self.applies_to in (self.AppliesTo.DECIMAL, self.AppliesTo.PERCENT):
             if self.default_decimal is None:
                 raise ValidationError("default_decimal is required.")
             if any([
-                self.default_string,
-                self.default_date,
-                self.default_boolean,
+                _is_set(self.default_string),
+                _is_set(self.default_date),
+                _is_set(self.default_boolean),
             ]):
                 raise ValidationError("Only default_decimal may be set.")
 
@@ -129,9 +136,9 @@ class MasterConstraint(models.Model):
             if self.default_string is None:
                 raise ValidationError("default_string is required.")
             if any([
-                self.default_decimal,
-                self.default_date,
-                self.default_boolean,
+                _is_set(self.default_decimal),
+                _is_set(self.default_date),
+                _is_set(self.default_boolean),
             ]):
                 raise ValidationError("Only default_string may be set.")
 
@@ -139,9 +146,9 @@ class MasterConstraint(models.Model):
             if self.default_date is None:
                 raise ValidationError("default_date is required.")
             if any([
-                self.default_decimal,
-                self.default_string,
-                self.default_boolean,
+                _is_set(self.default_decimal),
+                _is_set(self.default_string),
+                _is_set(self.default_boolean),
             ]):
                 raise ValidationError("Only default_date may be set.")
 
@@ -149,9 +156,9 @@ class MasterConstraint(models.Model):
             if self.default_boolean is None:
                 raise ValidationError("default_boolean is required.")
             if any([
-                self.default_decimal,
-                self.default_string,
-                self.default_date,
+                _is_set(self.default_decimal),
+                _is_set(self.default_string),
+                _is_set(self.default_date),
             ]):
                 raise ValidationError("Only default_boolean may be set.")
 
@@ -241,6 +248,9 @@ class SchemaConstraint(models.Model):
     def clean(self):
         super().clean()
 
+        def _is_set(value):
+            return value is not None and value != ""
+
         if self.applies_to in (
             MasterConstraint.AppliesTo.DECIMAL,
             MasterConstraint.AppliesTo.PERCENT,
@@ -248,9 +258,9 @@ class SchemaConstraint(models.Model):
             if self.value_decimal is None:
                 raise ValidationError("value_decimal is required.")
             if any([
-                self.value_string,
-                self.value_date,
-                self.value_boolean,
+                _is_set(self.value_string),
+                _is_set(self.value_date),
+                _is_set(self.value_boolean),
             ]):
                 raise ValidationError("Only value_decimal may be set.")
 
@@ -267,9 +277,9 @@ class SchemaConstraint(models.Model):
             if self.value_string is None:
                 raise ValidationError("value_string is required.")
             if any([
-                self.value_decimal,
-                self.value_date,
-                self.value_boolean,
+                _is_set(self.value_decimal),
+                _is_set(self.value_date),
+                _is_set(self.value_boolean),
             ]):
                 raise ValidationError("Only value_string may be set.")
 
@@ -289,14 +299,18 @@ class SchemaConstraint(models.Model):
             if self.value_boolean is None:
                 raise ValidationError("value_boolean is required.")
             if any([
-                self.value_decimal,
-                self.value_string,
-                self.value_date,
+                _is_set(self.value_decimal),
+                _is_set(self.value_string),
+                _is_set(self.value_date),
             ]):
                 raise ValidationError("Only value_boolean may be set.")
 
     def __str__(self):
         return f"{self.column.identifier}.{self.name}"
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     # ==========================================================
     # VALUE ACCESS
@@ -331,6 +345,18 @@ class SchemaConstraint(models.Model):
                 value = Decimal(str(raw_value))
             except Exception:
                 raise ValidationError(f"'{raw_value}' is not a valid number.")
+
+            if self.name == "min_value" and self.value_decimal is not None:
+                if value < self.value_decimal:
+                    raise ValidationError(
+                        f"Value {value} is less than minimum {self.value_decimal}."
+                    )
+
+            if self.name == "max_value" and self.value_decimal is not None:
+                if value > self.value_decimal:
+                    raise ValidationError(
+                        f"Value {value} is greater than maximum {self.value_decimal}."
+                    )
 
             if self.min_decimal is not None and value < self.min_decimal:
                 raise ValidationError(

@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 from schemas.models.schema import Schema
 from schemas.models.schema_column_template import SchemaColumnTemplate
@@ -41,6 +42,23 @@ class SchemaColumn(models.Model):
     class Meta:
         unique_together = ("schema", "identifier")
         ordering = ["display_order", "id"]
+
+    def clean(self):
+        super().clean()
+        if self.is_system and self.is_deletable:
+            raise ValidationError("System columns cannot be deletable.")
+        if self.data_type not in {
+            "decimal",
+            "percent",
+            "string",
+            "boolean",
+            "date",
+        }:
+            raise ValidationError("Unsupported schema column data_type.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         from schemas.policies.schema_column_deletion_policy import SchemaColumnDeletionPolicy

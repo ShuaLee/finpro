@@ -6,10 +6,11 @@ from .plan import AllocationScenario
 
 class AllocationDimension(models.Model):
     """
-    What a scenario is targeting (country, asset class, sector, etc.).
+    Targeting dimension linked to analytics output.
 
-    This uses identifiers instead of hard FK to analytics dimensions so the
-    target layer stays stable even if analytics internals evolve.
+    source_identifier expects the analytics dimension name (slug).
+    source_analytic_name can be provided to disambiguate when multiple analytics
+    contain the same dimension name.
     """
 
     class DenominatorMode(models.TextChoices):
@@ -28,7 +29,13 @@ class AllocationDimension(models.Model):
 
     source_identifier = models.SlugField(
         max_length=100,
-        help_text="Grouping identifier (typically SCV/analytic dimension identifier).",
+        help_text="Analytics dimension name (slug).",
+    )
+    source_analytic_name = models.SlugField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Optional analytics name to disambiguate dimension source.",
     )
 
     denominator_mode = models.CharField(
@@ -51,6 +58,19 @@ class AllocationDimension(models.Model):
             )
         ]
         ordering = ["display_order", "name"]
+        indexes = [models.Index(fields=["scenario", "is_active", "display_order"]) ]
+
+    def clean(self):
+        super().clean()
+
+        if self.pk:
+            original = AllocationDimension.objects.only("scenario_id").filter(pk=self.pk).first()
+            if original and original.scenario_id != self.scenario_id:
+                raise ValidationError("Allocation dimension scenario cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.scenario.name}:{self.name}"
@@ -58,7 +78,7 @@ class AllocationDimension(models.Model):
 
 class AllocationTarget(models.Model):
     """
-    Target bucket inside a dimension (e.g., country=AR => 5%).
+    Target bucket inside a dimension (e.g., key=met_coal => 5%).
     """
 
     dimension = models.ForeignKey(
@@ -96,9 +116,8 @@ class AllocationTarget(models.Model):
         if self.target_percent is None and self.target_value is None:
             raise ValidationError("At least one of target_percent or target_value is required.")
 
-        if self.target_percent is not None:
-            if self.target_percent < 0 or self.target_percent > 1:
-                raise ValidationError("target_percent must be between 0 and 1.")
+        if self.target_percent is not None and (self.target_percent < 0 or self.target_percent > 1):
+            raise ValidationError("target_percent must be between 0 and 1.")
 
         if self.min_percent is not None and (self.min_percent < 0 or self.min_percent > 1):
             raise ValidationError("min_percent must be between 0 and 1.")
@@ -106,9 +125,17 @@ class AllocationTarget(models.Model):
         if self.max_percent is not None and (self.max_percent < 0 or self.max_percent > 1):
             raise ValidationError("max_percent must be between 0 and 1.")
 
-        if self.min_percent is not None and self.max_percent is not None:
-            if self.min_percent > self.max_percent:
-                raise ValidationError("min_percent cannot be greater than max_percent.")
+        if self.min_percent is not None and self.max_percent is not None and self.min_percent > self.max_percent:
+            raise ValidationError("min_percent cannot be greater than max_percent.")
+
+        if self.pk:
+            original = AllocationTarget.objects.only("dimension_id").filter(pk=self.pk).first()
+            if original and original.dimension_id != self.dimension_id:
+                raise ValidationError("Allocation target dimension cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.dimension.name}:{self.key}"

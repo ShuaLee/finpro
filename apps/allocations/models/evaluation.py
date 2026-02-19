@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from .plan import AllocationScenario
@@ -26,7 +27,7 @@ class AllocationEvaluationRun(models.Model):
     error_message = models.TextField(blank=True, null=True)
 
     triggered_by = models.ForeignKey(
-        "users.User",
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -73,6 +74,7 @@ class AllocationGapResult(models.Model):
         related_name="results",
     )
 
+    bucket_key_snapshot = models.SlugField(max_length=100)
     bucket_label_snapshot = models.CharField(max_length=150)
 
     actual_value = models.DecimalField(max_digits=20, decimal_places=2)
@@ -88,14 +90,12 @@ class AllocationGapResult(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["run", "dimension", "bucket_label_snapshot"],
+                fields=["run", "dimension", "bucket_key_snapshot"],
                 name="uniq_allocation_gap_bucket_per_run_dimension",
             )
         ]
         ordering = ["-gap_value"]
-        indexes = [
-            models.Index(fields=["run", "dimension"]),
-        ]
+        indexes = [models.Index(fields=["run", "dimension"])]
 
     def __str__(self):
-        return f"{self.run_id}:{self.bucket_label_snapshot}:{self.gap_value}"
+        return f"{self.run_id}:{self.bucket_key_snapshot}:{self.gap_value}"

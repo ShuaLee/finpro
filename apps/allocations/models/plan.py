@@ -23,8 +23,8 @@ class AllocationPlan(models.Model):
 
     base_value_identifier = models.SlugField(
         max_length=100,
-        default="total_value_profile_ccy",
-        help_text="SCV identifier used as the base value for allocation math.",
+        default="current_value",
+        help_text="Schema identifier used as the base value for allocation math.",
     )
 
     base_scope = models.CharField(
@@ -55,6 +55,7 @@ class AllocationPlan(models.Model):
             )
         ]
         ordering = ["name"]
+        indexes = [models.Index(fields=["portfolio", "is_active"]) ]
 
     def clean(self):
         super().clean()
@@ -64,6 +65,18 @@ class AllocationPlan(models.Model):
 
         if self.base_scope != self.BaseScope.ACCOUNT_TYPE and self.account_type_id:
             raise ValidationError("account_type must be empty unless base_scope='account_type'.")
+
+        if self.account_type and self.account_type.owner_id and self.account_type.owner_id != self.portfolio.profile_id:
+            raise ValidationError("Custom account_type must belong to the same profile as this portfolio.")
+
+        if self.pk:
+            original = AllocationPlan.objects.only("portfolio_id").filter(pk=self.pk).first()
+            if original and original.portfolio_id != self.portfolio_id:
+                raise ValidationError("Allocation plan portfolio cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.portfolio_id}:{self.name}"
@@ -95,14 +108,28 @@ class AllocationScenario(models.Model):
             models.UniqueConstraint(
                 fields=["plan", "name"],
                 name="uniq_allocation_scenario_name_per_plan",
-            ),
-            models.UniqueConstraint(
-                fields=["plan"],
-                condition=models.Q(is_default=True),
-                name="uniq_default_allocation_scenario_per_plan",
-            ),
+            )
         ]
         ordering = ["name"]
+        indexes = [models.Index(fields=["plan", "is_active"]) ]
+
+    def clean(self):
+        super().clean()
+        if self.is_default:
+            qs = AllocationScenario.objects.filter(plan=self.plan, is_default=True)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise ValidationError("Only one default scenario is allowed per plan.")
+
+        if self.pk:
+            original = AllocationScenario.objects.only("plan_id").filter(pk=self.pk).first()
+            if original and original.plan_id != self.plan_id:
+                raise ValidationError("Allocation scenario plan cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.plan.name}:{self.name}"

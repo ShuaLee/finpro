@@ -1,5 +1,4 @@
 from django.contrib import admin
-from django.core.exceptions import PermissionDenied
 
 from formulas.models.formula import Formula
 from formulas.models.formula_definition import FormulaDefinition

@@ -21,7 +21,7 @@ Usage:
 - Triggered automatically after `python manage.py migrate` or when migrations are applied during deployment.
 """
 
-from django.db import transaction
+from django.db import OperationalError, ProgrammingError, transaction
 
 from subscriptions.models import Plan
 
@@ -107,6 +107,11 @@ def create_default_plans(sender, **kwargs):
             "is_public": True,
         },
     ]
-    with transaction.atomic():
-        for data in plans:
-            Plan.objects.update_or_create(slug=data["slug"], defaults=data)
+    try:
+        with transaction.atomic():
+            for data in plans:
+                Plan.objects.update_or_create(slug=data["slug"], defaults=data)
+    except (OperationalError, ProgrammingError):
+        # Database schema may still be on an older revision while migrations run.
+        # Avoid blocking migrate; seeding can be re-run after schema is current.
+        return

@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class AccountColumnVisibility(models.Model):
@@ -27,6 +28,19 @@ class AccountColumnVisibility(models.Model):
 
     class Meta:
         unique_together = ("account", "column")
+
+    def clean(self):
+        super().clean()
+        if self.account and self.column:
+            schema = getattr(self.account, "active_schema", None)
+            if not schema or self.column.schema_id != schema.id:
+                raise ValidationError(
+                    "Visibility column must belong to the account's active schema."
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.account_id}:{self.column.identifier}={self.is_visible}"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -221,7 +222,10 @@ class SchemaMutationService:
             elif column.data_type == "boolean":
                 value = SchemaMutationService._cast_boolean(raw_value)
             elif column.data_type == "date":
-                value = raw_value
+                if isinstance(raw_value, date):
+                    value = raw_value
+                else:
+                    value = date.fromisoformat(str(raw_value))
             else:
                 value = str(raw_value)
         except Exception:

@@ -42,7 +42,7 @@ class FormulaService:
         formula = Formula(
             owner=user.profile,
             title=title,
-            identifier=identifier,
+            identifier=normalized_identifier,
             expression=expression,
             decimal_places=decimal_places,
         )
@@ -65,7 +65,16 @@ class FormulaService:
 
         for field in ["title", "expression", "decimal_places", "identifier"]:
             if field in updates:
-                setattr(formula, field, updates[field])
+                if field == "identifier":
+                    normalized_identifier = slugify(
+                        updates[field]).replace("-", "_")
+                    if SystemFormulaRegistry.is_reserved(normalized_identifier):
+                        raise ValidationError(
+                            f"'{normalized_identifier}' is a reserved system formula identifier."
+                        )
+                    setattr(formula, field, normalized_identifier)
+                else:
+                    setattr(formula, field, updates[field])
 
         formula.save()
         return formula
@@ -94,9 +103,11 @@ class FormulaService:
         2. System formula
         """
 
+        normalized = slugify(identifier).replace("-", "_")
+
         # User-owned first
         formula = Formula.objects.filter(
-            identifier=identifier,
+            identifier=normalized,
             owner=user.profile,
         ).first()
 
@@ -105,7 +116,7 @@ class FormulaService:
 
         # System fallback
         return Formula.objects.get(
-            identifier=identifier,
+            identifier=normalized,
             owner__isnull=True,
         )
 
