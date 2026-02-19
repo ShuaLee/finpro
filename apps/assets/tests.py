@@ -5,10 +5,15 @@ from assets.models.commodity.precious_metal import PreciousMetalAsset
 from assets.models.core import Asset, AssetType
 from assets.models.crypto.crypto import CryptoAsset
 from assets.models.custom.custom_asset import CustomAsset
+from assets.models.equity import EquityAsset, EquitySnapshotID
 from assets.models.real_estate.real_estate_type import RealEstateType
+from assets.services.equity.snapshot_cleanup import EquitySnapshotCleanupService
+from accounts.models import Account, AccountType, Holding
 from fx.models.fx import FXCurrency
+from portfolios.models import Portfolio
 from profiles.models import Profile
 from users.models import User
+import uuid
 
 
 class AssetsProductionReadinessTests(TestCase):
@@ -152,3 +157,112 @@ class AssetsProductionReadinessTests(TestCase):
 
         with self.assertRaises(ValidationError):
             duplicate.full_clean()
+
+    def test_snapshot_cleanup_relinks_holdings_to_active_market_asset(self):
+        portfolio = Portfolio.objects.create(profile=self.profile1, name="Main", kind=Portfolio.Kind.PERSONAL)
+
+        equity_type = AssetType.objects.create(name="Equity", created_by=None)
+        account_type = AccountType.objects.create(
+            name="Brokerage",
+            slug="brokerage",
+            is_system=True,
+        )
+        account_type.allowed_asset_types.add(equity_type)
+        account = Account.objects.create(
+            portfolio=portfolio,
+            name="Test Brokerage",
+            account_type=account_type,
+        )
+
+        old_snapshot = uuid.uuid4()
+        active_snapshot = uuid.uuid4()
+
+        old_asset = Asset.objects.create(asset_type=equity_type)
+        old_equity = EquityAsset.objects.create(
+            asset=old_asset,
+            snapshot_id=old_snapshot,
+            ticker="FRO",
+            name="Frontline Ltd",
+            currency=self.usd,
+        )
+
+        active_asset = Asset.objects.create(asset_type=equity_type)
+        EquityAsset.objects.create(
+            asset=active_asset,
+            snapshot_id=active_snapshot,
+            ticker="FRO",
+            name="Frontline Ltd",
+            currency=self.usd,
+        )
+
+        holding = Holding.objects.create(
+            account=account,
+            asset=old_equity.asset,
+            quantity="10",
+            average_purchase_price="5",
+            original_ticker="FRO",
+        )
+
+        EquitySnapshotID.objects.update_or_create(
+            id=1,
+            defaults={"current_snapshot": active_snapshot},
+        )
+
+        EquitySnapshotCleanupService.run()
+
+        holding.refresh_from_db()
+        self.assertEqual(holding.asset_id, active_asset.id)
+        self.assertFalse(CustomAsset.objects.filter(owner=self.profile1, name="FRO").exists())
+
+    def test_snapshot_cleanup_relinks_market_custom_holdings_when_ticker_returns(self):
+        portfolio = Portfolio.objects.create(profile=self.profile1, name="Main", kind=Portfolio.Kind.PERSONAL)
+
+        equity_type = AssetType.objects.create(name="Equity", created_by=None)
+        account_type = AccountType.objects.create(
+            name="Brokerage",
+            slug="brokerage",
+            is_system=True,
+        )
+        account_type.allowed_asset_types.add(equity_type)
+        account = Account.objects.create(
+            portfolio=portfolio,
+            name="Test Brokerage",
+            account_type=account_type,
+        )
+
+        active_snapshot = uuid.uuid4()
+        active_asset = Asset.objects.create(asset_type=equity_type)
+        EquityAsset.objects.create(
+            asset=active_asset,
+            snapshot_id=active_snapshot,
+            ticker="FRO",
+            name="Frontline Ltd",
+            currency=self.usd,
+        )
+
+        custom_asset_wrapper = CustomAsset.objects.create(
+            asset=Asset.objects.create(asset_type=equity_type),
+            owner=self.profile1,
+            name="FRO",
+            currency=self.usd,
+            reason=CustomAsset.Reason.MARKET,
+            requires_review=True,
+        )
+        holding = Holding.objects.create(
+            account=account,
+            asset=custom_asset_wrapper.asset,
+            quantity="10",
+            average_purchase_price="5",
+            original_ticker="FRO",
+        )
+
+        EquitySnapshotID.objects.update_or_create(
+            id=1,
+            defaults={"current_snapshot": active_snapshot},
+        )
+
+        EquitySnapshotCleanupService.run()
+
+        holding.refresh_from_db()
+        self.assertEqual(holding.asset_id, active_asset.id)
+        self.assertFalse(CustomAsset.objects.filter(pk=custom_asset_wrapper.pk).exists())

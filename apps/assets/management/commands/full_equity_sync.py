@@ -1,114 +1,98 @@
 from django.core.management.base import BaseCommand, CommandError
 
 from assets.models.equity import EquityAsset, EquitySnapshotID
-from assets.services.equity.equity_profile_sync import EquityProfileSyncService
+from assets.services.equity.dividend_sync import EquityDividendSyncService
 from assets.services.equity.equity_price_sync import EquityPriceSyncService
+from assets.services.equity.equity_profile_sync import EquityProfileSyncService
 
 
 class Command(BaseCommand):
-    help = (
-        "Sync equity profile data and/or latest price for a single ticker "
-        "(active snapshot only)"
-    )
+    help = "Run profile, price, and dividend sync for active-snapshot equities."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "ticker",
+            "--ticker",
             type=str,
-            help="Equity ticker symbol (e.g. AAPL, MSFT)",
+            help="Optional single ticker (e.g. AAPL). If omitted, syncs all active equities.",
         )
-
         parser.add_argument(
-            "--profile-only",
+            "--skip-profile",
             action="store_true",
-            help="Only sync equity profile data",
+            help="Skip profile sync.",
         )
-
         parser.add_argument(
-            "--price-only",
+            "--skip-price",
             action="store_true",
-            help="Only sync equity price data",
+            help="Skip price sync.",
         )
-
         parser.add_argument(
-            "--no-fail-price",
+            "--skip-dividends",
             action="store_true",
-            help="Do not fail the command if price sync updates nothing",
+            help="Skip dividend sync.",
         )
 
     def handle(self, *args, **options):
-        ticker = options["ticker"].upper().strip()
-        profile_only = options["profile_only"]
-        price_only = options["price_only"]
-        no_fail_price = options["no_fail_price"]
-
-        if profile_only and price_only:
-            raise CommandError(
-                "Cannot use --profile-only and --price-only together."
-            )
-
-        # -------------------------------------------------
-        # Resolve active snapshot
-        # -------------------------------------------------
         try:
             snapshot = EquitySnapshotID.objects.get(id=1).current_snapshot
-        except EquitySnapshotID.DoesNotExist:
-            raise CommandError("EquitySnapshotID with id=1 does not exist.")
+        except EquitySnapshotID.DoesNotExist as exc:
+            raise CommandError("EquitySnapshotID with id=1 does not exist.") from exc
 
-        # -------------------------------------------------
-        # Resolve equity asset (needed for profile sync)
-        # -------------------------------------------------
-        equity = None
-        if not price_only:
-            try:
-                equity = EquityAsset.objects.get(
-                    ticker=ticker,
-                    snapshot_id=snapshot,
-                )
-            except EquityAsset.DoesNotExist:
-                raise CommandError(
-                    f"Ticker '{ticker}' not found in active snapshot."
-                )
+        ticker = (options.get("ticker") or "").upper().strip()
+        skip_profile = options["skip_profile"]
+        skip_price = options["skip_price"]
+        skip_dividends = options["skip_dividends"]
 
-        # -------------------------------------------------
-        # 1️⃣ Profile sync (default: YES)
-        # -------------------------------------------------
-        if not price_only:
-            self.stdout.write(f"🔄 Syncing profile for {ticker}...")
+        if skip_profile and skip_price and skip_dividends:
+            raise CommandError("Nothing to do: all sync steps are disabled.")
 
-            profile_service = EquityProfileSyncService()
-            profile_result = profile_service.sync(equity)
+        equities = EquityAsset.objects.filter(snapshot_id=snapshot).select_related("asset")
+        if ticker:
+            equities = equities.filter(ticker__iexact=ticker)
 
-            self.stdout.write(
-                self.style.SUCCESS("✅ Profile sync complete")
-            )
-            self.stdout.write(str(profile_result))
+        equities = list(equities.order_by("ticker"))
+        if not equities:
+            raise CommandError("No equities found for the requested scope.")
 
-        # -------------------------------------------------
-        # 2️⃣ Price sync (default: YES)
-        # -------------------------------------------------
-        if not profile_only:
-            self.stdout.write(f"💰 Syncing price for {ticker}...")
+        profile_service = EquityProfileSyncService()
+        price_service = EquityPriceSyncService()
+        dividend_service = EquityDividendSyncService()
 
-            price_service = EquityPriceSyncService()
-            price_result = price_service.run(ticker=ticker)
+        profile_synced = 0
+        profile_failed = 0
+        dividend_synced = 0
+        dividend_failed = 0
 
-            if price_result.get("updated", 0) == 0 and not no_fail_price:
-                raise CommandError(
-                    f"No price updated for {ticker}"
-                )
+        if not skip_profile:
+            self.stdout.write("Syncing equity profiles...")
+            for equity in equities:
+                try:
+                    profile_service.sync(equity)
+                    profile_synced += 1
+                except Exception:
+                    profile_failed += 1
 
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"✅ Price synced for {ticker}"
-                )
-            )
+        if not skip_price:
+            self.stdout.write("Syncing equity prices...")
+            price_result = price_service.run(ticker=ticker or None)
+        else:
+            price_result = {"updated": 0, "skipped": len(equities)}
 
-        # -------------------------------------------------
-        # Done
-        # -------------------------------------------------
+        if not skip_dividends:
+            self.stdout.write("Syncing equity dividends...")
+            for equity in equities:
+                try:
+                    dividend_service.sync(equity.asset)
+                    dividend_synced += 1
+                except Exception:
+                    dividend_failed += 1
+
         self.stdout.write(
             self.style.SUCCESS(
-                f"🎉 Sync completed successfully for {ticker}"
+                (
+                    "Full equity sync complete | "
+                    f"profiles ok={profile_synced} failed={profile_failed} | "
+                    f"prices updated={price_result['updated']} skipped={price_result['skipped']} | "
+                    f"dividends ok={dividend_synced} failed={dividend_failed}"
+                )
             )
         )

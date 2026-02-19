@@ -81,9 +81,21 @@ class Portfolio(models.Model):
         super().clean()
 
         if self.pk:
-            original = Portfolio.objects.only("profile_id").filter(pk=self.pk).first()
+            original = Portfolio.objects.only(
+                "profile_id",
+                "kind",
+                "name",
+                "client_name",
+            ).filter(pk=self.pk).first()
             if original and original.profile_id != self.profile_id:
                 raise ValidationError("Portfolio owner cannot be changed.")
+            if original and original.kind == self.Kind.PERSONAL:
+                if self.kind != original.kind:
+                    raise ValidationError("Personal portfolio kind cannot be changed.")
+                if self.name != original.name:
+                    raise ValidationError("Personal portfolio name cannot be changed.")
+                if (self.client_name or "") != (original.client_name or ""):
+                    raise ValidationError("Personal portfolio client_name cannot be changed.")
 
         if self.kind == self.Kind.PERSONAL and self.client_name:
             raise ValidationError("Personal portfolio cannot have a client name.")

@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
@@ -46,7 +47,16 @@ class SnapshotCleanupBaseService:
         )
 
         for extension in stale_extensions:
-            cls._handle_stale_extension(extension, holding_model)
+            cls._handle_stale_extension(
+                extension=extension,
+                holding_model=holding_model,
+                active_snapshot_id=snapshot.current_snapshot,
+            )
+
+        cls._relink_market_custom_assets(
+            holding_model=holding_model,
+            active_snapshot_id=snapshot.current_snapshot,
+        )
 
     @classmethod
     def _validate_configuration(cls):
@@ -76,11 +86,28 @@ class SnapshotCleanupBaseService:
         SchemaOrchestrationService.holdings_changed(holdings_qs)
 
     @classmethod
-    def _handle_stale_extension(cls, extension, holding_model):
+    def _handle_stale_extension(cls, *, extension, holding_model, active_snapshot_id):
         asset = extension.asset
         holdings = holding_model.objects.select_for_update().filter(asset=asset)
 
         if not holdings.exists():
+            extension.delete()
+            asset.delete()
+            return
+
+        replacement_asset = cls._find_active_replacement_asset(
+            extension=extension,
+            active_snapshot_id=active_snapshot_id,
+        )
+        if replacement_asset:
+            cls._relink_holdings_to_market_asset(
+                holdings_qs=holdings,
+                target_asset=replacement_asset,
+                holding_model=holding_model,
+            )
+
+        remaining_holdings = holding_model.objects.select_for_update().filter(asset=asset)
+        if not remaining_holdings.exists():
             extension.delete()
             asset.delete()
             return
@@ -90,6 +117,137 @@ class SnapshotCleanupBaseService:
 
         if not holding_model.objects.filter(asset=asset).exists():
             asset.delete()
+
+    @classmethod
+    def _find_active_replacement_asset(cls, *, extension, active_snapshot_id):
+        name = getattr(extension, cls.name_attr, None)
+        if not name:
+            return None
+
+        replacement = (
+            cls.extension_model.objects.filter(
+                **{
+                    f"{cls.name_attr}__iexact": name,
+                    "snapshot_id": active_snapshot_id,
+                }
+            )
+            .exclude(pk=extension.pk)
+            .select_related("asset")
+            .first()
+        )
+        if not replacement:
+            return None
+        return replacement.asset
+
+    @classmethod
+    def _relink_holdings_to_market_asset(cls, *, holdings_qs, target_asset, holding_model):
+        touched_holding_ids = set()
+
+        for holding in holdings_qs.select_related("account").order_by("id"):
+            existing_target_holding = (
+                holding_model.objects.select_for_update()
+                .filter(account=holding.account, asset=target_asset)
+                .exclude(pk=holding.pk)
+                .first()
+            )
+
+            if not existing_target_holding:
+                holding.asset = target_asset
+                holding.save(update_fields=["asset", "updated_at"])
+                touched_holding_ids.add(holding.id)
+                continue
+
+            cls._merge_holdings(existing_target_holding, holding)
+            touched_holding_ids.add(existing_target_holding.id)
+
+        if touched_holding_ids:
+            changed_holdings = list(
+                holding_model.objects.filter(id__in=touched_holding_ids).select_related("account")
+            )
+            cls._notify_holdings_changed(changed_holdings)
+
+    @staticmethod
+    def _merge_holdings(target, source):
+        target_qty = target.quantity or Decimal("0")
+        source_qty = source.quantity or Decimal("0")
+        merged_qty = target_qty + source_qty
+
+        target_avg = target.average_purchase_price
+        source_avg = source.average_purchase_price
+
+        merged_avg = None
+        if merged_qty > 0 and (target_avg is not None or source_avg is not None):
+            target_cost = (target_avg or Decimal("0")) * target_qty
+            source_cost = (source_avg or Decimal("0")) * source_qty
+            merged_avg = (target_cost + source_cost) / merged_qty
+
+        target.quantity = merged_qty
+        target.average_purchase_price = merged_avg
+        if not target.original_ticker and source.original_ticker:
+            target.original_ticker = source.original_ticker
+            target.save(
+                update_fields=[
+                    "quantity",
+                    "average_purchase_price",
+                    "original_ticker",
+                    "updated_at",
+                ]
+            )
+        else:
+            target.save(update_fields=["quantity", "average_purchase_price", "updated_at"])
+
+        source.delete()
+
+    @classmethod
+    def _relink_market_custom_assets(cls, *, holding_model, active_snapshot_id):
+        custom_assets = (
+            CustomAsset.objects.filter(reason=CustomAsset.Reason.MARKET)
+            .select_related("asset")
+            .order_by("asset_id")
+        )
+
+        for custom_asset in custom_assets:
+            if not custom_asset.asset_id:
+                continue
+
+            replacement_asset = cls._find_active_replacement_asset_for_name(
+                name=custom_asset.name,
+                active_snapshot_id=active_snapshot_id,
+            )
+            if not replacement_asset:
+                continue
+
+            holdings = holding_model.objects.select_for_update().filter(asset=custom_asset.asset)
+            if not holdings.exists():
+                custom_asset.asset.delete()
+                continue
+
+            cls._relink_holdings_to_market_asset(
+                holdings_qs=holdings,
+                target_asset=replacement_asset,
+                holding_model=holding_model,
+            )
+
+            if not holding_model.objects.filter(asset=custom_asset.asset).exists():
+                custom_asset.asset.delete()
+
+    @classmethod
+    def _find_active_replacement_asset_for_name(cls, *, name, active_snapshot_id):
+        if not name:
+            return None
+
+        lookup = {
+            f"{cls.name_attr}__iexact": name,
+            "snapshot_id": active_snapshot_id,
+        }
+        replacement = (
+            cls.extension_model.objects.filter(**lookup)
+            .select_related("asset")
+            .first()
+        )
+        if not replacement:
+            return None
+        return replacement.asset
 
     @classmethod
     def _convert_asset_per_profile(cls, extension, holding_model):
