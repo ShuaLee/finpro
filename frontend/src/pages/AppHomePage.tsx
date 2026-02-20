@@ -32,10 +32,14 @@ type ResizeSession = {
   tileId: number;
   startX: number;
   startY: number;
+  startSlot: number;
   startColSpan: number;
   startRowSpan: number;
+  startLeft: number;
+  startTop: number;
   startWidth: number;
   startHeight: number;
+  handle: "tl" | "tr" | "bl" | "br";
 };
 
 type DragSession = {
@@ -89,8 +93,10 @@ export function AppHomePage() {
   const [draggingTileId, setDraggingTileId] = useState<number | null>(null);
   const [gridMetrics, setGridMetrics] = useState<GridMetrics | null>(null);
   const [resizeSession, setResizeSession] = useState<ResizeSession | null>(null);
-  const [resizePreview, setResizePreview] = useState<{ tileId: number; colSpan: number; rowSpan: number } | null>(null);
-  const [resizeVisual, setResizeVisual] = useState<{ tileId: number; width: number; height: number } | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ tileId: number; slot: number; colSpan: number; rowSpan: number } | null>(null);
+  const [resizeVisual, setResizeVisual] = useState<{ tileId: number; left: number; top: number; width: number; height: number } | null>(
+    null,
+  );
   const [dragSession, setDragSession] = useState<DragSession | null>(null);
   const [dragPreview, setDragPreview] = useState<{ tileId: number; left: number; top: number } | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -155,20 +161,69 @@ export function AppHomePage() {
       const tile = tiles.find((item) => item.id === resizeSession.tileId);
       if (!tile) return;
 
-      const tilePos = getGridPosition(tile.slot, columns);
-      const maxColSpan = columns - tilePos.col;
       const dx = event.clientX - resizeSession.startX;
       const dy = event.clientY - resizeSession.startY;
+      const stepX = Math.max(1, gridMetrics.cellWidth + gridMetrics.colGap);
+      const stepY = Math.max(1, gridMetrics.cellHeight + gridMetrics.rowGap);
+      const colDelta = Math.round(dx / stepX);
+      const rowDelta = Math.round(dy / stepY);
+      const startPos = getGridPosition(resizeSession.startSlot, columns);
+      const startEndCol = startPos.col + resizeSession.startColSpan - 1;
+      const startEndRow = startPos.row + resizeSession.startRowSpan - 1;
 
-      const colFloat = resizeSession.startColSpan + dx / Math.max(1, gridMetrics.cellWidth + gridMetrics.colGap);
-      const rowFloat = resizeSession.startRowSpan + dy / Math.max(1, gridMetrics.cellHeight + gridMetrics.rowGap);
-      const nextColSpan = clamp(Math.floor(colFloat + 0.5), 1, maxColSpan);
-      const nextRowSpan = clamp(Math.floor(rowFloat + 0.5), 1, MAX_ROW_SPAN);
-      setResizePreview({ tileId: tile.id, colSpan: nextColSpan, rowSpan: nextRowSpan });
+      let nextStartCol = startPos.col;
+      let nextEndCol = startEndCol;
+      let nextStartRow = startPos.row;
+      let nextEndRow = startEndRow;
+
+      if (resizeSession.handle === "br") {
+        nextEndCol = clamp(startEndCol + colDelta, startPos.col, columns - 1);
+        nextEndRow = Math.max(startPos.row, startEndRow + rowDelta);
+      } else if (resizeSession.handle === "tl") {
+        nextStartCol = clamp(startPos.col + colDelta, 0, startEndCol);
+        nextStartRow = Math.max(0, Math.min(startPos.row + rowDelta, startEndRow));
+      } else if (resizeSession.handle === "tr") {
+        nextEndCol = clamp(startEndCol + colDelta, startPos.col, columns - 1);
+        nextStartRow = Math.max(0, Math.min(startPos.row + rowDelta, startEndRow));
+      } else if (resizeSession.handle === "bl") {
+        nextStartCol = clamp(startPos.col + colDelta, 0, startEndCol);
+        nextEndRow = Math.max(startPos.row, startEndRow + rowDelta);
+      }
+
+      const nextColSpan = clamp(nextEndCol - nextStartCol + 1, 1, columns);
+      const nextRowSpan = clamp(nextEndRow - nextStartRow + 1, 1, MAX_ROW_SPAN);
+      const nextSlot = nextStartRow * columns + nextStartCol;
+
+      setResizePreview({ tileId: tile.id, slot: nextSlot, colSpan: nextColSpan, rowSpan: nextRowSpan });
+
+      let visualLeft = resizeSession.startLeft;
+      let visualTop = resizeSession.startTop;
+      let visualWidth = resizeSession.startWidth;
+      let visualHeight = resizeSession.startHeight;
+      if (resizeSession.handle === "br") {
+        visualWidth = Math.max(72, resizeSession.startWidth + dx);
+        visualHeight = Math.max(72, resizeSession.startHeight + dy);
+      } else if (resizeSession.handle === "tl") {
+        visualLeft = resizeSession.startLeft + dx;
+        visualTop = resizeSession.startTop + dy;
+        visualWidth = Math.max(72, resizeSession.startWidth - dx);
+        visualHeight = Math.max(72, resizeSession.startHeight - dy);
+      } else if (resizeSession.handle === "tr") {
+        visualTop = resizeSession.startTop + dy;
+        visualWidth = Math.max(72, resizeSession.startWidth + dx);
+        visualHeight = Math.max(72, resizeSession.startHeight - dy);
+      } else if (resizeSession.handle === "bl") {
+        visualLeft = resizeSession.startLeft + dx;
+        visualWidth = Math.max(72, resizeSession.startWidth - dx);
+        visualHeight = Math.max(72, resizeSession.startHeight + dy);
+      }
+
       setResizeVisual({
         tileId: tile.id,
-        width: Math.max(72, resizeSession.startWidth + dx),
-        height: Math.max(72, resizeSession.startHeight + dy),
+        left: visualLeft,
+        top: visualTop,
+        width: visualWidth,
+        height: visualHeight,
       });
     };
 
@@ -181,7 +236,7 @@ export function AppHomePage() {
         const valid = canPlaceTile(
           previous,
           tile.id,
-          tile.slot,
+          resizePreview.slot,
           resizePreview.colSpan,
           resizePreview.rowSpan,
           columns,
@@ -189,7 +244,9 @@ export function AppHomePage() {
         if (!valid) return previous;
 
         return previous.map((item) =>
-          item.id === tile.id ? { ...item, colSpan: resizePreview.colSpan, rowSpan: resizePreview.rowSpan } : item,
+          item.id === tile.id
+            ? { ...item, slot: resizePreview.slot, colSpan: resizePreview.colSpan, rowSpan: resizePreview.rowSpan }
+            : item,
         );
       });
 
@@ -254,7 +311,7 @@ export function AppHomePage() {
   const occupiedSlots = getOccupiedSlots(
     tiles.map((tile) => {
       const preview = resizePreview?.tileId === tile.id ? resizePreview : null;
-      return preview ? { ...tile, colSpan: preview.colSpan, rowSpan: preview.rowSpan } : tile;
+      return preview ? { ...tile, slot: preview.slot, colSpan: preview.colSpan, rowSpan: preview.rowSpan } : tile;
     }),
     columns,
   );
@@ -373,11 +430,12 @@ export function AppHomePage() {
                       ref={overlayRef}
                       className="absolute inset-0 z-10"
                     >
-                      {tiles.map((tile) => {
-                        const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
-                        const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
-                        const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
-                        const pos = getGridPosition(tile.slot, columns);
+                    {tiles.map((tile) => {
+                      const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
+                      const liveSlot = resizeSnapPreview ? resizeSnapPreview.slot : tile.slot;
+                      const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
+                      const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
+                      const pos = getGridPosition(liveSlot, columns);
                         const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
                         const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
                         const snappedWidth =
@@ -420,8 +478,8 @@ export function AppHomePage() {
                               setDragPreview({ tileId: tile.id, left, top });
                             }}
                             style={{
-                              left: `${dragMovePreview ? dragMovePreview.left : left}px`,
-                              top: `${dragMovePreview ? dragMovePreview.top : top}px`,
+                              left: `${dragMovePreview ? dragMovePreview.left : resizeLivePreview ? resizeLivePreview.left : left}px`,
+                              top: `${dragMovePreview ? dragMovePreview.top : resizeLivePreview ? resizeLivePreview.top : top}px`,
                               width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
                               height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
                             }}
@@ -435,35 +493,48 @@ export function AppHomePage() {
                                 {liveColSpan}x{liveRowSpan} tile
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setResizeSession({
-                                  tileId: tile.id,
-                                  startX: event.clientX,
-                                  startY: event.clientY,
-                                  startColSpan: tile.colSpan,
-                                  startRowSpan: tile.rowSpan,
-                                  startWidth:
-                                    tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0),
-                                  startHeight:
-                                    tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0),
-                                });
-                                setResizePreview({
-                                  tileId: tile.id,
-                                  colSpan: tile.colSpan,
-                                  rowSpan: tile.rowSpan,
-                                });
-                              }}
-                              style={{ right: "-8px", bottom: "-8px" }}
-                              className="absolute z-20 inline-flex h-8 w-8 cursor-se-resize items-center justify-center rounded-md border-2 border-slate-300 bg-white text-slate-700 shadow-md"
-                              aria-label={`Resize tile ${tile.id}`}
-                              title="Click and hold to resize"
-                            >
-                              <MoveDiagonal2 className="pointer-events-none h-4 w-4" />
-                            </button>
+                            {[
+                              { key: "tl", style: { left: "-8px", top: "-8px" }, cursor: "cursor-nwse-resize", icon: "rotate-180" },
+                              { key: "tr", style: { right: "-8px", top: "-8px" }, cursor: "cursor-nesw-resize", icon: "rotate-90" },
+                              { key: "bl", style: { left: "-8px", bottom: "-8px" }, cursor: "cursor-nesw-resize", icon: "-rotate-90" },
+                              { key: "br", style: { right: "-8px", bottom: "-8px" }, cursor: "cursor-se-resize", icon: "" },
+                            ].map((handle) => (
+                              <button
+                                key={`${tile.id}-${handle.key}`}
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                              setResizeSession({
+                                tileId: tile.id,
+                                startX: event.clientX,
+                                startY: event.clientY,
+                                startSlot: tile.slot,
+                                startColSpan: tile.colSpan,
+                                startRowSpan: tile.rowSpan,
+                                startLeft: left,
+                                startTop: top,
+                                startWidth:
+                                  tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0),
+                                startHeight:
+                                  tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0),
+                                handle: handle.key as "tl" | "tr" | "bl" | "br",
+                              });
+                              setResizePreview({
+                                tileId: tile.id,
+                                slot: tile.slot,
+                                colSpan: tile.colSpan,
+                                rowSpan: tile.rowSpan,
+                              });
+                            }}
+                                style={handle.style}
+                                className={`absolute z-20 inline-flex h-5 w-5 items-center justify-center rounded-md border-2 border-slate-300 bg-white text-slate-700 shadow-md ${handle.cursor}`}
+                                aria-label={`Resize tile ${tile.id}`}
+                                title="Resize"
+                              >
+                                <MoveDiagonal2 className={`pointer-events-none h-3 w-3 ${handle.icon}`} />
+                              </button>
+                            ))}
                           </div>
                         );
                       })}
