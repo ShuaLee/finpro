@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { CircleUserRound, LogOut, Settings, SlidersHorizontal } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { ChartNoAxesCombined, CircleUserRound, LogOut, Menu, Settings, X } from "lucide-react";
 
 import { ApiError } from "../api/http";
 import { useAuth } from "../context/AuthContext";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 
 export function Header() {
   const { user, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -19,24 +20,25 @@ export function Header() {
         return;
       }
       if (event.target instanceof Node && !menuRef.current.contains(event.target)) {
-        setMenuOpen(false);
+        setProfileMenuOpen(false);
       }
     };
 
-    if (menuOpen) {
+    if (profileMenuOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [menuOpen]);
+  }, [profileMenuOpen]);
 
   const onLogout = async () => {
     setLoggingOut(true);
     try {
       await logout();
-      setMenuOpen(false);
+      setProfileMenuOpen(false);
+      setMobileMenuOpen(false);
     } catch (caught) {
       if (caught instanceof ApiError) {
         // no-op
@@ -46,71 +48,186 @@ export function Header() {
     }
   };
 
+  const onDashboard = location.pathname === "/" && Boolean(user);
+
   return (
-    <header className="sticky top-0 z-40 px-4 pb-2 pt-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl rounded-2xl border border-black/10 bg-white/90 px-4 py-3 shadow-[0_14px_34px_rgba(15,23,42,0.08)] backdrop-blur sm:px-5">
-        <div className="flex w-full items-center justify-between gap-3">
-          <Link to="/" className="group inline-flex items-center gap-3">
-            <span className="h-3 w-3 rounded-full bg-primary shadow-[0_0_0_8px_rgba(15,23,42,0.12)]" />
-            <span className="font-display text-xl font-bold tracking-tight">FinPro</span>
-            <Badge variant="secondary" className="hidden rounded-full sm:inline-flex">Beta</Badge>
+    <header className="sticky top-0 z-40 relative border-b border-black/10 bg-background/97 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+      <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-8">
+          <Link to="/" className="inline-flex items-center gap-2">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <ChartNoAxesCombined className="h-5 w-5" />
+            </span>
+            <span className="font-display text-[1.35rem] font-bold tracking-tight">FinPro</span>
           </Link>
 
-          <nav className="flex items-center gap-2" aria-label="Primary">
+          <nav className="hidden items-center gap-8 pl-4 lg:pl-8 lg:flex" aria-label="Primary">
             {user ? (
-              <div className="relative" ref={menuRef}>
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  className="inline-flex items-center justify-center rounded-full border border-border bg-secondary p-2 hover:bg-accent"
-                  aria-label="Open profile menu"
-                >
-                  <CircleUserRound className="h-5 w-5 text-primary" />
-                </button>
-
-                {menuOpen ? (
-                  <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-white shadow-[0_16px_34px_rgba(15,23,42,0.14)]">
-                    <ul className="p-2 text-sm">
-                      <li>
-                        <button type="button" className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-secondary">
-                          <Settings className="h-4 w-4 text-muted-foreground" />
-                          Settings
-                        </button>
-                      </li>
-                      <li>
-                        <button type="button" className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-secondary">
-                          <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                          Preferences
-                        </button>
-                      </li>
-                      <li className="mt-1 border-t border-border pt-1">
-                        <button
-                          type="button"
-                          onClick={onLogout}
-                          disabled={loggingOut}
-                          className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-destructive hover:bg-secondary disabled:opacity-60"
-                        >
-                          <LogOut className="h-4 w-4" />
-                          {loggingOut ? "Signing out..." : "Sign out"}
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
+              <Link
+                to="/"
+                className={`rounded-md px-3 py-2 text-[0.95rem] font-medium transition ${
+                  onDashboard ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                }`}
+              >
+                Dashboard
+              </Link>
             ) : (
               <>
-                <Link to="/login">
-                  <Button variant="ghost">Login</Button>
+                <Link to="/#pricing" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                  Pricing
                 </Link>
-                <Link to="/signup">
-                  <Button>Sign up</Button>
+                <Link to="/#security" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                  Security
+                </Link>
+                <Link to="/#learn" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                  Learn
+                </Link>
+                <Link to="/#business" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                  Business
                 </Link>
               </>
             )}
           </nav>
         </div>
+
+        <nav className="hidden items-center gap-2 lg:flex" aria-label="Account">
+          {user ? (
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-2 py-1.5 hover:bg-secondary"
+                aria-label="Open profile menu"
+              >
+                <CircleUserRound className="h-4 w-4 text-primary" />
+                <span className="hidden max-w-[140px] truncate text-xs font-medium text-foreground sm:inline">
+                  {user.email}
+                </span>
+              </button>
+
+              {profileMenuOpen ? (
+                <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-white shadow-[0_16px_34px_rgba(15,23,42,0.14)]">
+                  <ul className="p-2 text-sm">
+                    <li>
+                      <Link
+                        to="/settings#account"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-secondary"
+                      >
+                        <Settings className="h-4 w-4 text-muted-foreground" />
+                        Settings
+                      </Link>
+                    </li>
+                    <li className="mt-1 border-t border-border pt-1">
+                      <button
+                        type="button"
+                        onClick={onLogout}
+                        disabled={loggingOut}
+                        className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-destructive hover:bg-secondary disabled:opacity-60"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        {loggingOut ? "Signing out..." : "Sign out"}
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <Link to="/login">
+                  <Button variant="ghost" size="lg" className="border border-primary font-semibold text-[0.95rem] text-primary hover:bg-primary/10">Login</Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="lg" className="text-[0.95rem]">Get started</Button>
+                </Link>
+              </div>
+            </>
+          )}
+        </nav>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="inline-flex items-center justify-center rounded-lg border border-border bg-white p-2 text-foreground lg:hidden"
+          aria-label="Toggle navigation menu"
+        >
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </div>
+
+      {mobileMenuOpen ? (
+        <div className="absolute left-0 right-0 top-full z-50 border-b border-black/10 bg-background/95 px-4 py-4 shadow-[0_16px_30px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-2">
+            {user ? (
+              <>
+                <Link
+                  to="/"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/settings#account"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Settings
+                </Link>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  disabled={loggingOut}
+                  className="rounded-md px-3 py-2 text-left text-sm font-medium text-destructive hover:bg-secondary disabled:opacity-60"
+                >
+                  {loggingOut ? "Signing out..." : "Sign out"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/#pricing"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Pricing
+                </Link>
+                <Link
+                  to="/#security"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Security
+                </Link>
+                <Link
+                  to="/#learn"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Learn
+                </Link>
+                <Link
+                  to="/#business"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Business
+                </Link>
+                <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="mt-1 w-full border border-primary font-semibold text-primary hover:bg-primary/10">
+                    Login
+                  </Button>
+                </Link>
+                <Link to="/signup" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full">Get started</Button>
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }

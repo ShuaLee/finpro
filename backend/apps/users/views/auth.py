@@ -19,6 +19,8 @@ from users.serializers.auth import (
     RegisterSerializer,
     ResendVerificationSerializer,
     ResetPasswordSerializer,
+    UpdateMeSerializer,
+    VerifyEmailChangeSerializer,
     VerifyEmailSerializer,
 )
 from users.services import (
@@ -288,16 +290,87 @@ class ChangePasswordView(APIView):
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        user = request.user
-        payload = {
+    @staticmethod
+    def _payload(user):
+        return {
             "id": user.id,
             "email": user.email,
+            "pending_email_change": AuthService.get_pending_email_change(user=user),
             "is_email_verified": user.is_email_verified,
             "is_active": user.is_active,
             "is_locked": user.is_locked,
             "date_joined": user.date_joined,
         }
+
+    def get(self, request):
+        return Response(self._payload(request.user), status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        serializer = UpdateMeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            pending_email = AuthService.request_email_change(
+                user=request.user,
+                new_email=serializer.validated_data["email"],
+                current_password=serializer.validated_data["current_password"],
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = self._payload(request.user)
+        payload["pending_email_change"] = pending_email
+        payload["detail"] = "Verification code sent. Your login email will update after verification."
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class VerifyEmailChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = VerifyEmailChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            user = AuthService.confirm_email_change(
+                user=request.user,
+                new_email=serializer.validated_data["email"],
+                code=serializer.validated_data["code"],
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = MeView._payload(user)
+        payload["detail"] = "Email updated successfully."
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class ResendEmailChangeCodeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            pending_email = AuthService.resend_email_change_code(user=request.user)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = MeView._payload(request.user)
+        payload["pending_email_change"] = pending_email
+        payload["detail"] = "Verification code resent."
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class CancelEmailChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            AuthService.cancel_email_change(user=request.user)
+        except DjangoValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = MeView._payload(request.user)
+        payload["detail"] = "Pending email change canceled."
         return Response(payload, status=status.HTTP_200_OK)
 
 

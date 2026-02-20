@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -34,7 +34,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Manrope", "Segoe UI", sans-serif;
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
     background-image:
       radial-gradient(circle at 8% 10%, rgba(30, 41, 59, 0.07) 0%, transparent 36%),
       radial-gradient(circle at 90% 14%, rgba(15, 23, 42, 0.06) 0%, transparent 30%),
@@ -51,6 +51,6 @@
   h2,
   h3,
   .font-display {
-    font-family: "Space Grotesk", "Manrope", sans-serif;
+    font-family: "Fraunces", "Plus Jakarta Sans", serif;
   }
 }

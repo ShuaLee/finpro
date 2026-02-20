@@ -6,6 +6,8 @@ from .auth import (
     RegisterSerializer,
     ResendVerificationSerializer,
     ResetPasswordSerializer,
+    UpdateMeSerializer,
+    VerifyEmailChangeSerializer,
     VerifyEmailSerializer,
 )
 
@@ -18,4 +20,6 @@ __all__ = [
     "ForgotPasswordSerializer",
     "ResetPasswordSerializer",
     "ChangePasswordSerializer",
+    "UpdateMeSerializer",
+    "VerifyEmailChangeSerializer",
 ]

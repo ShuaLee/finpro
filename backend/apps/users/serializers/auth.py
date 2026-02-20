@@ -55,3 +55,13 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = getattr(request, "user", None)
         validate_password(value, user=user)
         return value
+
+
+class UpdateMeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    current_password = serializers.CharField(write_only=True)
+
+
+class VerifyEmailChangeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.RegexField(regex=r"^\d{6}$")

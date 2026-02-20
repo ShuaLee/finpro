@@ -6,6 +6,7 @@ class EmailVerificationToken(models.Model):
     class Purpose(models.TextChoices):
         VERIFY_EMAIL = "verify_email", "Verify Email"
         LOGIN_SECURITY = "login_security", "Login Security"
+        EMAIL_CHANGE = "email_change", "Email Change"
 
     user = models.ForeignKey(
         "users.User",
@@ -20,6 +21,7 @@ class EmailVerificationToken(models.Model):
     )
 
     token_hash = models.CharField(max_length=128, unique=True)
+    target_email = models.EmailField(null=True, blank=True)
     expires_at = models.DateTimeField()
     consumed_at = models.DateTimeField(null=True, blank=True)
 
@@ -29,6 +31,7 @@ class EmailVerificationToken(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "purpose", "created_at"]),
+            models.Index(fields=["user", "purpose", "target_email", "created_at"]),
             models.Index(fields=["expires_at"]),
         ]
 
