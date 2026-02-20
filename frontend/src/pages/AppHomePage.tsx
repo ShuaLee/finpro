@@ -84,6 +84,7 @@ export function AppHomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tiles, setTiles] = useState<DashboardTile[]>([{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }]);
   const [nextTileId, setNextTileId] = useState(2);
+  const [targetRows, setTargetRows] = useState(BASE_DASHBOARD_ROWS);
   const [activeDropSlot, setActiveDropSlot] = useState<number | null>(null);
   const [draggingTileId, setDraggingTileId] = useState<number | null>(null);
   const [gridMetrics, setGridMetrics] = useState<GridMetrics | null>(null);
@@ -248,7 +249,7 @@ export function AppHomePage() {
     tiles.length > 0
       ? Math.max(...tiles.map((tile) => getGridPosition(tile.slot, columns).row + tile.rowSpan))
       : 0;
-  const totalRows = Math.max(BASE_DASHBOARD_ROWS, maxUsedRow);
+  const totalRows = Math.max(1, targetRows, maxUsedRow);
   const totalSlots = totalRows * columns;
   const occupiedSlots = getOccupiedSlots(
     tiles.map((tile) => {
@@ -257,6 +258,15 @@ export function AppHomePage() {
     }),
     columns,
   );
+
+  const isRowOccupied = (rowIndex: number) =>
+    tiles.some((tile) => {
+      const pos = getGridPosition(tile.slot, columns);
+      return pos.row <= rowIndex && pos.row + tile.rowSpan - 1 >= rowIndex;
+    });
+
+  const canDeleteRow = (rowIndex: number) =>
+    rowIndex === totalRows - 1 && !isRowOccupied(rowIndex) && totalRows > 1;
 
   return (
     <main className="w-full pb-10 pt-4">
@@ -339,124 +349,180 @@ export function AppHomePage() {
                   </button>
                 </div>
 
-                <div className="relative">
-                  <div
-                    ref={gridRef}
-                    className="grid grid-cols-2 auto-rows-[120px] gap-3 md:grid-cols-4 md:auto-rows-[132px]"
-                  >
-                    {Array.from({ length: totalSlots }, (_, slot) => (
-                      <div
-                        key={`slot-${slot}`}
-                        className={`rounded-xl border border-dashed ${
-                          activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
-                        }`}
-                      >
-                        <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
-                          {occupiedSlots.has(slot) ? "" : "Drop tile here"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div
-                    ref={overlayRef}
-                    className="absolute inset-0 z-10"
-                  >
-                    {tiles.map((tile) => {
-                      const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
-                      const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
-                      const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
-                      const pos = getGridPosition(tile.slot, columns);
-                      const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
-                      const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
-                      const snappedWidth =
-                        liveColSpan * (gridMetrics?.cellWidth ?? 0) + (liveColSpan - 1) * (gridMetrics?.colGap ?? 0);
-                      const snappedHeight =
-                        liveRowSpan * (gridMetrics?.cellHeight ?? 0) + (liveRowSpan - 1) * (gridMetrics?.rowGap ?? 0);
-                      const dragMovePreview = dragPreview?.tileId === tile.id ? dragPreview : null;
-                      const resizeLivePreview = resizeVisual?.tileId === tile.id ? resizeVisual : null;
-
-                      return (
+                <div className="flex items-start gap-2">
+                  <div className="relative flex-1">
+                    <div
+                      ref={gridRef}
+                      className="grid grid-cols-2 auto-rows-[120px] gap-3 md:grid-cols-4 md:auto-rows-[132px]"
+                    >
+                      {Array.from({ length: totalSlots }, (_, slot) => (
                         <div
-                          key={`tile-${tile.id}`}
-                          ref={(element) => {
-                            tileRefs.current[tile.id] = element;
-                          }}
-                          onMouseDown={(event) => {
-                            if (event.button !== 0) return;
-                            if (resizeSession?.tileId === tile.id) return;
-                            if (!gridMetrics) return;
-                            event.preventDefault();
-                            setDraggingTileId(tile.id);
-                            setActiveDropSlot(null);
-                            const tileRect = event.currentTarget.getBoundingClientRect();
-                            const relativeX = event.clientX - tileRect.left;
-                            const relativeY = event.clientY - tileRect.top;
-                            const colStep = Math.max(1, snappedWidth / Math.max(1, tile.colSpan));
-                            const rowStep = Math.max(1, snappedHeight / Math.max(1, tile.rowSpan));
-                            const anchorCol = clamp(Math.floor(relativeX / colStep), 0, tile.colSpan - 1);
-                            const anchorRow = clamp(Math.floor(relativeY / rowStep), 0, tile.rowSpan - 1);
-
-                            setDragSession({
-                              tileId: tile.id,
-                              startX: event.clientX,
-                              startY: event.clientY,
-                              startLeft: left,
-                              startTop: top,
-                              anchorCol,
-                              anchorRow,
-                            });
-                            setDragPreview({ tileId: tile.id, left, top });
-                          }}
-                          style={{
-                            left: `${dragMovePreview ? dragMovePreview.left : left}px`,
-                            top: `${dragMovePreview ? dragMovePreview.top : top}px`,
-                            width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
-                            height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
-                          }}
-                          className={`absolute cursor-grab rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm active:cursor-grabbing ${
-                            draggingTileId === tile.id ? "z-40 opacity-100" : "z-10"
+                          key={`slot-${slot}`}
+                          className={`rounded-xl border border-dashed ${
+                            activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
                           }`}
                         >
-                          <div className="flex h-full flex-col justify-between">
-                            <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
-                            <div className="text-[11px] opacity-85">
-                              {liveColSpan}x{liveRowSpan} tile
-                            </div>
+                          <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
+                            {occupiedSlots.has(slot) ? "" : "Drop tile here"}
                           </div>
-                          <button
-                            type="button"
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      ref={overlayRef}
+                      className="absolute inset-0 z-10"
+                    >
+                      {tiles.map((tile) => {
+                        const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
+                        const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
+                        const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
+                        const pos = getGridPosition(tile.slot, columns);
+                        const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
+                        const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
+                        const snappedWidth =
+                          liveColSpan * (gridMetrics?.cellWidth ?? 0) + (liveColSpan - 1) * (gridMetrics?.colGap ?? 0);
+                        const snappedHeight =
+                          liveRowSpan * (gridMetrics?.cellHeight ?? 0) + (liveRowSpan - 1) * (gridMetrics?.rowGap ?? 0);
+                        const dragMovePreview = dragPreview?.tileId === tile.id ? dragPreview : null;
+                        const resizeLivePreview = resizeVisual?.tileId === tile.id ? resizeVisual : null;
+
+                        return (
+                          <div
+                            key={`tile-${tile.id}`}
+                            ref={(element) => {
+                              tileRefs.current[tile.id] = element;
+                            }}
                             onMouseDown={(event) => {
+                              if (event.button !== 0) return;
+                              if (resizeSession?.tileId === tile.id) return;
+                              if (!gridMetrics) return;
                               event.preventDefault();
-                              event.stopPropagation();
-                              setResizeSession({
+                              setDraggingTileId(tile.id);
+                              setActiveDropSlot(null);
+                              const tileRect = event.currentTarget.getBoundingClientRect();
+                              const relativeX = event.clientX - tileRect.left;
+                              const relativeY = event.clientY - tileRect.top;
+                              const colStep = Math.max(1, snappedWidth / Math.max(1, tile.colSpan));
+                              const rowStep = Math.max(1, snappedHeight / Math.max(1, tile.rowSpan));
+                              const anchorCol = clamp(Math.floor(relativeX / colStep), 0, tile.colSpan - 1);
+                              const anchorRow = clamp(Math.floor(relativeY / rowStep), 0, tile.rowSpan - 1);
+
+                              setDragSession({
                                 tileId: tile.id,
                                 startX: event.clientX,
                                 startY: event.clientY,
-                                startColSpan: tile.colSpan,
-                                startRowSpan: tile.rowSpan,
-                                startWidth:
-                                  tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0),
-                                startHeight:
-                                  tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0),
+                                startLeft: left,
+                                startTop: top,
+                                anchorCol,
+                                anchorRow,
                               });
-                              setResizePreview({
-                                tileId: tile.id,
-                                colSpan: tile.colSpan,
-                                rowSpan: tile.rowSpan,
-                              });
+                              setDragPreview({ tileId: tile.id, left, top });
                             }}
-                            style={{ right: "-8px", bottom: "-8px" }}
-                            className="absolute z-20 inline-flex h-8 w-8 cursor-se-resize items-center justify-center rounded-md border-2 border-slate-300 bg-white text-slate-700 shadow-md"
-                            aria-label={`Resize tile ${tile.id}`}
-                            title="Click and hold to resize"
+                            style={{
+                              left: `${dragMovePreview ? dragMovePreview.left : left}px`,
+                              top: `${dragMovePreview ? dragMovePreview.top : top}px`,
+                              width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
+                              height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
+                            }}
+                            className={`absolute cursor-grab rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm active:cursor-grabbing ${
+                              draggingTileId === tile.id ? "z-40 opacity-100" : "z-10"
+                            }`}
                           >
-                            <MoveDiagonal2 className="pointer-events-none h-4 w-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <div className="flex h-full flex-col justify-between">
+                              <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
+                              <div className="text-[11px] opacity-85">
+                                {liveColSpan}x{liveRowSpan} tile
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setResizeSession({
+                                  tileId: tile.id,
+                                  startX: event.clientX,
+                                  startY: event.clientY,
+                                  startColSpan: tile.colSpan,
+                                  startRowSpan: tile.rowSpan,
+                                  startWidth:
+                                    tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0),
+                                  startHeight:
+                                    tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0),
+                                });
+                                setResizePreview({
+                                  tileId: tile.id,
+                                  colSpan: tile.colSpan,
+                                  rowSpan: tile.rowSpan,
+                                });
+                              }}
+                              style={{ right: "-8px", bottom: "-8px" }}
+                              className="absolute z-20 inline-flex h-8 w-8 cursor-se-resize items-center justify-center rounded-md border-2 border-slate-300 bg-white text-slate-700 shadow-md"
+                              aria-label={`Resize tile ${tile.id}`}
+                              title="Click and hold to resize"
+                            >
+                              <MoveDiagonal2 className="pointer-events-none h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                    <div className="relative w-8">
+                      {Array.from({ length: totalRows }, (_, rowIndex) => {
+                        const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
+                        return (
+                          <button
+                            key={`del-row-${rowIndex}`}
+                            type="button"
+                            onClick={() => {
+                              if (!canDeleteRow(rowIndex)) return;
+                              setTargetRows((previous) => Math.max(1, previous - 1));
+                            }}
+                            className={`absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold ${
+                              canDeleteRow(rowIndex) ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
+                            }`}
+                            style={{
+                              top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
+                              borderColor: "#ef4444",
+                              backgroundColor: "#fee2e2",
+                              color: "#b91c1c",
+                            }}
+                            title="Del row"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                <div className="flex w-full items-center gap-3">
+                  <ul className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <li>rows:{totalRows}</li>
+                    <li>|</li>
+                    <li>tiles:{tiles.length}</li>
+                  </ul>
+                  <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
+                  <button
+                    type="button"
+                    onClick={() => setTargetRows((previous) => previous + 1)}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold hover:opacity-90"
+                    style={{
+                      backgroundColor: "rgba(22,163,74,0.14)",
+                      borderColor: "rgba(21,128,61,0.35)",
+                      color: "#166534",
+                    }}
+                  >
+                    Add Row
+                  </button>
+                  <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
+                  <ul className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <li>min:1</li>
+                    <li>|</li>
+                    <li>set:{targetRows}</li>
+                  </ul>
                 </div>
               </CardContent>
             </Card>
