@@ -2,6 +2,7 @@ from django.urls import path
 
 from accounts.views import (
     AccountDetailView,
+    AccountCreateOptionsView,
     AccountListCreateView,
     AccountSnapshotView,
     AccountsSidebarView,
@@ -26,6 +27,7 @@ from accounts.views import (
 
 urlpatterns = [
     path("account-types/", AccountTypeListView.as_view(), name="account-type-list"),
+    path("create-options/", AccountCreateOptionsView.as_view(), name="account-create-options"),
     path("account-types/custom/", CustomAccountTypeCreateView.as_view(), name="account-type-custom-create"),
     path("", AccountListCreateView.as_view(), name="account-list-create"),
     path("<int:account_id>/", AccountDetailView.as_view(), name="account-detail"),

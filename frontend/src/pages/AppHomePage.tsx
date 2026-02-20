@@ -1,26 +1,23 @@
-import { type ComponentType, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  BriefcaseBusiness,
   Building2,
   ChevronDown,
+  Coins,
   Eye,
-  Landmark,
+  House,
   Menu,
   MoveDiagonal2,
   Settings,
   Trash2,
-  Wallet,
   X,
 } from "lucide-react";
 
+import { type SidebarAccount, getAccountsSidebar } from "../api/accounts";
 import { Badge } from "../components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader } from "../components/ui/card";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
-
-type AccountGroup = {
-  title: string;
-  icon: ComponentType<{ className?: string }>;
-  items: string[];
-};
 
 type DashboardTile = {
   id: number;
@@ -76,35 +73,26 @@ const MAX_ROW_SPAN = 8;
 const MAX_ROWS = 20;
 const MAX_LAYOUT_NAME_LENGTH = 30;
 const DEFAULT_LAYOUT_ID = "default";
-const DEFAULT_LAYOUT_NAME = "Portfolio";
 const DEFAULT_TILES: DashboardTile[] = [{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }];
 
 const normalizeLayoutName = (name: string) => name.trim().slice(0, MAX_LAYOUT_NAME_LENGTH);
 const getDisplayLayoutName = (name: string) =>
   name.length > MAX_LAYOUT_NAME_LENGTH ? `${name.slice(0, MAX_LAYOUT_NAME_LENGTH)}...` : name;
 
-const accountGroups: AccountGroup[] = [
-  {
-    title: "Brokerage Accounts",
-    icon: Building2,
-    items: ["Personal Investing", "TFSA", "RRSP"],
-  },
-  {
-    title: "Crypto Wallets",
-    icon: Wallet,
-    items: ["Ledger Nano", "Coinbase Wallet", "MetaMask"],
-  },
-  {
-    title: "Cash and Banks",
-    icon: Landmark,
-    items: ["Main Checking", "High-Interest Savings"],
-  },
-];
-
 export function AppHomePage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const [expandedGroup, setExpandedGroup] = useState<string>(accountGroups[0].title);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [customSidebarCategories] = useState<Array<{ key: string; label: string }>>([
+    { key: "private-equity", label: "Private Equity" },
+  ]);
+  const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
+  const [isBrokerageExpanded, setIsBrokerageExpanded] = useState(true);
+  const [brokerageAccounts, setBrokerageAccounts] = useState<SidebarAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [selectedView, setSelectedView] = useState<"brokerage-summary" | "account">("brokerage-summary");
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [layoutsMenuOpen, setLayoutsMenuOpen] = useState(false);
@@ -128,7 +116,22 @@ export function AppHomePage() {
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const columns = gridMetrics?.columns ?? DESKTOP_COLUMNS;
-  const storageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}`;
+  const sectionLabel = (() => {
+    if (activeSidebarCategory === "brokerage") return "Brokerage";
+    if (activeSidebarCategory === "crypto") return "Crypto";
+    if (activeSidebarCategory === "real-estate") return "Real Estate";
+    if (activeSidebarCategory === "portfolio") return "Portfolio";
+    return customSidebarCategories.find((category) => category.key === activeSidebarCategory)?.label ?? "Custom";
+  })();
+  const defaultLayoutName = `${sectionLabel} Default Layout`;
+  const dashboardScope = (() => {
+    if (activeSidebarCategory === "brokerage") {
+      if (selectedView === "account" && selectedAccountId) return `brokerage-account-${selectedAccountId}`;
+      return "brokerage-summary";
+    }
+    return activeSidebarCategory;
+  })();
+  const storageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}.${dashboardScope}`;
 
   const normalizePrimary = (layouts: SavedLayout[]) => {
     if (layouts.length === 0) return layouts;
@@ -151,11 +154,21 @@ export function AppHomePage() {
 
   const saveCurrentLayout = (layoutId: string, layoutName: string, exitEdit: boolean) => {
     const now = new Date().toISOString();
-    const trimmedTargetRows = Math.max(1, getRequiredRows(tiles, columns));
+    const minUsedRow = tiles.length > 0
+      ? Math.min(...tiles.map((tile) => getGridPosition(tile.slot, columns).row))
+      : 0;
+    const normalizedTiles = minUsedRow > 0
+      ? tiles.map((tile) => {
+          const pos = getGridPosition(tile.slot, columns);
+          const normalizedRow = pos.row - minUsedRow;
+          return { ...tile, slot: normalizedRow * columns + pos.col };
+        })
+      : tiles.map((tile) => ({ ...tile }));
+    const trimmedTargetRows = Math.max(1, getRequiredRows(normalizedTiles, columns));
     const snapshot: SavedLayout = {
       id: layoutId,
       name: normalizeLayoutName(layoutName),
-      tiles: tiles.map((tile) => ({ ...tile })),
+      tiles: normalizedTiles,
       targetRows: trimmedTargetRows,
       isPrimary: savedLayouts.find((layout) => layout.id === layoutId)?.isPrimary ?? false,
       updatedAt: now,
@@ -169,13 +182,14 @@ export function AppHomePage() {
 
     setSavedLayouts(nextLayouts);
     setActiveLayoutId(layoutId);
+    setTiles(normalizedTiles);
     setTargetRows(trimmedTargetRows);
     persistLayouts(nextLayouts, layoutId);
     if (exitEdit) setIsEditing(false);
   };
 
   const saveAsLayout = () => {
-    const raw = window.prompt("Layout name", `Layout ${savedLayouts.length + 1}`);
+    const raw = window.prompt("Layout name", `${sectionLabel} Layout ${savedLayouts.length + 1}`);
     const name = raw ? normalizeLayoutName(raw) : "";
     if (!name) return;
     const id = `layout_${Date.now()}`;
@@ -195,6 +209,31 @@ export function AppHomePage() {
     setSavedLayouts(nextLayouts);
     persistLayouts(nextLayouts, activeLayoutId);
   };
+
+  const loadBrokerageAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const groups = await getAccountsSidebar();
+      const brokerageGroup = groups.find((group) =>
+        /brokerage/i.test(group.group_label) || /brokerage/i.test(group.group_key)
+      );
+      const accounts = brokerageGroup ? brokerageGroup.accounts : [];
+      setBrokerageAccounts(accounts);
+      if (accounts.length === 0) {
+        setSelectedView("brokerage-summary");
+        setSelectedAccountId(null);
+      }
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to load brokerage accounts.";
+      setAccountsError(message);
+      setBrokerageAccounts([]);
+      setSelectedView("brokerage-summary");
+      setSelectedAccountId(null);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
 
   const deleteLayout = (layoutId: string) => {
     if (savedLayouts.length <= 1) return;
@@ -231,11 +270,22 @@ export function AppHomePage() {
   }, []);
 
   useEffect(() => {
+    void loadBrokerageAccounts();
+  }, [loadBrokerageAccounts, user?.email]);
+
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    if (brokerageAccounts.some((account) => account.id === selectedAccountId)) return;
+    setSelectedAccountId(null);
+    setSelectedView("brokerage-summary");
+  }, [brokerageAccounts, selectedAccountId]);
+
+  useEffect(() => {
     const raw = localStorage.getItem(storageKey);
     if (!raw) {
       const defaultLayout: SavedLayout = {
         id: DEFAULT_LAYOUT_ID,
-        name: DEFAULT_LAYOUT_NAME,
+        name: defaultLayoutName,
         tiles: DEFAULT_TILES,
         targetRows: BASE_DASHBOARD_ROWS,
         isPrimary: true,
@@ -254,7 +304,7 @@ export function AppHomePage() {
       const layouts = normalizePrimary(
         layoutsRaw.map((layout) => ({
           ...layout,
-          name: normalizeLayoutName(layout.name || DEFAULT_LAYOUT_NAME),
+          name: normalizeLayoutName(layout.name || defaultLayoutName),
           isPrimary: Boolean(layout.isPrimary),
         })),
       );
@@ -270,7 +320,7 @@ export function AppHomePage() {
     } catch {
       const fallback: SavedLayout = {
         id: DEFAULT_LAYOUT_ID,
-        name: DEFAULT_LAYOUT_NAME,
+        name: defaultLayoutName,
         tiles: DEFAULT_TILES,
         targetRows: BASE_DASHBOARD_ROWS,
         isPrimary: true,
@@ -282,7 +332,7 @@ export function AppHomePage() {
       persistLayouts([fallback], fallback.id);
     } finally {
     }
-  }, [storageKey]);
+  }, [defaultLayoutName, storageKey]);
 
   useEffect(() => {
     if (isEditing) return;
@@ -603,49 +653,9 @@ export function AppHomePage() {
                       </button>
                     </>
                   ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const layout = savedLayouts.find((item) => item.id === activeLayoutId);
-                          saveCurrentLayout(activeLayoutId, layout?.name ?? DEFAULT_LAYOUT_NAME, true);
-                          setSettingsMenuOpen(false);
-                        }}
-                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          saveAsLayout();
-                          setSettingsMenuOpen(false);
-                        }}
-                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                      >
-                        Save As
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          addTile();
-                          setSettingsMenuOpen(false);
-                        }}
-                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                      >
-                        Add Tile
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditing(false);
-                          setSettingsMenuOpen(false);
-                        }}
-                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                      >
-                        Done
-                      </button>
-                    </>
+                    <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                      Use the edit toolbar above the dashboard.
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -653,9 +663,29 @@ export function AppHomePage() {
           </div>
         </div>
 
-        <div className="grid items-start gap-6 md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="hidden md:block">
-            <SidebarPanel accountGroups={accountGroups} expandedGroup={expandedGroup} setExpandedGroup={setExpandedGroup} />
+        <div className="grid items-stretch gap-6 md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="hidden md:block md:self-stretch">
+            <SidebarPanel
+              customSidebarCategories={customSidebarCategories}
+              activeSidebarCategory={activeSidebarCategory}
+              setActiveSidebarCategory={setActiveSidebarCategory}
+              isBrokerageExpanded={isBrokerageExpanded}
+              setIsBrokerageExpanded={setIsBrokerageExpanded}
+              brokerageAccounts={brokerageAccounts}
+              selectedView={selectedView}
+              selectedAccountId={selectedAccountId}
+              accountsLoading={accountsLoading}
+              accountsError={accountsError}
+              onSelectSummary={() => {
+                setSelectedView("brokerage-summary");
+                setSelectedAccountId(null);
+              }}
+              onSelectAccount={(accountId) => {
+                setSelectedView("account");
+                setSelectedAccountId(accountId);
+              }}
+              onAddBrokerageAccount={() => navigate("/accounts/brokerage/new")}
+            />
           </aside>
 
           {sidebarOpen ? (
@@ -670,7 +700,32 @@ export function AppHomePage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <SidebarPanel accountGroups={accountGroups} expandedGroup={expandedGroup} setExpandedGroup={setExpandedGroup} />
+                <SidebarPanel
+                  customSidebarCategories={customSidebarCategories}
+                  activeSidebarCategory={activeSidebarCategory}
+                  setActiveSidebarCategory={setActiveSidebarCategory}
+                  isBrokerageExpanded={isBrokerageExpanded}
+                  setIsBrokerageExpanded={setIsBrokerageExpanded}
+                  brokerageAccounts={brokerageAccounts}
+                  selectedView={selectedView}
+                  selectedAccountId={selectedAccountId}
+                  accountsLoading={accountsLoading}
+                  accountsError={accountsError}
+                  onSelectSummary={() => {
+                    setSelectedView("brokerage-summary");
+                    setSelectedAccountId(null);
+                    setSidebarOpen(false);
+                  }}
+                  onSelectAccount={(accountId) => {
+                    setSelectedView("account");
+                    setSelectedAccountId(accountId);
+                    setSidebarOpen(false);
+                  }}
+                  onAddBrokerageAccount={() => {
+                    setSidebarOpen(false);
+                    navigate("/accounts/brokerage/new");
+                  }}
+                />
               </div>
             </div>
           ) : null}
@@ -752,49 +807,9 @@ export function AppHomePage() {
                           </button>
                         </>
                       ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const layout = savedLayouts.find((item) => item.id === activeLayoutId);
-                              saveCurrentLayout(activeLayoutId, layout?.name ?? DEFAULT_LAYOUT_NAME, true);
-                              setSettingsMenuOpen(false);
-                            }}
-                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              saveAsLayout();
-                              setSettingsMenuOpen(false);
-                            }}
-                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                          >
-                            Save As
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              addTile();
-                              setSettingsMenuOpen(false);
-                            }}
-                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                      >
-                        Add Tile
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditing(false);
-                              setSettingsMenuOpen(false);
-                            }}
-                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                          >
-                            Done
-                          </button>
-                        </>
+                        <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                          Use the edit toolbar above the dashboard.
+                        </div>
                       )}
                     </div>
                   ) : null}
@@ -826,7 +841,7 @@ export function AppHomePage() {
                           type="button"
                           onClick={() => {
                             const layout = savedLayouts.find((item) => item.id === activeLayoutId);
-                            saveCurrentLayout(activeLayoutId, layout?.name ?? DEFAULT_LAYOUT_NAME, false);
+                            saveCurrentLayout(activeLayoutId, layout?.name ?? defaultLayoutName, false);
                           }}
                           className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
                         >
@@ -838,6 +853,20 @@ export function AppHomePage() {
                           className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
                         >
                           Save As
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addTile()}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Add Tile
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(false)}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Done
                         </button>
                       </div>
                     </div>
@@ -875,7 +904,6 @@ export function AppHomePage() {
                     Drag and resize tiles. Drop zones and row controls are edit-only.
                   </p>
                 ) : null}
-
                 <div className="flex items-start gap-2">
                   <div className="relative flex-1">
                     <div
@@ -1197,50 +1225,172 @@ function getSlotFromPoint(
 
 
 function SidebarPanel({
-  accountGroups,
-  expandedGroup,
-  setExpandedGroup,
+  customSidebarCategories,
+  activeSidebarCategory,
+  setActiveSidebarCategory,
+  isBrokerageExpanded,
+  setIsBrokerageExpanded,
+  brokerageAccounts,
+  selectedView,
+  selectedAccountId,
+  accountsLoading,
+  accountsError,
+  onSelectSummary,
+  onSelectAccount,
+  onAddBrokerageAccount,
 }: {
-  accountGroups: AccountGroup[];
-  expandedGroup: string;
-  setExpandedGroup: (value: string) => void;
+  customSidebarCategories: Array<{ key: string; label: string }>;
+  activeSidebarCategory: string;
+  setActiveSidebarCategory: (value: string) => void;
+  isBrokerageExpanded: boolean;
+  setIsBrokerageExpanded: (value: boolean) => void;
+  brokerageAccounts: SidebarAccount[];
+  selectedView: "brokerage-summary" | "account";
+  selectedAccountId: number | null;
+  accountsLoading: boolean;
+  accountsError: string | null;
+  onSelectSummary: () => void;
+  onSelectAccount: (accountId: number) => void;
+  onAddBrokerageAccount: () => void;
 }) {
   return (
-    <Card className="bg-white/95">
-      <CardHeader className="space-y-3">
-        <Badge className="w-fit">Accounts</Badge>
-        <CardDescription>Quick access to grouped accounts</CardDescription>
+    <Card className="h-full overflow-hidden border-border/80 bg-white/95">
+      <CardHeader className="space-y-4 border-b border-border/80 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Badge className="w-fit">Accounts</Badge>
+            <p className="mt-2 text-xs uppercase tracking-wide text-muted-foreground">Navigation</p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-secondary/40 px-2 py-1 text-xs text-muted-foreground">
+            {brokerageAccounts.length}
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {accountGroups.map((group) => {
-          const isExpanded = expandedGroup === group.title;
-          const Icon = group.icon;
+      <CardContent className="space-y-3 p-3">
+        <button
+          type="button"
+          onClick={() => setActiveSidebarCategory("portfolio")}
+          className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+            activeSidebarCategory === "portfolio"
+              ? "border-primary/30 bg-primary/10 text-foreground"
+              : "border-border/70 bg-white text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          <BriefcaseBusiness className="h-4 w-4 text-primary" />
+          Portfolio
+        </button>
 
-          return (
-            <div key={group.title} className="rounded-lg border border-border bg-secondary/35">
+        <div className="rounded-md border border-border/70 bg-white">
+          <div className="flex items-stretch">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSidebarCategory("brokerage");
+                onSelectSummary();
+              }}
+              className={`flex min-w-0 flex-1 items-center gap-2 rounded-l-md px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                activeSidebarCategory === "brokerage"
+                  ? "bg-primary/10 text-foreground"
+                  : "text-foreground hover:bg-secondary/50"
+              }`}
+            >
+              <Building2 className="h-4 w-4 text-primary" />
+              Brokerage
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsBrokerageExpanded(!isBrokerageExpanded)}
+              className="inline-flex w-10 items-center justify-center rounded-r-md border-l border-border/70 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              aria-label={isBrokerageExpanded ? "Collapse brokerage accounts" : "Expand brokerage accounts"}
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${isBrokerageExpanded ? "rotate-180" : ""}`} />
+            </button>
+          </div>
+          {isBrokerageExpanded ? (
+            <div className="space-y-2 border-t border-border/70 p-2">
               <button
                 type="button"
-                onClick={() => setExpandedGroup(isExpanded ? "" : group.title)}
-                className="inline-flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-semibold"
+                onClick={onAddBrokerageAccount}
+                className="w-full rounded-md border border-green-700/40 bg-green-600/15 px-3 py-2 text-left text-sm font-semibold text-green-900 transition-colors hover:bg-green-600/30"
               >
-                <span className="inline-flex items-center gap-2">
-                  <Icon className="h-4 w-4 text-primary" />
-                  {group.title}
-                </span>
-                <ChevronDown className={`h-4 w-4 transition ${isExpanded ? "rotate-180" : ""}`} />
+                + Add New Brokerage Account
               </button>
-              {isExpanded ? (
-                <ul className="space-y-1 border-t border-border px-3 py-2 text-sm text-muted-foreground">
-                  {group.items.map((item) => (
-                    <li key={item} className="rounded px-2 py-1 hover:bg-secondary/70">
-                      {item}
+              {accountsLoading ? (
+                <p className="px-2 py-1 text-xs text-muted-foreground">Loading accounts...</p>
+              ) : null}
+              {accountsError ? (
+                <p className="px-2 py-1 text-xs text-destructive">{accountsError}</p>
+              ) : null}
+              {!accountsLoading && !accountsError ? (
+                <ul className="space-y-1">
+                  {brokerageAccounts.map((account) => (
+                    <li key={account.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSidebarCategory("brokerage");
+                          onSelectAccount(account.id);
+                        }}
+                        className={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
+                          selectedView === "account" && selectedAccountId === account.id
+                            ? "border-primary/30 bg-primary/10 text-foreground"
+                            : "border-transparent text-foreground hover:border-border/70 hover:bg-secondary/50"
+                        }`}
+                      >
+                        <span className="block truncate text-sm font-medium">{account.name}</span>
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          {account.broker || "Broker"} · {account.holdings_count} holdings
+                        </span>
+                      </button>
                     </li>
                   ))}
                 </ul>
               ) : null}
             </div>
-          );
-        })}
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setActiveSidebarCategory("crypto")}
+          className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+            activeSidebarCategory === "crypto"
+              ? "border-primary/30 bg-primary/10 text-foreground"
+              : "border-border/70 bg-white text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          <Coins className="h-4 w-4 text-primary" />
+          Crypto
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSidebarCategory("real-estate")}
+          className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+            activeSidebarCategory === "real-estate"
+              ? "border-primary/30 bg-primary/10 text-foreground"
+              : "border-border/70 bg-white text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          <House className="h-4 w-4 text-primary" />
+          Real Estate
+        </button>
+
+        {customSidebarCategories.map((category) => (
+          <button
+            key={category.key}
+            type="button"
+            onClick={() => setActiveSidebarCategory(category.key)}
+            className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+              activeSidebarCategory === category.key
+                ? "border-primary/30 bg-primary/10 text-foreground"
+                : "border-border/70 bg-white text-foreground hover:bg-secondary/50"
+            }`}
+          >
+            <BriefcaseBusiness className="h-4 w-4 text-primary" />
+            {category.label}
+          </button>
+        ))}
       </CardContent>
     </Card>
   );

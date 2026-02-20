@@ -16,6 +16,7 @@ from accounts.models import (
     ReconciliationIssue,
     AccountJob,
 )
+from accounts.models.account_classification import ClassificationDefinition
 from accounts.serializers import (
     AccountCreateSerializer,
     AccountSerializer,
@@ -127,6 +128,41 @@ class AccountListCreateView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(AccountSerializer(account).data, status=status.HTTP_201_CREATED)
+
+
+class AccountCreateOptionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        account_types = AccountType.objects.filter(is_system=True) | AccountType.objects.filter(owner=profile)
+        account_types = account_types.prefetch_related("allowed_asset_types").order_by("name")
+
+        portfolios = [
+            {
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "kind": portfolio.kind,
+            }
+            for portfolio in profile.portfolios.order_by("name")
+        ]
+        classifications = [
+            {
+                "id": definition.id,
+                "name": definition.name,
+                "tax_status": definition.tax_status,
+            }
+            for definition in ClassificationDefinition.objects.filter(is_system=True).order_by("name")
+        ]
+
+        return Response(
+            {
+                "portfolios": portfolios,
+                "account_types": AccountTypeSerializer(account_types, many=True).data,
+                "classification_definitions": classifications,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class AccountDetailView(APIView):

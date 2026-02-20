@@ -5,6 +5,7 @@ import { Header } from "./components/Header";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
 import { AppHomePage } from "./pages/AppHomePage";
+import { AddBrokerageAccountPage } from "./pages/AddBrokerageAccountPage";
 import { AboutPage } from "./pages/AboutPage";
 import { BusinessPage } from "./pages/BusinessPage";
 import { ContactPage } from "./pages/ContactPage";
@@ -66,6 +67,14 @@ function App() {
             element={(
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/accounts/brokerage/new"
+            element={(
+              <ProtectedRoute>
+                <AddBrokerageAccountPage />
               </ProtectedRoute>
             )}
           />

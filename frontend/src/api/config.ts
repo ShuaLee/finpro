@@ -24,4 +24,9 @@ export const API_ENDPOINTS = {
   profile: {
     detail: `${API_BASE_URL}/user/profile/`,
   },
+  accounts: {
+    create: `${API_BASE_URL}/accounts/`,
+    createOptions: `${API_BASE_URL}/accounts/create-options/`,
+    sidebar: `${API_BASE_URL}/accounts/sidebar/`,
+  },
 };
