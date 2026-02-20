@@ -1,12 +1,13 @@
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import {
-  Bell,
   Building2,
   ChevronDown,
+  Eye,
   Landmark,
   Menu,
   MoveDiagonal2,
-  Search,
+  Settings,
+  Trash2,
   Wallet,
   X,
 } from "lucide-react";
@@ -26,6 +27,15 @@ type DashboardTile = {
   slot: number;
   colSpan: number;
   rowSpan: number;
+};
+
+type SavedLayout = {
+  id: string;
+  name: string;
+  tiles: DashboardTile[];
+  targetRows: number;
+  isPrimary: boolean;
+  updatedAt: string;
 };
 
 type ResizeSession = {
@@ -63,6 +73,15 @@ type GridMetrics = {
 const DESKTOP_COLUMNS = 4;
 const BASE_DASHBOARD_ROWS = 4;
 const MAX_ROW_SPAN = 8;
+const MAX_ROWS = 20;
+const MAX_LAYOUT_NAME_LENGTH = 30;
+const DEFAULT_LAYOUT_ID = "default";
+const DEFAULT_LAYOUT_NAME = "Portfolio";
+const DEFAULT_TILES: DashboardTile[] = [{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }];
+
+const normalizeLayoutName = (name: string) => name.trim().slice(0, MAX_LAYOUT_NAME_LENGTH);
+const getDisplayLayoutName = (name: string) =>
+  name.length > MAX_LAYOUT_NAME_LENGTH ? `${name.slice(0, MAX_LAYOUT_NAME_LENGTH)}...` : name;
 
 const accountGroups: AccountGroup[] = [
   {
@@ -86,9 +105,14 @@ export function AppHomePage() {
   const { user } = useAuth();
   const [expandedGroup, setExpandedGroup] = useState<string>(accountGroups[0].title);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [tiles, setTiles] = useState<DashboardTile[]>([{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [layoutsMenuOpen, setLayoutsMenuOpen] = useState(false);
+  const [tiles, setTiles] = useState<DashboardTile[]>(DEFAULT_TILES);
   const [nextTileId, setNextTileId] = useState(2);
   const [targetRows, setTargetRows] = useState(BASE_DASHBOARD_ROWS);
+  const [savedLayouts, setSavedLayouts] = useState<SavedLayout[]>([]);
+  const [activeLayoutId, setActiveLayoutId] = useState(DEFAULT_LAYOUT_ID);
   const [activeDropSlot, setActiveDropSlot] = useState<number | null>(null);
   const [draggingTileId, setDraggingTileId] = useState<number | null>(null);
   const [gridMetrics, setGridMetrics] = useState<GridMetrics | null>(null);
@@ -104,6 +128,172 @@ export function AppHomePage() {
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const columns = gridMetrics?.columns ?? DESKTOP_COLUMNS;
+  const storageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}`;
+
+  const normalizePrimary = (layouts: SavedLayout[]) => {
+    if (layouts.length === 0) return layouts;
+    const primaryCount = layouts.filter((layout) => layout.isPrimary).length;
+    if (primaryCount === 1) return layouts;
+    return layouts.map((layout, index) => ({ ...layout, isPrimary: index === 0 }));
+  };
+
+  const applyLayout = (layout: SavedLayout) => {
+    setTiles(layout.tiles);
+    setTargetRows(layout.targetRows);
+    const maxId = layout.tiles.reduce((max, tile) => Math.max(max, tile.id), 0);
+    setNextTileId(maxId + 1);
+  };
+
+  const persistLayouts = (layouts: SavedLayout[], activeId: string) => {
+    const normalized = normalizePrimary(layouts);
+    localStorage.setItem(storageKey, JSON.stringify({ activeLayoutId: activeId, layouts: normalized }));
+  };
+
+  const saveCurrentLayout = (layoutId: string, layoutName: string, exitEdit: boolean) => {
+    const now = new Date().toISOString();
+    const trimmedTargetRows = Math.max(1, getRequiredRows(tiles, columns));
+    const snapshot: SavedLayout = {
+      id: layoutId,
+      name: normalizeLayoutName(layoutName),
+      tiles: tiles.map((tile) => ({ ...tile })),
+      targetRows: trimmedTargetRows,
+      isPrimary: savedLayouts.find((layout) => layout.id === layoutId)?.isPrimary ?? false,
+      updatedAt: now,
+    };
+
+    const nextLayouts = normalizePrimary((() => {
+      const index = savedLayouts.findIndex((layout) => layout.id === layoutId);
+      if (index === -1) return [...savedLayouts, snapshot];
+      return savedLayouts.map((layout, idx) => (idx === index ? snapshot : layout));
+    })());
+
+    setSavedLayouts(nextLayouts);
+    setActiveLayoutId(layoutId);
+    setTargetRows(trimmedTargetRows);
+    persistLayouts(nextLayouts, layoutId);
+    if (exitEdit) setIsEditing(false);
+  };
+
+  const saveAsLayout = () => {
+    const raw = window.prompt("Layout name", `Layout ${savedLayouts.length + 1}`);
+    const name = raw ? normalizeLayoutName(raw) : "";
+    if (!name) return;
+    const id = `layout_${Date.now()}`;
+    saveCurrentLayout(id, name, false);
+  };
+
+  const switchLayout = (layoutId: string) => {
+    const layout = savedLayouts.find((item) => item.id === layoutId);
+    if (!layout) return;
+    setActiveLayoutId(layoutId);
+    applyLayout(layout);
+    persistLayouts(savedLayouts, layoutId);
+  };
+
+  const setPrimaryLayout = (layoutId: string) => {
+    const nextLayouts = savedLayouts.map((layout) => ({ ...layout, isPrimary: layout.id === layoutId }));
+    setSavedLayouts(nextLayouts);
+    persistLayouts(nextLayouts, activeLayoutId);
+  };
+
+  const deleteLayout = (layoutId: string) => {
+    if (savedLayouts.length <= 1) return;
+
+    const deletingLayout = savedLayouts.find((layout) => layout.id === layoutId);
+    let remaining = savedLayouts.filter((layout) => layout.id !== layoutId);
+    if (remaining.length === 0) return;
+
+    if (deletingLayout?.isPrimary || !remaining.some((layout) => layout.isPrimary)) {
+      const nextPrimaryId = remaining[0].id;
+      remaining = remaining.map((layout) => ({ ...layout, isPrimary: layout.id === nextPrimaryId }));
+    }
+
+    const nextActiveId = activeLayoutId === layoutId ? remaining[0].id : activeLayoutId;
+    const normalized = normalizePrimary(remaining);
+    setSavedLayouts(normalized);
+    setActiveLayoutId(nextActiveId);
+    const nextActiveLayout = normalized.find((layout) => layout.id === nextActiveId);
+    if (nextActiveLayout) applyLayout(nextActiveLayout);
+    persistLayouts(normalized, nextActiveId);
+  };
+
+  useEffect(() => {
+    const onDocClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-dashboard-menu]")) return;
+      setSettingsMenuOpen(false);
+      setLayoutsMenuOpen(false);
+    };
+
+    window.addEventListener("mousedown", onDocClick);
+    return () => window.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) {
+      const defaultLayout: SavedLayout = {
+        id: DEFAULT_LAYOUT_ID,
+        name: DEFAULT_LAYOUT_NAME,
+        tiles: DEFAULT_TILES,
+        targetRows: BASE_DASHBOARD_ROWS,
+        isPrimary: true,
+        updatedAt: new Date().toISOString(),
+      };
+      setSavedLayouts([defaultLayout]);
+      setActiveLayoutId(defaultLayout.id);
+      applyLayout(defaultLayout);
+      persistLayouts([defaultLayout], defaultLayout.id);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as { activeLayoutId?: string; layouts?: SavedLayout[] };
+      const layoutsRaw = Array.isArray(parsed.layouts) && parsed.layouts.length > 0 ? parsed.layouts : [];
+      const layouts = normalizePrimary(
+        layoutsRaw.map((layout) => ({
+          ...layout,
+          name: normalizeLayoutName(layout.name || DEFAULT_LAYOUT_NAME),
+          isPrimary: Boolean(layout.isPrimary),
+        })),
+      );
+      if (layouts.length === 0) throw new Error("No layouts");
+      const activeId = parsed.activeLayoutId && layouts.some((layout) => layout.id === parsed.activeLayoutId)
+        ? parsed.activeLayoutId
+        : layouts[0].id;
+      const activeLayout = layouts.find((layout) => layout.id === activeId) ?? layouts[0];
+      setSavedLayouts(layouts);
+      setActiveLayoutId(activeId);
+      applyLayout(activeLayout);
+      persistLayouts(layouts, activeId);
+    } catch {
+      const fallback: SavedLayout = {
+        id: DEFAULT_LAYOUT_ID,
+        name: DEFAULT_LAYOUT_NAME,
+        tiles: DEFAULT_TILES,
+        targetRows: BASE_DASHBOARD_ROWS,
+        isPrimary: true,
+        updatedAt: new Date().toISOString(),
+      };
+      setSavedLayouts([fallback]);
+      setActiveLayoutId(fallback.id);
+      applyLayout(fallback);
+      persistLayouts([fallback], fallback.id);
+    } finally {
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    setActiveDropSlot(null);
+    setDraggingTileId(null);
+    setDragSession(null);
+    setDragPreview(null);
+    setResizeSession(null);
+    setResizePreview(null);
+    setResizeVisual(null);
+  }, [isEditing]);
 
   useEffect(() => {
     const updateMetrics = () => {
@@ -306,7 +496,7 @@ export function AppHomePage() {
     tiles.length > 0
       ? Math.max(...tiles.map((tile) => getGridPosition(tile.slot, columns).row + tile.rowSpan))
       : 0;
-  const totalRows = Math.max(1, targetRows, maxUsedRow);
+  const totalRows = Math.min(MAX_ROWS, Math.max(1, targetRows, maxUsedRow));
   const totalSlots = totalRows * columns;
   const occupiedSlots = getOccupiedSlots(
     tiles.map((tile) => {
@@ -324,31 +514,142 @@ export function AppHomePage() {
 
   const canDeleteRow = (rowIndex: number) =>
     rowIndex === totalRows - 1 && !isRowOccupied(rowIndex) && totalRows > 1;
+  const canAddRow = totalRows < MAX_ROWS;
 
   return (
     <main className="w-full pb-10 pt-4">
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-4 md:hidden">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-4 md:hidden">
           <div>
             <p className="text-sm text-muted-foreground">Welcome back</p>
             <h1 className="font-display text-3xl font-bold tracking-tight">Portfolio Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Signed in as {user?.email}</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="inline-flex rounded-lg border border-border bg-white p-2 shadow-sm md:hidden"
+              className="inline-flex rounded-lg border border-border bg-white p-2.5 shadow-sm md:hidden"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-6 w-6" />
             </button>
-            <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
-              <Search className="h-4 w-4" />
-            </button>
-            <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
-              <Bell className="h-4 w-4" />
-            </button>
+            <div className="relative" data-dashboard-menu>
+              <button
+                type="button"
+                onClick={() => {
+                  setLayoutsMenuOpen((previous) => !previous);
+                  setSettingsMenuOpen(false);
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+              >
+                <Eye className="h-5 w-5" />
+              </button>
+              {layoutsMenuOpen ? (
+                <div className="absolute right-0 z-50 mt-2 min-w-[19rem] max-w-[26rem] rounded-md border border-border bg-white p-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrimaryLayout(activeLayoutId);
+                      setLayoutsMenuOpen(false);
+                    }}
+                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                  >
+                    Set Current as Primary
+                  </button>
+                  <div className="my-1 border-t border-border/80" />
+                  {savedLayouts.map((layout) => (
+                    <button
+                      key={`mobile-layout-${layout.id}`}
+                      type="button"
+                      onClick={() => {
+                        switchLayout(layout.id);
+                        setLayoutsMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground ${
+                        layout.id === activeLayoutId ? "bg-secondary/50" : ""
+                      }`}
+                    >
+                      <span className="truncate pr-2" title={layout.name}>{getDisplayLayoutName(layout.name)}</span>
+                      <span className="text-[10px] text-muted-foreground">{layout.isPrimary ? "Primary" : ""}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="relative" data-dashboard-menu>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsMenuOpen((previous) => !previous);
+                  setLayoutsMenuOpen(false);
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+              {settingsMenuOpen ? (
+                <div className="absolute right-0 z-50 mt-2 w-40 rounded-md border border-border bg-white p-1 shadow-lg">
+                  {!isEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditing(true);
+                          setSettingsMenuOpen(false);
+                        }}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Edit Dashboard
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const layout = savedLayouts.find((item) => item.id === activeLayoutId);
+                          saveCurrentLayout(activeLayoutId, layout?.name ?? DEFAULT_LAYOUT_NAME, true);
+                          setSettingsMenuOpen(false);
+                        }}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveAsLayout();
+                          setSettingsMenuOpen(false);
+                        }}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Save As
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addTile();
+                          setSettingsMenuOpen(false);
+                        }}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Add Tile
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditing(false);
+                          setSettingsMenuOpen(false);
+                        }}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Done
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -375,36 +676,205 @@ export function AppHomePage() {
           ) : null}
 
           <section className="space-y-4">
-            <div className="mb-1 hidden items-center justify-between gap-4 md:flex">
+            <div className="mb-1 hidden items-end justify-between gap-4 md:flex">
               <div>
                 <p className="text-sm text-muted-foreground">Welcome back</p>
                 <h1 className="font-display text-3xl font-bold tracking-tight">Portfolio Dashboard</h1>
-                <p className="text-sm text-muted-foreground">Signed in as {user?.email}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
-                  <Search className="h-4 w-4" />
-                </button>
-                <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
-                  <Bell className="h-4 w-4" />
-                </button>
+              <div className="mt-3 flex items-center gap-2">
+                <div className="relative" data-dashboard-menu>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLayoutsMenuOpen((previous) => !previous);
+                      setSettingsMenuOpen(false);
+                    }}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  >
+                    <Eye className="h-5 w-5" />
+                  </button>
+                  {layoutsMenuOpen ? (
+                    <div className="absolute right-0 z-50 mt-2 min-w-[19rem] max-w-[26rem] rounded-md border border-border bg-white p-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPrimaryLayout(activeLayoutId);
+                          setLayoutsMenuOpen(false);
+                        }}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Set Current as Primary
+                      </button>
+                      <div className="my-1 border-t border-border/80" />
+                      {savedLayouts.map((layout) => (
+                        <button
+                          key={`desktop-layout-${layout.id}`}
+                          type="button"
+                          onClick={() => {
+                            switchLayout(layout.id);
+                            setLayoutsMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground ${
+                            layout.id === activeLayoutId ? "bg-secondary/50" : ""
+                          }`}
+                        >
+                          <span className="truncate pr-2" title={layout.name}>{getDisplayLayoutName(layout.name)}</span>
+                          <span className="text-[10px] text-muted-foreground">{layout.isPrimary ? "Primary" : ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="relative" data-dashboard-menu>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsMenuOpen((previous) => !previous);
+                      setLayoutsMenuOpen(false);
+                    }}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                  >
+                    <Settings className="h-5 w-5" />
+                  </button>
+                  {settingsMenuOpen ? (
+                    <div className="absolute right-0 z-50 mt-2 w-40 rounded-md border border-border bg-white p-1 shadow-lg">
+                      {!isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditing(true);
+                              setSettingsMenuOpen(false);
+                            }}
+                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                          >
+                            Edit Dashboard
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const layout = savedLayouts.find((item) => item.id === activeLayoutId);
+                              saveCurrentLayout(activeLayoutId, layout?.name ?? DEFAULT_LAYOUT_NAME, true);
+                              setSettingsMenuOpen(false);
+                            }}
+                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveAsLayout();
+                              setSettingsMenuOpen(false);
+                            }}
+                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                          >
+                            Save As
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addTile();
+                              setSettingsMenuOpen(false);
+                            }}
+                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                      >
+                        Add Tile
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditing(false);
+                              setSettingsMenuOpen(false);
+                            }}
+                            className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                          >
+                            Done
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
+                {isEditing ? (
+                  <div className="rounded-lg border border-border/80 bg-muted/20 p-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="min-w-[220px] flex-1">
+                        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Working Layout
+                        </label>
+                        <select
+                          value={activeLayoutId}
+                          onChange={(event) => switchLayout(event.target.value)}
+                          className="w-full rounded border border-border bg-white px-2 py-2 text-sm text-foreground"
+                        >
+                          {savedLayouts.map((layout) => (
+                            <option key={`dashboard-edit-layout-option-${layout.id}`} value={layout.id}>
+                              {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Primary)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const layout = savedLayouts.find((item) => item.id === activeLayoutId);
+                            saveCurrentLayout(activeLayoutId, layout?.name ?? DEFAULT_LAYOUT_NAME, false);
+                          }}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveAsLayout()}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Save As
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 max-h-28 space-y-1 overflow-y-auto pr-1">
+                      {savedLayouts.map((layout) => (
+                        <div key={`dashboard-edit-layout-delete-${layout.id}`} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => switchLayout(layout.id)}
+                            className={`flex-1 rounded border px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground ${
+                              layout.id === activeLayoutId ? "border-primary/40 bg-secondary/50" : "border-border/70 bg-white"
+                            }`}
+                          >
+                            {getDisplayLayoutName(layout.name)}
+                            {layout.isPrimary ? " (Primary)" : ""}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteLayout(layout.id)}
+                            disabled={savedLayouts.length <= 1}
+                            title={savedLayouts.length <= 1 ? "At least one layout is required" : "Delete layout"}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded border border-destructive/50 bg-white text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
             <Card className="bg-white/95">
               <CardContent className="min-h-[74vh] space-y-4 p-6">
-                <div className="flex items-center justify-between gap-3">
+                {isEditing ? (
                   <p className="text-sm text-muted-foreground">
-                    Drag tiles to move. Resize only affects the selected tile and snaps on release.
+                    Drag and resize tiles. Drop zones and row controls are edit-only.
                   </p>
-                  <button
-                    type="button"
-                    onClick={addTile}
-                    className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-                  >
-                    Add Tile
-                  </button>
-                </div>
+                ) : null}
 
                 <div className="flex items-start gap-2">
                   <div className="relative flex-1">
@@ -415,13 +885,19 @@ export function AppHomePage() {
                       {Array.from({ length: totalSlots }, (_, slot) => (
                         <div
                           key={`slot-${slot}`}
-                          className={`rounded-xl border border-dashed ${
-                            activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
-                          }`}
+                          className={
+                            isEditing
+                              ? `rounded-xl border border-dashed ${
+                                  activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
+                                }`
+                              : "pointer-events-none rounded-xl border border-transparent bg-transparent"
+                          }
                         >
-                          <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
-                            {occupiedSlots.has(slot) ? "" : "Drop tile here"}
-                          </div>
+                          {isEditing ? (
+                            <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
+                              {occupiedSlots.has(slot) ? "" : "Drop tile here"}
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -452,6 +928,7 @@ export function AppHomePage() {
                               tileRefs.current[tile.id] = element;
                             }}
                             onMouseDown={(event) => {
+                              if (!isEditing) return;
                               if (event.button !== 0) return;
                               if (resizeSession?.tileId === tile.id) return;
                               if (!gridMetrics) return;
@@ -483,7 +960,9 @@ export function AppHomePage() {
                               width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
                               height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
                             }}
-                            className={`absolute cursor-grab rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm active:cursor-grabbing ${
+                            className={`absolute rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm ${
+                              isEditing ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+                            } ${
                               draggingTileId === tile.id ? "z-40 opacity-100" : "z-10"
                             }`}
                           >
@@ -493,7 +972,8 @@ export function AppHomePage() {
                                 {liveColSpan}x{liveRowSpan} tile
                               </div>
                             </div>
-                            {[
+                            {isEditing
+                              ? [
                               { key: "tl", style: { left: "-8px", top: "-8px" }, cursor: "cursor-nwse-resize", icon: "rotate-180" },
                               { key: "tr", style: { right: "-8px", top: "-8px" }, cursor: "cursor-nesw-resize", icon: "rotate-90" },
                               { key: "bl", style: { left: "-8px", bottom: "-8px" }, cursor: "cursor-nesw-resize", icon: "-rotate-90" },
@@ -534,67 +1014,78 @@ export function AppHomePage() {
                               >
                                 <MoveDiagonal2 className={`pointer-events-none h-3 w-3 ${handle.icon}`} />
                               </button>
-                            ))}
+                            ))
+                              : null}
                           </div>
                         );
                       })}
                     </div>
                   </div>
 
-                    <div className="relative w-8">
-                      {Array.from({ length: totalRows }, (_, rowIndex) => {
-                        const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
-                        return (
-                          <button
-                            key={`del-row-${rowIndex}`}
-                            type="button"
-                            onClick={() => {
-                              if (!canDeleteRow(rowIndex)) return;
-                              setTargetRows((previous) => Math.max(1, previous - 1));
-                            }}
-                            className={`absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold ${
-                              canDeleteRow(rowIndex) ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
-                            }`}
-                            style={{
-                              top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
-                              borderColor: "#ef4444",
-                              backgroundColor: "#fee2e2",
-                              color: "#b91c1c",
-                            }}
-                            title="Del row"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {isEditing ? (
+                      <div className="relative w-8">
+                        {Array.from({ length: totalRows }, (_, rowIndex) => {
+                          const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
+                          return (
+                            <button
+                              key={`del-row-${rowIndex}`}
+                              type="button"
+                              onClick={() => {
+                                if (!canDeleteRow(rowIndex)) return;
+                                setTargetRows((previous) => Math.max(1, previous - 1));
+                              }}
+                              className={`absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold ${
+                                canDeleteRow(rowIndex) ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
+                              }`}
+                              style={{
+                                top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
+                                borderColor: "#ef4444",
+                                backgroundColor: "#fee2e2",
+                                color: "#b91c1c",
+                              }}
+                              title="Del row"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                <div className="flex w-full items-center gap-3">
-                  <ul className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <li>rows:{totalRows}</li>
-                    <li>|</li>
-                    <li>tiles:{tiles.length}</li>
-                  </ul>
-                  <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
-                  <button
-                    type="button"
-                    onClick={() => setTargetRows((previous) => previous + 1)}
-                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold hover:opacity-90"
-                    style={{
-                      backgroundColor: "rgba(22,163,74,0.14)",
-                      borderColor: "rgba(21,128,61,0.35)",
-                      color: "#166534",
-                    }}
-                  >
-                    Add Row
-                  </button>
-                  <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
-                  <ul className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <li>min:1</li>
-                    <li>|</li>
-                    <li>set:{targetRows}</li>
-                  </ul>
-                </div>
+                {isEditing ? (
+                  <div className="flex w-full items-center gap-3">
+                    <ul className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <li>rows:{totalRows}</li>
+                      <li>|</li>
+                      <li>tiles:{tiles.length}</li>
+                    </ul>
+                    <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canAddRow) return;
+                        setTargetRows((previous) => previous + 1);
+                      }}
+                      className={`inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${
+                        canAddRow ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
+                      }`}
+                      style={{
+                        backgroundColor: "rgba(22,163,74,0.14)",
+                        borderColor: "rgba(21,128,61,0.35)",
+                        color: "#166534",
+                      }}
+                      title={canAddRow ? "Add Row" : "Max blank rows reached"}
+                    >
+                      Add Row
+                    </button>
+                    <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
+                    <ul className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <li>min:1</li>
+                      <li>|</li>
+                      <li>set:{targetRows}</li>
+                    </ul>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </section>
@@ -613,6 +1104,17 @@ function getGridPosition(slot: number, columns: number) {
     row: Math.floor(slot / columns),
     col: slot % columns,
   };
+}
+
+function getRequiredRows(tiles: DashboardTile[], columns: number) {
+  if (tiles.length === 0) return 1;
+  return Math.max(
+    1,
+    ...tiles.map((tile) => {
+      const pos = getGridPosition(tile.slot, columns);
+      return pos.row + tile.rowSpan;
+    }),
+  );
 }
 
 function rectanglesOverlap(
@@ -743,3 +1245,4 @@ function SidebarPanel({
     </Card>
   );
 }
+
