@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import timedelta
+from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
@@ -13,6 +14,7 @@ from users.models import PasswordResetToken
 
 class PasswordResetService:
     TOKEN_TTL_HOURS = getattr(settings, "AUTH_PASSWORD_RESET_TTL_HOURS", 1)
+    TOKEN_BYTES = getattr(settings, "AUTH_PASSWORD_RESET_TOKEN_BYTES", 32)
     RESEND_COOLDOWN_SECONDS = getattr(
         settings, "AUTH_PASSWORD_RESET_COOLDOWN_SECONDS", 60
     )
@@ -20,6 +22,21 @@ class PasswordResetService:
     @staticmethod
     def _hash_token(raw_token: str) -> str:
         return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _normalize_token(raw_token: str) -> str:
+        token = (raw_token or "").strip().replace("\r", "").replace("\n", "")
+        token = token.replace("=3D", "=").replace("=3d", "=")
+
+        # Some copied dev-console links include the query delimiter encoding ("3D")
+        # inside the token value; trim that prefix when present.
+        if token.startswith("3D"):
+            token = token[2:]
+
+        # token_urlsafe() values do not require "=" padding; removing "=" helps
+        # recover from soft line-wrap artifacts in console backend output.
+        token = token.replace("=", "")
+        return token
 
     @staticmethod
     def issue_token(*, user):
@@ -42,7 +59,7 @@ class PasswordResetService:
             consumed_at__isnull=True,
         ).update(consumed_at=timezone.now())
 
-        raw = secrets.token_urlsafe(48)
+        raw = secrets.token_urlsafe(PasswordResetService.TOKEN_BYTES)
         token_hash = PasswordResetService._hash_token(raw)
 
         token = PasswordResetToken.objects.create(
@@ -56,7 +73,7 @@ class PasswordResetService:
     @staticmethod
     def send_reset_email(*, user, raw_token: str):
         frontend_base = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-        reset_url = f"{frontend_base}/reset-password?token={raw_token}"
+        reset_url = f"{frontend_base}/reset-password?token={quote(raw_token, safe='')}"
 
         subject = "Reset your password"
         message = (
@@ -83,7 +100,11 @@ class PasswordResetService:
 
     @staticmethod
     def reset_with_token(*, raw_token: str, new_password: str):
-        token_hash = PasswordResetService._hash_token(raw_token)
+        normalized_token = PasswordResetService._normalize_token(raw_token)
+        if not normalized_token:
+            raise ValidationError("Invalid password reset token.")
+
+        token_hash = PasswordResetService._hash_token(normalized_token)
         token = PasswordResetToken.objects.select_related("user").filter(
             token_hash=token_hash
         ).first()

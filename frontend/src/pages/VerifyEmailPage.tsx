@@ -6,7 +6,7 @@ import { ApiError } from "../api/http";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
+import { FloatingInput } from "../components/ui/floating-input";
 import { useAuth } from "../context/AuthContext";
 
 export function VerifyEmailPage() {
@@ -53,29 +53,25 @@ export function VerifyEmailPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <label htmlFor="verification-email" className="text-sm font-medium">Email</label>
-              <Input
-                id="verification-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="verification-code" className="text-sm font-medium">6-digit code</label>
-              <Input
-                id="verification-code"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                required
-              />
-            </div>
+            <FloatingInput
+              id="verification-email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+            <FloatingInput
+              id="verification-code"
+              label="6-digit code"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              required
+            />
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             {success ? <p className="text-sm text-primary">{success}</p> : null}

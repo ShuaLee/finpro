@@ -52,8 +52,9 @@ export async function refreshSession(): Promise<void> {
   await apiRequest<{ detail: string }>(API_ENDPOINTS.auth.refresh, "POST");
 }
 
-export async function register(email: string, password: string, acceptTerms: boolean): Promise<RegisterResponse> {
+export async function register(fullName: string, email: string, password: string, acceptTerms: boolean): Promise<RegisterResponse> {
   return apiRequest<RegisterResponse>(API_ENDPOINTS.auth.register, "POST", {
+    full_name: fullName,
     email,
     password,
     accept_terms: acceptTerms,
@@ -70,5 +71,18 @@ export async function verifyEmail(email: string, code: string): Promise<VerifyEm
 export async function resendVerification(email: string): Promise<{ detail: string }> {
   return apiRequest<{ detail: string }>(API_ENDPOINTS.auth.resendVerification, "POST", {
     email,
+  });
+}
+
+export async function forgotPassword(email: string): Promise<{ detail: string }> {
+  return apiRequest<{ detail: string }>(API_ENDPOINTS.auth.forgotPassword, "POST", {
+    email,
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ detail: string }> {
+  return apiRequest<{ detail: string }>(API_ENDPOINTS.auth.resetPassword, "POST", {
+    token,
+    new_password: newPassword,
   });
 }

@@ -18,6 +18,8 @@ export const API_ENDPOINTS = {
     status: `${API_BASE_URL}/auth/status/`,
     verifyEmail: `${API_BASE_URL}/auth/verify-email/`,
     resendVerification: `${API_BASE_URL}/auth/resend-verification/`,
+    forgotPassword: `${API_BASE_URL}/auth/forgot-password/`,
+    resetPassword: `${API_BASE_URL}/auth/reset-password/`,
   },
   profile: {
     detail: `${API_BASE_URL}/user/profile/`,

@@ -1,22 +1,23 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { MailCheck } from "lucide-react";
+import { ChartNoAxesCombined } from "lucide-react";
 
-import { register, resendVerification } from "../api/auth";
+import { register, resendVerification, verifyEmail } from "../api/auth";
 import { ApiError } from "../api/http";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { FloatingInput } from "../components/ui/floating-input";
 import { useAuth } from "../context/AuthContext";
 
 export function SignupPage() {
-  const { user } = useAuth();
+  const { user, refreshAuth } = useAuth();
   const navigate = useNavigate();
 
+  const [stage, setStage] = useState<"signup" | "verify">("signup");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -32,14 +33,37 @@ export function SignupPage() {
     setError(null);
 
     try {
-      const response = await register(email.trim(), password, acceptTerms);
+      const response = await register(fullName.trim(), email.trim(), password, true);
       setSuccessMessage(response.detail);
-      navigate(`/verify-email?email=${encodeURIComponent(email.trim())}`);
+      setStage("verify");
+      setCode("");
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);
       } else {
         setError("Signup failed. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onVerify = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await verifyEmail(email.trim(), code.trim());
+      setSuccessMessage(response.detail);
+      await refreshAuth();
+      navigate("/", { replace: true });
+    } catch (caught) {
+      if (caught instanceof ApiError) {
+        setError(caught.message);
+      } else {
+        setError("Verification failed. Please try again.");
       }
     } finally {
       setSubmitting(false);
@@ -65,79 +89,117 @@ export function SignupPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <Card className="mx-auto max-w-lg bg-white/95">
-        <CardHeader>
-          <Badge className="w-fit">Get Started</Badge>
-          <CardTitle className="font-display text-3xl">Create your account</CardTitle>
-          <CardDescription>Sign up now and verify your email to unlock login.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <label htmlFor="signup-email" className="text-sm font-medium">Email</label>
-              <Input
-                id="signup-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
+    <main className="w-full">
+      <div className="mx-auto flex h-20 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="inline-flex items-center gap-2">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <ChartNoAxesCombined className="h-5 w-5" />
+          </span>
+          <span className="font-display text-[1.45rem] font-bold tracking-tight">FinPro</span>
+        </Link>
+      </div>
 
-            <div className="space-y-2">
-              <label htmlFor="signup-password" className="text-sm font-medium">Password</label>
-              <Input
-                id="signup-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-              />
-            </div>
+      <div className="mx-auto w-full max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <Card className="mx-auto max-w-lg bg-white/95">
+          <CardHeader>
+            <CardTitle className="font-display text-3xl">
+              {stage === "signup" ? "Create your account" : "Verify your email"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stage === "signup" ? (
+              <form className="space-y-4" onSubmit={onSubmit}>
+                <FloatingInput
+                  id="signup-name"
+                  label="Name"
+                  type="text"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  required
+                  autoComplete="name"
+                />
 
-            <label className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 p-3 text-sm" htmlFor="accept-terms">
-              <input
-                id="accept-terms"
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-border"
-                checked={acceptTerms}
-                onChange={(event) => setAcceptTerms(event.target.checked)}
-                required
-              />
-              <span>I accept the terms of use and understand authentication requires email verification.</span>
-            </label>
+                <FloatingInput
+                  id="signup-email"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  autoComplete="email"
+                />
 
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            {successMessage ? <p className="text-sm text-primary">{successMessage}</p> : null}
+                <FloatingInput
+                  id="signup-password"
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                />
 
-            <Button className="w-full" type="submit" disabled={submitting}>
-              {submitting ? "Creating account..." : "Create account"}
-            </Button>
+                <p className="text-sm text-muted-foreground">
+                  By continuing to sign up you accept our{" "}
+                  <Link to="/terms" className="font-semibold text-primary">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link to="/privacy" className="font-semibold text-primary">
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
 
-            <Button
-              className="w-full"
-              variant="secondary"
-              type="button"
-              onClick={onResend}
-              disabled={resending || !email.trim()}
-            >
-              {resending ? "Sending..." : "Resend verification email"}
-            </Button>
-          </form>
+                {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                {successMessage ? <p className="text-sm text-primary">{successMessage}</p> : null}
 
-          <div className="mt-6 rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
-            <div className="mb-1 flex items-center gap-2 text-foreground">
-              <MailCheck className="h-4 w-4 text-primary" />
-              Verification-first auth flow
-            </div>
-            Already have an account? <Link className="font-semibold text-primary" to="/login">Log in</Link>
-          </div>
-        </CardContent>
-      </Card>
+                <Button className="w-full" type="submit" disabled={submitting}>
+                  {submitting ? "Creating account..." : "Create account"}
+                </Button>
+              </form>
+            ) : (
+              <form className="space-y-4" onSubmit={onVerify}>
+                <FloatingInput id="verify-email" label="Email" type="email" value={email} disabled readOnly />
+
+                <FloatingInput
+                  id="verification-code"
+                  label="6-digit code"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                />
+
+                {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                {successMessage ? <p className="text-sm text-primary">{successMessage}</p> : null}
+
+                <Button className="w-full" type="submit" disabled={submitting}>
+                  {submitting ? "Verifying..." : "Verify email"}
+                </Button>
+
+                <Button
+                  className="w-full"
+                  variant="secondary"
+                  type="button"
+                  onClick={onResend}
+                  disabled={resending}
+                >
+                  {resending ? "Sending..." : "Resend verification code"}
+                </Button>
+              </form>
+            )}
+
+            <p className="mt-6 text-sm text-muted-foreground">
+              Already have an account? <Link className="font-semibold text-primary" to="/login">Log in</Link>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

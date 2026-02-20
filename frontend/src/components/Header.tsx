@@ -58,10 +58,10 @@ export function Header() {
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <ChartNoAxesCombined className="h-5 w-5" />
             </span>
-            <span className="font-display text-[1.35rem] font-bold tracking-tight">FinPro</span>
+            <span className="font-display text-[1.45rem] font-bold tracking-tight">FinPro</span>
           </Link>
 
-          <nav className="hidden items-center gap-8 pl-4 lg:pl-8 lg:flex" aria-label="Primary">
+          <nav className="hidden items-center gap-10 pl-2 lg:pl-4 lg:flex" aria-label="Primary">
             {user ? (
               <Link
                 to="/"
@@ -73,16 +73,16 @@ export function Header() {
               </Link>
             ) : (
               <>
-                <Link to="/#pricing" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/pricing" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
                   Pricing
                 </Link>
-                <Link to="/#security" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/security" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
                   Security
                 </Link>
-                <Link to="/#learn" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/learn" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
                   Learn
                 </Link>
-                <Link to="/#business" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/business" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
                   Business
                 </Link>
               </>
@@ -188,28 +188,28 @@ export function Header() {
             ) : (
               <>
                 <Link
-                  to="/#pricing"
+                  to="/pricing"
                   onClick={() => setMobileMenuOpen(false)}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Pricing
                 </Link>
                 <Link
-                  to="/#security"
+                  to="/security"
                   onClick={() => setMobileMenuOpen(false)}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Security
                 </Link>
                 <Link
-                  to="/#learn"
+                  to="/learn"
                   onClick={() => setMobileMenuOpen(false)}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Learn
                 </Link>
                 <Link
-                  to="/#business"
+                  to="/business"
                   onClick={() => setMobileMenuOpen(false)}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >

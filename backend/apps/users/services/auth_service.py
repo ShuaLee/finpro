@@ -97,7 +97,7 @@ class AuthService:
 
     @staticmethod
     @transaction.atomic
-    def register_user(*, email: str, password: str, accept_terms: bool):
+    def register_user(*, email: str, password: str, accept_terms: bool, full_name: str = ""):
         if not accept_terms:
             raise ValidationError("You must accept terms to register.")
 
@@ -107,7 +107,12 @@ class AuthService:
         user = User.objects.create_user(email=email, password=password)
 
         # Ensure foundational user context exists immediately
-        ProfileBootstrapService.bootstrap(user=user)
+        profile = ProfileBootstrapService.bootstrap(user=user)
+
+        cleaned_full_name = (full_name or "").strip()
+        if cleaned_full_name:
+            profile.full_name = cleaned_full_name
+            profile.save(update_fields=["full_name", "updated_at"])
 
         code, _ = EmailVerificationService.issue_token(user=user)
         EmailVerificationService.send_verification_email(user=user, verification_code=code)

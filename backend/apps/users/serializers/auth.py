@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 
 class RegisterSerializer(serializers.Serializer):
+    full_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     accept_terms = serializers.BooleanField()

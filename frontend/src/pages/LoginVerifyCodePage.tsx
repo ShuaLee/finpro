@@ -6,7 +6,7 @@ import { ApiError } from "../api/http";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
+import { FloatingInput } from "../components/ui/floating-input";
 import { useAuth } from "../context/AuthContext";
 
 export function LoginVerifyCodePage() {
@@ -57,30 +57,26 @@ export function LoginVerifyCodePage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <label htmlFor="login-email" className="text-sm font-medium">Email</label>
-              <Input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </div>
+            <FloatingInput
+              id="login-email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
 
-            <div className="space-y-2">
-              <label htmlFor="login-code" className="text-sm font-medium">6-digit code</label>
-              <Input
-                id="login-code"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                required
-              />
-            </div>
+            <FloatingInput
+              id="login-code"
+              label="6-digit code"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              required
+            />
 
             <label className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 p-3 text-sm" htmlFor="remember-device-login-verify">
               <input
