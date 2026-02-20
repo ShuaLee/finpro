@@ -1,17 +1,18 @@
-import { type ComponentType, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useRef, useState } from "react";
 import {
   Bell,
   Building2,
   ChevronDown,
   Landmark,
   Menu,
+  MoveDiagonal2,
   Search,
   Wallet,
   X,
 } from "lucide-react";
 
 import { Badge } from "../components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 
 type AccountGroup = {
@@ -19,6 +20,45 @@ type AccountGroup = {
   icon: ComponentType<{ className?: string }>;
   items: string[];
 };
+
+type DashboardTile = {
+  id: number;
+  slot: number;
+  colSpan: number;
+  rowSpan: number;
+};
+
+type ResizeSession = {
+  tileId: number;
+  startX: number;
+  startY: number;
+  startColSpan: number;
+  startRowSpan: number;
+  startWidth: number;
+  startHeight: number;
+};
+
+type DragSession = {
+  tileId: number;
+  startX: number;
+  startY: number;
+  startLeft: number;
+  startTop: number;
+  anchorCol: number;
+  anchorRow: number;
+};
+
+type GridMetrics = {
+  columns: number;
+  cellWidth: number;
+  cellHeight: number;
+  colGap: number;
+  rowGap: number;
+};
+
+const DESKTOP_COLUMNS = 4;
+const BASE_DASHBOARD_ROWS = 4;
+const MAX_ROW_SPAN = 8;
 
 const accountGroups: AccountGroup[] = [
   {
@@ -38,191 +78,484 @@ const accountGroups: AccountGroup[] = [
   },
 ];
 
-const netWorthSeries = [
-  182000, 185000, 190500, 196000, 201000, 205500,
-  208250, 211000, 214300, 218500, 221200, 225400,
-];
-
 export function AppHomePage() {
   const { user } = useAuth();
   const [expandedGroup, setExpandedGroup] = useState<string>(accountGroups[0].title);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("Overview");
+  const [tiles, setTiles] = useState<DashboardTile[]>([{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }]);
+  const [nextTileId, setNextTileId] = useState(2);
+  const [activeDropSlot, setActiveDropSlot] = useState<number | null>(null);
+  const [draggingTileId, setDraggingTileId] = useState<number | null>(null);
+  const [gridMetrics, setGridMetrics] = useState<GridMetrics | null>(null);
+  const [resizeSession, setResizeSession] = useState<ResizeSession | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ tileId: number; colSpan: number; rowSpan: number } | null>(null);
+  const [resizeVisual, setResizeVisual] = useState<{ tileId: number; width: number; height: number } | null>(null);
+  const [dragSession, setDragSession] = useState<DragSession | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ tileId: number; left: number; top: number } | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  const graphPoints = useMemo(() => {
-    const max = Math.max(...netWorthSeries);
-    const min = Math.min(...netWorthSeries);
-    const width = 900;
-    const height = 260;
+  const columns = gridMetrics?.columns ?? DESKTOP_COLUMNS;
 
-    return netWorthSeries
-      .map((value, index) => {
-        const x = (index / (netWorthSeries.length - 1)) * width;
-        const y = height - ((value - min) / (max - min || 1)) * height;
-        return `${x},${y}`;
-      })
-      .join(" ");
+  useEffect(() => {
+    const updateMetrics = () => {
+      const grid = gridRef.current;
+      if (!grid) return;
+      const styles = window.getComputedStyle(grid);
+      const templateCols = styles.gridTemplateColumns
+        .split(" ")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const colCount = templateCols.length > 0 ? templateCols.length : DESKTOP_COLUMNS;
+      const colGap = Number.parseFloat(styles.columnGap || "0");
+      const rowGap = Number.parseFloat(styles.rowGap || "0");
+      const rowSize = Number.parseFloat(styles.gridAutoRows || "132");
+      const cellWidth = (grid.clientWidth - colGap * (colCount - 1)) / colCount;
+
+      setGridMetrics({
+        columns: colCount,
+        cellWidth: Number.isFinite(cellWidth) ? cellWidth : 132,
+        cellHeight: Number.isFinite(rowSize) ? rowSize : 132,
+        colGap: Number.isFinite(colGap) ? colGap : 0,
+        rowGap: Number.isFinite(rowGap) ? rowGap : 0,
+      });
+    };
+
+    updateMetrics();
+    window.addEventListener("resize", updateMetrics);
+    return () => window.removeEventListener("resize", updateMetrics);
   }, []);
 
+  const addTile = () => {
+    let nextSlot = 0;
+    while (!canPlaceTile(tiles, null, nextSlot, 1, 1, columns)) nextSlot += 1;
+    setTiles((previous) => [...previous, { id: nextTileId, slot: nextSlot, colSpan: 1, rowSpan: 1 }]);
+    setNextTileId((previous) => previous + 1);
+  };
+
+  const moveTileToSlot = (tileId: number, targetSlot: number) => {
+    setTiles((previous) => {
+      const tile = previous.find((item) => item.id === tileId);
+      if (!tile) return previous;
+      if (tile.slot === targetSlot) return previous;
+      if (!canPlaceTile(previous, tile.id, targetSlot, tile.colSpan, tile.rowSpan, columns)) return previous;
+      return previous.map((item) => (item.id === tileId ? { ...item, slot: targetSlot } : item));
+    });
+  };
+
+  useEffect(() => {
+    if (!resizeSession || !gridMetrics) return;
+
+    const previousCursor = document.body.style.cursor;
+    document.body.style.cursor = "se-resize";
+
+    const onMouseMove = (event: MouseEvent) => {
+      const tile = tiles.find((item) => item.id === resizeSession.tileId);
+      if (!tile) return;
+
+      const tilePos = getGridPosition(tile.slot, columns);
+      const maxColSpan = columns - tilePos.col;
+      const dx = event.clientX - resizeSession.startX;
+      const dy = event.clientY - resizeSession.startY;
+
+      const colFloat = resizeSession.startColSpan + dx / Math.max(1, gridMetrics.cellWidth + gridMetrics.colGap);
+      const rowFloat = resizeSession.startRowSpan + dy / Math.max(1, gridMetrics.cellHeight + gridMetrics.rowGap);
+      const nextColSpan = clamp(Math.floor(colFloat + 0.5), 1, maxColSpan);
+      const nextRowSpan = clamp(Math.floor(rowFloat + 0.5), 1, MAX_ROW_SPAN);
+      setResizePreview({ tileId: tile.id, colSpan: nextColSpan, rowSpan: nextRowSpan });
+      setResizeVisual({
+        tileId: tile.id,
+        width: Math.max(72, resizeSession.startWidth + dx),
+        height: Math.max(72, resizeSession.startHeight + dy),
+      });
+    };
+
+    const onMouseUp = () => {
+      setTiles((previous) => {
+        if (!resizePreview || resizePreview.tileId !== resizeSession.tileId) return previous;
+        const tile = previous.find((item) => item.id === resizeSession.tileId);
+        if (!tile) return previous;
+
+        const valid = canPlaceTile(
+          previous,
+          tile.id,
+          tile.slot,
+          resizePreview.colSpan,
+          resizePreview.rowSpan,
+          columns,
+        );
+        if (!valid) return previous;
+
+        return previous.map((item) =>
+          item.id === tile.id ? { ...item, colSpan: resizePreview.colSpan, rowSpan: resizePreview.rowSpan } : item,
+        );
+      });
+
+      setResizeSession(null);
+      setResizePreview(null);
+      setResizeVisual(null);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = previousCursor;
+    };
+  }, [columns, gridMetrics, resizePreview, resizeSession, tiles]);
+
+  useEffect(() => {
+    if (!dragSession || !gridMetrics || !gridRef.current) return;
+
+    const onMouseMove = (event: MouseEvent) => {
+      const dx = event.clientX - dragSession.startX;
+      const dy = event.clientY - dragSession.startY;
+      const left = dragSession.startLeft + dx;
+      const top = dragSession.startTop + dy;
+      setDragPreview({ tileId: dragSession.tileId, left, top });
+
+      const slot = getSlotFromPoint(event.clientX, event.clientY, gridRef.current!, gridMetrics, columns);
+
+      setActiveDropSlot(slot);
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+      const slot = getSlotFromPoint(event.clientX, event.clientY, gridRef.current!, gridMetrics, columns);
+      if (slot !== null) {
+        const tile = tiles.find((item) => item.id === dragSession.tileId);
+        if (tile) {
+          const alignedSlot = getAlignedTopLeftSlot(slot, dragSession.anchorCol, dragSession.anchorRow, tile, columns);
+          moveTileToSlot(dragSession.tileId, alignedSlot);
+        }
+      }
+      setDraggingTileId(null);
+      setActiveDropSlot(null);
+      setDragSession(null);
+      setDragPreview(null);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [columns, dragSession, gridMetrics]);
+
+  const maxUsedRow =
+    tiles.length > 0
+      ? Math.max(...tiles.map((tile) => getGridPosition(tile.slot, columns).row + tile.rowSpan))
+      : 0;
+  const totalRows = Math.max(BASE_DASHBOARD_ROWS, maxUsedRow);
+  const totalSlots = totalRows * columns;
+  const occupiedSlots = getOccupiedSlots(
+    tiles.map((tile) => {
+      const preview = resizePreview?.tileId === tile.id ? resizePreview : null;
+      return preview ? { ...tile, colSpan: preview.colSpan, rowSpan: preview.rowSpan } : tile;
+    }),
+    columns,
+  );
+
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted-foreground">Welcome back</p>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Portfolio Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Signed in as {user?.email}</p>
+    <main className="w-full pb-10 pt-4">
+      <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4 md:hidden">
+          <div>
+            <p className="text-sm text-muted-foreground">Welcome back</p>
+            <h1 className="font-display text-3xl font-bold tracking-tight">Portfolio Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Signed in as {user?.email}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="inline-flex rounded-lg border border-border bg-white p-2 shadow-sm md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
+              <Search className="h-4 w-4" />
+            </button>
+            <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
+              <Bell className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="inline-flex rounded-lg border border-border bg-white p-2 shadow-sm lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
-            <Search className="h-4 w-4" />
-          </button>
-          <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
-            <Bell className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+        <div className="grid items-start gap-6 md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="hidden md:block">
+            <SidebarPanel accountGroups={accountGroups} expandedGroup={expandedGroup} setExpandedGroup={setExpandedGroup} />
+          </aside>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[280px_1fr]">
-        <aside className="hidden lg:block">
-          <SidebarPanel accountGroups={accountGroups} expandedGroup={expandedGroup} setExpandedGroup={setExpandedGroup} />
-        </aside>
+          {sidebarOpen ? (
+            <div className="fixed inset-0 z-50 bg-black/35 md:hidden" onClick={() => setSidebarOpen(false)}>
+              <div className="h-full w-80 max-w-[85vw] bg-white p-4" onClick={(event) => event.stopPropagation()}>
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="rounded-md border border-border p-1"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <SidebarPanel accountGroups={accountGroups} expandedGroup={expandedGroup} setExpandedGroup={setExpandedGroup} />
+              </div>
+            </div>
+          ) : null}
 
-        {sidebarOpen ? (
-          <div className="fixed inset-0 z-50 bg-black/35 lg:hidden" onClick={() => setSidebarOpen(false)}>
-            <div className="h-full w-80 max-w-[85vw] bg-white p-4" onClick={(event) => event.stopPropagation()}>
-              <div className="mb-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(false)}
-                  className="rounded-md border border-border p-1"
-                >
-                  <X className="h-4 w-4" />
+          <section className="space-y-4">
+            <div className="mb-1 hidden items-center justify-between gap-4 md:flex">
+              <div>
+                <p className="text-sm text-muted-foreground">Welcome back</p>
+                <h1 className="font-display text-3xl font-bold tracking-tight">Portfolio Dashboard</h1>
+                <p className="text-sm text-muted-foreground">Signed in as {user?.email}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
+                  <Search className="h-4 w-4" />
+                </button>
+                <button type="button" className="inline-flex rounded-lg border border-border bg-white p-2 text-muted-foreground">
+                  <Bell className="h-4 w-4" />
                 </button>
               </div>
-              <SidebarPanel accountGroups={accountGroups} expandedGroup={expandedGroup} setExpandedGroup={setExpandedGroup} />
             </div>
-          </div>
-        ) : null}
-
-        <section className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
-            {["Overview", "Performance", "Allocations"].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  activeTab === tab
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-white text-muted-foreground hover:bg-secondary hover:text-foreground"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricTile label="Net Worth" value="$225,400" change="+4.8%" />
-            <MetricTile label="Monthly Return" value="$8,720" change="+2.1%" />
-            <MetricTile label="Accounts" value="8" change="+1 new" />
-            <MetricTile label="Risk Level" value="Moderate" change="Stable" />
-          </div>
-
-          <Card className="bg-white/95">
-            <CardHeader className="flex flex-row items-center justify-between gap-4">
-              <div>
-                <CardTitle className="font-display text-2xl">Net Worth Trend</CardTitle>
-                <CardDescription>Last 12 months</CardDescription>
-              </div>
-              <Badge>$225,400</Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-hidden rounded-lg border border-border bg-[#f8f9fb] p-4">
-                <svg viewBox="0 0 900 260" className="h-64 w-full">
-                  <defs>
-                    <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#111315" stopOpacity="0.16" />
-                      <stop offset="100%" stopColor="#111315" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <line
-                      key={`grid-${i}`}
-                      x1="0"
-                      y1={i * 65}
-                      x2="900"
-                      y2={i * 65}
-                      stroke="rgba(15,23,42,0.12)"
-                      strokeDasharray="4 6"
-                    />
-                  ))}
-                  <polyline
-                    fill="url(#areaFill)"
-                    stroke="none"
-                    points={`0,260 ${graphPoints} 900,260`}
-                  />
-                  <polyline
-                    fill="none"
-                    stroke="#111315"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    points={graphPoints}
-                  />
-                </svg>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="bg-white/95">
-              <CardHeader>
-                <CardTitle className="font-display text-xl">Allocation</CardTitle>
-                <CardDescription>Current split by asset class</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-[180px_1fr]">
-                <svg viewBox="0 0 140 140" className="mx-auto h-40 w-40 -rotate-90">
-                  <circle cx="70" cy="70" r="48" fill="none" stroke="#e7e9ee" strokeWidth="22" />
-                  <circle cx="70" cy="70" r="48" fill="none" stroke="#111315" strokeWidth="22" strokeDasharray="301.6" strokeDashoffset="174.9" />
-                  <circle cx="70" cy="70" r="48" fill="none" stroke="#454d5b" strokeWidth="22" strokeDasharray="301.6" strokeDashoffset="224" />
-                  <circle cx="70" cy="70" r="48" fill="none" stroke="#697384" strokeWidth="22" strokeDasharray="301.6" strokeDashoffset="260" />
-                  <circle cx="70" cy="70" r="48" fill="none" stroke="#9aa2af" strokeWidth="22" strokeDasharray="301.6" strokeDashoffset="282" />
-                </svg>
-                <ul className="space-y-2 text-sm">
-                  <LegendRow label="Equities" value="42%" color="bg-[#12151b]" />
-                  <LegendRow label="Cash" value="25%" color="bg-[#454d5b]" />
-                  <LegendRow label="Crypto" value="16%" color="bg-[#697384]" />
-                  <LegendRow label="Alternatives" value="17%" color="bg-[#9aa2af]" />
-                </ul>
-              </CardContent>
-            </Card>
 
             <Card className="bg-white/95">
-              <CardHeader>
-                <CardTitle className="font-display text-xl">Top Holdings</CardTitle>
-                <CardDescription>Largest positions by current value</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <HoldingRow symbol="AAPL" name="Apple" value="$32,550" change="+1.2%" positive />
-                <HoldingRow symbol="MSFT" name="Microsoft" value="$28,140" change="+0.7%" positive />
-                <HoldingRow symbol="BTC" name="Bitcoin" value="$19,380" change="-0.9%" />
-                <HoldingRow symbol="CASH" name="Cash Reserve" value="$14,220" change="0.0%" positive />
+              <CardContent className="min-h-[74vh] space-y-4 p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Drag tiles to move. Resize only affects the selected tile and snaps on release.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addTile}
+                    className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                  >
+                    Add Tile
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <div
+                    ref={gridRef}
+                    className="grid grid-cols-2 auto-rows-[120px] gap-3 md:grid-cols-4 md:auto-rows-[132px]"
+                  >
+                    {Array.from({ length: totalSlots }, (_, slot) => (
+                      <div
+                        key={`slot-${slot}`}
+                        className={`rounded-xl border border-dashed ${
+                          activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
+                        }`}
+                      >
+                        <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
+                          {occupiedSlots.has(slot) ? "" : "Drop tile here"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    ref={overlayRef}
+                    className="absolute inset-0 z-10"
+                  >
+                    {tiles.map((tile) => {
+                      const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
+                      const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
+                      const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
+                      const pos = getGridPosition(tile.slot, columns);
+                      const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
+                      const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
+                      const snappedWidth =
+                        liveColSpan * (gridMetrics?.cellWidth ?? 0) + (liveColSpan - 1) * (gridMetrics?.colGap ?? 0);
+                      const snappedHeight =
+                        liveRowSpan * (gridMetrics?.cellHeight ?? 0) + (liveRowSpan - 1) * (gridMetrics?.rowGap ?? 0);
+                      const dragMovePreview = dragPreview?.tileId === tile.id ? dragPreview : null;
+                      const resizeLivePreview = resizeVisual?.tileId === tile.id ? resizeVisual : null;
+
+                      return (
+                        <div
+                          key={`tile-${tile.id}`}
+                          ref={(element) => {
+                            tileRefs.current[tile.id] = element;
+                          }}
+                          onMouseDown={(event) => {
+                            if (event.button !== 0) return;
+                            if (resizeSession?.tileId === tile.id) return;
+                            if (!gridMetrics) return;
+                            event.preventDefault();
+                            setDraggingTileId(tile.id);
+                            setActiveDropSlot(null);
+                            const tileRect = event.currentTarget.getBoundingClientRect();
+                            const relativeX = event.clientX - tileRect.left;
+                            const relativeY = event.clientY - tileRect.top;
+                            const colStep = Math.max(1, snappedWidth / Math.max(1, tile.colSpan));
+                            const rowStep = Math.max(1, snappedHeight / Math.max(1, tile.rowSpan));
+                            const anchorCol = clamp(Math.floor(relativeX / colStep), 0, tile.colSpan - 1);
+                            const anchorRow = clamp(Math.floor(relativeY / rowStep), 0, tile.rowSpan - 1);
+
+                            setDragSession({
+                              tileId: tile.id,
+                              startX: event.clientX,
+                              startY: event.clientY,
+                              startLeft: left,
+                              startTop: top,
+                              anchorCol,
+                              anchorRow,
+                            });
+                            setDragPreview({ tileId: tile.id, left, top });
+                          }}
+                          style={{
+                            left: `${dragMovePreview ? dragMovePreview.left : left}px`,
+                            top: `${dragMovePreview ? dragMovePreview.top : top}px`,
+                            width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
+                            height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
+                          }}
+                          className={`absolute cursor-grab rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm active:cursor-grabbing ${
+                            draggingTileId === tile.id ? "z-40 opacity-100" : "z-10"
+                          }`}
+                        >
+                          <div className="flex h-full flex-col justify-between">
+                            <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
+                            <div className="text-[11px] opacity-85">
+                              {liveColSpan}x{liveRowSpan} tile
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setResizeSession({
+                                tileId: tile.id,
+                                startX: event.clientX,
+                                startY: event.clientY,
+                                startColSpan: tile.colSpan,
+                                startRowSpan: tile.rowSpan,
+                                startWidth:
+                                  tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0),
+                                startHeight:
+                                  tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0),
+                              });
+                              setResizePreview({
+                                tileId: tile.id,
+                                colSpan: tile.colSpan,
+                                rowSpan: tile.rowSpan,
+                              });
+                            }}
+                            style={{ right: "-8px", bottom: "-8px" }}
+                            className="absolute z-20 inline-flex h-8 w-8 cursor-se-resize items-center justify-center rounded-md border-2 border-slate-300 bg-white text-slate-700 shadow-md"
+                            aria-label={`Resize tile ${tile.id}`}
+                            title="Click and hold to resize"
+                          >
+                            <MoveDiagonal2 className="pointer-events-none h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </main>
   );
 }
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getGridPosition(slot: number, columns: number) {
+  return {
+    row: Math.floor(slot / columns),
+    col: slot % columns,
+  };
+}
+
+function rectanglesOverlap(
+  a: { row: number; col: number; rowSpan: number; colSpan: number },
+  b: { row: number; col: number; rowSpan: number; colSpan: number },
+) {
+  return !(
+    a.col + a.colSpan <= b.col ||
+    b.col + b.colSpan <= a.col ||
+    a.row + a.rowSpan <= b.row ||
+    b.row + b.rowSpan <= a.row
+  );
+}
+
+function canPlaceTile(
+  tiles: DashboardTile[],
+  movingTileId: number | null,
+  targetSlot: number,
+  colSpan: number,
+  rowSpan: number,
+  columns: number,
+) {
+  const targetPos = getGridPosition(targetSlot, columns);
+  if (targetPos.col + colSpan > columns) return false;
+  const targetRect = { row: targetPos.row, col: targetPos.col, colSpan, rowSpan };
+
+  return tiles.every((tile) => {
+    if (movingTileId !== null && tile.id === movingTileId) return true;
+    const pos = getGridPosition(tile.slot, columns);
+    const tileRect = { row: pos.row, col: pos.col, colSpan: tile.colSpan, rowSpan: tile.rowSpan };
+    return !rectanglesOverlap(targetRect, tileRect);
+  });
+}
+
+function getOccupiedSlots(tiles: DashboardTile[], columns: number) {
+  const occupied = new Set<number>();
+  tiles.forEach((tile) => {
+    const pos = getGridPosition(tile.slot, columns);
+    for (let r = 0; r < tile.rowSpan; r += 1) {
+      for (let c = 0; c < tile.colSpan; c += 1) {
+        occupied.add((pos.row + r) * columns + pos.col + c);
+      }
+    }
+  });
+  return occupied;
+}
+
+function getAlignedTopLeftSlot(
+  hoveredSlot: number,
+  anchorCol: number,
+  anchorRow: number,
+  tile: DashboardTile,
+  columns: number,
+) {
+  const hoveredPos = getGridPosition(hoveredSlot, columns);
+  const unclampedCol = hoveredPos.col - anchorCol;
+  const unclampedRow = hoveredPos.row - anchorRow;
+  const maxStartCol = Math.max(0, columns - tile.colSpan);
+  const col = clamp(unclampedCol, 0, maxStartCol);
+  const row = Math.max(0, unclampedRow);
+  return row * columns + col;
+}
+
+function getSlotFromPoint(
+  clientX: number,
+  clientY: number,
+  gridElement: HTMLDivElement,
+  metrics: GridMetrics,
+  columns: number,
+) {
+  const rect = gridElement.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+
+  const col = clamp(Math.floor(x / Math.max(1, metrics.cellWidth + metrics.colGap)), 0, columns - 1);
+  const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
+  return row * columns + col;
+}
+
 
 function SidebarPanel({
   accountGroups,
@@ -271,56 +604,5 @@ function SidebarPanel({
         })}
       </CardContent>
     </Card>
-  );
-}
-
-function MetricTile({ label, value, change }: { label: string; value: string; change: string }) {
-  return (
-    <Card className="bg-white/95">
-      <CardContent className="space-y-1 p-5">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="text-2xl font-bold tracking-tight">{value}</p>
-        <p className="text-sm text-muted-foreground">{change}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function LegendRow({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <li className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-      <span className="inline-flex items-center gap-2">
-        <span className={`h-3 w-3 rounded ${color}`} />
-        {label}
-      </span>
-      <span className="font-semibold">{value}</span>
-    </li>
-  );
-}
-
-function HoldingRow({
-  symbol,
-  name,
-  value,
-  change,
-  positive = false,
-}: {
-  symbol: string;
-  name: string;
-  value: string;
-  change: string;
-  positive?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-      <div>
-        <p className="text-sm font-semibold">{symbol}</p>
-        <p className="text-xs text-muted-foreground">{name}</p>
-      </div>
-      <div className="text-right">
-        <p className="text-sm font-semibold">{value}</p>
-        <p className={`text-xs ${positive ? "text-green-600" : "text-destructive"}`}>{change}</p>
-      </div>
-    </div>
   );
 }
