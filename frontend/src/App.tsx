@@ -38,9 +38,10 @@ function RootRedirect() {
 
 function App() {
   const location = useLocation();
+  const { user } = useAuth();
   const authStandalonePaths = new Set(["/signup", "/login", "/login-verify", "/forgot-password", "/reset-password"]);
   const hideHeader = authStandalonePaths.has(location.pathname);
-  const hideFooter = authStandalonePaths.has(location.pathname);
+  const hideFooter = authStandalonePaths.has(location.pathname) || Boolean(user);
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -48,7 +48,18 @@ export function Header() {
     }
   };
 
-  const onDashboard = location.pathname === "/" && Boolean(user);
+  const onPortfolio = location.pathname === "/" && Boolean(user);
+  const onSettings = location.pathname.startsWith("/settings") && Boolean(user);
+  const onPricing = location.pathname.startsWith("/pricing");
+  const onSecurity = location.pathname.startsWith("/security");
+  const onLearn = location.pathname.startsWith("/learn");
+  const onBusiness = location.pathname.startsWith("/business");
+  const navTabClass = (isActive: boolean) =>
+    `relative px-1 py-2 text-[0.95rem] font-semibold transition after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:rounded-full ${
+      isActive
+        ? "text-foreground after:bg-primary"
+        : "text-muted-foreground hover:text-foreground after:bg-transparent hover:after:bg-primary/35"
+    }`;
 
   return (
     <header className="sticky top-0 z-40 relative border-b border-black/10 bg-background/97 backdrop-blur supports-[backdrop-filter]:bg-background/95">
@@ -63,26 +74,26 @@ export function Header() {
 
           <nav className="hidden items-center gap-10 pl-2 lg:pl-4 lg:flex" aria-label="Primary">
             {user ? (
-              <Link
-                to="/"
-                className={`rounded-md px-3 py-2 text-[0.95rem] font-medium transition ${
-                  onDashboard ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                }`}
-              >
-                Dashboard
-              </Link>
+              <>
+                <Link to="/" className={navTabClass(onPortfolio)}>
+                  Portfolio
+                </Link>
+                <Link to="/settings#account" className={navTabClass(onSettings)}>
+                  Settings
+                </Link>
+              </>
             ) : (
               <>
-                <Link to="/pricing" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/pricing" className={navTabClass(onPricing)}>
                   Pricing
                 </Link>
-                <Link to="/security" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/security" className={navTabClass(onSecurity)}>
                   Security
                 </Link>
-                <Link to="/learn" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/learn" className={navTabClass(onLearn)}>
                   Learn
                 </Link>
-                <Link to="/business" className="text-[0.95rem] font-medium text-muted-foreground transition hover:text-foreground">
+                <Link to="/business" className={navTabClass(onBusiness)}>
                   Business
                 </Link>
               </>
@@ -167,7 +178,7 @@ export function Header() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
-                  Dashboard
+                  Portfolio
                 </Link>
                 <Link
                   to="/settings#account"
