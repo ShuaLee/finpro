@@ -34,10 +34,17 @@ type ViewportLayout = {
 };
 
 type ViewportLayouts = Record<EditViewport, ViewportLayout>;
+type TilePreset = {
+  id: string;
+  label: string;
+  spans: Record<EditViewport, { colSpan: number; rowSpan: number }>;
+};
 type HolderTile = {
   id: number;
   colSpan: number;
   rowSpan: number;
+  returnColSpan?: number;
+  returnRowSpan?: number;
 };
 type ViewportHolders = Record<EditViewport, HolderTile[]>;
 
@@ -141,6 +148,53 @@ const INSIGHT_TILE_VIEWS: InsightTileView[] = [
     hint: "Dividend and interest projections are trending up.",
   },
 ];
+const TILE_PRESETS: TilePreset[] = [
+  {
+    id: "compact",
+    label: "Compact",
+    spans: {
+      desktop: { colSpan: 1, rowSpan: 1 },
+      tablet: { colSpan: 1, rowSpan: 1 },
+      mobile: { colSpan: 1, rowSpan: 1 },
+    },
+  },
+  {
+    id: "wide",
+    label: "Wide",
+    spans: {
+      desktop: { colSpan: 2, rowSpan: 1 },
+      tablet: { colSpan: 2, rowSpan: 1 },
+      mobile: { colSpan: 2, rowSpan: 1 },
+    },
+  },
+  {
+    id: "analytics",
+    label: "Analytics",
+    spans: {
+      desktop: { colSpan: 2, rowSpan: 3 },
+      tablet: { colSpan: 2, rowSpan: 3 },
+      mobile: { colSpan: 2, rowSpan: 2 },
+    },
+  },
+  {
+    id: "overview",
+    label: "Overview",
+    spans: {
+      desktop: { colSpan: 2, rowSpan: 4 },
+      tablet: { colSpan: 2, rowSpan: 4 },
+      mobile: { colSpan: 2, rowSpan: 2 },
+    },
+  },
+  {
+    id: "panel",
+    label: "Panel",
+    spans: {
+      desktop: { colSpan: 3, rowSpan: 2 },
+      tablet: { colSpan: 3, rowSpan: 2 },
+      mobile: { colSpan: 2, rowSpan: 2 },
+    },
+  },
+];
 
 const normalizeLayoutName = (name: string) => name.trim().slice(0, MAX_LAYOUT_NAME_LENGTH);
 const getDisplayLayoutName = (name: string) =>
@@ -153,7 +207,9 @@ export function AppHomePage() {
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [layoutsMenuOpen, setLayoutsMenuOpen] = useState(false);
   const [tileMenuOpenId, setTileMenuOpenId] = useState<number | null>(null);
+  const [holderMenuOpenId, setHolderMenuOpenId] = useState<number | null>(null);
   const [isNewLayoutDialogOpen, setIsNewLayoutDialogOpen] = useState(false);
+  const [isAddTileDialogOpen, setIsAddTileDialogOpen] = useState(false);
   const [layoutNameDialogMode, setLayoutNameDialogMode] = useState<"create" | "rename">("create");
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
   const [pendingLayoutName, setPendingLayoutName] = useState("");
@@ -189,6 +245,7 @@ export function AppHomePage() {
   const [gridActionsMenuOpen, setGridActionsMenuOpen] = useState(false);
   const [gridActionError, setGridActionError] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const holderDropRef = useRef<HTMLDivElement | null>(null);
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -482,11 +539,13 @@ export function AppHomePage() {
       if (!target) return;
       if (target.closest("[data-dashboard-menu]")) return;
       if (target.closest("[data-tile-menu]")) return;
+      if (target.closest("[data-holder-menu]")) return;
       setSettingsMenuOpen(false);
       setLayoutsMenuOpen(false);
       setLayoutActionsMenuOpen(false);
       setGridActionsMenuOpen(false);
       setTileMenuOpenId(null);
+      setHolderMenuOpenId(null);
     };
 
     window.addEventListener("mousedown", onDocClick);
@@ -573,7 +632,9 @@ export function AppHomePage() {
     setResizePreview(null);
     setResizeVisual(null);
     setTileMenuOpenId(null);
+    setHolderMenuOpenId(null);
     setIsOverHolderDrop(false);
+    setIsAddTileDialogOpen(false);
     setIsNewLayoutDialogOpen(false);
     setIsSwitchLayoutDialogOpen(false);
     setPendingSwitchLayoutId(null);
@@ -603,6 +664,7 @@ export function AppHomePage() {
     setSelectedDeleteRows([]);
     setSelectedDeleteCols([]);
     setGridActionError(null);
+    setHolderMenuOpenId(null);
   }, [activeViewport]);
 
   useEffect(() => {
@@ -643,7 +705,7 @@ export function AppHomePage() {
     };
   }, [isEditing, editingViewport, activeViewport, columns]);
 
-  const addTile = () => {
+  const addTile = (preset: TilePreset = TILE_PRESETS[0]) => {
     const newTileId = nextTileId;
     setViewportLayouts((previous) => {
       const next: ViewportLayouts = {
@@ -654,10 +716,17 @@ export function AppHomePage() {
 
       (["mobile", "tablet", "desktop"] as EditViewport[]).forEach((viewport) => {
         const viewportColumns = previous[viewport].targetColumns;
+        const presetSpan = preset.spans[viewport];
+        const colSpan = clamp(presetSpan.colSpan, 1, viewportColumns);
+        const rowSpan = clamp(presetSpan.rowSpan, 1, MAX_ROW_SPAN);
         let nextSlot = 0;
-        while (!canPlaceTile(next[viewport].tiles, null, nextSlot, 1, 1, viewportColumns)) nextSlot += 1;
-        next[viewport].tiles.push({ id: newTileId, slot: nextSlot, colSpan: 1, rowSpan: 1 });
-        next[viewport].targetRows = Math.max(1, getRequiredRows(next[viewport].tiles, viewportColumns));
+        while (!canPlaceTile(next[viewport].tiles, null, nextSlot, colSpan, rowSpan, viewportColumns)) nextSlot += 1;
+        next[viewport].tiles.push({ id: newTileId, slot: nextSlot, colSpan, rowSpan });
+        next[viewport].targetRows = Math.max(
+          previous[viewport].targetRows,
+          getRequiredRows(next[viewport].tiles, viewportColumns),
+          VIEWPORT_BASE_ROWS[viewport],
+        );
       });
 
       return next;
@@ -758,7 +827,7 @@ export function AppHomePage() {
         [activeViewport]: {
           ...current,
           tiles: nextTiles,
-          targetRows: Math.max(1, getRequiredRows(nextTiles, viewportColumns)),
+          targetRows: Math.max(current.targetRows, getRequiredRows(nextTiles, viewportColumns), VIEWPORT_BASE_ROWS[activeViewport]),
         },
       };
     });
@@ -767,19 +836,40 @@ export function AppHomePage() {
       if (current.some((holderTile) => holderTile.id === tileId)) return previous;
       return {
         ...previous,
-        [activeViewport]: [...current, { id: tile.id, colSpan: tile.colSpan, rowSpan: tile.rowSpan }],
+        [activeViewport]: [
+          ...current,
+          {
+            id: tile.id,
+            colSpan: tile.colSpan,
+            rowSpan: tile.rowSpan,
+            returnColSpan: tile.colSpan,
+            returnRowSpan: tile.rowSpan,
+          },
+        ],
       };
     });
   };
 
-  const restoreHeldTileToViewport = (tileId: number, preferredSlot: number | null) => {
+  const restoreHeldTileToViewport = (
+    tileId: number,
+    preferredSlot: number | null,
+    sizeOverride?: { colSpan: number; rowSpan: number },
+  ) => {
+    const heldTile = viewportHolders[activeViewport].find((holderTile) => holderTile.id === tileId);
+    const restoreColSpan = clamp(
+      sizeOverride?.colSpan ?? heldTile?.returnColSpan ?? heldTile?.colSpan ?? 1,
+      1,
+      viewportLayouts[activeViewport].targetColumns,
+    );
+    const restoreRowSpan = clamp(sizeOverride?.rowSpan ?? heldTile?.returnRowSpan ?? heldTile?.rowSpan ?? 1, 1, MAX_ROW_SPAN);
+
     setViewportLayouts((previous) => {
       const viewportColumns = previous[activeViewport].targetColumns;
       const current = previous[activeViewport];
       if (current.tiles.some((tile) => tile.id === tileId)) return previous;
       let slot = preferredSlot ?? 0;
-      while (!canPlaceTile(current.tiles, null, slot, 1, 1, viewportColumns)) slot += 1;
-      const nextTiles = [...current.tiles, { id: tileId, slot, colSpan: 1, rowSpan: 1 }];
+      while (!canPlaceTile(current.tiles, null, slot, restoreColSpan, restoreRowSpan, viewportColumns)) slot += 1;
+      const nextTiles = [...current.tiles, { id: tileId, slot, colSpan: restoreColSpan, rowSpan: restoreRowSpan }];
       return {
         ...previous,
         [activeViewport]: {
@@ -815,15 +905,15 @@ export function AppHomePage() {
       return {
         mobile: {
           ...next.mobile,
-          targetRows: Math.max(1, getRequiredRows(next.mobile.tiles, next.mobile.targetColumns)),
+          targetRows: Math.max(previous.mobile.targetRows, getRequiredRows(next.mobile.tiles, next.mobile.targetColumns), VIEWPORT_BASE_ROWS.mobile),
         },
         tablet: {
           ...next.tablet,
-          targetRows: Math.max(1, getRequiredRows(next.tablet.tiles, next.tablet.targetColumns)),
+          targetRows: Math.max(previous.tablet.targetRows, getRequiredRows(next.tablet.tiles, next.tablet.targetColumns), VIEWPORT_BASE_ROWS.tablet),
         },
         desktop: {
           ...next.desktop,
-          targetRows: Math.max(1, getRequiredRows(next.desktop.tiles, next.desktop.targetColumns)),
+          targetRows: Math.max(previous.desktop.targetRows, getRequiredRows(next.desktop.tiles, next.desktop.targetColumns), VIEWPORT_BASE_ROWS.desktop),
         },
       };
     });
@@ -993,7 +1083,7 @@ export function AppHomePage() {
           nextLayouts[viewport] = {
             ...previous[viewport],
             tiles: nextTiles,
-            targetRows: Math.max(1, getRequiredRows(nextTiles, viewportColumns)),
+            targetRows: Math.max(previous[viewport].targetRows, getRequiredRows(nextTiles, viewportColumns), VIEWPORT_BASE_ROWS[viewport]),
           };
         });
 
@@ -1018,6 +1108,31 @@ export function AppHomePage() {
     if (!dragSession || !gridMetrics || !gridRef.current) return;
 
     const onMouseMove = (event: MouseEvent) => {
+      const scrollContainer = gridScrollRef.current;
+      if (scrollContainer) {
+        const rect = scrollContainer.getBoundingClientRect();
+        const edge = 84;
+        const maxStep = 10;
+        let dx = 0;
+        let dy = 0;
+
+        if (event.clientY < rect.top + edge) {
+          dy = -Math.ceil(((rect.top + edge - event.clientY) / edge) * maxStep);
+        } else if (event.clientY > rect.bottom - edge) {
+          dy = Math.ceil(((event.clientY - (rect.bottom - edge)) / edge) * maxStep);
+        }
+
+        if (event.clientX < rect.left + edge) {
+          dx = -Math.ceil(((rect.left + edge - event.clientX) / edge) * maxStep);
+        } else if (event.clientX > rect.right - edge) {
+          dx = Math.ceil(((event.clientX - (rect.right - edge)) / edge) * maxStep);
+        }
+
+        if (dx !== 0 || dy !== 0) {
+          scrollContainer.scrollBy({ left: dx, top: dy });
+        }
+      }
+
       setDragPreview({
         tileId: dragSession.tileId,
         x: event.clientX - dragSession.pointerOffsetX,
@@ -1100,6 +1215,8 @@ export function AppHomePage() {
       : editingViewport === "tablet"
         ? "max-w-[900px]"
         : "max-w-[1320px]";
+  const useCompactEditToolbar = windowWidth < 860 || editingViewport === "mobile";
+  const useTabletEditToolbar = !useCompactEditToolbar && editingViewport === "tablet";
 
   return (
     <main className="w-full pb-10 pt-4">
@@ -1542,7 +1659,8 @@ export function AppHomePage() {
                 <div className={`h-[calc(100vh-7rem)] w-full ${editPreviewWidthClass}`}>
                 <Card className="h-full overflow-hidden border-border bg-[#f4f6fa]">
                   <CardContent className="flex h-full flex-col gap-4 overflow-hidden p-5">
-                    {editingViewport === "mobile" ? (
+                    <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-auto pr-1">
+                    {useCompactEditToolbar ? (
                     <div className="space-y-3">
                       <div className="flex justify-center">
                         <div className="relative grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
@@ -1686,7 +1804,7 @@ export function AppHomePage() {
                         </div>
                       </div>
                     </div>
-                    ) : editingViewport === "tablet" ? (
+                    ) : useTabletEditToolbar ? (
                     <div className="space-y-3">
                       <div className="flex justify-center">
                         <div className="relative grid w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
@@ -1973,72 +2091,159 @@ export function AppHomePage() {
                       </div>
                     </div>
                     )}
-                    <div className="space-y-1">
-                      <div
-                        ref={holderDropRef}
-                        className={`min-h-20 rounded-lg border p-2 transition-colors ${
-                          isOverHolderDrop && dragSession?.source === "grid"
-                            ? "border-blue-400 bg-blue-50"
-                            : "border-blue-100 bg-white"
-                        }`}
-                      >
-                        {heldTileIds.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Drag tiles here to hide in this viewport.</p>
-                        ) : (
+                      <div className="sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 bg-[#f4f6fa] pb-2">
+                      <div className="min-h-24 rounded-2xl border border-blue-200 bg-white p-3">
+                        <div className="mb-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Tile Storage</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Drag tiles here to hide for this display size while keeping for others, or park while reorganizing.
+                          </p>
+                        </div>
+                        <div
+                          ref={holderDropRef}
+                          className={`mb-2 flex h-10 items-center justify-center rounded-xl border border-dashed transition-colors ${
+                            isOverHolderDrop && dragSession?.source === "grid"
+                              ? "border-primary/60 bg-primary/10 text-primary"
+                              : "border-blue-200 bg-[#f8fafc] text-slate-500"
+                          }`}
+                        >
+                          <div className="inline-flex items-center gap-1 text-xs font-medium">
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Drop to store</span>
+                          </div>
+                        </div>
+                        {heldTileIds.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
                             {heldTileIds.map((holderTile) => (
-                              <button
+                              <div
                                 key={`holder-tile-${activeViewport}-${holderTile.id}`}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  if (event.button !== 0) return;
-                                  event.preventDefault();
-                                  const viewportColumns = viewportLayouts[activeViewport].targetColumns;
-                                  const cellWidth = gridMetrics?.cellWidth ?? 120;
-                                  const cellHeight = gridMetrics?.cellHeight ?? 132;
-                                  const colGap = gridMetrics?.colGap ?? 12;
-                                  const rowGap = gridMetrics?.rowGap ?? 12;
-                                  const ghostColSpan = clamp(holderTile.colSpan, 1, viewportColumns);
-                                  const ghostRowSpan = clamp(holderTile.rowSpan, 1, MAX_ROW_SPAN);
-                                  const ghostWidth = ghostColSpan * cellWidth + (ghostColSpan - 1) * colGap;
-                                  const ghostHeight = ghostRowSpan * cellHeight + (ghostRowSpan - 1) * rowGap;
-
-                                  setDraggingTileId(holderTile.id);
-                                  setActiveDropSlot(null);
-                                  setDragSession({
-                                    source: "holder",
-                                    tileId: holderTile.id,
-                                    startX: event.clientX,
-                                    startY: event.clientY,
-                                    pointerOffsetX: Math.min(80, ghostWidth / 2),
-                                    pointerOffsetY: 18,
-                                    ghostWidth,
-                                    ghostHeight,
-                                    ghostColSpan,
-                                    ghostRowSpan,
-                                    anchorCol: 0,
-                                    anchorRow: 0,
-                                  });
-                                  setDragPreview({
-                                    tileId: holderTile.id,
-                                    x: event.clientX - Math.min(80, ghostWidth / 2),
-                                    y: event.clientY - 18,
-                                    width: ghostWidth,
-                                    height: ghostHeight,
-                                  });
-                                }}
-                                className="inline-flex items-center rounded-md border border-blue-100 bg-[#f4f6fa] px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-blue-50"
+                                className="relative z-30 rounded-xl border border-blue-100 bg-[#f4f6fa] px-2 py-1.5 text-xs text-slate-700 shadow-sm"
+                                data-holder-menu
                               >
-                                Tile {holderTile.id}
-                              </button>
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    if (event.button !== 0) return;
+                                    event.preventDefault();
+                                    const viewportColumns = viewportLayouts[activeViewport].targetColumns;
+                                    const cellWidth = gridMetrics?.cellWidth ?? 120;
+                                    const cellHeight = gridMetrics?.cellHeight ?? 132;
+                                    const colGap = gridMetrics?.colGap ?? 12;
+                                    const rowGap = gridMetrics?.rowGap ?? 12;
+                                  const ghostColSpan = clamp(holderTile.returnColSpan ?? holderTile.colSpan, 1, viewportColumns);
+                                  const ghostRowSpan = clamp(holderTile.returnRowSpan ?? holderTile.rowSpan, 1, MAX_ROW_SPAN);
+                                    const ghostWidth = ghostColSpan * cellWidth + (ghostColSpan - 1) * colGap;
+                                    const ghostHeight = ghostRowSpan * cellHeight + (ghostRowSpan - 1) * rowGap;
+
+                                    setDraggingTileId(holderTile.id);
+                                    setActiveDropSlot(null);
+                                    setDragSession({
+                                      source: "holder",
+                                      tileId: holderTile.id,
+                                      startX: event.clientX,
+                                      startY: event.clientY,
+                                      pointerOffsetX: Math.min(80, ghostWidth / 2),
+                                      pointerOffsetY: 18,
+                                      ghostWidth,
+                                      ghostHeight,
+                                      ghostColSpan,
+                                      ghostRowSpan,
+                                      anchorCol: 0,
+                                      anchorRow: 0,
+                                    });
+                                    setDragPreview({
+                                      tileId: holderTile.id,
+                                      x: event.clientX - Math.min(80, ghostWidth / 2),
+                                      y: event.clientY - 18,
+                                      width: ghostWidth,
+                                      height: ghostHeight,
+                                    });
+                                  }}
+                                  className="pr-7 text-left"
+                                  title="Drag back into the grid"
+                                >
+                                  <span className="font-medium">Tile {holderTile.id}</span>
+                                  <span className="ml-1 text-[11px] text-muted-foreground">{holderTile.colSpan}x{holderTile.rowSpan}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setHolderMenuOpenId((previous) => (previous === holderTile.id ? null : holderTile.id))}
+                                  className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-blue-50"
+                                  title="Storage options"
+                                  aria-label="Storage options"
+                                >
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </button>
+                                {holderMenuOpenId === holderTile.id ? (
+                                  <div className="absolute left-0 top-full z-[80] mt-1 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                    <div className="px-2 py-1 text-[11px] font-medium text-slate-500">
+                                      Current: {holderTile.returnColSpan ?? holderTile.colSpan}x{holderTile.returnRowSpan ?? holderTile.rowSpan}
+                                    </div>
+                                    <div className="my-1 border-t border-border/80" />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setViewportHolders((previous) => ({
+                                          ...previous,
+                                          [activeViewport]: previous[activeViewport].map((item) =>
+                                            item.id === holderTile.id
+                                              ? {
+                                                  ...item,
+                                                  returnColSpan: holderTile.colSpan,
+                                                  returnRowSpan: holderTile.rowSpan,
+                                                }
+                                              : item,
+                                          ),
+                                        }));
+                                        setHolderMenuOpenId(null);
+                                      }}
+                                      className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                    >
+                                      Return as original ({holderTile.colSpan}x{holderTile.rowSpan})
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setViewportHolders((previous) => ({
+                                          ...previous,
+                                          [activeViewport]: previous[activeViewport].map((item) =>
+                                            item.id === holderTile.id
+                                              ? {
+                                                  ...item,
+                                                  returnColSpan: 1,
+                                                  returnRowSpan: 1,
+                                                }
+                                              : item,
+                                          ),
+                                        }));
+                                        setHolderMenuOpenId(null);
+                                      }}
+                                      className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                    >
+                                      Return as 1x1
+                                    </button>
+                                    <div className="my-1 border-t border-border/80" />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        deleteTile(holderTile.id);
+                                        setHolderMenuOpenId(null);
+                                      }}
+                                      className="w-full rounded px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
+                                    >
+                                      Delete tile
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                             ))}
                           </div>
-                        )}
+                        ) : null}
                       </div>
-                      <div className="flex items-center justify-center gap-3 pb-0 pt-3">
+                      <div className="flex items-center justify-center gap-3 pb-2 pt-3">
                         <button
                           type="button"
-                          onClick={() => addTile()}
+                          onClick={() => setIsAddTileDialogOpen(true)}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                           title="Add Tile"
                           aria-label="Add Tile"
@@ -2142,10 +2347,9 @@ export function AppHomePage() {
                       {gridActionError ? (
                         <p className="text-center text-xs text-red-700">{gridActionError}</p>
                       ) : null}
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-auto pr-1">
+                      </div>
                       <div className="flex items-start gap-2 px-2 pb-2 pt-0">
-                      <div className="relative flex-1 overflow-visible">
+                      <div className="relative flex-1 overflow-visible pt-2">
                         {isDeleteStructureMode ? (
                           <div className="absolute left-0 right-0 top-1 z-30 h-7">
                             {Array.from({ length: columns }, (_, colIndex) => {
@@ -2510,6 +2714,46 @@ export function AppHomePage() {
           </Card>
         </div>
       ) : null}
+      {isEditing && isAddTileDialogOpen ? (
+        <div className="fixed inset-0 z-[81] flex items-center justify-center bg-slate-900/25 px-4">
+          <Card className="w-full max-w-lg border-border bg-white">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-slate-900">Add Tile Preset</p>
+              <div className="space-y-2">
+                {TILE_PRESETS.map((preset) => (
+                  <button
+                    key={`tile-preset-${preset.id}`}
+                    type="button"
+                    onClick={() => {
+                      addTile(preset);
+                      setIsAddTileDialogOpen(false);
+                    }}
+                    className="w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-left text-sm transition-colors hover:bg-blue-50"
+                  >
+                    <div className="font-medium text-slate-900">{preset.label}</div>
+                    <div className="mt-0.5 text-xs text-slate-600">
+                      Desktop {preset.spans.desktop.colSpan}x{preset.spans.desktop.rowSpan}
+                      {" | "}
+                      Tablet {preset.spans.tablet.colSpan}x{preset.spans.tablet.rowSpan}
+                      {" | "}
+                      Mobile {preset.spans.mobile.colSpan}x{preset.spans.mobile.rowSpan}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTileDialogOpen(false)}
+                  className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
+                >
+                  Cancel
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
       {isEditing && isSwitchLayoutDialogOpen ? (
         <div className="fixed inset-0 z-[82] flex items-center justify-center bg-slate-900/30 px-4">
           <Card className="w-full max-w-lg border-border bg-white">
@@ -2551,7 +2795,7 @@ export function AppHomePage() {
           <Card className="w-full max-w-lg border-border bg-white">
             <CardContent className="space-y-3 p-4">
               <p className="text-sm font-semibold text-slate-900">
-                You have unsaved changes. Save Changes and Exit, Discard Changes, or Cancel?
+                You have unsaved changes. Save and Exit, Discard Changes, or Cancel?
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -2571,9 +2815,9 @@ export function AppHomePage() {
                 <button
                   type="button"
                   onClick={confirmExitEditSave}
-                  className="rounded-md border border-border bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90"
+                  className="rounded-md border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                 >
-                  Save Changes and Exit
+                  Save and Exit
                 </button>
               </div>
             </CardContent>
@@ -2643,12 +2887,16 @@ function normalizeViewportHolders(holders: Partial<ViewportHolders> | undefined)
   const normalizeOne = (items: Array<HolderTile | number> | undefined) => {
     const mapped = (items ?? []).map((item) => {
       if (typeof item === "number") {
-        return { id: item, colSpan: 1, rowSpan: 1 };
+        return { id: item, colSpan: 1, rowSpan: 1, returnColSpan: 1, returnRowSpan: 1 };
       }
+      const colSpan = clamp(item.colSpan ?? 1, 1, VIEWPORT_MAX_COLUMNS.desktop);
+      const rowSpan = clamp(item.rowSpan ?? 1, 1, MAX_ROW_SPAN);
       return {
         id: item.id,
-        colSpan: clamp(item.colSpan ?? 1, 1, VIEWPORT_MAX_COLUMNS.desktop),
-        rowSpan: clamp(item.rowSpan ?? 1, 1, MAX_ROW_SPAN),
+        colSpan,
+        rowSpan,
+        returnColSpan: clamp(item.returnColSpan ?? colSpan, 1, VIEWPORT_MAX_COLUMNS.desktop),
+        returnRowSpan: clamp(item.returnRowSpan ?? rowSpan, 1, MAX_ROW_SPAN),
       };
     });
     const unique = new Map<number, HolderTile>();
