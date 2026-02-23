@@ -29,4 +29,7 @@ export const API_ENDPOINTS = {
     createOptions: `${API_BASE_URL}/accounts/create-options/`,
     sidebar: `${API_BASE_URL}/accounts/sidebar/`,
   },
+  portfolios: {
+    dashboardLayouts: `${API_BASE_URL}/portfolios/dashboard-layouts/`,
+  },
 };

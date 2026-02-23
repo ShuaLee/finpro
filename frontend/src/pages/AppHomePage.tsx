@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { getAccountsSidebar } from "../api/accounts";
+import { getDashboardLayoutState, upsertDashboardLayoutState } from "../api/dashboardLayouts";
 import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 
@@ -276,7 +277,7 @@ export function AppHomePage() {
   const sectionLabel = "Portfolio";
   const defaultLayoutName = `${sectionLabel} Default Layout`;
   const dashboardScope = activeSidebarCategory;
-  const storageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}.${dashboardScope}`;
+  const legacyStorageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}.${dashboardScope}`;
 
   const normalizePrimary = (layouts: SavedLayout[]) => {
     if (layouts.length === 0) return layouts;
@@ -300,7 +301,14 @@ export function AppHomePage() {
 
   const persistLayouts = (layouts: SavedLayout[], activeId: string) => {
     const normalized = normalizePrimary(layouts);
-    localStorage.setItem(storageKey, JSON.stringify({ activeLayoutId: activeId, layouts: normalized }));
+    localStorage.setItem(legacyStorageKey, JSON.stringify({ activeLayoutId: activeId, layouts: normalized }));
+    void upsertDashboardLayoutState({
+      scope: dashboardScope,
+      active_layout_id: activeId,
+      layouts: normalized as unknown as Array<Record<string, unknown>>,
+    }).catch(() => {
+      // Keep edit flow responsive if persistence fails.
+    });
   };
 
   const saveCurrentLayout = (
@@ -564,26 +572,21 @@ export function AppHomePage() {
   }, [loadBrokerageAccounts, user?.email]);
 
   useEffect(() => {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) {
-      const defaultLayout: SavedLayout = {
-        id: DEFAULT_LAYOUT_ID,
-        name: defaultLayoutName,
-        viewportLayouts: createDefaultViewportLayouts(),
-        viewportHolders: createDefaultViewportHolders(),
-        isPrimary: true,
-        updatedAt: new Date().toISOString(),
-      };
-      setSavedLayouts([defaultLayout]);
-      setActiveLayoutId(defaultLayout.id);
-      applyLayout(defaultLayout);
-      persistLayouts([defaultLayout], defaultLayout.id);
-      return;
-    }
+    let isCancelled = false;
 
-    try {
-      const parsed = JSON.parse(raw) as { activeLayoutId?: string; layouts?: Array<SavedLayout & { tiles?: DashboardTile[]; targetRows?: number }> };
-      const layoutsRaw = Array.isArray(parsed.layouts) && parsed.layouts.length > 0 ? parsed.layouts : [];
+    const createFallbackLayout = (): SavedLayout => ({
+      id: DEFAULT_LAYOUT_ID,
+      name: defaultLayoutName,
+      viewportLayouts: createDefaultViewportLayouts(),
+      viewportHolders: createDefaultViewportHolders(),
+      isPrimary: true,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const hydrateFromPayload = (
+      payload: { activeLayoutId?: string; layouts?: Array<SavedLayout & { tiles?: DashboardTile[]; targetRows?: number }> },
+    ): { layouts: SavedLayout[]; activeId: string } => {
+      const layoutsRaw = Array.isArray(payload.layouts) && payload.layouts.length > 0 ? payload.layouts : [];
       const layouts = normalizePrimary(
         layoutsRaw.map((layout) => ({
           id: layout.id,
@@ -596,31 +599,71 @@ export function AppHomePage() {
           updatedAt: layout.updatedAt ?? new Date().toISOString(),
         })),
       );
-      if (layouts.length === 0) throw new Error("No layouts");
-      const activeId = parsed.activeLayoutId && layouts.some((layout) => layout.id === parsed.activeLayoutId)
-        ? parsed.activeLayoutId
+      if (layouts.length === 0) {
+        const fallback = createFallbackLayout();
+        return { layouts: [fallback], activeId: fallback.id };
+      }
+      const activeId = payload.activeLayoutId && layouts.some((layout) => layout.id === payload.activeLayoutId)
+        ? payload.activeLayoutId
         : layouts[0].id;
+      return { layouts, activeId };
+    };
+
+    const applyHydrated = (layouts: SavedLayout[], activeId: string) => {
+      if (isCancelled) return;
       const activeLayout = layouts.find((layout) => layout.id === activeId) ?? layouts[0];
       setSavedLayouts(layouts);
       setActiveLayoutId(activeId);
       applyLayout(activeLayout);
       persistLayouts(layouts, activeId);
-    } catch {
-      const fallback: SavedLayout = {
-        id: DEFAULT_LAYOUT_ID,
-        name: defaultLayoutName,
-        viewportLayouts: createDefaultViewportLayouts(),
-        viewportHolders: createDefaultViewportHolders(),
-        isPrimary: true,
-        updatedAt: new Date().toISOString(),
-      };
-      setSavedLayouts([fallback]);
-      setActiveLayoutId(fallback.id);
-      applyLayout(fallback);
-      persistLayouts([fallback], fallback.id);
-    } finally {
-    }
-  }, [defaultLayoutName, storageKey]);
+    };
+
+    const boot = async () => {
+      try {
+        const backendState = await getDashboardLayoutState(dashboardScope);
+        const backendPayload = {
+          activeLayoutId: backendState.active_layout_id,
+          layouts: backendState.layouts as Array<SavedLayout & { tiles?: DashboardTile[]; targetRows?: number }>,
+        };
+        if (Array.isArray(backendPayload.layouts) && backendPayload.layouts.length > 0) {
+          const hydrated = hydrateFromPayload(backendPayload);
+          applyHydrated(hydrated.layouts, hydrated.activeId);
+          return;
+        }
+
+        const raw = localStorage.getItem(legacyStorageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { activeLayoutId?: string; layouts?: Array<SavedLayout & { tiles?: DashboardTile[]; targetRows?: number }> };
+          const hydrated = hydrateFromPayload(parsed);
+          applyHydrated(hydrated.layouts, hydrated.activeId);
+          return;
+        }
+
+        const fallback = createFallbackLayout();
+        applyHydrated([fallback], fallback.id);
+      } catch {
+        try {
+          const raw = localStorage.getItem(legacyStorageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { activeLayoutId?: string; layouts?: Array<SavedLayout & { tiles?: DashboardTile[]; targetRows?: number }> };
+            const hydrated = hydrateFromPayload(parsed);
+            applyHydrated(hydrated.layouts, hydrated.activeId);
+            return;
+          }
+        } catch {
+          // Ignore local parsing errors and fall back to defaults below.
+        }
+
+        const fallback = createFallbackLayout();
+        applyHydrated([fallback], fallback.id);
+      }
+    };
+
+    void boot();
+    return () => {
+      isCancelled = true;
+    };
+  }, [dashboardScope, defaultLayoutName, legacyStorageKey]);
 
   useEffect(() => {
     if (isEditing) return;

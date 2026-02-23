@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from portfolios.models import PortfolioDenomination, PortfolioValuationSnapshot
+from portfolios.models import DashboardLayoutState, PortfolioDenomination, PortfolioValuationSnapshot
 
 
 class PortfolioDenominationSerializer(serializers.ModelSerializer):
@@ -72,3 +72,20 @@ class PortfolioValuationSnapshotSerializer(serializers.ModelSerializer):
             "denominations",
             "captured_at",
         )
+
+
+class DashboardLayoutStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DashboardLayoutState
+        fields = (
+            "scope",
+            "active_layout_id",
+            "layouts",
+            "updated_at",
+        )
+
+
+class DashboardLayoutStateUpsertSerializer(serializers.Serializer):
+    scope = serializers.CharField(max_length=120)
+    active_layout_id = serializers.CharField(max_length=100)
+    layouts = serializers.ListField(child=serializers.DictField(), allow_empty=True)

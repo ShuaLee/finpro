@@ -7,8 +7,10 @@ from rest_framework.views import APIView
 
 from assets.models import Asset
 from fx.models import FXCurrency
-from portfolios.models import Portfolio, PortfolioDenomination
+from portfolios.models import DashboardLayoutState, Portfolio, PortfolioDenomination
 from portfolios.serializers import (
+    DashboardLayoutStateSerializer,
+    DashboardLayoutStateUpsertSerializer,
     PortfolioDenominationCreateSerializer,
     PortfolioDenominationPatchSerializer,
     PortfolioDenominationSerializer,
@@ -155,3 +157,41 @@ class PortfolioDenominationDetailView(APIView):
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DashboardLayoutStateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        scope = (request.query_params.get("scope") or "").strip()
+        if not scope:
+            return Response({"detail": "scope is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        state = DashboardLayoutState.objects.filter(profile=request.user.profile, scope=scope).first()
+        if not state:
+            return Response(
+                {
+                    "scope": scope,
+                    "active_layout_id": "",
+                    "layouts": [],
+                    "updated_at": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(DashboardLayoutStateSerializer(state).data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        serializer = DashboardLayoutStateUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        state, _created = DashboardLayoutState.objects.update_or_create(
+            profile=request.user.profile,
+            scope=data["scope"],
+            defaults={
+                "active_layout_id": data["active_layout_id"],
+                "layouts": data["layouts"],
+            },
+        )
+        return Response(DashboardLayoutStateSerializer(state).data, status=status.HTTP_200_OK)

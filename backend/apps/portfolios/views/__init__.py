@@ -1,4 +1,5 @@
 from .api import (
+    DashboardLayoutStateView,
     PortfolioDenominationDetailView,
     PortfolioDenominationListCreateView,
     PortfolioValuationSnapshotCaptureView,
@@ -12,4 +13,5 @@ __all__ = [
     "PortfolioValuationSnapshotListView",
     "PortfolioDenominationListCreateView",
     "PortfolioDenominationDetailView",
+    "DashboardLayoutStateView",
 ]
