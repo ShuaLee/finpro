@@ -8,7 +8,6 @@ import {
   Settings,
   Smartphone,
   Tablet,
-  Trash2,
   X,
 } from "lucide-react";
 
@@ -93,7 +92,7 @@ type InsightTileView = {
 };
 
 const DESKTOP_COLUMNS = 5;
-const BASE_DASHBOARD_ROWS = 6;
+const BASE_DASHBOARD_ROWS = 5;
 const MAX_ROW_SPAN = 8;
 const MAX_ROWS = 80;
 const MAX_LAYOUT_NAME_LENGTH = 30;
@@ -101,6 +100,11 @@ const DEFAULT_LAYOUT_ID = "default";
 const DEFAULT_TILES: DashboardTile[] = [{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }];
 const VIEWPORT_COLUMNS: Record<EditViewport, number> = {
   mobile: 2,
+  tablet: 4,
+  desktop: 5,
+};
+const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
+  mobile: 4,
   tablet: 4,
   desktop: 5,
 };
@@ -157,11 +161,9 @@ export function AppHomePage() {
   const [dragSession, setDragSession] = useState<DragSession | null>(null);
   const [dragPreview, setDragPreview] = useState<{ tileId: number; x: number; y: number; width: number; height: number } | null>(null);
   const [isOverHolderDrop, setIsOverHolderDrop] = useState(false);
-  const [editVisibleRows, setEditVisibleRows] = useState(BASE_DASHBOARD_ROWS);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const holderDropRef = useRef<HTMLDivElement | null>(null);
-  const editGridViewportRef = useRef<HTMLDivElement | null>(null);
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const columns = gridMetrics?.columns ?? DESKTOP_COLUMNS;
@@ -215,7 +217,7 @@ export function AppHomePage() {
 
   const saveCurrentLayout = (layoutId: string, layoutName: string, exitEdit: boolean) => {
     const now = new Date().toISOString();
-    const normalizedViewportLayouts = normalizeAllViewportLayouts(viewportLayouts);
+    const normalizedViewportLayouts = trimAllViewportLayoutsRows(viewportLayouts);
     const snapshot: SavedLayout = {
       id: layoutId,
       name: normalizeLayoutName(layoutName),
@@ -267,27 +269,6 @@ export function AppHomePage() {
       // Keep dashboard functional if accounts sidebar request fails.
     }
   }, []);
-
-  const deleteLayout = (layoutId: string) => {
-    if (savedLayouts.length <= 1) return;
-
-    const deletingLayout = savedLayouts.find((layout) => layout.id === layoutId);
-    let remaining = savedLayouts.filter((layout) => layout.id !== layoutId);
-    if (remaining.length === 0) return;
-
-    if (deletingLayout?.isPrimary || !remaining.some((layout) => layout.isPrimary)) {
-      const nextPrimaryId = remaining[0].id;
-      remaining = remaining.map((layout) => ({ ...layout, isPrimary: layout.id === nextPrimaryId }));
-    }
-
-    const nextActiveId = activeLayoutId === layoutId ? remaining[0].id : activeLayoutId;
-    const normalized = normalizePrimary(remaining);
-    setSavedLayouts(normalized);
-    setActiveLayoutId(nextActiveId);
-    const nextActiveLayout = normalized.find((layout) => layout.id === nextActiveId);
-    if (nextActiveLayout) applyLayout(nextActiveLayout);
-    persistLayouts(normalized, nextActiveId);
-  };
 
   useEffect(() => {
     const onDocClick = (event: MouseEvent) => {
@@ -427,26 +408,6 @@ export function AppHomePage() {
     };
   }, [isEditing, editingViewport]);
 
-  useEffect(() => {
-    if (!isEditing || !gridMetrics || !editGridViewportRef.current) return;
-
-    const updateVisibleRows = () => {
-      const viewportHeight = editGridViewportRef.current?.clientHeight ?? 0;
-      const rowStep = Math.max(1, gridMetrics.cellHeight + gridMetrics.rowGap);
-      const rows = Math.max(1, Math.ceil(viewportHeight / rowStep));
-      setEditVisibleRows(rows);
-    };
-
-    updateVisibleRows();
-    const resizeObserver = new ResizeObserver(() => updateVisibleRows());
-    resizeObserver.observe(editGridViewportRef.current);
-    window.addEventListener("resize", updateVisibleRows);
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", updateVisibleRows);
-    };
-  }, [isEditing, editingViewport, gridMetrics]);
-
   const addTile = () => {
     const newTileId = nextTileId;
     setViewportLayouts((previous) => {
@@ -580,7 +541,7 @@ export function AppHomePage() {
       if (!canPlaceTile(currentLayout.tiles, tile.id, targetSlot, tile.colSpan, tile.rowSpan, viewportColumns)) return previous;
       const nextTiles = currentLayout.tiles.map((item) => (item.id === tile.id ? { ...item, slot: targetSlot } : item));
       const requiredRows = getRequiredRows(nextTiles, viewportColumns);
-      const nextTargetRows = Math.max(currentLayout.targetRows, requiredRows, BASE_DASHBOARD_ROWS);
+      const nextTargetRows = Math.max(currentLayout.targetRows, requiredRows, VIEWPORT_BASE_ROWS[activeViewport]);
 
       return {
         ...previous,
@@ -797,9 +758,12 @@ export function AppHomePage() {
     tiles.length > 0
       ? Math.max(...tiles.map((tile) => getGridPosition(tile.slot, columns).row + tile.rowSpan))
       : 0;
-  const baseRows = Math.max(1, targetRows, maxUsedRow, isEditing ? editVisibleRows : 1);
-  const withBufferRows = isEditing && maxUsedRow > 0 && maxUsedRow >= baseRows ? maxUsedRow + 2 : baseRows;
-  const totalRows = Math.min(MAX_ROWS, withBufferRows);
+  const viewportMinRows = VIEWPORT_BASE_ROWS[activeViewport];
+  const computeTotalRows = (candidateTargetRows: number) => {
+    const rows = Math.max(viewportMinRows, maxUsedRow, isEditing ? candidateTargetRows : viewportMinRows);
+    return Math.min(MAX_ROWS, rows);
+  };
+  const totalRows = computeTotalRows(targetRows);
   const totalSlots = totalRows * columns;
   const occupiedSlots = getOccupiedSlots(
     tiles.map((tile) => {
@@ -816,7 +780,10 @@ export function AppHomePage() {
     });
 
   const canDeleteRow = (rowIndex: number) =>
-    rowIndex === totalRows - 1 && !isRowOccupied(rowIndex) && totalRows > 1;
+    rowIndex === totalRows - 1
+      && !isRowOccupied(rowIndex)
+      && totalRows > viewportMinRows
+      && computeTotalRows(Math.max(viewportMinRows, targetRows - 1)) < totalRows;
   const canAddRow = totalRows < MAX_ROWS;
   const editViewportIndex = editingViewport === "mobile" ? 0 : editingViewport === "tablet" ? 1 : 2;
   const gridColumnsClass = isEditing
@@ -836,10 +803,10 @@ export function AppHomePage() {
   return (
     <main className="w-full pb-10 pt-4">
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
-        <div className="space-y-4">
-          <section className="space-y-4">
+        <div>
+          <section>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-              <Card className="h-fit border-transparent bg-transparent shadow-none">
+              <Card className="h-fit border-transparent bg-transparent shadow-none xl:sticky xl:top-24 xl:self-start">
                 <CardContent className="p-0">
                   <Card className="border-border bg-[#f4f6fa]">
                     <CardContent className="space-y-4 p-4">
@@ -1147,18 +1114,16 @@ export function AppHomePage() {
                     {isEditing ? (
                       <div className="relative w-8">
                         {Array.from({ length: totalRows }, (_, rowIndex) => {
+                          if (!canDeleteRow(rowIndex)) return null;
                           const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
                           return (
                             <button
                               key={`del-row-${rowIndex}`}
                               type="button"
                               onClick={() => {
-                                if (!canDeleteRow(rowIndex)) return;
-                                setTargetRows((previous) => Math.max(1, previous - 1));
+                                setTargetRows((previous) => Math.max(viewportMinRows, previous - 1));
                               }}
-                              className={`absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold ${
-                                canDeleteRow(rowIndex) ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
-                              }`}
+                              className="absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold hover:opacity-90"
                               style={{
                                 top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
                                 borderColor: "#ef4444",
@@ -1217,176 +1182,172 @@ export function AppHomePage() {
       </div>
       {isEditing ? (
         <div className="fixed inset-x-0 bottom-0 top-20 z-50 bg-slate-900/25 backdrop-blur-[4px]">
-          <div className="mx-auto h-full w-full max-w-[1680px] px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex h-full items-stretch gap-4">
-              <Card className="h-full w-[260px] shrink-0 border-border bg-[#f4f6fa]">
-                <CardContent className="flex h-full flex-col gap-4 p-3">
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Viewport</p>
-                    <div className="relative grid w-full grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
-                      <div
-                        className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
-                        style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
-                      />
-                      {[
-                        { key: "mobile", label: "Mobile", icon: Smartphone },
-                        { key: "tablet", label: "Tablet", icon: Tablet },
-                        { key: "desktop", label: "Desktop", icon: Monitor },
-                      ].map((option) => {
-                        const active = editingViewport === option.key;
-                        const Icon = option.icon;
-                        return (
-                          <button
-                            key={`edit-viewport-${option.key}`}
-                            type="button"
-                            onClick={() => setEditingViewport(option.key as EditViewport)}
-                            title={option.label}
-                            aria-label={option.label}
-                            className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
-                              active ? "text-white" : "text-slate-400 hover:text-slate-600"
-                            }`}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Drag and resize tiles. Drop zones and row controls are edit-only.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const layout = savedLayouts.find((item) => item.id === activeLayoutId);
-                        saveCurrentLayout(activeLayoutId, layout?.name ?? defaultLayoutName, false);
-                      }}
-                      className="w-full rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => saveAsLayout()}
-                      className="w-full rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
-                    >
-                      Save As
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addTile()}
-                      className="w-full rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
-                    >
-                      Add Tile
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditing(false)}
-                      className="w-full rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
-                    >
-                      Done
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1 space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Layouts</p>
-                    <div className="h-full space-y-1 overflow-y-auto pr-1">
-                      {savedLayouts.map((layout) => (
-                        <div key={`dashboard-edit-layout-delete-${layout.id}`} className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => switchLayout(layout.id)}
-                            className={`flex-1 rounded border px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground ${
-                              layout.id === activeLayoutId ? "border-primary/40 bg-secondary/50" : "border-border/70 bg-white"
-                            }`}
-                          >
-                            {getDisplayLayoutName(layout.name)}
-                            {layout.isPrimary ? " (Primary)" : ""}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteLayout(layout.id)}
-                            disabled={savedLayouts.length <= 1}
-                            title={savedLayouts.length <= 1 ? "At least one layout is required" : "Delete layout"}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded border border-destructive/50 bg-white text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Holder</p>
-                    <div
-                      ref={holderDropRef}
-                      className={`min-h-24 rounded-lg border p-2 transition-colors ${
-                        isOverHolderDrop && dragSession?.source === "grid"
-                          ? "border-blue-400 bg-blue-50"
-                          : "border-blue-100 bg-white"
-                      }`}
-                    >
-                      {heldTileIds.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Drag tiles here to hide in this viewport.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {heldTileIds.map((holderTile) => (
-                            <button
-                              key={`holder-tile-${activeViewport}-${holderTile.id}`}
-                              type="button"
-                              onMouseDown={(event) => {
-                                if (event.button !== 0) return;
-                                event.preventDefault();
-                                const viewportColumns = VIEWPORT_COLUMNS[activeViewport];
-                                const cellWidth = gridMetrics?.cellWidth ?? 120;
-                                const cellHeight = gridMetrics?.cellHeight ?? 132;
-                                const colGap = gridMetrics?.colGap ?? 12;
-                                const rowGap = gridMetrics?.rowGap ?? 12;
-                                const ghostColSpan = clamp(holderTile.colSpan, 1, viewportColumns);
-                                const ghostRowSpan = clamp(holderTile.rowSpan, 1, MAX_ROW_SPAN);
-                                const ghostWidth = ghostColSpan * cellWidth + (ghostColSpan - 1) * colGap;
-                                const ghostHeight = ghostRowSpan * cellHeight + (ghostRowSpan - 1) * rowGap;
-
-                                setDraggingTileId(holderTile.id);
-                                setActiveDropSlot(null);
-                                setDragSession({
-                                  source: "holder",
-                                  tileId: holderTile.id,
-                                  startX: event.clientX,
-                                  startY: event.clientY,
-                                  pointerOffsetX: Math.min(80, ghostWidth / 2),
-                                  pointerOffsetY: 18,
-                                  ghostWidth,
-                                  ghostHeight,
-                                  ghostColSpan,
-                                  ghostRowSpan,
-                                  anchorCol: 0,
-                                  anchorRow: 0,
-                                });
-                                setDragPreview({
-                                  tileId: holderTile.id,
-                                  x: event.clientX - Math.min(80, ghostWidth / 2),
-                                  y: event.clientY - 18,
-                                  width: ghostWidth,
-                                  height: ghostHeight,
-                                });
-                              }}
-                              className="inline-flex items-center rounded-md border border-blue-100 bg-[#f4f6fa] px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-blue-50"
-                            >
-                              Tile {holderTile.id}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <div className="min-h-0 flex-1">
-                <div className={`mx-auto h-full w-full ${editPreviewWidthClass}`}>
+          <div className="mx-auto h-full w-full max-w-[1680px] overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div className="space-y-3">
+              <div className="flex justify-center">
+                <div className={`h-[74vh] w-full ${editPreviewWidthClass}`}>
                 <Card className="h-full overflow-hidden border-border bg-[#f4f6fa]">
                   <CardContent className="flex h-full flex-col gap-4 overflow-hidden p-5">
-                    <div ref={editGridViewportRef} className="min-h-0 flex-1 overflow-auto pr-1">
+                    <div className="grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
+                        <select
+                          value={activeLayoutId}
+                          onChange={(event) => switchLayout(event.target.value)}
+                          className="min-w-[220px] rounded border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
+                        >
+                          {savedLayouts.map((layout) => (
+                            <option key={`dashboard-layout-select-${layout.id}`} value={layout.id}>
+                              {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Primary)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="justify-self-center">
+                        <div className="relative grid w-[220px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
+                          <div
+                            className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
+                            style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
+                          />
+                          {[
+                            { key: "mobile", label: "Mobile", icon: Smartphone },
+                            { key: "tablet", label: "Tablet", icon: Tablet },
+                            { key: "desktop", label: "Desktop", icon: Monitor },
+                          ].map((option) => {
+                            const active = editingViewport === option.key;
+                            const Icon = option.icon;
+                            return (
+                              <button
+                                key={`edit-viewport-${option.key}`}
+                                type="button"
+                                onClick={() => setEditingViewport(option.key as EditViewport)}
+                                title={option.label}
+                                aria-label={option.label}
+                                className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
+                                  active ? "text-white" : "text-slate-400 hover:text-slate-600"
+                                }`}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const layout = savedLayouts.find((item) => item.id === activeLayoutId);
+                            saveCurrentLayout(activeLayoutId, layout?.name ?? defaultLayoutName, false);
+                          }}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveAsLayout()}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Save As
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(false)}
+                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Holder</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => addTile()}
+                            className="rounded border border-border bg-white px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/80"
+                          >
+                            Add Tile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!canAddRow) return;
+                              setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
+                            }}
+                            className={`rounded border border-border bg-white px-3 py-1.5 text-xs font-medium transition-colors ${
+                              canAddRow ? "hover:bg-secondary/80" : "cursor-not-allowed opacity-55"
+                            }`}
+                          >
+                            Add Row
+                          </button>
+                        </div>
+                      </div>
+                      <div
+                        ref={holderDropRef}
+                        className={`min-h-20 rounded-lg border p-2 transition-colors ${
+                          isOverHolderDrop && dragSession?.source === "grid"
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-blue-100 bg-white"
+                        }`}
+                      >
+                        {heldTileIds.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">Drag tiles here to hide in this viewport.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {heldTileIds.map((holderTile) => (
+                              <button
+                                key={`holder-tile-${activeViewport}-${holderTile.id}`}
+                                type="button"
+                                onMouseDown={(event) => {
+                                  if (event.button !== 0) return;
+                                  event.preventDefault();
+                                  const viewportColumns = VIEWPORT_COLUMNS[activeViewport];
+                                  const cellWidth = gridMetrics?.cellWidth ?? 120;
+                                  const cellHeight = gridMetrics?.cellHeight ?? 132;
+                                  const colGap = gridMetrics?.colGap ?? 12;
+                                  const rowGap = gridMetrics?.rowGap ?? 12;
+                                  const ghostColSpan = clamp(holderTile.colSpan, 1, viewportColumns);
+                                  const ghostRowSpan = clamp(holderTile.rowSpan, 1, MAX_ROW_SPAN);
+                                  const ghostWidth = ghostColSpan * cellWidth + (ghostColSpan - 1) * colGap;
+                                  const ghostHeight = ghostRowSpan * cellHeight + (ghostRowSpan - 1) * rowGap;
+
+                                  setDraggingTileId(holderTile.id);
+                                  setActiveDropSlot(null);
+                                  setDragSession({
+                                    source: "holder",
+                                    tileId: holderTile.id,
+                                    startX: event.clientX,
+                                    startY: event.clientY,
+                                    pointerOffsetX: Math.min(80, ghostWidth / 2),
+                                    pointerOffsetY: 18,
+                                    ghostWidth,
+                                    ghostHeight,
+                                    ghostColSpan,
+                                    ghostRowSpan,
+                                    anchorCol: 0,
+                                    anchorRow: 0,
+                                  });
+                                  setDragPreview({
+                                    tileId: holderTile.id,
+                                    x: event.clientX - Math.min(80, ghostWidth / 2),
+                                    y: event.clientY - 18,
+                                    width: ghostWidth,
+                                    height: ghostHeight,
+                                  });
+                                }}
+                                className="inline-flex items-center rounded-md border border-blue-100 bg-[#f4f6fa] px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-blue-50"
+                              >
+                                Tile {holderTile.id}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto pr-1">
                       <div className="flex items-start gap-2 p-2">
                       <div className="relative flex-1 overflow-visible">
                         <div
@@ -1578,18 +1539,16 @@ export function AppHomePage() {
 
                       <div className="relative w-8">
                         {Array.from({ length: totalRows }, (_, rowIndex) => {
+                          if (!canDeleteRow(rowIndex)) return null;
                           const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
                           return (
                             <button
                               key={`edit-del-row-${rowIndex}`}
                               type="button"
                               onClick={() => {
-                                if (!canDeleteRow(rowIndex)) return;
-                                setTargetRows((previous) => Math.max(1, previous - 1));
+                                setTargetRows((previous) => Math.max(viewportMinRows, previous - 1));
                               }}
-                              className={`absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold ${
-                                canDeleteRow(rowIndex) ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
-                              }`}
+                              className="absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold hover:opacity-90"
                               style={{
                                 top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
                                 borderColor: "#ef4444",
@@ -1669,9 +1628,9 @@ export function AppHomePage() {
 
 function createDefaultViewportLayouts(): ViewportLayouts {
   return {
-    mobile: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: BASE_DASHBOARD_ROWS },
-    tablet: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: BASE_DASHBOARD_ROWS },
-    desktop: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: BASE_DASHBOARD_ROWS },
+    mobile: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: VIEWPORT_BASE_ROWS.mobile },
+    tablet: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: VIEWPORT_BASE_ROWS.tablet },
+    desktop: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: VIEWPORT_BASE_ROWS.desktop },
   };
 }
 
@@ -1766,20 +1725,84 @@ function normalizeAllViewportLayouts(layouts: Partial<ViewportLayouts>): Viewpor
 
 function normalizeViewportLayoutForColumns(layout: ViewportLayout, sourceColumns: number, targetColumns: number): ViewportLayout {
   const fittedTiles = fitTilesToColumns(layout.tiles, sourceColumns, targetColumns);
-  const minUsedRow = fittedTiles.length > 0
-    ? Math.min(...fittedTiles.map((tile) => getGridPosition(tile.slot, targetColumns).row))
-    : 0;
-  const normalizedTiles = minUsedRow > 0
-    ? fittedTiles.map((tile) => {
-        const pos = getGridPosition(tile.slot, targetColumns);
-        return { ...tile, slot: (pos.row - minUsedRow) * targetColumns + pos.col };
-      })
-    : fittedTiles.map((tile) => ({ ...tile }));
-  const trimmedTargetRows = Math.max(1, getRequiredRows(normalizedTiles, targetColumns));
+  const normalizedTiles = fittedTiles.map((tile) => ({ ...tile }));
+  const minRowsForColumns =
+    targetColumns === VIEWPORT_COLUMNS.desktop
+      ? VIEWPORT_BASE_ROWS.desktop
+      : targetColumns === VIEWPORT_COLUMNS.tablet
+        ? VIEWPORT_BASE_ROWS.tablet
+        : VIEWPORT_BASE_ROWS.mobile;
+  const trimmedTargetRows = Math.max(minRowsForColumns, getRequiredRows(normalizedTiles, targetColumns), layout.targetRows);
   return {
     tiles: normalizedTiles,
     targetRows: trimmedTargetRows,
   };
+}
+
+function trimAllViewportLayoutsRows(layouts: ViewportLayouts): ViewportLayouts {
+  return {
+    mobile: trimViewportLayoutRows(layouts.mobile, VIEWPORT_COLUMNS.mobile, VIEWPORT_BASE_ROWS.mobile),
+    tablet: trimViewportLayoutRows(layouts.tablet, VIEWPORT_COLUMNS.tablet, VIEWPORT_BASE_ROWS.tablet),
+    desktop: trimViewportLayoutRows(layouts.desktop, VIEWPORT_COLUMNS.desktop, VIEWPORT_BASE_ROWS.desktop),
+  };
+}
+
+function trimViewportLayoutRows(layout: ViewportLayout, columns: number, minRows: number): ViewportLayout {
+  if (layout.tiles.length === 0) {
+    return { tiles: [], targetRows: minRows };
+  }
+
+  const minUsedRow = Math.min(...layout.tiles.map((tile) => getGridPosition(tile.slot, columns).row));
+  const shiftedTiles = layout.tiles.map((tile) => {
+    const pos = getGridPosition(tile.slot, columns);
+    return { ...tile, slot: (pos.row - minUsedRow) * columns + pos.col };
+  });
+  const compactedTiles = compactRowGaps(shiftedTiles, columns, 1);
+  const requiredRows = getRequiredRows(compactedTiles, columns);
+
+  return {
+    tiles: compactedTiles,
+    targetRows: Math.min(MAX_ROWS, Math.max(minRows, requiredRows)),
+  };
+}
+
+function compactRowGaps(tiles: DashboardTile[], columns: number, maxEmptyGap: number): DashboardTile[] {
+  if (tiles.length === 0) return tiles;
+
+  const maxRows = getRequiredRows(tiles, columns);
+  const occupied = Array.from({ length: maxRows }, () => false);
+  tiles.forEach((tile) => {
+    const pos = getGridPosition(tile.slot, columns);
+    for (let row = pos.row; row < pos.row + tile.rowSpan; row += 1) {
+      if (row >= 0 && row < maxRows) occupied[row] = true;
+    }
+  });
+
+  const removedBefore = Array.from({ length: maxRows }, () => 0);
+  let removed = 0;
+  let emptyRun = 0;
+
+  for (let row = 0; row < maxRows; row += 1) {
+    if (occupied[row]) {
+      if (emptyRun > maxEmptyGap) {
+        removed += emptyRun - maxEmptyGap;
+      }
+      emptyRun = 0;
+      removedBefore[row] = removed;
+    } else {
+      emptyRun += 1;
+      removedBefore[row] = removed;
+    }
+  }
+
+  return tiles.map((tile) => {
+    const pos = getGridPosition(tile.slot, columns);
+    const newRow = Math.max(0, pos.row - removedBefore[pos.row]);
+    return {
+      ...tile,
+      slot: newRow * columns + pos.col,
+    };
+  });
 }
 
 function fitTilesToColumns(tiles: DashboardTile[], sourceColumns: number, targetColumns: number): DashboardTile[] {
