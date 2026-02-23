@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
+  ArrowDown,
+  ArrowUp,
+  BadgeDollarSign,
+  BriefcaseBusiness,
+  Boxes,
   Check,
   Columns3,
-  Eye,
   MoreHorizontal,
   Monitor,
   MoveDiagonal2,
   Plus,
-  Repeat2,
+  SlidersHorizontal,
+  Search,
   Settings,
   Smartphone,
   Tablet,
   X,
 } from "lucide-react";
 
-import { getAccountsSidebar } from "../api/accounts";
+import { getAccountCreateOptions, getAccountsList, type AccountCreateOptions, type AccountListItem } from "../api/accounts";
+import { getAssetTypes, type AssetTypeOption } from "../api/assets";
 import { getDashboardLayoutState, upsertDashboardLayoutState } from "../api/dashboardLayouts";
+import { getNavigationState, upsertNavigationState } from "../api/navigationState";
 import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 
@@ -48,6 +57,7 @@ type HolderTile = {
   returnRowSpan?: number;
 };
 type ViewportHolders = Record<EditViewport, HolderTile[]>;
+type NavSectionKey = "portfolio" | "assetTypes" | "accounts";
 
 type SavedLayout = {
   id: string;
@@ -95,14 +105,6 @@ type GridMetrics = {
   rowGap: number;
 };
 
-type InsightTileView = {
-  id: string;
-  label: string;
-  value: string;
-  delta: string;
-  hint: string;
-};
-
 const DESKTOP_COLUMNS = 5;
 const BASE_DASHBOARD_ROWS = 5;
 const MAX_ROW_SPAN = 8;
@@ -126,29 +128,7 @@ const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
   tablet: 4,
   desktop: 5,
 };
-const INSIGHT_TILE_VIEWS: InsightTileView[] = [
-  {
-    id: "total-value",
-    label: "Total Portfolio Value",
-    value: "$102,844.27",
-    delta: "+4.2% this month",
-    hint: "Your core holdings are driving most of this move.",
-  },
-  {
-    id: "cash-position",
-    label: "Available Cash",
-    value: "$8,210.14",
-    delta: "+$540.00 this week",
-    hint: "Dry powder ready for new positions or transfers.",
-  },
-  {
-    id: "income",
-    label: "Projected Annual Income",
-    value: "$3,904.55",
-    delta: "+6.9% year-over-year",
-    hint: "Dividend and interest projections are trending up.",
-  },
-];
+const DEFAULT_NAV_SECTION_ORDER: NavSectionKey[] = ["portfolio", "assetTypes", "accounts"];
 const TILE_PRESETS: TilePreset[] = [
   {
     id: "compact",
@@ -200,19 +180,68 @@ const TILE_PRESETS: TilePreset[] = [
 const normalizeLayoutName = (name: string) => name.trim().slice(0, MAX_LAYOUT_NAME_LENGTH);
 const getDisplayLayoutName = (name: string) =>
   name.length > MAX_LAYOUT_NAME_LENGTH ? `${name.slice(0, MAX_LAYOUT_NAME_LENGTH)}...` : name;
+const formatSlugLabel = (value: string) =>
+  value
+    .split("_")
+    .join(" ")
+    .split("-")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+const normalizeOrder = (order: string[], available: string[]) => {
+  const availableSet = new Set(available);
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const key of order) {
+    if (!availableSet.has(key) || seen.has(key)) continue;
+    normalized.push(key);
+    seen.add(key);
+  }
+  for (const key of available) {
+    if (seen.has(key)) continue;
+    normalized.push(key);
+    seen.add(key);
+  }
+  return normalized;
+};
+const moveInList = <T,>(items: T[], index: number, delta: number) => {
+  const target = index + delta;
+  if (target < 0 || target >= items.length) return items;
+  const next = [...items];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  return next;
+};
 
 export function AppHomePage() {
   const { user } = useAuth();
-  const [activeSidebarCategory] = useState("portfolio");
+  const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
+  const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
+  const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
+  const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
+  const [accountCreateOptions, setAccountCreateOptions] = useState<AccountCreateOptions | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
-  const [layoutsMenuOpen, setLayoutsMenuOpen] = useState(false);
   const [tileMenuOpenId, setTileMenuOpenId] = useState<number | null>(null);
   const [holderMenuOpenId, setHolderMenuOpenId] = useState<number | null>(null);
   const [isNewLayoutDialogOpen, setIsNewLayoutDialogOpen] = useState(false);
   const [isAddTileDialogOpen, setIsAddTileDialogOpen] = useState(false);
   const [layoutNameDialogMode, setLayoutNameDialogMode] = useState<"create" | "rename">("create");
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
+  const [assetTypeMenuOpen, setAssetTypeMenuOpen] = useState(false);
+  const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
+  const [accountsCollapsed, setAccountsCollapsed] = useState(true);
+  const [assetTypeSearch, setAssetTypeSearch] = useState("");
+  const [accountSearch, setAccountSearch] = useState("");
+  const [hasHydratedNavState, setHasHydratedNavState] = useState(false);
+  const [navEditMode, setNavEditMode] = useState(false);
+  const [navSectionOrder, setNavSectionOrder] = useState<NavSectionKey[]>(DEFAULT_NAV_SECTION_ORDER);
+  const [navAssetItemOrder, setNavAssetItemOrder] = useState<string[]>([]);
+  const [navAccountItemOrder, setNavAccountItemOrder] = useState<string[]>([]);
+  const [draftNavSectionOrder, setDraftNavSectionOrder] = useState<NavSectionKey[]>(DEFAULT_NAV_SECTION_ORDER);
+  const [draftNavAssetItemOrder, setDraftNavAssetItemOrder] = useState<string[]>([]);
+  const [draftNavAccountItemOrder, setDraftNavAccountItemOrder] = useState<string[]>([]);
   const [pendingLayoutName, setPendingLayoutName] = useState("");
   const [layoutNameError, setLayoutNameError] = useState<string | null>(null);
   const [isSwitchLayoutDialogOpen, setIsSwitchLayoutDialogOpen] = useState(false);
@@ -224,7 +253,6 @@ export function AppHomePage() {
   const [viewportLayouts, setViewportLayouts] = useState<ViewportLayouts>(() => createDefaultViewportLayouts());
   const [viewportHolders, setViewportHolders] = useState<ViewportHolders>(() => createDefaultViewportHolders());
   const [nextTileId, setNextTileId] = useState(2);
-  const [insightTileIndex, setInsightTileIndex] = useState(0);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayout[]>([]);
   const [activeLayoutId, setActiveLayoutId] = useState(DEFAULT_LAYOUT_ID);
   const [editingViewport, setEditingViewport] = useState<EditViewport>("desktop");
@@ -273,8 +301,7 @@ export function AppHomePage() {
       },
     }));
   };
-  const activeInsightTile = INSIGHT_TILE_VIEWS[insightTileIndex];
-  const sectionLabel = "Portfolio";
+  const sectionLabel = activeSidebarLabel;
   const defaultLayoutName = `${sectionLabel} Default Layout`;
   const dashboardScope = activeSidebarCategory;
   const legacyStorageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}.${dashboardScope}`;
@@ -368,6 +395,66 @@ export function AppHomePage() {
     () => savedLayouts.find((layout) => layout.isPrimary) ?? savedLayouts[0] ?? null,
     [savedLayouts],
   );
+  const accountTypeById = useMemo(() => {
+    const map = new Map<number, AccountCreateOptions["account_types"][number]>();
+    for (const option of accountCreateOptions?.account_types ?? []) {
+      map.set(option.id, option);
+    }
+    return map;
+  }, [accountCreateOptions]);
+  const assetTypeEntries = useMemo(
+    () =>
+      assetTypes.map((assetType) => ({
+        key: `asset-type:${assetType.slug ?? assetType.id}`,
+        assetType,
+      })),
+    [assetTypes],
+  );
+  const accountEntries = useMemo(
+    () =>
+      accountRows.map((account) => ({
+        key: `account:${account.id}`,
+        account,
+      })),
+    [accountRows],
+  );
+  const sectionOrderForRender = navEditMode ? draftNavSectionOrder : navSectionOrder;
+  const assetOrderForRender = navEditMode ? draftNavAssetItemOrder : navAssetItemOrder;
+  const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
+  const orderedAssetEntries = useMemo(() => {
+    const keyToEntry = new Map(assetTypeEntries.map((entry) => [entry.key, entry] as const));
+    const orderedKeys = normalizeOrder(assetOrderForRender, assetTypeEntries.map((entry) => entry.key));
+    return orderedKeys.map((key) => keyToEntry.get(key)).filter(Boolean) as typeof assetTypeEntries;
+  }, [assetOrderForRender, assetTypeEntries]);
+  const filteredOrderedAssetEntries = useMemo(() => {
+    const term = assetTypeSearch.trim().toLowerCase();
+    if (!term) return orderedAssetEntries;
+    return orderedAssetEntries.filter((entry) => entry.assetType.name.toLowerCase().includes(term));
+  }, [assetTypeSearch, orderedAssetEntries]);
+  const systemAssetTypes = useMemo(
+    () => filteredOrderedAssetEntries.filter((entry) => entry.assetType.is_system),
+    [filteredOrderedAssetEntries],
+  );
+  const customAssetTypes = useMemo(
+    () => filteredOrderedAssetEntries.filter((entry) => !entry.assetType.is_system),
+    [filteredOrderedAssetEntries],
+  );
+  const orderedAccountEntries = useMemo(() => {
+    const keyToEntry = new Map(accountEntries.map((entry) => [entry.key, entry] as const));
+    const orderedKeys = normalizeOrder(accountOrderForRender, accountEntries.map((entry) => entry.key));
+    return orderedKeys.map((key) => keyToEntry.get(key)).filter(Boolean) as typeof accountEntries;
+  }, [accountEntries, accountOrderForRender]);
+  const filteredOrderedAccountEntries = useMemo(() => {
+    const term = accountSearch.trim().toLowerCase();
+    if (!term) return orderedAccountEntries;
+    return orderedAccountEntries.filter((entry) => {
+      const accountName = entry.account.name.toLowerCase();
+      if (accountName.includes(term)) return true;
+      const accountType = accountTypeById.get(entry.account.account_type);
+      const allowedAssets = accountType?.allowed_asset_type_slugs?.join(" ").toLowerCase() ?? "";
+      return allowedAssets.includes(term);
+    });
+  }, [accountSearch, orderedAccountEntries, accountTypeById]);
 
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
@@ -533,11 +620,82 @@ export function AppHomePage() {
     persistLayouts(nextLayouts, nextActive.id);
   };
 
-  const loadBrokerageAccounts = useCallback(async () => {
-    try {
-      await getAccountsSidebar();
-    } catch {
-      // Keep dashboard functional if accounts sidebar request fails.
+  const startNavigationEdit = () => {
+    setAssetTypeMenuOpen(false);
+    setNavEditMode(true);
+    setDraftNavSectionOrder([...sectionOrderForRender]);
+    setDraftNavAssetItemOrder([...assetOrderForRender]);
+    setDraftNavAccountItemOrder([...accountOrderForRender]);
+  };
+
+  const cancelNavigationEdit = () => {
+    setAssetTypeMenuOpen(false);
+    setNavEditMode(false);
+    setDraftNavSectionOrder([...navSectionOrder]);
+    setDraftNavAssetItemOrder([...navAssetItemOrder]);
+    setDraftNavAccountItemOrder([...navAccountItemOrder]);
+  };
+
+  const saveNavigationEdit = () => {
+    setAssetTypeMenuOpen(false);
+    const assetKeys = assetTypeEntries.map((entry) => entry.key);
+    const accountKeys = accountEntries.map((entry) => entry.key);
+    const nextSectionOrder = normalizeOrder(draftNavSectionOrder, DEFAULT_NAV_SECTION_ORDER) as NavSectionKey[];
+    const nextAssetOrder = normalizeOrder(draftNavAssetItemOrder, assetKeys);
+    const nextAccountOrder = normalizeOrder(draftNavAccountItemOrder, accountKeys);
+    setNavSectionOrder(nextSectionOrder);
+    setNavAssetItemOrder(nextAssetOrder);
+    setNavAccountItemOrder(nextAccountOrder);
+    setNavEditMode(false);
+  };
+
+  const moveDraftSection = (section: NavSectionKey, delta: number) => {
+    setDraftNavSectionOrder((previous) => {
+      const index = previous.indexOf(section);
+      if (index < 0) return previous;
+      return moveInList(previous, index, delta);
+    });
+  };
+
+  const moveDraftAssetItem = (key: string, delta: number) => {
+    setDraftNavAssetItemOrder((previous) => {
+      const index = previous.indexOf(key);
+      if (index < 0) return previous;
+      return moveInList(previous, index, delta);
+    });
+  };
+
+  const moveDraftAccountItem = (key: string, delta: number) => {
+    setDraftNavAccountItemOrder((previous) => {
+      const index = previous.indexOf(key);
+      if (index < 0) return previous;
+      return moveInList(previous, index, delta);
+    });
+  };
+
+  const loadSidebarData = useCallback(async () => {
+    const [assetTypeResult, accountListResult, createOptionsResult] = await Promise.allSettled([
+      getAssetTypes(),
+      getAccountsList(),
+      getAccountCreateOptions(),
+    ]);
+
+    if (assetTypeResult.status === "fulfilled") {
+      setAssetTypes(assetTypeResult.value);
+    } else {
+      setAssetTypes([]);
+    }
+
+    if (accountListResult.status === "fulfilled") {
+      setAccountRows(accountListResult.value);
+    } else {
+      setAccountRows([]);
+    }
+
+    if (createOptionsResult.status === "fulfilled") {
+      setAccountCreateOptions(createOptionsResult.value);
+    } else {
+      setAccountCreateOptions(null);
     }
   }, []);
 
@@ -549,8 +707,8 @@ export function AppHomePage() {
       if (target.closest("[data-tile-menu]")) return;
       if (target.closest("[data-holder-menu]")) return;
       setSettingsMenuOpen(false);
-      setLayoutsMenuOpen(false);
       setLayoutActionsMenuOpen(false);
+      setAssetTypeMenuOpen(false);
       setGridActionsMenuOpen(false);
       setTileMenuOpenId(null);
       setHolderMenuOpenId(null);
@@ -568,8 +726,70 @@ export function AppHomePage() {
   }, [activeLayoutId, activeMarkedLayout, isEditing]);
 
   useEffect(() => {
-    void loadBrokerageAccounts();
-  }, [loadBrokerageAccounts, user?.email]);
+    void loadSidebarData();
+  }, [loadSidebarData, user?.email]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const bootNavigationState = async () => {
+      try {
+        const payload = await getNavigationState(dashboardScope);
+        if (isCancelled) return;
+        const normalizedSections = normalizeOrder(payload.section_order ?? [], DEFAULT_NAV_SECTION_ORDER) as NavSectionKey[];
+        setNavSectionOrder(normalizedSections);
+        setNavAssetItemOrder(payload.asset_item_order ?? []);
+        setNavAccountItemOrder(payload.account_item_order ?? []);
+        setAssetTypesCollapsed(Boolean(payload.asset_types_collapsed));
+        setAccountsCollapsed(Boolean(payload.accounts_collapsed));
+        setActiveSidebarCategory((payload.active_item_key || "portfolio").trim() || "portfolio");
+        setHasHydratedNavState(true);
+      } catch {
+        if (isCancelled) return;
+        setNavSectionOrder(DEFAULT_NAV_SECTION_ORDER);
+        setNavAssetItemOrder([]);
+        setNavAccountItemOrder([]);
+        setAssetTypesCollapsed(false);
+        setAccountsCollapsed(true);
+        setActiveSidebarCategory("portfolio");
+        setHasHydratedNavState(true);
+      }
+    };
+    setHasHydratedNavState(false);
+    void bootNavigationState();
+    return () => {
+      isCancelled = true;
+    };
+  }, [dashboardScope, user?.email]);
+
+  useEffect(() => {
+    const assetKeys = assetTypeEntries.map((entry) => entry.key);
+    const accountKeys = accountEntries.map((entry) => entry.key);
+    setNavAssetItemOrder((previous) => normalizeOrder(previous, assetKeys));
+    setNavAccountItemOrder((previous) => normalizeOrder(previous, accountKeys));
+    if (navEditMode) {
+      setDraftNavAssetItemOrder((previous) => normalizeOrder(previous, assetKeys));
+      setDraftNavAccountItemOrder((previous) => normalizeOrder(previous, accountKeys));
+    }
+  }, [accountEntries, assetTypeEntries, navEditMode]);
+
+  useEffect(() => {
+    if (activeSidebarCategory === "portfolio") {
+      setActiveSidebarLabel("Portfolio");
+      return;
+    }
+    const assetMatch = assetTypeEntries.find((entry) => entry.key === activeSidebarCategory);
+    if (assetMatch) {
+      setActiveSidebarLabel(assetMatch.assetType.name);
+      return;
+    }
+    const accountMatch = accountEntries.find((entry) => entry.key === activeSidebarCategory);
+    if (accountMatch) {
+      setActiveSidebarLabel(accountMatch.account.name);
+      return;
+    }
+    setActiveSidebarCategory("portfolio");
+    setActiveSidebarLabel("Portfolio");
+  }, [accountEntries, activeSidebarCategory, assetTypeEntries]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -664,6 +884,32 @@ export function AppHomePage() {
       isCancelled = true;
     };
   }, [dashboardScope, defaultLayoutName, legacyStorageKey]);
+
+  useEffect(() => {
+    if (!hasHydratedNavState) return;
+    if (navEditMode) return;
+    void upsertNavigationState({
+      scope: dashboardScope,
+      section_order: navSectionOrder,
+      asset_item_order: navAssetItemOrder,
+      account_item_order: navAccountItemOrder,
+      asset_types_collapsed: assetTypesCollapsed,
+      accounts_collapsed: accountsCollapsed,
+      active_item_key: activeSidebarCategory,
+    }).catch(() => {
+      // Keep UI responsive if persistence fails.
+    });
+  }, [
+    hasHydratedNavState,
+    navEditMode,
+    dashboardScope,
+    navSectionOrder,
+    navAssetItemOrder,
+    navAccountItemOrder,
+    assetTypesCollapsed,
+    accountsCollapsed,
+    activeSidebarCategory,
+  ]);
 
   useEffect(() => {
     if (isEditing) return;
@@ -1260,6 +1506,9 @@ export function AppHomePage() {
         : "max-w-[1320px]";
   const useCompactEditToolbar = windowWidth < 860 || editingViewport === "mobile";
   const useTabletEditToolbar = !useCompactEditToolbar && editingViewport === "tablet";
+  const portfolioSectionIndex = sectionOrderForRender.indexOf("portfolio");
+  const assetSectionIndex = sectionOrderForRender.indexOf("assetTypes");
+  const accountsSectionIndex = sectionOrderForRender.indexOf("accounts");
 
   return (
     <main className="w-full pb-10 pt-4">
@@ -1267,145 +1516,444 @@ export function AppHomePage() {
         <div>
           <section>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-              <Card className="h-fit border-transparent bg-transparent shadow-none xl:sticky xl:top-24 xl:self-start">
-                <CardContent className="p-0">
-                  <Card className="border-border bg-[#f4f6fa]">
-                    <CardContent className="space-y-4 p-4">
-                      <Card className="border-blue-100 bg-white">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">Portfolio Dashboard</h1>
-                            <div className="flex items-center gap-2">
-                              <div className="relative" data-dashboard-menu>
+              <Card className="h-fit border-border bg-[#f4f6fa] xl:sticky xl:top-24 xl:self-start">
+                <CardContent className="flex flex-col gap-5 p-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Navigation</p>
+                            <div className="flex items-center gap-1">
+                              {navEditMode ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={saveNavigationEdit}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 transition-colors hover:bg-blue-50"
+                                    aria-label="Save navigation order"
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelNavigationEdit}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                                    aria-label="Cancel navigation order edit"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </>
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setLayoutsMenuOpen((previous) => !previous);
-                                    setSettingsMenuOpen(false);
-                                  }}
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                                  onClick={startNavigationEdit}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                                  aria-label="Edit navigation order"
                                 >
-                                  <Eye className="h-5 w-5" />
+                                  <SlidersHorizontal className="h-4 w-4" />
                                 </button>
-                                {layoutsMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 min-w-[19rem] max-w-[26rem] rounded-xl border border-border bg-white p-1 shadow-lg">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPrimaryLayout(activeLayoutId);
-                                        setLayoutsMenuOpen(false);
-                                      }}
-                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      Set Current as Active
-                                    </button>
-                                    <div className="my-1 border-t border-border/80" />
-                                    {savedLayouts.map((layout) => (
-                                      <button
-                                        key={`rail-layout-${layout.id}`}
-                                        type="button"
-                                        onClick={() => {
-                                          requestLayoutSwitch(layout.id);
-                                          setLayoutsMenuOpen(false);
-                                        }}
-                                        className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground ${
-                                          layout.id === activeLayoutId ? "bg-secondary/50" : ""
-                                        }`}
-                                      >
-                                        <span className="truncate pr-2" title={layout.name}>{getDisplayLayoutName(layout.name)}</span>
-                                        <span className="text-[10px] text-muted-foreground">{layout.isPrimary ? "Active" : ""}</span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="relative" data-dashboard-menu>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSettingsMenuOpen((previous) => !previous);
-                                    setLayoutsMenuOpen(false);
-                                  }}
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
-                                >
-                                  <Settings className="h-5 w-5" />
-                                </button>
-                                {settingsMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
-                                    {!isEditing ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsEditing(true);
-                                          setSettingsMenuOpen(false);
-                                        }}
-                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                      >
-                                        Edit Dashboard
-                                      </button>
-                                    ) : (
-                                      <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
-                                        Use the edit toolbar above the dashboard.
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : null}
-                              </div>
+                              )}
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-blue-100 bg-white">
-                        <CardContent className="space-y-4 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dashboard Tile</p>
-                              <h2 className="mt-1 text-lg font-semibold text-slate-900">{activeInsightTile.label}</h2>
+                          <div className="space-y-3" style={{ order: portfolioSectionIndex + 1 }}>
+                            <div className="flex items-center justify-between gap-2">
+                              <h2 className="text-base font-semibold text-slate-900">Portfolio</h2>
+                              {navEditMode ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveDraftSection("portfolio", -1)}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                    disabled={portfolioSectionIndex <= 0}
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveDraftSection("portfolio", 1)}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                    disabled={portfolioSectionIndex >= sectionOrderForRender.length - 1}
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                             <button
                               type="button"
-                              onClick={() =>
-                                setInsightTileIndex((previous) => (previous + 1) % INSIGHT_TILE_VIEWS.length)}
-                              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+                              onClick={() => {
+                                if (navEditMode) return;
+                                setActiveSidebarCategory("portfolio");
+                                setActiveSidebarLabel("Portfolio");
+                              }}
+                              className={`relative flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors ${
+                                activeSidebarCategory === "portfolio"
+                                  ? "text-blue-700"
+                                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                              }`}
                             >
-                              <Repeat2 className="h-3.5 w-3.5" />
-                              Flip view
+                              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+                              <span className="truncate">Portfolio Dashboard</span>
+                              {activeSidebarCategory === "portfolio" ? (
+                                <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
+                              ) : null}
                             </button>
                           </div>
-                          <div className="rounded-lg border border-blue-100 bg-white p-4">
-                            <p className="text-3xl font-semibold text-slate-900">{activeInsightTile.value}</p>
-                            <p className="mt-1 text-sm font-medium text-blue-700">{activeInsightTile.delta}</p>
-                            <p className="mt-3 text-sm text-slate-600">{activeInsightTile.hint}</p>
+
+                          <div
+                            className={`${assetSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"}`}
+                            style={{ order: assetSectionIndex + 1 }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <h2 className="text-base font-semibold text-slate-900">Asset Types</h2>
+                                <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                                  {orderedAssetEntries.length}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setAssetTypesCollapsed((previous) => !previous)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                                  aria-label={assetTypesCollapsed ? "Expand asset types" : "Collapse asset types"}
+                                >
+                                  {assetTypesCollapsed && !navEditMode ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                </button>
+                                {navEditMode ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => moveDraftSection("assetTypes", -1)}
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                      disabled={assetSectionIndex <= 0}
+                                    >
+                                      <ArrowUp className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => moveDraftSection("assetTypes", 1)}
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                      disabled={assetSectionIndex >= sectionOrderForRender.length - 1}
+                                    >
+                                      <ArrowDown className="h-3.5 w-3.5" />
+                                    </button>
+                                  </>
+                                ) : null}
+                                <div className="relative" data-dashboard-menu>
+                                <button
+                                  type="button"
+                                  onClick={() => setAssetTypeMenuOpen((previous) => !previous)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                                  aria-label="Asset type actions"
+                                >
+                                  <MoreHorizontal className="h-4.5 w-4.5" />
+                                </button>
+                                {assetTypeMenuOpen ? (
+                                  <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                    <button
+                                      type="button"
+                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                    >
+                                      Add New Asset Type
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                    >
+                                      Manage Existing
+                                    </button>
+                                  </div>
+                                ) : null}
+                                </div>
+                              </div>
+                            </div>
+                            {navEditMode || !assetTypesCollapsed ? (
+                            <div className="mt-3 space-y-2">
+                              <div className="relative">
+                                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                <input
+                                  value={assetTypeSearch}
+                                  onChange={(event) => setAssetTypeSearch(event.target.value)}
+                                  placeholder="Search asset types"
+                                  className="w-full rounded-lg border border-blue-100 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-200"
+                                />
+                              </div>
+                              <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
+                              {systemAssetTypes.map((entry) => {
+                                const key = entry.key;
+                                const assetType = entry.assetType;
+                                return (
+                                  <div key={key} className="flex items-start gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (navEditMode) return;
+                                        setActiveSidebarCategory(key);
+                                        setActiveSidebarLabel(assetType.name);
+                                      }}
+                                      className={`relative flex-1 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                                        activeSidebarCategory === key
+                                          ? "text-blue-700"
+                                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Boxes className="h-4 w-4 shrink-0" />
+                                        <span className="truncate text-sm font-medium">{assetType.name}</span>
+                                      </div>
+                                      {activeSidebarCategory === key ? (
+                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
+                                      ) : null}
+                                    </button>
+                                    {navEditMode ? (
+                                      <div className="flex items-center gap-1 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => moveDraftAssetItem(key, -1)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                          disabled={assetOrderForRender.indexOf(key) <= 0}
+                                        >
+                                          <ArrowUp className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => moveDraftAssetItem(key, 1)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                          disabled={assetOrderForRender.indexOf(key) >= assetOrderForRender.length - 1}
+                                        >
+                                          <ArrowDown className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                              {customAssetTypes.length > 0 ? (
+                                <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                  Custom
+                                </p>
+                              ) : null}
+                              {customAssetTypes.map((entry) => {
+                                const key = entry.key;
+                                const assetType = entry.assetType;
+                                return (
+                                  <div key={key} className="flex items-start gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (navEditMode) return;
+                                        setActiveSidebarCategory(key);
+                                        setActiveSidebarLabel(assetType.name);
+                                      }}
+                                      className={`relative flex-1 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                                        activeSidebarCategory === key
+                                          ? "text-blue-700"
+                                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Boxes className="h-4 w-4 shrink-0" />
+                                        <span className="truncate text-sm font-medium">{assetType.name}</span>
+                                      </div>
+                                      {activeSidebarCategory === key ? (
+                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
+                                      ) : null}
+                                    </button>
+                                    {navEditMode ? (
+                                      <div className="flex items-center gap-1 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => moveDraftAssetItem(key, -1)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                          disabled={assetOrderForRender.indexOf(key) <= 0}
+                                        >
+                                          <ArrowUp className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => moveDraftAssetItem(key, 1)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                          disabled={assetOrderForRender.indexOf(key) >= assetOrderForRender.length - 1}
+                                        >
+                                          <ArrowDown className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                              </div>
+                              {filteredOrderedAssetEntries.length === 0 ? (
+                                <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                  No asset types found.
+                                </div>
+                              ) : null}
+                            </div>
+                            ) : null}
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-blue-100/70">
-                            <div
-                              className="h-full rounded-full bg-blue-600 transition-all"
-                              style={{ width: `${((insightTileIndex + 1) / INSIGHT_TILE_VIEWS.length) * 100}%` }}
-                            />
+
+                          <div
+                            className={`${accountsSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"}`}
+                            style={{ order: accountsSectionIndex + 1 }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <h2 className="text-base font-semibold text-slate-900">Accounts</h2>
+                                <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                                  {orderedAccountEntries.length}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setAccountsCollapsed((previous) => !previous)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                                  aria-label={accountsCollapsed ? "Expand accounts" : "Collapse accounts"}
+                                >
+                                  {accountsCollapsed && !navEditMode ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                </button>
+                                {navEditMode ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => moveDraftSection("accounts", -1)}
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                      disabled={accountsSectionIndex <= 0}
+                                    >
+                                      <ArrowUp className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => moveDraftSection("accounts", 1)}
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                      disabled={accountsSectionIndex >= sectionOrderForRender.length - 1}
+                                    >
+                                      <ArrowDown className="h-3.5 w-3.5" />
+                                    </button>
+                                  </>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                                  aria-label="Account actions"
+                                >
+                                  <MoreHorizontal className="h-4.5 w-4.5" />
+                                </button>
+                              </div>
+                            </div>
+                            {navEditMode || !accountsCollapsed ? (
+                            <div className="mt-3 space-y-2">
+                              <div className="relative">
+                                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                <input
+                                  value={accountSearch}
+                                  onChange={(event) => setAccountSearch(event.target.value)}
+                                  placeholder="Search accounts"
+                                  className="w-full rounded-lg border border-blue-100 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-200"
+                                />
+                              </div>
+                              <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
+                              {filteredOrderedAccountEntries.map((entry) => {
+                                const account = entry.account;
+                                const key = entry.key;
+                                const accountType = accountTypeById.get(account.account_type);
+                                const allowedAssets = accountType?.allowed_asset_type_slugs?.length
+                                  ? accountType.allowed_asset_type_slugs.map(formatSlugLabel).join(", ")
+                                  : "Asset types not available";
+                                return (
+                                  <div key={account.id} className="flex items-start gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (navEditMode) return;
+                                        setActiveSidebarCategory(key);
+                                        setActiveSidebarLabel(account.name);
+                                      }}
+                                      className={`relative flex-1 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                                        activeSidebarCategory === key
+                                          ? "text-blue-700"
+                                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <BadgeDollarSign className="h-4 w-4 shrink-0" />
+                                        <p className="truncate text-sm font-semibold">{account.name}</p>
+                                      </div>
+                                      <p className="ml-6 mt-0.5 truncate text-[11px] text-slate-500">{allowedAssets}</p>
+                                      <p className="ml-6 mt-0.5 text-[11px] text-slate-500">Synced: {account.last_synced ? "Yes" : "No"}</p>
+                                      {activeSidebarCategory === key ? (
+                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
+                                      ) : null}
+                                    </button>
+                                    {navEditMode ? (
+                                      <div className="flex items-center gap-1 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => moveDraftAccountItem(key, -1)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                          disabled={accountOrderForRender.indexOf(key) <= 0}
+                                        >
+                                          <ArrowUp className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => moveDraftAccountItem(key, 1)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
+                                          disabled={accountOrderForRender.indexOf(key) >= accountOrderForRender.length - 1}
+                                        >
+                                          <ArrowDown className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                              </div>
+                              {filteredOrderedAccountEntries.length === 0 ? (
+                                <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                  No accounts found.
+                                </div>
+                              ) : null}
+                            </div>
+                            ) : null}
                           </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-blue-100 bg-white">
-                        <CardContent className="space-y-4 p-4">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dashboard Tile</p>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-900">Quick Actions</h2>
-                          </div>
-                          <div className="space-y-2">
-                            {["Transfer funds", "Review subscriptions", "Manage accounts"].map((item) => (
-                              <button
-                                key={item}
-                                type="button"
-                                className="w-full rounded-md border border-blue-100 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
-                              >
-                                {item}
-                              </button>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </CardContent>
-                  </Card>
+                </CardContent>
+              </Card>
+              <div className="space-y-4">
+              <Card className="border-blue-100 bg-white">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
+                    <div className="relative" data-dashboard-menu>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsMenuOpen((previous) => !previous);
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                      >
+                        <Settings className="h-5 w-5" />
+                      </button>
+                      {settingsMenuOpen ? (
+                        <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
+                          {!isEditing ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditing(true);
+                                setSettingsMenuOpen(false);
+                              }}
+                              className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                            >
+                              Edit Dashboard
+                            </button>
+                          ) : (
+                            <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                              Use the edit toolbar above the dashboard.
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
               {!isEditing ? (
@@ -1691,6 +2239,7 @@ export function AppHomePage() {
                 </Card>
               ) : null}
             </div>
+            </div>
           </section>
         </div>
       </div>
@@ -1749,7 +2298,7 @@ export function AppHomePage() {
                           <button
                             type="button"
                             onClick={requestExitEditing}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
                             title="Save and close"
                             aria-label="Save and close"
                           >
@@ -1775,7 +2324,7 @@ export function AppHomePage() {
                             <button
                               type="button"
                               onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                               title="Layout actions"
                               aria-label="Layout actions"
                             >
@@ -1898,7 +2447,7 @@ export function AppHomePage() {
                               <button
                                 type="button"
                                 onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                                 title="Layout actions"
                                 aria-label="Layout actions"
                               >
@@ -1982,7 +2531,7 @@ export function AppHomePage() {
                           <button
                             type="button"
                             onClick={requestExitEditing}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
                             title="Save and close"
                             aria-label="Save and close"
                           >
@@ -2011,7 +2560,7 @@ export function AppHomePage() {
                             <button
                               type="button"
                               onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                               title="Layout actions"
                               aria-label="Layout actions"
                             >
@@ -2125,7 +2674,7 @@ export function AppHomePage() {
                         <button
                           type="button"
                           onClick={requestExitEditing}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
                           title="Save and close"
                           aria-label="Save and close"
                         >
@@ -2287,7 +2836,7 @@ export function AppHomePage() {
                         <button
                           type="button"
                           onClick={() => setIsAddTileDialogOpen(true)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                           title="Add Tile"
                           aria-label="Add Tile"
                         >
@@ -2297,7 +2846,7 @@ export function AppHomePage() {
                           <button
                             type="button"
                             onClick={() => setGridActionsMenuOpen((previous) => !previous)}
-                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
                               isDeleteStructureMode
                                 ? "border-red-300 bg-red-100 text-red-700"
                                 : "border-border bg-white text-foreground hover:bg-secondary/80"
@@ -2368,7 +2917,7 @@ export function AppHomePage() {
                                 setSelectedDeleteRows([]);
                                 setSelectedDeleteCols([]);
                               }}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                               title="Cancel"
                               aria-label="Cancel"
                             >
@@ -2378,7 +2927,7 @@ export function AppHomePage() {
                               type="button"
                               onClick={confirmDeleteStructure}
                               disabled={selectedDeleteRows.length === 0 && selectedDeleteCols.length === 0}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
                               title="Confirm delete"
                               aria-label="Confirm delete"
                             >
@@ -2714,7 +3263,7 @@ export function AppHomePage() {
                     setPendingLayoutName("");
                     setLayoutNameError(null);
                   }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                   title="Cancel"
                   aria-label="Cancel"
                 >
@@ -2746,7 +3295,7 @@ export function AppHomePage() {
                     setPendingLayoutName("");
                     setLayoutNameError(null);
                   }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
                   title="Save layout"
                   aria-label="Save layout"
                 >
@@ -3298,6 +3847,7 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
 
 
 

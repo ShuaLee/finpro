@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from portfolios.models import DashboardLayoutState, PortfolioDenomination, PortfolioValuationSnapshot
+from portfolios.models import DashboardLayoutState, NavigationState, PortfolioDenomination, PortfolioValuationSnapshot
 
 
 class PortfolioDenominationSerializer(serializers.ModelSerializer):
@@ -89,3 +89,28 @@ class DashboardLayoutStateUpsertSerializer(serializers.Serializer):
     scope = serializers.CharField(max_length=120)
     active_layout_id = serializers.CharField(max_length=100)
     layouts = serializers.ListField(child=serializers.DictField(), allow_empty=True)
+
+
+class NavigationStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NavigationState
+        fields = (
+            "scope",
+            "section_order",
+            "asset_item_order",
+            "account_item_order",
+            "asset_types_collapsed",
+            "accounts_collapsed",
+            "active_item_key",
+            "updated_at",
+        )
+
+
+class NavigationStateUpsertSerializer(serializers.Serializer):
+    scope = serializers.CharField(max_length=120)
+    section_order = serializers.ListField(child=serializers.CharField(max_length=120), allow_empty=True)
+    asset_item_order = serializers.ListField(child=serializers.CharField(max_length=200), allow_empty=True)
+    account_item_order = serializers.ListField(child=serializers.CharField(max_length=200), allow_empty=True)
+    asset_types_collapsed = serializers.BooleanField(required=False, default=False)
+    accounts_collapsed = serializers.BooleanField(required=False, default=True)
+    active_item_key = serializers.CharField(required=False, allow_blank=True, default="portfolio", max_length=200)

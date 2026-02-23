@@ -26,10 +26,15 @@ export const API_ENDPOINTS = {
   },
   accounts: {
     create: `${API_BASE_URL}/accounts/`,
+    list: `${API_BASE_URL}/accounts/`,
     createOptions: `${API_BASE_URL}/accounts/create-options/`,
     sidebar: `${API_BASE_URL}/accounts/sidebar/`,
   },
+  assets: {
+    assetTypes: `${API_BASE_URL}/assets/asset-types/`,
+  },
   portfolios: {
     dashboardLayouts: `${API_BASE_URL}/portfolios/dashboard-layouts/`,
+    navigationState: `${API_BASE_URL}/portfolios/navigation-state/`,
   },
 };

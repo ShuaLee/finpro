@@ -7,10 +7,12 @@ from rest_framework.views import APIView
 
 from assets.models import Asset
 from fx.models import FXCurrency
-from portfolios.models import DashboardLayoutState, Portfolio, PortfolioDenomination
+from portfolios.models import DashboardLayoutState, NavigationState, Portfolio, PortfolioDenomination
 from portfolios.serializers import (
     DashboardLayoutStateSerializer,
     DashboardLayoutStateUpsertSerializer,
+    NavigationStateSerializer,
+    NavigationStateUpsertSerializer,
     PortfolioDenominationCreateSerializer,
     PortfolioDenominationPatchSerializer,
     PortfolioDenominationSerializer,
@@ -195,3 +197,49 @@ class DashboardLayoutStateView(APIView):
             },
         )
         return Response(DashboardLayoutStateSerializer(state).data, status=status.HTTP_200_OK)
+
+
+class NavigationStateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        scope = (request.query_params.get("scope") or "").strip()
+        if not scope:
+            return Response({"detail": "scope is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        state = NavigationState.objects.filter(profile=request.user.profile, scope=scope).first()
+        if not state:
+            return Response(
+                {
+                    "scope": scope,
+                    "section_order": [],
+                    "asset_item_order": [],
+                    "account_item_order": [],
+                    "asset_types_collapsed": False,
+                    "accounts_collapsed": True,
+                    "active_item_key": "portfolio",
+                    "updated_at": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(NavigationStateSerializer(state).data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        serializer = NavigationStateUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        state, _created = NavigationState.objects.update_or_create(
+            profile=request.user.profile,
+            scope=data["scope"],
+            defaults={
+                "section_order": data["section_order"],
+                "asset_item_order": data["asset_item_order"],
+                "account_item_order": data["account_item_order"],
+                "asset_types_collapsed": data.get("asset_types_collapsed", False),
+                "accounts_collapsed": data.get("accounts_collapsed", True),
+                "active_item_key": data.get("active_item_key", "portfolio"),
+            },
+        )
+        return Response(NavigationStateSerializer(state).data, status=status.HTTP_200_OK)

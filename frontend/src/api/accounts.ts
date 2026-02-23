@@ -52,8 +52,22 @@ export type CreateAccountPayload = {
   allow_manual_overrides?: boolean;
 };
 
+export type AccountListItem = {
+  id: number;
+  portfolio: number;
+  name: string;
+  account_type: number;
+  broker: string | null;
+  last_synced: string | null;
+  holdings_count: number;
+};
+
 export async function getAccountsSidebar(): Promise<SidebarGroup[]> {
   return apiRequest<SidebarGroup[]>(API_ENDPOINTS.accounts.sidebar, "GET");
+}
+
+export async function getAccountsList(): Promise<AccountListItem[]> {
+  return apiRequest<AccountListItem[]>(API_ENDPOINTS.accounts.list, "GET");
 }
 
 export async function getAccountCreateOptions(): Promise<AccountCreateOptions> {

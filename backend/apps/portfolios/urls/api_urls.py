@@ -2,6 +2,7 @@ from django.urls import path
 
 from portfolios.views import (
     DashboardLayoutStateView,
+    NavigationStateView,
     PortfolioDenominationDetailView,
     PortfolioDenominationListCreateView,
     PortfolioValuationSnapshotCaptureView,
@@ -11,6 +12,7 @@ from portfolios.views import (
 
 urlpatterns = [
     path("dashboard-layouts/", DashboardLayoutStateView.as_view(), name="dashboard-layout-state"),
+    path("navigation-state/", NavigationStateView.as_view(), name="navigation-state"),
     path("<int:portfolio_id>/valuation/", PortfolioValuationView.as_view(), name="portfolio-valuation"),
     path(
         "<int:portfolio_id>/valuation/snapshots/capture/",
