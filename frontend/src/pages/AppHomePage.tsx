@@ -1,9 +1,12 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
+  Columns3,
   Eye,
   MoreHorizontal,
   Monitor,
   MoveDiagonal2,
+  Plus,
   Repeat2,
   Settings,
   Smartphone,
@@ -27,6 +30,7 @@ type EditViewport = "mobile" | "tablet" | "desktop";
 type ViewportLayout = {
   tiles: DashboardTile[];
   targetRows: number;
+  targetColumns: number;
 };
 
 type ViewportLayouts = Record<EditViewport, ViewportLayout>;
@@ -98,11 +102,17 @@ const MAX_ROWS = 80;
 const MAX_LAYOUT_NAME_LENGTH = 30;
 const DEFAULT_LAYOUT_ID = "default";
 const DEFAULT_TILES: DashboardTile[] = [{ id: 1, slot: 0, colSpan: 1, rowSpan: 1 }];
-const VIEWPORT_COLUMNS: Record<EditViewport, number> = {
+const VIEWPORT_DEFAULT_COLUMNS: Record<EditViewport, number> = {
   mobile: 2,
   tablet: 4,
   desktop: 5,
 };
+const VIEWPORT_MAX_COLUMNS: Record<EditViewport, number> = {
+  mobile: 2,
+  tablet: 6,
+  desktop: 8,
+};
+const VIEWPORT_MIN_COLUMNS = 1;
 const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
   mobile: 4,
   tablet: 4,
@@ -143,6 +153,17 @@ export function AppHomePage() {
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [layoutsMenuOpen, setLayoutsMenuOpen] = useState(false);
   const [tileMenuOpenId, setTileMenuOpenId] = useState<number | null>(null);
+  const [isNewLayoutDialogOpen, setIsNewLayoutDialogOpen] = useState(false);
+  const [layoutNameDialogMode, setLayoutNameDialogMode] = useState<"create" | "rename">("create");
+  const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
+  const [pendingLayoutName, setPendingLayoutName] = useState("");
+  const [layoutNameError, setLayoutNameError] = useState<string | null>(null);
+  const [isSwitchLayoutDialogOpen, setIsSwitchLayoutDialogOpen] = useState(false);
+  const [pendingSwitchLayoutId, setPendingSwitchLayoutId] = useState<string | null>(null);
+  const [pendingCreateLayout, setPendingCreateLayout] = useState(false);
+  const [isExitEditDialogOpen, setIsExitEditDialogOpen] = useState(false);
+  const [isSetActiveDialogOpen, setIsSetActiveDialogOpen] = useState(false);
+  const [pendingSetActiveLayoutId, setPendingSetActiveLayoutId] = useState<string | null>(null);
   const [viewportLayouts, setViewportLayouts] = useState<ViewportLayouts>(() => createDefaultViewportLayouts());
   const [viewportHolders, setViewportHolders] = useState<ViewportHolders>(() => createDefaultViewportHolders());
   const [nextTileId, setNextTileId] = useState(2);
@@ -161,14 +182,24 @@ export function AppHomePage() {
   const [dragSession, setDragSession] = useState<DragSession | null>(null);
   const [dragPreview, setDragPreview] = useState<{ tileId: number; x: number; y: number; width: number; height: number } | null>(null);
   const [isOverHolderDrop, setIsOverHolderDrop] = useState(false);
+  const [windowWidth, setWindowWidth] = useState<number>(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
+  const [isDeleteStructureMode, setIsDeleteStructureMode] = useState(false);
+  const [selectedDeleteRows, setSelectedDeleteRows] = useState<number[]>([]);
+  const [selectedDeleteCols, setSelectedDeleteCols] = useState<number[]>([]);
+  const [gridActionsMenuOpen, setGridActionsMenuOpen] = useState(false);
+  const [gridActionError, setGridActionError] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const holderDropRef = useRef<HTMLDivElement | null>(null);
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  const columns = gridMetrics?.columns ?? DESKTOP_COLUMNS;
-  const displayViewport: EditViewport = columns <= 2 ? "mobile" : columns === 4 ? "tablet" : "desktop";
+  const displayViewport: EditViewport = windowWidth < 768 ? "mobile" : windowWidth < 1280 ? "tablet" : "desktop";
   const activeViewport: EditViewport = isEditing ? editingViewport : displayViewport;
+  const columns = clamp(
+    viewportLayouts[activeViewport]?.targetColumns ?? VIEWPORT_DEFAULT_COLUMNS[activeViewport],
+    VIEWPORT_MIN_COLUMNS,
+    VIEWPORT_MAX_COLUMNS[activeViewport],
+  );
   const tiles = viewportLayouts[activeViewport].tiles;
   const targetRows = viewportLayouts[activeViewport].targetRows;
   const heldTileIds = viewportHolders[activeViewport];
@@ -215,14 +246,21 @@ export function AppHomePage() {
     localStorage.setItem(storageKey, JSON.stringify({ activeLayoutId: activeId, layouts: normalized }));
   };
 
-  const saveCurrentLayout = (layoutId: string, layoutName: string, exitEdit: boolean) => {
+  const saveCurrentLayout = (
+    layoutId: string,
+    layoutName: string,
+    exitEdit: boolean,
+    sourceViewportLayouts: ViewportLayouts = viewportLayouts,
+    sourceViewportHolders: ViewportHolders = viewportHolders,
+  ) => {
     const now = new Date().toISOString();
-    const normalizedViewportLayouts = trimAllViewportLayoutsRows(viewportLayouts);
+    const normalizedViewportLayouts = trimAllViewportLayoutsRows(sourceViewportLayouts);
+    const normalizedViewportHolders = normalizeViewportHolders(sourceViewportHolders);
     const snapshot: SavedLayout = {
       id: layoutId,
       name: normalizeLayoutName(layoutName),
       viewportLayouts: normalizedViewportLayouts,
-      viewportHolders: normalizeViewportHolders(viewportHolders),
+      viewportHolders: normalizedViewportHolders,
       isPrimary: savedLayouts.find((layout) => layout.id === layoutId)?.isPrimary ?? false,
       updatedAt: now,
     };
@@ -236,30 +274,198 @@ export function AppHomePage() {
     setSavedLayouts(nextLayouts);
     setActiveLayoutId(layoutId);
     setViewportLayouts(normalizedViewportLayouts);
+    setViewportHolders(normalizedViewportHolders);
     persistLayouts(nextLayouts, layoutId);
     if (exitEdit) setIsEditing(false);
+    return nextLayouts;
   };
 
-  const saveAsLayout = () => {
-    const raw = window.prompt("Layout name", `${sectionLabel} Layout ${savedLayouts.length + 1}`);
-    const name = raw ? normalizeLayoutName(raw) : "";
-    if (!name) return;
-    const id = `layout_${Date.now()}`;
-    saveCurrentLayout(id, name, false);
-  };
-
-  const switchLayout = (layoutId: string) => {
-    const layout = savedLayouts.find((item) => item.id === layoutId);
+  const switchLayout = (layoutId: string, layoutsSource: SavedLayout[] = savedLayouts) => {
+    const layout = layoutsSource.find((item) => item.id === layoutId);
     if (!layout) return;
     setActiveLayoutId(layoutId);
     applyLayout(layout);
-    persistLayouts(savedLayouts, layoutId);
+    persistLayouts(layoutsSource, layoutId);
   };
 
   const setPrimaryLayout = (layoutId: string) => {
     const nextLayouts = savedLayouts.map((layout) => ({ ...layout, isPrimary: layout.id === layoutId }));
     setSavedLayouts(nextLayouts);
-    persistLayouts(nextLayouts, activeLayoutId);
+    setActiveLayoutId(layoutId);
+    persistLayouts(nextLayouts, layoutId);
+  };
+
+  const activeLayout = useMemo(
+    () => savedLayouts.find((layout) => layout.id === activeLayoutId) ?? null,
+    [activeLayoutId, savedLayouts],
+  );
+  const activeMarkedLayout = useMemo(
+    () => savedLayouts.find((layout) => layout.isPrimary) ?? savedLayouts[0] ?? null,
+    [savedLayouts],
+  );
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!activeLayout) return false;
+    const currentSignature = JSON.stringify({
+      viewportLayouts: normalizeAllViewportLayouts(viewportLayouts),
+      viewportHolders: normalizeViewportHolders(viewportHolders),
+    });
+    const savedSignature = JSON.stringify({
+      viewportLayouts: normalizeAllViewportLayouts(activeLayout.viewportLayouts),
+      viewportHolders: normalizeViewportHolders(activeLayout.viewportHolders),
+    });
+    return currentSignature !== savedSignature;
+  }, [activeLayout, viewportHolders, viewportLayouts]);
+
+  const createNewLayout = (layoutName: string) => {
+    const id = `layout_${Date.now()}`;
+    const name = normalizeLayoutName(layoutName);
+    if (!name) return;
+    const duplicateExists = savedLayouts.some((layout) => normalizeLayoutName(layout.name).toLowerCase() === name.toLowerCase());
+    if (duplicateExists) return;
+    saveCurrentLayout(id, name, false, createDefaultViewportLayouts(), createDefaultViewportHolders());
+  };
+
+  const renameActiveLayout = (layoutName: string) => {
+    if (!activeLayout) return;
+    const name = normalizeLayoutName(layoutName);
+    if (!name) return;
+    const duplicateExists = savedLayouts.some(
+      (layout) => layout.id !== activeLayout.id && normalizeLayoutName(layout.name).toLowerCase() === name.toLowerCase(),
+    );
+    if (duplicateExists) return;
+    const nextLayouts = savedLayouts.map((layout) => (layout.id === activeLayout.id ? { ...layout, name, updatedAt: new Date().toISOString() } : layout));
+    setSavedLayouts(nextLayouts);
+    persistLayouts(nextLayouts, activeLayout.id);
+  };
+
+  const requestLayoutSwitch = (layoutId: string) => {
+    if (layoutId === activeLayoutId) return;
+    if (hasUnsavedChanges) {
+      setPendingSwitchLayoutId(layoutId);
+      setPendingCreateLayout(false);
+      setIsSwitchLayoutDialogOpen(true);
+      return;
+    }
+    switchLayout(layoutId);
+  };
+
+  const cancelLayoutSwitchDialog = () => {
+    setIsSwitchLayoutDialogOpen(false);
+    setPendingSwitchLayoutId(null);
+    setPendingCreateLayout(false);
+  };
+
+  const confirmLayoutSwitchSave = () => {
+    const baseLayoutName = activeLayout?.name ?? defaultLayoutName;
+    const nextLayouts = saveCurrentLayout(activeLayoutId, baseLayoutName, false, viewportLayouts, viewportHolders);
+    if (pendingSwitchLayoutId) {
+      switchLayout(pendingSwitchLayoutId, nextLayouts);
+    } else if (pendingCreateLayout) {
+      setLayoutNameDialogMode("create");
+      setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
+      setLayoutNameError(null);
+      setIsNewLayoutDialogOpen(true);
+    }
+    cancelLayoutSwitchDialog();
+  };
+
+  const confirmLayoutSwitchLose = () => {
+    if (pendingSwitchLayoutId) {
+      switchLayout(pendingSwitchLayoutId);
+    } else if (pendingCreateLayout) {
+      if (activeLayout) {
+        applyLayout(activeLayout);
+      }
+      setLayoutNameDialogMode("create");
+      setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
+      setLayoutNameError(null);
+      setIsNewLayoutDialogOpen(true);
+    }
+    cancelLayoutSwitchDialog();
+  };
+
+  const requestExitEditing = () => {
+    if (hasUnsavedChanges) {
+      setIsExitEditDialogOpen(true);
+      return;
+    }
+    if (activeLayout && !activeLayout.isPrimary) {
+      setPendingSetActiveLayoutId(activeLayout.id);
+      setIsSetActiveDialogOpen(true);
+      return;
+    }
+    setIsEditing(false);
+  };
+
+  const cancelExitEditDialog = () => {
+    setIsExitEditDialogOpen(false);
+  };
+
+  const confirmExitEditSave = () => {
+    const layout = savedLayouts.find((item) => item.id === activeLayoutId);
+    const wasActive = Boolean(layout?.isPrimary);
+    saveCurrentLayout(activeLayoutId, layout?.name ?? defaultLayoutName, false);
+    setIsExitEditDialogOpen(false);
+    if (!wasActive) {
+      setPendingSetActiveLayoutId(activeLayoutId);
+      setIsSetActiveDialogOpen(true);
+      return;
+    }
+    if (activeMarkedLayout && activeMarkedLayout.id !== activeLayoutId) {
+      switchLayout(activeMarkedLayout.id);
+    }
+    setIsEditing(false);
+  };
+
+  const confirmExitEditDiscard = () => {
+    if (activeLayout) {
+      applyLayout(activeLayout);
+    }
+    if (activeLayout && !activeLayout.isPrimary) {
+      setPendingSetActiveLayoutId(activeLayout.id);
+      setIsSetActiveDialogOpen(true);
+      setIsExitEditDialogOpen(false);
+      return;
+    }
+    setIsEditing(false);
+    setIsExitEditDialogOpen(false);
+  };
+
+  const confirmMakeLayoutActive = () => {
+    if (pendingSetActiveLayoutId) {
+      setPrimaryLayout(pendingSetActiveLayoutId);
+      switchLayout(pendingSetActiveLayoutId);
+    }
+    setPendingSetActiveLayoutId(null);
+    setIsSetActiveDialogOpen(false);
+    setIsEditing(false);
+  };
+
+  const confirmKeepCurrentActive = () => {
+    const keepId = activeMarkedLayout?.id ?? activeLayoutId;
+    if (keepId !== activeLayoutId) {
+      switchLayout(keepId);
+    }
+    setPendingSetActiveLayoutId(null);
+    setIsSetActiveDialogOpen(false);
+    setIsEditing(false);
+  };
+
+  const deleteActiveLayout = () => {
+    if (!activeLayout) return;
+    if (activeLayout.isPrimary) return;
+    if (savedLayouts.length <= 1) return;
+
+    const remaining = savedLayouts.filter((layout) => layout.id !== activeLayout.id);
+    if (remaining.length === 0) return;
+
+    const nextLayouts = normalizePrimary(remaining);
+    const nextActive = nextLayouts[0];
+    setSavedLayouts(nextLayouts);
+    setActiveLayoutId(nextActive.id);
+    applyLayout(nextActive);
+    persistLayouts(nextLayouts, nextActive.id);
   };
 
   const loadBrokerageAccounts = useCallback(async () => {
@@ -278,12 +484,21 @@ export function AppHomePage() {
       if (target.closest("[data-tile-menu]")) return;
       setSettingsMenuOpen(false);
       setLayoutsMenuOpen(false);
+      setLayoutActionsMenuOpen(false);
+      setGridActionsMenuOpen(false);
       setTileMenuOpenId(null);
     };
 
     window.addEventListener("mousedown", onDocClick);
     return () => window.removeEventListener("mousedown", onDocClick);
   }, []);
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (!activeMarkedLayout) return;
+    if (activeLayoutId === activeMarkedLayout.id) return;
+    switchLayout(activeMarkedLayout.id);
+  }, [activeLayoutId, activeMarkedLayout, isEditing]);
 
   useEffect(() => {
     void loadBrokerageAccounts();
@@ -359,6 +574,14 @@ export function AppHomePage() {
     setResizeVisual(null);
     setTileMenuOpenId(null);
     setIsOverHolderDrop(false);
+    setIsNewLayoutDialogOpen(false);
+    setIsSwitchLayoutDialogOpen(false);
+    setPendingSwitchLayoutId(null);
+    setIsDeleteStructureMode(false);
+    setSelectedDeleteRows([]);
+    setSelectedDeleteCols([]);
+    setGridActionsMenuOpen(false);
+    setGridActionError(null);
   }, [isEditing]);
 
   useEffect(() => {
@@ -369,6 +592,18 @@ export function AppHomePage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [isEditing]);
+
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    setSelectedDeleteRows([]);
+    setSelectedDeleteCols([]);
+    setGridActionError(null);
+  }, [activeViewport]);
 
   useEffect(() => {
     const updateMetrics = () => {
@@ -406,7 +641,7 @@ export function AppHomePage() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateMetrics);
     };
-  }, [isEditing, editingViewport]);
+  }, [isEditing, editingViewport, activeViewport, columns]);
 
   const addTile = () => {
     const newTileId = nextTileId;
@@ -417,8 +652,8 @@ export function AppHomePage() {
         desktop: { ...previous.desktop, tiles: [...previous.desktop.tiles] },
       };
 
-      (Object.keys(VIEWPORT_COLUMNS) as EditViewport[]).forEach((viewport) => {
-        const viewportColumns = VIEWPORT_COLUMNS[viewport];
+      (["mobile", "tablet", "desktop"] as EditViewport[]).forEach((viewport) => {
+        const viewportColumns = previous[viewport].targetColumns;
         let nextSlot = 0;
         while (!canPlaceTile(next[viewport].tiles, null, nextSlot, 1, 1, viewportColumns)) nextSlot += 1;
         next[viewport].tiles.push({ id: newTileId, slot: nextSlot, colSpan: 1, rowSpan: 1 });
@@ -430,11 +665,91 @@ export function AppHomePage() {
     setNextTileId((previous) => previous + 1);
   };
 
+  const addColumn = () => {
+    setViewportLayouts((previous) => {
+      const current = previous[activeViewport];
+      const currentColumns = current.targetColumns;
+      const maxColumns = VIEWPORT_MAX_COLUMNS[activeViewport];
+      if (currentColumns >= maxColumns) return previous;
+      const nextColumns = currentColumns + 1;
+      const nextTiles = current.tiles.map((tile) => {
+        const pos = getGridPosition(tile.slot, currentColumns);
+        return {
+          ...tile,
+          slot: pos.row * nextColumns + pos.col,
+          colSpan: clamp(tile.colSpan, 1, nextColumns),
+        };
+      });
+      return {
+        ...previous,
+        [activeViewport]: {
+          ...current,
+          targetColumns: nextColumns,
+          tiles: nextTiles,
+          targetRows: Math.max(current.targetRows, getRequiredRows(nextTiles, nextColumns), VIEWPORT_BASE_ROWS[activeViewport]),
+        },
+      };
+    });
+  };
+
+  const confirmDeleteStructure = () => {
+    setViewportLayouts((previous) => {
+      const current = previous[activeViewport];
+      let nextLayout: ViewportLayout = {
+        ...current,
+        tiles: current.tiles.map((tile) => ({ ...tile })),
+      };
+
+      if (selectedDeleteCols.length > 0 && nextLayout.targetColumns > VIEWPORT_MIN_COLUMNS) {
+        const deletableCols = selectedDeleteCols
+          .filter((col) => col >= 0 && col < nextLayout.targetColumns)
+          .filter((col) => !isColumnOccupied(nextLayout.tiles, nextLayout.targetColumns, col))
+          .sort((a, b) => a - b);
+        if (deletableCols.length > 0) {
+          const maxRemovable = nextLayout.targetColumns - VIEWPORT_MIN_COLUMNS;
+          const toRemove = new Set(deletableCols.slice(0, maxRemovable));
+          if (toRemove.size > 0) {
+            nextLayout = removeColumnsFromLayout(nextLayout, toRemove, VIEWPORT_BASE_ROWS[activeViewport]);
+          }
+        }
+      }
+
+      if (selectedDeleteRows.length > 0) {
+        const trailingEmptyRows = getTrailingEmptyRows(
+          nextLayout.tiles,
+          nextLayout.targetColumns,
+          nextLayout.targetRows,
+          VIEWPORT_BASE_ROWS[activeViewport],
+        );
+        const removableRows = selectedDeleteRows.filter((row) => trailingEmptyRows.includes(row));
+        if (removableRows.length > 0) {
+          const requiredRows = getRequiredRows(nextLayout.tiles, nextLayout.targetColumns);
+          nextLayout = {
+            ...nextLayout,
+            targetRows: Math.max(
+              VIEWPORT_BASE_ROWS[activeViewport],
+              requiredRows,
+              nextLayout.targetRows - removableRows.length,
+            ),
+          };
+        }
+      }
+
+      return {
+        ...previous,
+        [activeViewport]: nextLayout,
+      };
+    });
+    setSelectedDeleteRows([]);
+    setSelectedDeleteCols([]);
+    setIsDeleteStructureMode(false);
+  };
+
   const moveTileToHolder = (tileId: number) => {
     const tile = viewportLayouts[activeViewport].tiles.find((item) => item.id === tileId);
     if (!tile) return;
     setViewportLayouts((previous) => {
-      const viewportColumns = VIEWPORT_COLUMNS[activeViewport];
+      const viewportColumns = previous[activeViewport].targetColumns;
       const current = previous[activeViewport];
       const nextTiles = current.tiles.filter((tile) => tile.id !== tileId);
       if (nextTiles.length === current.tiles.length) return previous;
@@ -459,7 +774,7 @@ export function AppHomePage() {
 
   const restoreHeldTileToViewport = (tileId: number, preferredSlot: number | null) => {
     setViewportLayouts((previous) => {
-      const viewportColumns = VIEWPORT_COLUMNS[activeViewport];
+      const viewportColumns = previous[activeViewport].targetColumns;
       const current = previous[activeViewport];
       if (current.tiles.some((tile) => tile.id === tileId)) return previous;
       let slot = preferredSlot ?? 0;
@@ -500,15 +815,15 @@ export function AppHomePage() {
       return {
         mobile: {
           ...next.mobile,
-          targetRows: Math.max(1, getRequiredRows(next.mobile.tiles, VIEWPORT_COLUMNS.mobile)),
+          targetRows: Math.max(1, getRequiredRows(next.mobile.tiles, next.mobile.targetColumns)),
         },
         tablet: {
           ...next.tablet,
-          targetRows: Math.max(1, getRequiredRows(next.tablet.tiles, VIEWPORT_COLUMNS.tablet)),
+          targetRows: Math.max(1, getRequiredRows(next.tablet.tiles, next.tablet.targetColumns)),
         },
         desktop: {
           ...next.desktop,
-          targetRows: Math.max(1, getRequiredRows(next.desktop.tiles, VIEWPORT_COLUMNS.desktop)),
+          targetRows: Math.max(1, getRequiredRows(next.desktop.tiles, next.desktop.targetColumns)),
         },
       };
     });
@@ -533,8 +848,8 @@ export function AppHomePage() {
 
   const moveTileToSlot = (tileId: number, targetSlot: number) => {
     setViewportLayouts((previous) => {
-      const viewportColumns = VIEWPORT_COLUMNS[activeViewport];
       const currentLayout = previous[activeViewport];
+      const viewportColumns = currentLayout.targetColumns;
       const tile = currentLayout.tiles.find((item) => item.id === tileId);
       if (!tile) return previous;
       if (tile.slot === targetSlot) return previous;
@@ -635,7 +950,7 @@ export function AppHomePage() {
         if (!resizePreview || resizePreview.tileId !== resizeSession.tileId) return previous;
 
         const sourceViewport = activeViewport;
-        const sourceColumns = VIEWPORT_COLUMNS[sourceViewport];
+        const sourceColumns = previous[sourceViewport].targetColumns;
         const sourceLayout = previous[sourceViewport];
         const sourceTile = sourceLayout.tiles.find((item) => item.id === resizeSession.tileId);
         if (!sourceTile) return previous;
@@ -652,8 +967,8 @@ export function AppHomePage() {
 
         const nextLayouts = { ...previous };
 
-        (Object.keys(VIEWPORT_COLUMNS) as EditViewport[]).forEach((viewport) => {
-          const viewportColumns = VIEWPORT_COLUMNS[viewport];
+        (["mobile", "tablet", "desktop"] as EditViewport[]).forEach((viewport) => {
+          const viewportColumns = previous[viewport].targetColumns;
           let nextTiles = previous[viewport].tiles.map((tile) => ({ ...tile }));
           const tileIndex = nextTiles.findIndex((tile) => tile.id === resizeSession.tileId);
           if (tileIndex === -1) return;
@@ -773,26 +1088,12 @@ export function AppHomePage() {
     columns,
   );
 
-  const isRowOccupied = (rowIndex: number) =>
-    tiles.some((tile) => {
-      const pos = getGridPosition(tile.slot, columns);
-      return pos.row <= rowIndex && pos.row + tile.rowSpan - 1 >= rowIndex;
-    });
-
-  const canDeleteRow = (rowIndex: number) =>
-    rowIndex === totalRows - 1
-      && !isRowOccupied(rowIndex)
-      && totalRows > viewportMinRows
-      && computeTotalRows(Math.max(viewportMinRows, targetRows - 1)) < totalRows;
   const canAddRow = totalRows < MAX_ROWS;
+  const trailingEmptyRows = getTrailingEmptyRows(tiles, columns, totalRows, viewportMinRows);
+  const deletableColumns = Array.from({ length: columns }, (_, colIndex) => colIndex).filter(
+    (colIndex) => !isColumnOccupied(tiles, columns, colIndex),
+  );
   const editViewportIndex = editingViewport === "mobile" ? 0 : editingViewport === "tablet" ? 1 : 2;
-  const gridColumnsClass = isEditing
-    ? editingViewport === "mobile"
-      ? "grid-cols-2"
-      : editingViewport === "tablet"
-        ? "grid-cols-4"
-        : "grid-cols-5"
-    : "grid-cols-2 md:grid-cols-4 xl:grid-cols-5";
   const editPreviewWidthClass =
     editingViewport === "mobile"
       ? "max-w-[420px]"
@@ -827,7 +1128,7 @@ export function AppHomePage() {
                                   <Eye className="h-5 w-5" />
                                 </button>
                                 {layoutsMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 min-w-[19rem] max-w-[26rem] rounded-md border border-border bg-white p-1 shadow-lg">
+                                  <div className="absolute right-0 z-50 mt-2 min-w-[19rem] max-w-[26rem] rounded-xl border border-border bg-white p-1 shadow-lg">
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -836,7 +1137,7 @@ export function AppHomePage() {
                                       }}
                                       className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
                                     >
-                                      Set Current as Primary
+                                      Set Current as Active
                                     </button>
                                     <div className="my-1 border-t border-border/80" />
                                     {savedLayouts.map((layout) => (
@@ -844,7 +1145,7 @@ export function AppHomePage() {
                                         key={`rail-layout-${layout.id}`}
                                         type="button"
                                         onClick={() => {
-                                          switchLayout(layout.id);
+                                          requestLayoutSwitch(layout.id);
                                           setLayoutsMenuOpen(false);
                                         }}
                                         className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground ${
@@ -852,7 +1153,7 @@ export function AppHomePage() {
                                         }`}
                                       >
                                         <span className="truncate pr-2" title={layout.name}>{getDisplayLayoutName(layout.name)}</span>
-                                        <span className="text-[10px] text-muted-foreground">{layout.isPrimary ? "Primary" : ""}</span>
+                                        <span className="text-[10px] text-muted-foreground">{layout.isPrimary ? "Active" : ""}</span>
                                       </button>
                                     ))}
                                   </div>
@@ -870,7 +1171,7 @@ export function AppHomePage() {
                                   <Settings className="h-5 w-5" />
                                 </button>
                                 {settingsMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 w-40 rounded-md border border-border bg-white p-1 shadow-lg">
+                                  <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
                                     {!isEditing ? (
                                       <button
                                         type="button"
@@ -957,17 +1258,60 @@ export function AppHomePage() {
                 ) : null}
                 <div className="flex items-start gap-2">
                   <div className="relative flex-1 overflow-hidden">
+                    {isEditing && isDeleteStructureMode ? (
+                      <div className="absolute left-0 right-0 top-1 z-30 h-7">
+                        {Array.from({ length: columns }, (_, colIndex) => {
+                          const colCenter =
+                            colIndex * ((gridMetrics?.cellWidth ?? 0) + (gridMetrics?.colGap ?? 0)) + (gridMetrics?.cellWidth ?? 0) / 2;
+                          const deletable = columns > VIEWPORT_MIN_COLUMNS && deletableColumns.includes(colIndex);
+                          const selected = selectedDeleteCols.includes(colIndex);
+                          return (
+                            <button
+                              key={`col-del-${colIndex}`}
+                              type="button"
+                              onClick={() => {
+                                setSelectedDeleteCols((previous) =>
+                                  previous.includes(colIndex)
+                                    ? previous.filter((item) => item !== colIndex)
+                                    : [...previous, colIndex],
+                                );
+                              }}
+                              className="absolute inline-flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-md border-2 text-[10px] font-bold"
+                              style={{
+                                left: `${colCenter}px`,
+                                borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
+                                backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
+                                color: deletable ? "#b91c1c" : "#475569",
+                              }}
+                              title={deletable ? "Select column to delete" : "Column currently occupied"}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     <div
                       ref={gridRef}
-                      className={`grid ${gridColumnsClass} auto-rows-[120px] gap-3 md:auto-rows-[132px]`}
+                      className="grid auto-rows-[120px] gap-3 md:auto-rows-[132px]"
+                      style={{ gridTemplateColumns: `repeat(${Math.max(1, columns)}, minmax(0, 1fr))` }}
                     >
-                      {Array.from({ length: totalSlots }, (_, slot) => (
+                      {Array.from({ length: totalSlots }, (_, slot) => {
+                        const slotPos = getGridPosition(slot, columns);
+                        const selectedForDelete =
+                          isDeleteStructureMode
+                          && (selectedDeleteRows.includes(slotPos.row) || selectedDeleteCols.includes(slotPos.col));
+                        return (
                         <div
                           key={`slot-${slot}`}
                           className={
                             isEditing
                               ? `rounded-xl border border-dashed ${
-                                  activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
+                                  selectedForDelete
+                                    ? "border-red-400 bg-red-100/40"
+                                    : activeDropSlot === slot
+                                      ? "border-primary/60 bg-primary/10"
+                                      : "border-border/60 bg-muted/15"
                                 }`
                               : "pointer-events-none rounded-xl border border-transparent bg-transparent"
                           }
@@ -978,7 +1322,8 @@ export function AppHomePage() {
                             </div>
                           ) : null}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
 
                     <div
@@ -991,6 +1336,10 @@ export function AppHomePage() {
                       const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
                       const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
                       const pos = getGridPosition(liveSlot, columns);
+                      const deleteHighlight =
+                        isDeleteStructureMode
+                        && (selectedDeleteRows.some((row) => row >= pos.row && row < pos.row + liveRowSpan)
+                          || selectedDeleteCols.some((col) => col >= pos.col && col < pos.col + liveColSpan));
                         const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
                         const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
                         const snappedWidth =
@@ -1049,7 +1398,9 @@ export function AppHomePage() {
                               width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
                               height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
                             }}
-                            className={`absolute rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm ${
+                            className={`absolute rounded-xl border p-3 text-primary-foreground shadow-sm ${
+                              deleteHighlight ? "border-red-300 bg-red-400/85" : "border-primary/20 bg-primary"
+                            } ${
                               isEditing ? "cursor-grab active:cursor-grabbing" : "cursor-default"
                             } ${
                               draggingTileId === tile.id ? "z-40 opacity-30" : "z-10"
@@ -1111,26 +1462,29 @@ export function AppHomePage() {
                     </div>
                   </div>
 
-                    {isEditing ? (
+                    {isEditing && isDeleteStructureMode ? (
                       <div className="relative w-8">
                         {Array.from({ length: totalRows }, (_, rowIndex) => {
-                          if (!canDeleteRow(rowIndex)) return null;
+                          const deletable = trailingEmptyRows.includes(rowIndex);
                           const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
+                          const selected = selectedDeleteRows.includes(rowIndex);
                           return (
                             <button
                               key={`del-row-${rowIndex}`}
                               type="button"
                               onClick={() => {
-                                setTargetRows((previous) => Math.max(viewportMinRows, previous - 1));
+                                setSelectedDeleteRows((previous) =>
+                                  previous.includes(rowIndex) ? previous.filter((item) => item !== rowIndex) : [...previous, rowIndex],
+                                );
                               }}
                               className="absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold hover:opacity-90"
                               style={{
                                 top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
-                                borderColor: "#ef4444",
-                                backgroundColor: "#fee2e2",
-                                color: "#b91c1c",
+                                borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
+                                backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
+                                color: deletable ? "#b91c1c" : "#475569",
                               }}
-                              title="Del row"
+                              title={deletable ? "Select row to delete" : "Only trailing empty rows can be deleted"}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -1185,26 +1539,390 @@ export function AppHomePage() {
           <div className="mx-auto h-full w-full max-w-[1680px] overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
             <div className="space-y-3">
               <div className="flex justify-center">
-                <div className={`h-[74vh] w-full ${editPreviewWidthClass}`}>
+                <div className={`h-[calc(100vh-7rem)] w-full ${editPreviewWidthClass}`}>
                 <Card className="h-full overflow-hidden border-border bg-[#f4f6fa]">
                   <CardContent className="flex h-full flex-col gap-4 overflow-hidden p-5">
-                    <div className="grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
-                        <select
-                          value={activeLayoutId}
-                          onChange={(event) => switchLayout(event.target.value)}
-                          className="min-w-[220px] rounded border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
-                        >
-                          {savedLayouts.map((layout) => (
-                            <option key={`dashboard-layout-select-${layout.id}`} value={layout.id}>
-                              {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Primary)" : ""}
-                            </option>
-                          ))}
-                        </select>
+                    {editingViewport === "mobile" ? (
+                    <div className="space-y-3">
+                      <div className="flex justify-center">
+                        <div className="relative grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
+                          <div
+                            className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
+                            style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
+                          />
+                          {[
+                            { key: "mobile", label: "Mobile", icon: Smartphone },
+                            { key: "tablet", label: "Tablet", icon: Tablet },
+                            { key: "desktop", label: "Desktop", icon: Monitor },
+                          ].map((option) => {
+                            const active = editingViewport === option.key;
+                            const Icon = option.icon;
+                            return (
+                              <button
+                                key={`edit-viewport-mobile-${option.key}`}
+                                type="button"
+                                onClick={() => setEditingViewport(option.key as EditViewport)}
+                                title={option.label}
+                                aria-label={option.label}
+                                className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
+                                  active ? "text-white" : "text-slate-400 hover:text-slate-600"
+                                }`}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="justify-self-center">
-                        <div className="relative grid w-[220px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-end gap-2">
+                          <span
+                            className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                              hasUnsavedChanges
+                                ? "border-amber-200 bg-amber-50 text-amber-900"
+                                : "border-blue-200 bg-blue-50 text-blue-800"
+                            }`}
+                          >
+                            {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={requestExitEditing}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            title="Save and close"
+                            aria-label="Save and close"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={activeLayoutId}
+                            onChange={(event) => requestLayoutSwitch(event.target.value)}
+                            className="min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
+                          >
+                            {savedLayouts.map((layout) => (
+                              <option key={`dashboard-layout-select-mobile-${layout.id}`} value={layout.id}>
+                                {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Active)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="relative" data-dashboard-menu>
+                            <button
+                              type="button"
+                              onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              title="Layout actions"
+                              aria-label="Layout actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {layoutActionsMenuOpen ? (
+                              <div className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLayoutNameDialogMode("rename");
+                                      setPendingLayoutName(activeLayout?.name ?? defaultLayoutName);
+                                      setLayoutNameError(null);
+                                      setIsNewLayoutDialogOpen(true);
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Rename Current Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (hasUnsavedChanges) {
+                                        setPendingSwitchLayoutId(null);
+                                        setPendingCreateLayout(true);
+                                        setIsSwitchLayoutDialogOpen(true);
+                                      } else {
+                                        setLayoutNameDialogMode("create");
+                                        setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
+                                        setLayoutNameError(null);
+                                        setIsNewLayoutDialogOpen(true);
+                                      }
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Add Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!activeLayout || activeLayout.isPrimary) return;
+                                      setPrimaryLayout(activeLayout.id);
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    disabled={!activeLayout || activeLayout.isPrimary}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Make Active
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (activeLayout?.isPrimary || savedLayouts.length <= 1) return;
+                                      const shouldDelete = window.confirm(`Are you sure you want to delete "${activeLayout?.name ?? "this layout"}"?`);
+                                      if (!shouldDelete) return;
+                                      deleteActiveLayout();
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    disabled={Boolean(activeLayout?.isPrimary) || savedLayouts.length <= 1}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Delete
+                                  </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    ) : editingViewport === "tablet" ? (
+                    <div className="space-y-3">
+                      <div className="flex justify-center">
+                        <div className="relative grid w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
+                          <div
+                            className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
+                            style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
+                          />
+                          {[
+                            { key: "mobile", label: "Mobile", icon: Smartphone },
+                            { key: "tablet", label: "Tablet", icon: Tablet },
+                            { key: "desktop", label: "Desktop", icon: Monitor },
+                          ].map((option) => {
+                            const active = editingViewport === option.key;
+                            const Icon = option.icon;
+                            return (
+                              <button
+                                key={`edit-viewport-tablet-${option.key}`}
+                                type="button"
+                                onClick={() => setEditingViewport(option.key as EditViewport)}
+                                title={option.label}
+                                aria-label={option.label}
+                                className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
+                                  active ? "text-white" : "text-slate-400 hover:text-slate-600"
+                                }`}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
+                            <select
+                              value={activeLayoutId}
+                              onChange={(event) => requestLayoutSwitch(event.target.value)}
+                              className="min-w-0 max-w-[360px] flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
+                            >
+                              {savedLayouts.map((layout) => (
+                                <option key={`dashboard-layout-select-tablet-${layout.id}`} value={layout.id}>
+                                  {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Active)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="relative" data-dashboard-menu>
+                              <button
+                                type="button"
+                                onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                                title="Layout actions"
+                                aria-label="Layout actions"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                              {layoutActionsMenuOpen ? (
+                                <div className="absolute left-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLayoutNameDialogMode("rename");
+                                      setPendingLayoutName(activeLayout?.name ?? defaultLayoutName);
+                                      setLayoutNameError(null);
+                                      setIsNewLayoutDialogOpen(true);
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Rename Current Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (hasUnsavedChanges) {
+                                        setPendingSwitchLayoutId(null);
+                                        setPendingCreateLayout(true);
+                                        setIsSwitchLayoutDialogOpen(true);
+                                      } else {
+                                        setLayoutNameDialogMode("create");
+                                        setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
+                                        setLayoutNameError(null);
+                                        setIsNewLayoutDialogOpen(true);
+                                      }
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Add Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!activeLayout || activeLayout.isPrimary) return;
+                                      setPrimaryLayout(activeLayout.id);
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    disabled={!activeLayout || activeLayout.isPrimary}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Make Active
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (activeLayout?.isPrimary || savedLayouts.length <= 1) return;
+                                      const shouldDelete = window.confirm(`Are you sure you want to delete "${activeLayout?.name ?? "this layout"}"?`);
+                                      if (!shouldDelete) return;
+                                      deleteActiveLayout();
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    disabled={Boolean(activeLayout?.isPrimary) || savedLayouts.length <= 1}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                              hasUnsavedChanges
+                                ? "border-amber-200 bg-amber-50 text-amber-900"
+                                : "border-blue-200 bg-blue-50 text-blue-800"
+                            }`}
+                          >
+                            {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={requestExitEditing}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            title="Save and close"
+                            aria-label="Save and close"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    ) : (
+                    <div className="grid items-center gap-4 md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
+                          <select
+                            value={activeLayoutId}
+                            onChange={(event) => requestLayoutSwitch(event.target.value)}
+                            className="w-full min-w-0 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground sm:w-auto sm:min-w-[220px]"
+                          >
+                            {savedLayouts.map((layout) => (
+                              <option key={`dashboard-layout-select-${layout.id}`} value={layout.id}>
+                                {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Active)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="relative" data-dashboard-menu>
+                            <button
+                              type="button"
+                              onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              title="Layout actions"
+                              aria-label="Layout actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {layoutActionsMenuOpen ? (
+                              <div className="absolute left-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLayoutNameDialogMode("rename");
+                                    setPendingLayoutName(activeLayout?.name ?? defaultLayoutName);
+                                    setLayoutNameError(null);
+                                    setIsNewLayoutDialogOpen(true);
+                                    setLayoutActionsMenuOpen(false);
+                                  }}
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                >
+                                  Rename Current Layout
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (hasUnsavedChanges) {
+                                      setPendingSwitchLayoutId(null);
+                                      setPendingCreateLayout(true);
+                                      setIsSwitchLayoutDialogOpen(true);
+                                    } else {
+                                      setLayoutNameDialogMode("create");
+                                      setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
+                                      setLayoutNameError(null);
+                                      setIsNewLayoutDialogOpen(true);
+                                    }
+                                    setLayoutActionsMenuOpen(false);
+                                  }}
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                >
+                                  Add Layout
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!activeLayout || activeLayout.isPrimary) return;
+                                    setPrimaryLayout(activeLayout.id);
+                                    setLayoutActionsMenuOpen(false);
+                                  }}
+                                  disabled={!activeLayout || activeLayout.isPrimary}
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Make Active
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (activeLayout?.isPrimary || savedLayouts.length <= 1) return;
+                                    const shouldDelete = window.confirm(`Are you sure you want to delete "${activeLayout?.name ?? "this layout"}"?`);
+                                    if (!shouldDelete) return;
+                                    deleteActiveLayout();
+                                    setLayoutActionsMenuOpen(false);
+                                  }}
+                                  disabled={Boolean(activeLayout?.isPrimary) || savedLayouts.length <= 1}
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="justify-self-center w-full md:w-auto">
+                        <div className="relative mx-auto grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1 md:w-[220px] md:max-w-none">
                           <div
                             className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
                             style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
@@ -1233,58 +1951,29 @@ export function AppHomePage() {
                           })}
                         </div>
                       </div>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-3 md:col-span-2 xl:col-span-1">
+                        <span
+                          className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                            hasUnsavedChanges
+                              ? "border-amber-200 bg-amber-50 text-amber-900"
+                              : "border-blue-200 bg-blue-50 text-blue-800"
+                          }`}
+                        >
+                          {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => {
-                            const layout = savedLayouts.find((item) => item.id === activeLayoutId);
-                            saveCurrentLayout(activeLayoutId, layout?.name ?? defaultLayoutName, false);
-                          }}
-                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                          onClick={requestExitEditing}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                          title="Save and close"
+                          aria-label="Save and close"
                         >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => saveAsLayout()}
-                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
-                        >
-                          Save As
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsEditing(false)}
-                          className="rounded border border-border bg-white px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
-                        >
-                          Done
+                          <Check className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Holder</p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => addTile()}
-                            className="rounded border border-border bg-white px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary/80"
-                          >
-                            Add Tile
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!canAddRow) return;
-                              setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
-                            }}
-                            className={`rounded border border-border bg-white px-3 py-1.5 text-xs font-medium transition-colors ${
-                              canAddRow ? "hover:bg-secondary/80" : "cursor-not-allowed opacity-55"
-                            }`}
-                          >
-                            Add Row
-                          </button>
-                        </div>
-                      </div>
+                    )}
+                    <div className="space-y-1">
                       <div
                         ref={holderDropRef}
                         className={`min-h-20 rounded-lg border p-2 transition-colors ${
@@ -1304,7 +1993,7 @@ export function AppHomePage() {
                                 onMouseDown={(event) => {
                                   if (event.button !== 0) return;
                                   event.preventDefault();
-                                  const viewportColumns = VIEWPORT_COLUMNS[activeViewport];
+                                  const viewportColumns = viewportLayouts[activeViewport].targetColumns;
                                   const cellWidth = gridMetrics?.cellWidth ?? 120;
                                   const cellHeight = gridMetrics?.cellHeight ?? 132;
                                   const colGap = gridMetrics?.colGap ?? 12;
@@ -1346,21 +2035,171 @@ export function AppHomePage() {
                           </div>
                         )}
                       </div>
+                      <div className="flex items-center justify-center gap-3 pb-0 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => addTile()}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                          title="Add Tile"
+                          aria-label="Add Tile"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                        <div className="relative" data-dashboard-menu>
+                          <button
+                            type="button"
+                            onClick={() => setGridActionsMenuOpen((previous) => !previous)}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                              isDeleteStructureMode
+                                ? "border-red-300 bg-red-100 text-red-700"
+                                : "border-border bg-white text-foreground hover:bg-secondary/80"
+                            }`}
+                            title="Grid actions"
+                            aria-label="Grid actions"
+                          >
+                            <Columns3 className="h-4 w-4" />
+                          </button>
+                          {gridActionsMenuOpen ? (
+                            <div className="absolute left-1/2 z-50 mt-2 w-44 -translate-x-1/2 rounded-xl border border-border bg-white p-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (columns >= VIEWPORT_MAX_COLUMNS[activeViewport]) {
+                                    setGridActionError("maximum columns reached for this display size.");
+                                  } else {
+                                    addColumn();
+                                    setGridActionError(null);
+                                  }
+                                  setGridActionsMenuOpen(false);
+                                }}
+                                className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                              >
+                                Add Column
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (canAddRow) {
+                                    setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
+                                  }
+                                  setGridActionError(null);
+                                  setGridActionsMenuOpen(false);
+                                }}
+                                disabled={!canAddRow}
+                                className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Add Row
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsDeleteStructureMode((previous) => {
+                                    const next = !previous;
+                                    if (!next) {
+                                      setSelectedDeleteRows([]);
+                                      setSelectedDeleteCols([]);
+                                    }
+                                    return next;
+                                  });
+                                  setGridActionError(null);
+                                  setGridActionsMenuOpen(false);
+                                }}
+                                className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50"
+                              >
+                                {isDeleteStructureMode ? "Exit Delete Mode" : "Delete Rows/Columns"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                        {isDeleteStructureMode ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDeleteStructureMode(false);
+                                setSelectedDeleteRows([]);
+                                setSelectedDeleteCols([]);
+                              }}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              title="Cancel"
+                              aria-label="Cancel"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={confirmDeleteStructure}
+                              disabled={selectedDeleteRows.length === 0 && selectedDeleteCols.length === 0}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
+                              title="Confirm delete"
+                              aria-label="Confirm delete"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                      {gridActionError ? (
+                        <p className="text-center text-xs text-red-700">{gridActionError}</p>
+                      ) : null}
                     </div>
                     <div className="min-h-0 flex-1 overflow-auto pr-1">
-                      <div className="flex items-start gap-2 p-2">
+                      <div className="flex items-start gap-2 px-2 pb-2 pt-0">
                       <div className="relative flex-1 overflow-visible">
+                        {isDeleteStructureMode ? (
+                          <div className="absolute left-0 right-0 top-1 z-30 h-7">
+                            {Array.from({ length: columns }, (_, colIndex) => {
+                              const colCenter =
+                                colIndex * ((gridMetrics?.cellWidth ?? 0) + (gridMetrics?.colGap ?? 0)) + (gridMetrics?.cellWidth ?? 0) / 2;
+                              const deletable = columns > VIEWPORT_MIN_COLUMNS && deletableColumns.includes(colIndex);
+                              const selected = selectedDeleteCols.includes(colIndex);
+                              return (
+                                <button
+                                  key={`edit-col-del-${colIndex}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDeleteCols((previous) =>
+                                      previous.includes(colIndex)
+                                        ? previous.filter((item) => item !== colIndex)
+                                        : [...previous, colIndex],
+                                    );
+                                  }}
+                                  className="absolute inline-flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-md border-2 text-[10px] font-bold"
+                                  style={{
+                                    left: `${colCenter}px`,
+                                    borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
+                                    backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
+                                    color: deletable ? "#b91c1c" : "#475569",
+                                  }}
+                                  title={deletable ? "Select column to delete" : "Column currently occupied"}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
                         <div
                           ref={gridRef}
-                          className={`grid ${gridColumnsClass} auto-rows-[120px] gap-3 md:auto-rows-[132px]`}
+                          className="grid auto-rows-[120px] gap-3 md:auto-rows-[132px]"
+                          style={{ gridTemplateColumns: `repeat(${Math.max(1, columns)}, minmax(0, 1fr))` }}
                         >
-                          {Array.from({ length: totalSlots }, (_, slot) => (
+                          {Array.from({ length: totalSlots }, (_, slot) => {
+                            const slotPos = getGridPosition(slot, columns);
+                            const selectedForDelete =
+                              isDeleteStructureMode
+                              && (selectedDeleteRows.includes(slotPos.row) || selectedDeleteCols.includes(slotPos.col));
+                            return (
                             <div
                               key={`edit-slot-${slot}`}
                               className={
                                 isEditing
                                   ? `rounded-xl border border-dashed ${
-                                      activeDropSlot === slot ? "border-primary/60 bg-primary/10" : "border-border/60 bg-muted/15"
+                                      selectedForDelete
+                                        ? "border-red-400 bg-red-100/40"
+                                        : activeDropSlot === slot
+                                          ? "border-primary/60 bg-primary/10"
+                                          : "border-border/60 bg-muted/15"
                                     }`
                                   : "pointer-events-none rounded-xl border border-transparent bg-transparent"
                               }
@@ -1369,7 +2208,8 @@ export function AppHomePage() {
                                 {occupiedSlots.has(slot) ? "" : "Drop tile here"}
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
 
                         <div
@@ -1382,6 +2222,10 @@ export function AppHomePage() {
                           const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
                           const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
                           const pos = getGridPosition(liveSlot, columns);
+                          const deleteHighlight =
+                            isDeleteStructureMode
+                            && (selectedDeleteRows.some((row) => row >= pos.row && row < pos.row + liveRowSpan)
+                              || selectedDeleteCols.some((col) => col >= pos.col && col < pos.col + liveColSpan));
                             const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
                             const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
                             const snappedWidth =
@@ -1440,7 +2284,9 @@ export function AppHomePage() {
                                   width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
                                   height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
                                 }}
-                                className={`absolute rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm ${
+                                className={`absolute rounded-xl border p-3 text-primary-foreground shadow-sm ${
+                                  deleteHighlight ? "border-red-300 bg-red-400/85" : "border-primary/20 bg-primary"
+                                } ${
                                   isEditing ? "cursor-grab active:cursor-grabbing" : "cursor-default"
                                 } ${
                                   draggingTileId === tile.id ? "z-40 opacity-30" : "z-10"
@@ -1464,7 +2310,7 @@ export function AppHomePage() {
                                     <MoreHorizontal className="h-3.5 w-3.5" />
                                   </button>
                                   {tileMenuOpenId === tile.id ? (
-                                    <div className="absolute left-1/2 top-7 z-40 w-28 -translate-x-1/2 rounded-md border border-border bg-white p-1 shadow-lg">
+                                    <div className="absolute left-1/2 top-7 z-40 w-28 -translate-x-1/2 rounded-xl border border-border bg-white p-1 shadow-lg">
                                       <button
                                         type="button"
                                         onMouseDown={(event) => {
@@ -1539,23 +2385,27 @@ export function AppHomePage() {
 
                       <div className="relative w-8">
                         {Array.from({ length: totalRows }, (_, rowIndex) => {
-                          if (!canDeleteRow(rowIndex)) return null;
+                          if (!isDeleteStructureMode) return null;
+                          const deletable = trailingEmptyRows.includes(rowIndex);
                           const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
+                          const selected = selectedDeleteRows.includes(rowIndex);
                           return (
                             <button
                               key={`edit-del-row-${rowIndex}`}
                               type="button"
                               onClick={() => {
-                                setTargetRows((previous) => Math.max(viewportMinRows, previous - 1));
+                                setSelectedDeleteRows((previous) =>
+                                  previous.includes(rowIndex) ? previous.filter((item) => item !== rowIndex) : [...previous, rowIndex],
+                                );
                               }}
                               className="absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold hover:opacity-90"
                               style={{
                                 top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
-                                borderColor: "#ef4444",
-                                backgroundColor: "#fee2e2",
-                                color: "#b91c1c",
+                                borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
+                                backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
+                                color: deletable ? "#b91c1c" : "#475569",
                               }}
-                              title="Del row"
+                              title={deletable ? "Select row to delete" : "Only trailing empty rows can be deleted"}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -1563,38 +2413,6 @@ export function AppHomePage() {
                         })}
                       </div>
                       </div>
-                    </div>
-                    <div className="flex w-full items-center gap-3">
-                      <ul className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <li>rows:{totalRows}</li>
-                        <li>|</li>
-                        <li>tiles:{tiles.length}</li>
-                      </ul>
-                      <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!canAddRow) return;
-                          setTargetRows((previous) => previous + 1);
-                        }}
-                        className={`inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${
-                          canAddRow ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
-                        }`}
-                        style={{
-                          backgroundColor: "rgba(22,163,74,0.14)",
-                          borderColor: "rgba(21,128,61,0.35)",
-                          color: "#166534",
-                        }}
-                        title={canAddRow ? "Add Row" : "Max blank rows reached"}
-                      >
-                        Add Row
-                      </button>
-                      <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
-                      <ul className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <li>min:1</li>
-                        <li>|</li>
-                        <li>set:{targetRows}</li>
-                      </ul>
                     </div>
                   </CardContent>
                 </Card>
@@ -1622,15 +2440,194 @@ export function AppHomePage() {
           </div>
         </div>
       ) : null}
+      {isEditing && isNewLayoutDialogOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/25 px-4">
+          <Card className="w-full max-w-md border-border bg-white">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                {layoutNameDialogMode === "rename" ? "Rename Layout" : "New Layout Name"}
+              </p>
+              <input
+                type="text"
+                value={pendingLayoutName}
+                onChange={(event) => {
+                  setPendingLayoutName(event.target.value);
+                  if (layoutNameError) setLayoutNameError(null);
+                }}
+                className="w-full rounded-md border border-blue-100 bg-white px-3 py-2 text-sm text-foreground"
+                placeholder={`${sectionLabel} Layout ${savedLayouts.length + 1}`}
+                autoFocus
+              />
+              {layoutNameError ? <p className="text-xs text-red-700">{layoutNameError}</p> : null}
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewLayoutDialogOpen(false);
+                    setPendingLayoutName("");
+                    setLayoutNameError(null);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                  title="Cancel"
+                  aria-label="Cancel"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = normalizeLayoutName(pendingLayoutName);
+                    if (!name) {
+                      setLayoutNameError("Layout name is required.");
+                      return;
+                    }
+                    const isDuplicateName = savedLayouts.some((layout) =>
+                      layoutNameDialogMode === "rename" && activeLayout
+                        ? layout.id !== activeLayout.id && normalizeLayoutName(layout.name).toLowerCase() === name.toLowerCase()
+                        : normalizeLayoutName(layout.name).toLowerCase() === name.toLowerCase(),
+                    );
+                    if (isDuplicateName) {
+                      setLayoutNameError("A layout with this name already exists.");
+                      return;
+                    }
+                    if (layoutNameDialogMode === "rename") {
+                      renameActiveLayout(name);
+                    } else {
+                      createNewLayout(name);
+                    }
+                    setIsNewLayoutDialogOpen(false);
+                    setPendingLayoutName("");
+                    setLayoutNameError(null);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                  title="Save layout"
+                  aria-label="Save layout"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+      {isEditing && isSwitchLayoutDialogOpen ? (
+        <div className="fixed inset-0 z-[82] flex items-center justify-center bg-slate-900/30 px-4">
+          <Card className="w-full max-w-lg border-border bg-white">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                There are unsaved changes in "{activeLayout?.name ?? "layout"}". Would you like to save and proceed,
+                lose changes, or cancel
+                {pendingCreateLayout ? " before creating a new layout?" : "?"}
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cancelLayoutSwitchDialog}
+                  className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmLayoutSwitchLose}
+                  className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                >
+                  Lose Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmLayoutSwitchSave}
+                  className="rounded-md border border-border bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90"
+                >
+                  Save and Proceed
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+      {isEditing && isExitEditDialogOpen ? (
+        <div className="fixed inset-0 z-[83] flex items-center justify-center bg-slate-900/30 px-4">
+          <Card className="w-full max-w-lg border-border bg-white">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                You have unsaved changes. Save Changes and Exit, Discard Changes, or Cancel?
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cancelExitEditDialog}
+                  className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmExitEditDiscard}
+                  className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                >
+                  Discard Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmExitEditSave}
+                  className="rounded-md border border-border bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90"
+                >
+                  Save Changes and Exit
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+      {isSetActiveDialogOpen ? (
+        <div className="fixed inset-0 z-[84] flex items-center justify-center bg-slate-900/30 px-4">
+          <Card className="w-full max-w-lg border-border bg-white">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                Make "{savedLayouts.find((layout) => layout.id === pendingSetActiveLayoutId)?.name ?? "this layout"}" active or keep the current active layout?
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={confirmKeepCurrentActive}
+                  className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
+                >
+                  Keep Current Active
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmMakeLayoutActive}
+                  className="rounded-md border border-border bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90"
+                >
+                  Make Layout Active
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </main>
   );
 }
 
 function createDefaultViewportLayouts(): ViewportLayouts {
   return {
-    mobile: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: VIEWPORT_BASE_ROWS.mobile },
-    tablet: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: VIEWPORT_BASE_ROWS.tablet },
-    desktop: { tiles: DEFAULT_TILES.map((tile) => ({ ...tile })), targetRows: VIEWPORT_BASE_ROWS.desktop },
+    mobile: {
+      tiles: DEFAULT_TILES.map((tile) => ({ ...tile })),
+      targetRows: VIEWPORT_BASE_ROWS.mobile,
+      targetColumns: VIEWPORT_DEFAULT_COLUMNS.mobile,
+    },
+    tablet: {
+      tiles: DEFAULT_TILES.map((tile) => ({ ...tile })),
+      targetRows: VIEWPORT_BASE_ROWS.tablet,
+      targetColumns: VIEWPORT_DEFAULT_COLUMNS.tablet,
+    },
+    desktop: {
+      tiles: DEFAULT_TILES.map((tile) => ({ ...tile })),
+      targetRows: VIEWPORT_BASE_ROWS.desktop,
+      targetColumns: VIEWPORT_DEFAULT_COLUMNS.desktop,
+    },
   };
 }
 
@@ -1650,7 +2647,7 @@ function normalizeViewportHolders(holders: Partial<ViewportHolders> | undefined)
       }
       return {
         id: item.id,
-        colSpan: clamp(item.colSpan ?? 1, 1, VIEWPORT_COLUMNS.desktop),
+        colSpan: clamp(item.colSpan ?? 1, 1, VIEWPORT_MAX_COLUMNS.desktop),
         rowSpan: clamp(item.rowSpan ?? 1, 1, MAX_ROW_SPAN),
       };
     });
@@ -1669,51 +2666,66 @@ function normalizeViewportHolders(holders: Partial<ViewportHolders> | undefined)
 }
 
 function createViewportLayoutsFromLegacy(tiles: DashboardTile[], targetRows: number): ViewportLayouts {
+  const desktopColumns = VIEWPORT_DEFAULT_COLUMNS.desktop;
+  const tabletColumns = VIEWPORT_DEFAULT_COLUMNS.tablet;
+  const mobileColumns = VIEWPORT_DEFAULT_COLUMNS.mobile;
   const desktopNormalized = normalizeViewportLayoutForColumns(
-    { tiles: tiles.map((tile) => ({ ...tile })), targetRows },
-    VIEWPORT_COLUMNS.desktop,
-    VIEWPORT_COLUMNS.desktop,
+    { tiles: tiles.map((tile) => ({ ...tile })), targetRows, targetColumns: desktopColumns },
+    desktopColumns,
+    desktopColumns,
+    VIEWPORT_BASE_ROWS.desktop,
   );
   const desktopTiles = desktopNormalized.tiles;
   return normalizeAllViewportLayouts({
     desktop: desktopNormalized,
     tablet: {
-      tiles: fitTilesToColumns(desktopTiles, VIEWPORT_COLUMNS.desktop, VIEWPORT_COLUMNS.tablet),
+      tiles: fitTilesToColumns(desktopTiles, desktopColumns, tabletColumns),
       targetRows: targetRows,
+      targetColumns: tabletColumns,
     },
     mobile: {
-      tiles: fitTilesToColumns(desktopTiles, VIEWPORT_COLUMNS.desktop, VIEWPORT_COLUMNS.mobile),
+      tiles: fitTilesToColumns(desktopTiles, desktopColumns, mobileColumns),
       targetRows: targetRows,
+      targetColumns: mobileColumns,
     },
   });
 }
 
 function normalizeAllViewportLayouts(layouts: Partial<ViewportLayouts>): ViewportLayouts {
-  const desktopSource = layouts.desktop ?? createDefaultViewportLayouts().desktop;
+  const defaults = createDefaultViewportLayouts();
+  const desktopTargetColumns = sanitizeColumns("desktop", layouts.desktop?.targetColumns ?? defaults.desktop.targetColumns);
+  const tabletTargetColumns = sanitizeColumns("tablet", layouts.tablet?.targetColumns ?? defaults.tablet.targetColumns);
+  const mobileTargetColumns = sanitizeColumns("mobile", layouts.mobile?.targetColumns ?? defaults.mobile.targetColumns);
+  const desktopSource = layouts.desktop ?? defaults.desktop;
   const desktopNormalized = normalizeViewportLayoutForColumns(
-    desktopSource,
-    VIEWPORT_COLUMNS.desktop,
-    VIEWPORT_COLUMNS.desktop,
+    { ...desktopSource, targetColumns: desktopTargetColumns },
+    sanitizeColumns("desktop", desktopSource.targetColumns ?? desktopTargetColumns),
+    desktopTargetColumns,
+    VIEWPORT_BASE_ROWS.desktop,
   );
 
   const tabletSource = layouts.tablet ?? {
-    tiles: fitTilesToColumns(desktopNormalized.tiles, VIEWPORT_COLUMNS.desktop, VIEWPORT_COLUMNS.tablet),
+    tiles: fitTilesToColumns(desktopNormalized.tiles, desktopNormalized.targetColumns, tabletTargetColumns),
     targetRows: desktopNormalized.targetRows,
+    targetColumns: tabletTargetColumns,
   };
   const tabletNormalized = normalizeViewportLayoutForColumns(
-    tabletSource,
-    VIEWPORT_COLUMNS.tablet,
-    VIEWPORT_COLUMNS.tablet,
+    { ...tabletSource, targetColumns: tabletTargetColumns },
+    sanitizeColumns("tablet", tabletSource.targetColumns ?? tabletTargetColumns),
+    tabletTargetColumns,
+    VIEWPORT_BASE_ROWS.tablet,
   );
 
   const mobileSource = layouts.mobile ?? {
-    tiles: fitTilesToColumns(desktopNormalized.tiles, VIEWPORT_COLUMNS.desktop, VIEWPORT_COLUMNS.mobile),
+    tiles: fitTilesToColumns(desktopNormalized.tiles, desktopNormalized.targetColumns, mobileTargetColumns),
     targetRows: desktopNormalized.targetRows,
+    targetColumns: mobileTargetColumns,
   };
   const mobileNormalized = normalizeViewportLayoutForColumns(
-    mobileSource,
-    VIEWPORT_COLUMNS.mobile,
-    VIEWPORT_COLUMNS.mobile,
+    { ...mobileSource, targetColumns: mobileTargetColumns },
+    sanitizeColumns("mobile", mobileSource.targetColumns ?? mobileTargetColumns),
+    mobileTargetColumns,
+    VIEWPORT_BASE_ROWS.mobile,
   );
 
   return {
@@ -1723,33 +2735,33 @@ function normalizeAllViewportLayouts(layouts: Partial<ViewportLayouts>): Viewpor
   };
 }
 
-function normalizeViewportLayoutForColumns(layout: ViewportLayout, sourceColumns: number, targetColumns: number): ViewportLayout {
+function normalizeViewportLayoutForColumns(
+  layout: ViewportLayout,
+  sourceColumns: number,
+  targetColumns: number,
+  minRows: number,
+): ViewportLayout {
   const fittedTiles = fitTilesToColumns(layout.tiles, sourceColumns, targetColumns);
   const normalizedTiles = fittedTiles.map((tile) => ({ ...tile }));
-  const minRowsForColumns =
-    targetColumns === VIEWPORT_COLUMNS.desktop
-      ? VIEWPORT_BASE_ROWS.desktop
-      : targetColumns === VIEWPORT_COLUMNS.tablet
-        ? VIEWPORT_BASE_ROWS.tablet
-        : VIEWPORT_BASE_ROWS.mobile;
-  const trimmedTargetRows = Math.max(minRowsForColumns, getRequiredRows(normalizedTiles, targetColumns), layout.targetRows);
+  const trimmedTargetRows = Math.max(minRows, getRequiredRows(normalizedTiles, targetColumns), layout.targetRows);
   return {
     tiles: normalizedTiles,
     targetRows: trimmedTargetRows,
+    targetColumns,
   };
 }
 
 function trimAllViewportLayoutsRows(layouts: ViewportLayouts): ViewportLayouts {
   return {
-    mobile: trimViewportLayoutRows(layouts.mobile, VIEWPORT_COLUMNS.mobile, VIEWPORT_BASE_ROWS.mobile),
-    tablet: trimViewportLayoutRows(layouts.tablet, VIEWPORT_COLUMNS.tablet, VIEWPORT_BASE_ROWS.tablet),
-    desktop: trimViewportLayoutRows(layouts.desktop, VIEWPORT_COLUMNS.desktop, VIEWPORT_BASE_ROWS.desktop),
+    mobile: trimViewportLayoutRows(layouts.mobile, layouts.mobile.targetColumns, VIEWPORT_BASE_ROWS.mobile),
+    tablet: trimViewportLayoutRows(layouts.tablet, layouts.tablet.targetColumns, VIEWPORT_BASE_ROWS.tablet),
+    desktop: trimViewportLayoutRows(layouts.desktop, layouts.desktop.targetColumns, VIEWPORT_BASE_ROWS.desktop),
   };
 }
 
 function trimViewportLayoutRows(layout: ViewportLayout, columns: number, minRows: number): ViewportLayout {
   if (layout.tiles.length === 0) {
-    return { tiles: [], targetRows: minRows };
+    return { tiles: [], targetRows: minRows, targetColumns: columns };
   }
 
   const minUsedRow = Math.min(...layout.tiles.map((tile) => getGridPosition(tile.slot, columns).row));
@@ -1763,6 +2775,7 @@ function trimViewportLayoutRows(layout: ViewportLayout, columns: number, minRows
   return {
     tiles: compactedTiles,
     targetRows: Math.min(MAX_ROWS, Math.max(minRows, requiredRows)),
+    targetColumns: columns,
   };
 }
 
@@ -1847,6 +2860,11 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function sanitizeColumns(viewport: EditViewport, value: number | undefined) {
+  const fallback = VIEWPORT_DEFAULT_COLUMNS[viewport];
+  return clamp(value ?? fallback, VIEWPORT_MIN_COLUMNS, VIEWPORT_MAX_COLUMNS[viewport]);
+}
+
 function getGridPosition(slot: number, columns: number) {
   return {
     row: Math.floor(slot / columns),
@@ -1863,6 +2881,53 @@ function getRequiredRows(tiles: DashboardTile[], columns: number) {
       return pos.row + tile.rowSpan;
     }),
   );
+}
+
+function isColumnOccupied(tiles: DashboardTile[], columns: number, colIndex: number) {
+  return tiles.some((tile) => {
+    const pos = getGridPosition(tile.slot, columns);
+    return pos.col <= colIndex && pos.col + tile.colSpan - 1 >= colIndex;
+  });
+}
+
+function getTrailingEmptyRows(tiles: DashboardTile[], columns: number, totalRows: number, minRows: number) {
+  const rows: number[] = [];
+  for (let row = totalRows - 1; row >= minRows; row -= 1) {
+    const occupied = tiles.some((tile) => {
+      const pos = getGridPosition(tile.slot, columns);
+      return pos.row <= row && pos.row + tile.rowSpan - 1 >= row;
+    });
+    if (occupied) break;
+    rows.push(row);
+  }
+  return rows;
+}
+
+function removeColumnsFromLayout(layout: ViewportLayout, removeCols: Set<number>, minRows: number): ViewportLayout {
+  if (removeCols.size === 0) return layout;
+  const oldColumns = layout.targetColumns;
+  const newColumns = Math.max(VIEWPORT_MIN_COLUMNS, oldColumns - removeCols.size);
+
+  const nextTiles = layout.tiles.map((tile) => {
+    const pos = getGridPosition(tile.slot, oldColumns);
+    let shift = 0;
+    removeCols.forEach((removedCol) => {
+      if (removedCol < pos.col) shift += 1;
+    });
+    const nextCol = Math.max(0, pos.col - shift);
+    return {
+      ...tile,
+      slot: pos.row * newColumns + nextCol,
+      colSpan: clamp(tile.colSpan, 1, newColumns),
+    };
+  });
+
+  return {
+    ...layout,
+    tiles: nextTiles,
+    targetColumns: newColumns,
+    targetRows: Math.max(minRows, getRequiredRows(nextTiles, newColumns), layout.targetRows),
+  };
 }
 
 function rectanglesOverlap(
@@ -1942,5 +3007,6 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
 
 
