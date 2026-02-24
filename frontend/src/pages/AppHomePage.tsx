@@ -12,7 +12,6 @@ import {
   Monitor,
   MoveDiagonal2,
   Plus,
-  SlidersHorizontal,
   Search,
   Settings,
   Smartphone,
@@ -214,9 +213,8 @@ const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) =
   const targetIndex = items.indexOf(targetKey);
   if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items;
   const next = [...items];
-  const sourceItem = next[sourceIndex];
-  next[sourceIndex] = next[targetIndex];
-  next[targetIndex] = sourceItem;
+  const [sourceItem] = next.splice(sourceIndex, 1);
+  next.splice(targetIndex, 0, sourceItem);
   return next;
 };
 
@@ -236,12 +234,14 @@ export function AppHomePage() {
   const [layoutNameDialogMode, setLayoutNameDialogMode] = useState<"create" | "rename">("create");
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
   const [assetTypeMenuOpen, setAssetTypeMenuOpen] = useState(false);
+  const [accountsMenuOpen, setAccountsMenuOpen] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
   const [accountsCollapsed, setAccountsCollapsed] = useState(true);
   const [assetTypeSearch, setAssetTypeSearch] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
   const [hasHydratedNavState, setHasHydratedNavState] = useState(false);
   const [navEditMode, setNavEditMode] = useState(false);
+  const [buttonEditTarget, setButtonEditTarget] = useState<"assetTypes" | "accounts" | null>(null);
   const [navSectionOrder, setNavSectionOrder] = useState<NavSectionKey[]>(DEFAULT_NAV_SECTION_ORDER);
   const [navAssetItemOrder, setNavAssetItemOrder] = useState<string[]>([]);
   const [navAccountItemOrder, setNavAccountItemOrder] = useState<string[]>([]);
@@ -252,6 +252,10 @@ export function AppHomePage() {
   const [navDropTarget, setNavDropTarget] = useState<NavDragItem | null>(null);
   const navDragItemRef = useRef<NavDragItem | null>(null);
   const navHoverTargetRef = useRef<NavDragItem | null>(null);
+  const navDropTargetRef = useRef<NavDragItem | null>(null);
+  const navSectionSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
+  const navAssetSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
+  const navAccountSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
   const [pendingLayoutName, setPendingLayoutName] = useState("");
   const [layoutNameError, setLayoutNameError] = useState<string | null>(null);
   const [isSwitchLayoutDialogOpen, setIsSwitchLayoutDialogOpen] = useState(false);
@@ -453,8 +457,7 @@ export function AppHomePage() {
   const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
   const sectionOrderForView = useMemo(() => {
     if (
-      !navEditMode
-      || !navDragItem
+      !navDragItem
       || !navDropTarget
       || navDragItem.kind !== "section"
       || navDropTarget.kind !== "section"
@@ -463,7 +466,7 @@ export function AppHomePage() {
       return sectionOrderForRender;
     }
     return moveKeyForDrag(sectionOrderForRender, navDragItem.key, navDropTarget.key) as NavSectionKey[];
-  }, [navDragItem, navDropTarget, navEditMode, sectionOrderForRender]);
+  }, [navDragItem, navDropTarget, sectionOrderForRender]);
   const assetOrderForView = useMemo(() => {
     if (
       !navEditMode
@@ -490,6 +493,12 @@ export function AppHomePage() {
     }
     return moveKeyForDrag(accountOrderForRender, navDragItem.key, navDropTarget.key);
   }, [accountOrderForRender, navDragItem, navDropTarget, navEditMode]);
+  const canEditButtonsForKind = (kind: NavDragKind) =>
+    navEditMode && (
+      (buttonEditTarget === "assetTypes" && kind === "asset")
+      || (buttonEditTarget === "accounts" && kind === "account")
+    );
+  const canDragKind = (kind: NavDragKind) => kind === "section" || canEditButtonsForKind(kind);
   const orderedAssetEntries = useMemo(() => {
     const keyToEntry = new Map(assetTypeEntries.map((entry) => [entry.key, entry] as const));
     const orderedKeys = normalizeOrder(assetOrderForView, assetTypeEntries.map((entry) => entry.key));
@@ -689,24 +698,19 @@ export function AppHomePage() {
     persistLayouts(nextLayouts, nextActive.id);
   };
 
-  const startNavigationEdit = () => {
+  const startNavigationEdit = (target: "assetTypes" | "accounts") => {
     setAssetTypeMenuOpen(false);
+    setAccountsMenuOpen(false);
     setNavEditMode(true);
+    setButtonEditTarget(target);
     setDraftNavSectionOrder([...sectionOrderForRender]);
     setDraftNavAssetItemOrder([...assetOrderForRender]);
     setDraftNavAccountItemOrder([...accountOrderForRender]);
   };
 
-  const cancelNavigationEdit = () => {
-    setAssetTypeMenuOpen(false);
-    setNavEditMode(false);
-    setDraftNavSectionOrder([...navSectionOrder]);
-    setDraftNavAssetItemOrder([...navAssetItemOrder]);
-    setDraftNavAccountItemOrder([...navAccountItemOrder]);
-  };
-
   const saveNavigationEdit = () => {
     setAssetTypeMenuOpen(false);
+    setAccountsMenuOpen(false);
     const assetKeys = assetTypeEntries.map((entry) => entry.key);
     const accountKeys = accountEntries.map((entry) => entry.key);
     const nextSectionOrder = normalizeOrder(draftNavSectionOrder, DEFAULT_NAV_SECTION_ORDER) as NavSectionKey[];
@@ -716,6 +720,7 @@ export function AppHomePage() {
     setNavAssetItemOrder(nextAssetOrder);
     setNavAccountItemOrder(nextAccountOrder);
     setNavEditMode(false);
+    setButtonEditTarget(null);
     setNavDragItem(null);
     setNavDropTarget(null);
   };
@@ -723,6 +728,10 @@ export function AppHomePage() {
   const reorderDraftByDrag = (kind: NavDragKind, sourceKey: string, targetKey: string) => {
     if (sourceKey === targetKey) return;
     if (kind === "section") {
+      if (!navEditMode) {
+        setNavSectionOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey) as NavSectionKey[]);
+        return;
+      }
       setDraftNavSectionOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey) as NavSectionKey[]);
       return;
     }
@@ -734,11 +743,31 @@ export function AppHomePage() {
   };
 
   const handleNavDragStart = (event: DragEvent<HTMLButtonElement>, kind: NavDragKind, key: string) => {
-    if (!navEditMode) return;
+    if (!canDragKind(kind)) return;
     const dragSource = event.currentTarget.closest("[data-nav-draggable]") as HTMLElement | null;
     const dragItem: NavDragItem = { kind, key };
     navDragItemRef.current = dragItem;
     navHoverTargetRef.current = null;
+    navDropTargetRef.current = null;
+    navSectionSlotRef.current = [];
+    navAssetSlotRef.current = [];
+    navAccountSlotRef.current = [];
+    if (navEditPanelRef.current) {
+      const selector = `[data-nav-target-kind="${kind}"][data-nav-target-key]`;
+      const nodes = Array.from(navEditPanelRef.current.querySelectorAll<HTMLElement>(selector));
+      const slots = nodes
+        .map((node) => {
+          const targetKey = node.dataset.navTargetKey?.trim();
+          if (!targetKey) return null;
+          const rect = node.getBoundingClientRect();
+          return { key: targetKey, top: rect.top, bottom: rect.bottom };
+        })
+        .filter((item): item is { key: string; top: number; bottom: number } => Boolean(item))
+        .sort((a, b) => a.top - b.top);
+      if (kind === "section") navSectionSlotRef.current = slots;
+      if (kind === "asset") navAssetSlotRef.current = slots;
+      if (kind === "account") navAccountSlotRef.current = slots;
+    }
     setNavDragItem(dragItem);
     setNavDropTarget(null);
     event.dataTransfer.effectAllowed = "move";
@@ -785,88 +814,105 @@ export function AppHomePage() {
   };
 
   const handleNavDragEnd = () => {
-    const currentDrag = navDragItemRef.current ?? navDragItem;
-    const hoveredTarget = navHoverTargetRef.current;
-    if (
-      navEditMode
-      && currentDrag
-      && hoveredTarget
-      && hoveredTarget.kind === currentDrag.kind
-      && hoveredTarget.key !== currentDrag.key
-    ) {
-      reorderDraftByDrag(currentDrag.kind, currentDrag.key, hoveredTarget.key);
-    }
     navDragItemRef.current = null;
     navHoverTargetRef.current = null;
+    navDropTargetRef.current = null;
+    navSectionSlotRef.current = [];
+    navAssetSlotRef.current = [];
+    navAccountSlotRef.current = [];
     setNavDragItem(null);
     setNavDropTarget(null);
   };
 
   const handleNavTargetDragOver = (event: DragEvent<HTMLElement>, kind: NavDragKind, key: string) => {
-    if (!navEditMode) return;
+    if (!canDragKind(kind)) return;
     const currentDrag = readNavDragItem(event);
     if (!currentDrag || currentDrag.kind !== kind) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     let targetKey = key;
-    if (targetKey === currentDrag.key) {
-      // When hovering back over the dragged row, map to the row currently occupying the original slot.
-      // This preserves source-slot preview behavior without restoring initial flicker.
-      if (navDropTarget?.kind !== kind) return;
-      const baseOrder = kind === "section" ? sectionOrderForRender : kind === "asset" ? assetOrderForRender : accountOrderForRender;
-      const previewOrder = kind === "section" ? sectionOrderForView : kind === "asset" ? assetOrderForView : accountOrderForView;
-      const sourceIndex = baseOrder.indexOf(currentDrag.key);
-      const occupant = sourceIndex >= 0 ? previewOrder[sourceIndex] : null;
-      if (!occupant || occupant === currentDrag.key) return;
-      targetKey = occupant;
+    const slotMap =
+      kind === "section"
+        ? navSectionSlotRef.current
+        : kind === "asset"
+          ? navAssetSlotRef.current
+          : navAccountSlotRef.current;
+    if (slotMap.length > 0) {
+      const y = event.clientY;
+      const slot = slotMap.find((item) => y >= item.top && y <= item.bottom);
+      if (slot) {
+        targetKey = slot.key;
+      } else {
+        const nearest = slotMap.reduce((closest, item) => {
+          const mid = (item.top + item.bottom) / 2;
+          const distance = Math.abs(y - mid);
+          if (!closest || distance < closest.distance) {
+            return { key: item.key, distance };
+          }
+          return closest;
+        }, null as { key: string; distance: number } | null);
+        if (nearest) targetKey = nearest.key;
+      }
     }
     navHoverTargetRef.current = { kind, key: targetKey };
-    if (!navDropTarget || navDropTarget.kind !== kind || navDropTarget.key !== targetKey) {
+    if (!navDropTargetRef.current || navDropTargetRef.current.kind !== kind || navDropTargetRef.current.key !== targetKey) {
+      navDropTargetRef.current = { kind, key: targetKey };
       setNavDropTarget({ kind, key: targetKey });
     }
   };
 
   const handleNavTargetDrop = (event: DragEvent<HTMLElement>, kind: NavDragKind, key: string) => {
-    if (!navEditMode) return;
+    if (!canDragKind(kind)) return;
     event.preventDefault();
     const currentDrag = readNavDragItem(event);
     if (!currentDrag || currentDrag.kind !== kind) {
       navDragItemRef.current = null;
       navHoverTargetRef.current = null;
+      navDropTargetRef.current = null;
+      navSectionSlotRef.current = [];
+      navAssetSlotRef.current = [];
+      navAccountSlotRef.current = [];
       setNavDragItem(null);
       setNavDropTarget(null);
       return;
     }
-    navHoverTargetRef.current = { kind, key };
-    if (key !== currentDrag.key) {
-      reorderDraftByDrag(kind, currentDrag.key, key);
+    const targetKey = navDropTargetRef.current?.kind === kind ? navDropTargetRef.current.key : key;
+    navHoverTargetRef.current = { kind, key: targetKey };
+    if (targetKey !== currentDrag.key) {
+      reorderDraftByDrag(kind, currentDrag.key, targetKey);
     }
     navDragItemRef.current = null;
     navHoverTargetRef.current = null;
+    navDropTargetRef.current = null;
+    navSectionSlotRef.current = [];
+    navAssetSlotRef.current = [];
+    navAccountSlotRef.current = [];
     setNavDragItem(null);
     setNavDropTarget(null);
   };
 
   const handleNavContainerDragOver = (event: DragEvent<HTMLElement>) => {
-    if (!navEditMode) return;
     const currentDrag = readNavDragItem(event);
-    if (!currentDrag) return;
+    if (!currentDrag || !canDragKind(currentDrag.kind)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   };
 
   const handleNavContainerDrop = (event: DragEvent<HTMLElement>) => {
-    if (!navEditMode) return;
     event.preventDefault();
     const currentDrag = readNavDragItem(event);
-    if (!currentDrag) {
+    if (!currentDrag || !canDragKind(currentDrag.kind)) {
       navDragItemRef.current = null;
       navHoverTargetRef.current = null;
+      navDropTargetRef.current = null;
+      navSectionSlotRef.current = [];
+      navAssetSlotRef.current = [];
+      navAccountSlotRef.current = [];
       setNavDragItem(null);
       setNavDropTarget(null);
       return;
     }
-    const targetKey = navDropTarget?.kind === currentDrag.kind ? navDropTarget.key : null;
+    const targetKey = navDropTargetRef.current?.kind === currentDrag.kind ? navDropTargetRef.current.key : null;
     if (targetKey) {
       navHoverTargetRef.current = { kind: currentDrag.kind, key: targetKey };
     }
@@ -875,12 +921,16 @@ export function AppHomePage() {
     }
     navDragItemRef.current = null;
     navHoverTargetRef.current = null;
+    navDropTargetRef.current = null;
+    navSectionSlotRef.current = [];
+    navAssetSlotRef.current = [];
+    navAccountSlotRef.current = [];
     setNavDragItem(null);
     setNavDropTarget(null);
   };
 
   useEffect(() => {
-    if (!navEditMode || !navDragItem) return;
+    if (!navDragItem || !canDragKind(navDragItem.kind)) return;
     const listenerOptions: AddEventListenerOptions = { capture: true };
     const onWindowDragEnter = (event: Event) => {
       event.preventDefault();
@@ -902,6 +952,10 @@ export function AppHomePage() {
           && dragEvent.clientY <= rect.bottom;
         if (!inside) {
           navHoverTargetRef.current = null;
+          navDropTargetRef.current = null;
+          navSectionSlotRef.current = [];
+          navAssetSlotRef.current = [];
+          navAccountSlotRef.current = [];
           setNavDropTarget(null);
         }
       }
@@ -920,7 +974,7 @@ export function AppHomePage() {
       window.removeEventListener("dragover", onWindowDragOver, listenerOptions);
       window.removeEventListener("drop", onWindowDrop, listenerOptions);
     };
-  }, [navDragItem, navEditMode]);
+  }, [navDragItem, navEditMode, buttonEditTarget]);
 
   useEffect(() => {
     if (!navDragItem) return;
@@ -969,6 +1023,7 @@ export function AppHomePage() {
       setSettingsMenuOpen(false);
       setLayoutActionsMenuOpen(false);
       setAssetTypeMenuOpen(false);
+      setAccountsMenuOpen(false);
       setGridActionsMenuOpen(false);
       setTileMenuOpenId(null);
       setHolderMenuOpenId(null);
@@ -1770,7 +1825,7 @@ export function AppHomePage() {
   const assetSectionIndex = sectionOrderForView.indexOf("assetTypes");
   const accountsSectionIndex = sectionOrderForView.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
-    navEditMode && navDragItem?.kind === kind && navDragItem.key === key;
+    navDragItem?.kind === kind && navDragItem.key === key;
 
   return (
     <main className="w-full pb-10 pt-4">
@@ -1785,45 +1840,11 @@ export function AppHomePage() {
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Navigation</p>
-                            <div className="flex items-center gap-1">
-                              {navEditMode ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={saveNavigationEdit}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-900 text-slate-100 transition-colors hover:bg-slate-800"
-                                    aria-label="Save navigation order"
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={cancelNavigationEdit}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
-                                    aria-label="Cancel navigation order edit"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={startNavigationEdit}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
-                                  aria-label="Edit navigation order"
-                                >
-                                  <SlidersHorizontal className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
                           <div
-                            data-nav-draggable={navEditMode ? "true" : undefined}
+                            data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="portfolio"
-                            className={`space-y-3 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                            className={`rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
                               isNavDragging("section", "portfolio")
                                 ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -1832,29 +1853,28 @@ export function AppHomePage() {
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "portfolio")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "portfolio")}
                           >
+                            <CardContent className="space-y-3 p-4">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
-                                {navEditMode ? (
-                                  <button
-                                    type="button"
-                                    draggable
-                                    onDragStart={(event) => handleNavDragStart(event, "section", "portfolio")}
-                                    onDragEnd={handleNavDragEnd}
-                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                      isNavDragging("section", "portfolio") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                    }`}
-                                    aria-label="Reorder Portfolio section"
-                                  >
-                                    <GripVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                ) : null}
+                                <button
+                                  type="button"
+                                  draggable
+                                  onDragStart={(event) => handleNavDragStart(event, "section", "portfolio")}
+                                  onDragEnd={handleNavDragEnd}
+                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                    isNavDragging("section", "portfolio") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                  }`}
+                                  aria-label="Reorder Portfolio section"
+                                >
+                                  <GripVertical className="h-3.5 w-3.5" />
+                                </button>
                                 <h2 className="text-base font-semibold text-slate-900">Portfolio</h2>
                               </div>
                             </div>
                             <button
                               type="button"
                               onClick={() => {
-                                if (navEditMode) return;
+                                if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                 setActiveSidebarCategory("portfolio");
                                 setActiveSidebarLabel("Portfolio");
                               }}
@@ -1870,13 +1890,14 @@ export function AppHomePage() {
                                 <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
                               ) : null}
                             </button>
+                            </CardContent>
                           </div>
 
                           <div
-                            data-nav-draggable={navEditMode ? "true" : undefined}
+                            data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="assetTypes"
-                            className={`${assetSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"} rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                            className={`rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
                               isNavDragging("section", "assetTypes")
                                 ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -1885,22 +1906,21 @@ export function AppHomePage() {
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "assetTypes")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
                           >
+                            <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
-                                {navEditMode ? (
-                                  <button
-                                    type="button"
-                                    draggable
-                                    onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
-                                    onDragEnd={handleNavDragEnd}
-                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                      isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                    }`}
-                                    aria-label="Reorder Asset Types section"
-                                  >
-                                    <GripVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                ) : null}
+                                <button
+                                  type="button"
+                                  draggable
+                                  onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
+                                  onDragEnd={handleNavDragEnd}
+                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                    isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                  }`}
+                                  aria-label="Reorder Asset Types section"
+                                >
+                                  <GripVertical className="h-3.5 w-3.5" />
+                                </button>
                                 <h2 className="text-base font-semibold text-slate-900">Asset Types</h2>
                                 <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                                   {orderedAssetEntries.length}
@@ -1913,20 +1933,22 @@ export function AppHomePage() {
                                   className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
                                   aria-label={assetTypesCollapsed ? "Expand asset types" : "Collapse asset types"}
                                 >
-                                  {assetTypesCollapsed && !navEditMode ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                  {assetTypesCollapsed && !canEditButtonsForKind("asset") ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                                 </button>
-                                {!navEditMode ? (
                                 <div className="relative" data-dashboard-menu>
                                 <button
                                   type="button"
-                                  onClick={() => setAssetTypeMenuOpen((previous) => !previous)}
+                                  onClick={() => {
+                                    setAccountsMenuOpen(false);
+                                    setAssetTypeMenuOpen((previous) => !previous);
+                                  }}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
                                   aria-label="Asset type actions"
                                 >
                                   <MoreHorizontal className="h-4.5 w-4.5" />
                                 </button>
                                 {assetTypeMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                  <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-border bg-white p-1 shadow-lg">
                                     <button
                                       type="button"
                                       className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
@@ -1939,13 +1961,26 @@ export function AppHomePage() {
                                     >
                                       Manage Existing
                                     </button>
+                                    <div className="my-1 h-px bg-slate-200" />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (canEditButtonsForKind("asset")) {
+                                          saveNavigationEdit();
+                                        } else {
+                                          startNavigationEdit("assetTypes");
+                                        }
+                                      }}
+                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                    >
+                                      {canEditButtonsForKind("asset") ? "Done rearranging" : "Rearrange buttons"}
+                                    </button>
                                   </div>
                                 ) : null}
                                 </div>
-                                ) : null}
                               </div>
                             </div>
-                            {navEditMode || !assetTypesCollapsed ? (
+                            {canEditButtonsForKind("asset") || !assetTypesCollapsed ? (
                             <div className="mt-3 space-y-2">
                               <div className="relative">
                                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -1963,18 +1998,18 @@ export function AppHomePage() {
                                 return (
                                   <div
                                     key={key}
-                                    data-nav-draggable={navEditMode ? "true" : undefined}
+                                    data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
                                     data-nav-target-kind="asset"
                                     data-nav-target-key={key}
-                                    className={`flex items-start gap-1 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-1 transition-colors duration-100 ${
                                       isNavDragging("asset", key)
-                                        ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                        ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                         : ""
                                     }`}
                                     onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
                                     onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
                                   >
-                                    {navEditMode ? (
+                                    {canEditButtonsForKind("asset") ? (
                                       <button
                                         type="button"
                                         draggable
@@ -1991,7 +2026,7 @@ export function AppHomePage() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        if (navEditMode) return;
+                                        if (canEditButtonsForKind("asset")) return;
                                         setActiveSidebarCategory(key);
                                         setActiveSidebarLabel(assetType.name);
                                       }}
@@ -2023,18 +2058,18 @@ export function AppHomePage() {
                                 return (
                                   <div
                                     key={key}
-                                    data-nav-draggable={navEditMode ? "true" : undefined}
+                                    data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
                                     data-nav-target-kind="asset"
                                     data-nav-target-key={key}
-                                    className={`flex items-start gap-1 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-1 transition-colors duration-100 ${
                                       isNavDragging("asset", key)
-                                        ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                        ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                         : ""
                                     }`}
                                     onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
                                     onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
                                   >
-                                    {navEditMode ? (
+                                    {canEditButtonsForKind("asset") ? (
                                       <button
                                         type="button"
                                         draggable
@@ -2051,7 +2086,7 @@ export function AppHomePage() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        if (navEditMode) return;
+                                        if (canEditButtonsForKind("asset")) return;
                                         setActiveSidebarCategory(key);
                                         setActiveSidebarLabel(assetType.name);
                                       }}
@@ -2080,13 +2115,14 @@ export function AppHomePage() {
                               ) : null}
                             </div>
                             ) : null}
+                            </CardContent>
                           </div>
 
                           <div
-                            data-nav-draggable={navEditMode ? "true" : undefined}
+                            data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="accounts"
-                            className={`${accountsSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"} rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                            className={`rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
                               isNavDragging("section", "accounts")
                                 ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -2095,22 +2131,21 @@ export function AppHomePage() {
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "accounts")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
+                            <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
-                                {navEditMode ? (
-                                  <button
-                                    type="button"
-                                    draggable
-                                    onDragStart={(event) => handleNavDragStart(event, "section", "accounts")}
-                                    onDragEnd={handleNavDragEnd}
-                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                      isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                    }`}
-                                    aria-label="Reorder Accounts section"
-                                  >
-                                    <GripVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                ) : null}
+                                <button
+                                  type="button"
+                                  draggable
+                                  onDragStart={(event) => handleNavDragStart(event, "section", "accounts")}
+                                  onDragEnd={handleNavDragEnd}
+                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                    isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                  }`}
+                                  aria-label="Reorder Accounts section"
+                                >
+                                  <GripVertical className="h-3.5 w-3.5" />
+                                </button>
                                 <h2 className="text-base font-semibold text-slate-900">Accounts</h2>
                                 <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                                   {orderedAccountEntries.length}
@@ -2123,20 +2158,41 @@ export function AppHomePage() {
                                   className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
                                   aria-label={accountsCollapsed ? "Expand accounts" : "Collapse accounts"}
                                 >
-                                  {accountsCollapsed && !navEditMode ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                  {accountsCollapsed && !canEditButtonsForKind("account") ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                                 </button>
-                                {!navEditMode ? (
-                                <button
-                                  type="button"
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
-                                  aria-label="Account actions"
-                                >
-                                  <MoreHorizontal className="h-4.5 w-4.5" />
-                                </button>
-                                ) : null}
+                                <div className="relative" data-dashboard-menu>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAssetTypeMenuOpen(false);
+                                      setAccountsMenuOpen((previous) => !previous);
+                                    }}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                                    aria-label="Account actions"
+                                  >
+                                    <MoreHorizontal className="h-4.5 w-4.5" />
+                                  </button>
+                                  {accountsMenuOpen ? (
+                                    <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (canEditButtonsForKind("account")) {
+                                            saveNavigationEdit();
+                                          } else {
+                                            startNavigationEdit("accounts");
+                                          }
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        {canEditButtonsForKind("account") ? "Done rearranging" : "Rearrange buttons"}
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
                             </div>
-                            {navEditMode || !accountsCollapsed ? (
+                            {canEditButtonsForKind("account") || !accountsCollapsed ? (
                             <div className="mt-3 space-y-2">
                               <div className="relative">
                                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -2158,18 +2214,18 @@ export function AppHomePage() {
                                 return (
                                   <div
                                     key={account.id}
-                                    data-nav-draggable={navEditMode ? "true" : undefined}
+                                    data-nav-draggable={canEditButtonsForKind("account") ? "true" : undefined}
                                     data-nav-target-kind="account"
                                     data-nav-target-key={key}
-                                    className={`flex items-start gap-1 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-1 transition-colors duration-100 ${
                                       isNavDragging("account", key)
-                                        ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                        ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                         : ""
                                     }`}
                                     onDragOver={(event) => handleNavTargetDragOver(event, "account", key)}
                                     onDrop={(event) => handleNavTargetDrop(event, "account", key)}
                                   >
-                                    {navEditMode ? (
+                                    {canEditButtonsForKind("account") ? (
                                       <button
                                         type="button"
                                         draggable
@@ -2186,7 +2242,7 @@ export function AppHomePage() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        if (navEditMode) return;
+                                        if (canEditButtonsForKind("account")) return;
                                         setActiveSidebarCategory(key);
                                         setActiveSidebarLabel(account.name);
                                       }}
@@ -2217,6 +2273,7 @@ export function AppHomePage() {
                               ) : null}
                             </div>
                             ) : null}
+                            </CardContent>
                           </div>
                 </CardContent>
               </Card>
