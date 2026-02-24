@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  ArrowDown,
-  ArrowUp,
   BadgeDollarSign,
   BriefcaseBusiness,
   Boxes,
   Check,
   Columns3,
+  GripVertical,
   MoreHorizontal,
   Monitor,
   MoveDiagonal2,
@@ -58,6 +57,11 @@ type HolderTile = {
 };
 type ViewportHolders = Record<EditViewport, HolderTile[]>;
 type NavSectionKey = "portfolio" | "assetTypes" | "accounts";
+type NavDragKind = "section" | "asset" | "account";
+type NavDragItem = {
+  kind: NavDragKind;
+  key: string;
+};
 
 type SavedLayout = {
   id: string;
@@ -205,12 +209,14 @@ const normalizeOrder = (order: string[], available: string[]) => {
   }
   return normalized;
 };
-const moveInList = <T,>(items: T[], index: number, delta: number) => {
-  const target = index + delta;
-  if (target < 0 || target >= items.length) return items;
+const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) => {
+  const sourceIndex = items.indexOf(sourceKey);
+  const targetIndex = items.indexOf(targetKey);
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items;
   const next = [...items];
-  const [item] = next.splice(index, 1);
-  next.splice(target, 0, item);
+  const sourceItem = next[sourceIndex];
+  next[sourceIndex] = next[targetIndex];
+  next[targetIndex] = sourceItem;
   return next;
 };
 
@@ -242,6 +248,10 @@ export function AppHomePage() {
   const [draftNavSectionOrder, setDraftNavSectionOrder] = useState<NavSectionKey[]>(DEFAULT_NAV_SECTION_ORDER);
   const [draftNavAssetItemOrder, setDraftNavAssetItemOrder] = useState<string[]>([]);
   const [draftNavAccountItemOrder, setDraftNavAccountItemOrder] = useState<string[]>([]);
+  const [navDragItem, setNavDragItem] = useState<NavDragItem | null>(null);
+  const [navDropTarget, setNavDropTarget] = useState<NavDragItem | null>(null);
+  const navDragItemRef = useRef<NavDragItem | null>(null);
+  const navHoverTargetRef = useRef<NavDragItem | null>(null);
   const [pendingLayoutName, setPendingLayoutName] = useState("");
   const [layoutNameError, setLayoutNameError] = useState<string | null>(null);
   const [isSwitchLayoutDialogOpen, setIsSwitchLayoutDialogOpen] = useState(false);
@@ -277,6 +287,7 @@ export function AppHomePage() {
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const holderDropRef = useRef<HTMLDivElement | null>(null);
+  const navEditPanelRef = useRef<HTMLDivElement | null>(null);
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const displayViewport: EditViewport = windowWidth < 768 ? "mobile" : windowWidth < 1280 ? "tablet" : "desktop";
@@ -402,13 +413,32 @@ export function AppHomePage() {
     }
     return map;
   }, [accountCreateOptions]);
+  const fallbackAssetTypesFromAccountTypes = useMemo<AssetTypeOption[]>(() => {
+    const slugSet = new Set<string>();
+    const next: AssetTypeOption[] = [];
+    for (const type of accountCreateOptions?.account_types ?? []) {
+      for (const slug of type.allowed_asset_type_slugs ?? []) {
+        const clean = slug.trim();
+        if (!clean || slugSet.has(clean)) continue;
+        slugSet.add(clean);
+        next.push({
+          id: -next.length - 1,
+          name: formatSlugLabel(clean),
+          slug: clean,
+          is_system: true,
+        });
+      }
+    }
+    return next;
+  }, [accountCreateOptions]);
+  const assetTypesForNav = assetTypes.length > 0 ? assetTypes : fallbackAssetTypesFromAccountTypes;
   const assetTypeEntries = useMemo(
     () =>
-      assetTypes.map((assetType) => ({
+      assetTypesForNav.map((assetType) => ({
         key: `asset-type:${assetType.slug ?? assetType.id}`,
         assetType,
       })),
-    [assetTypes],
+    [assetTypesForNav],
   );
   const accountEntries = useMemo(
     () =>
@@ -421,11 +451,50 @@ export function AppHomePage() {
   const sectionOrderForRender = navEditMode ? draftNavSectionOrder : navSectionOrder;
   const assetOrderForRender = navEditMode ? draftNavAssetItemOrder : navAssetItemOrder;
   const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
+  const sectionOrderForView = useMemo(() => {
+    if (
+      !navEditMode
+      || !navDragItem
+      || !navDropTarget
+      || navDragItem.kind !== "section"
+      || navDropTarget.kind !== "section"
+      || navDropTarget.key === navDragItem.key
+    ) {
+      return sectionOrderForRender;
+    }
+    return moveKeyForDrag(sectionOrderForRender, navDragItem.key, navDropTarget.key) as NavSectionKey[];
+  }, [navDragItem, navDropTarget, navEditMode, sectionOrderForRender]);
+  const assetOrderForView = useMemo(() => {
+    if (
+      !navEditMode
+      || !navDragItem
+      || !navDropTarget
+      || navDragItem.kind !== "asset"
+      || navDropTarget.kind !== "asset"
+      || navDropTarget.key === navDragItem.key
+    ) {
+      return assetOrderForRender;
+    }
+    return moveKeyForDrag(assetOrderForRender, navDragItem.key, navDropTarget.key);
+  }, [assetOrderForRender, navDragItem, navDropTarget, navEditMode]);
+  const accountOrderForView = useMemo(() => {
+    if (
+      !navEditMode
+      || !navDragItem
+      || !navDropTarget
+      || navDragItem.kind !== "account"
+      || navDropTarget.kind !== "account"
+      || navDropTarget.key === navDragItem.key
+    ) {
+      return accountOrderForRender;
+    }
+    return moveKeyForDrag(accountOrderForRender, navDragItem.key, navDropTarget.key);
+  }, [accountOrderForRender, navDragItem, navDropTarget, navEditMode]);
   const orderedAssetEntries = useMemo(() => {
     const keyToEntry = new Map(assetTypeEntries.map((entry) => [entry.key, entry] as const));
-    const orderedKeys = normalizeOrder(assetOrderForRender, assetTypeEntries.map((entry) => entry.key));
+    const orderedKeys = normalizeOrder(assetOrderForView, assetTypeEntries.map((entry) => entry.key));
     return orderedKeys.map((key) => keyToEntry.get(key)).filter(Boolean) as typeof assetTypeEntries;
-  }, [assetOrderForRender, assetTypeEntries]);
+  }, [assetOrderForView, assetTypeEntries]);
   const filteredOrderedAssetEntries = useMemo(() => {
     const term = assetTypeSearch.trim().toLowerCase();
     if (!term) return orderedAssetEntries;
@@ -441,9 +510,9 @@ export function AppHomePage() {
   );
   const orderedAccountEntries = useMemo(() => {
     const keyToEntry = new Map(accountEntries.map((entry) => [entry.key, entry] as const));
-    const orderedKeys = normalizeOrder(accountOrderForRender, accountEntries.map((entry) => entry.key));
+    const orderedKeys = normalizeOrder(accountOrderForView, accountEntries.map((entry) => entry.key));
     return orderedKeys.map((key) => keyToEntry.get(key)).filter(Boolean) as typeof accountEntries;
-  }, [accountEntries, accountOrderForRender]);
+  }, [accountEntries, accountOrderForView]);
   const filteredOrderedAccountEntries = useMemo(() => {
     const term = accountSearch.trim().toLowerCase();
     if (!term) return orderedAccountEntries;
@@ -647,55 +716,246 @@ export function AppHomePage() {
     setNavAssetItemOrder(nextAssetOrder);
     setNavAccountItemOrder(nextAccountOrder);
     setNavEditMode(false);
+    setNavDragItem(null);
+    setNavDropTarget(null);
   };
 
-  const moveDraftSection = (section: NavSectionKey, delta: number) => {
-    setDraftNavSectionOrder((previous) => {
-      const index = previous.indexOf(section);
-      if (index < 0) return previous;
-      return moveInList(previous, index, delta);
-    });
+  const reorderDraftByDrag = (kind: NavDragKind, sourceKey: string, targetKey: string) => {
+    if (sourceKey === targetKey) return;
+    if (kind === "section") {
+      setDraftNavSectionOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey) as NavSectionKey[]);
+      return;
+    }
+    if (kind === "asset") {
+      setDraftNavAssetItemOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey));
+      return;
+    }
+    setDraftNavAccountItemOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey));
   };
 
-  const moveDraftAssetItem = (key: string, delta: number) => {
-    setDraftNavAssetItemOrder((previous) => {
-      const index = previous.indexOf(key);
-      if (index < 0) return previous;
-      return moveInList(previous, index, delta);
-    });
+  const handleNavDragStart = (event: DragEvent<HTMLButtonElement>, kind: NavDragKind, key: string) => {
+    if (!navEditMode) return;
+    const dragSource = event.currentTarget.closest("[data-nav-draggable]") as HTMLElement | null;
+    const dragItem: NavDragItem = { kind, key };
+    navDragItemRef.current = dragItem;
+    navHoverTargetRef.current = null;
+    setNavDragItem(dragItem);
+    setNavDropTarget(null);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `${kind}:${key}`);
+    if (dragSource) {
+      const rect = dragSource.getBoundingClientRect();
+      const offsetX = clamp(Math.round(event.clientX - rect.left), 0, Math.round(rect.width));
+      const offsetY = clamp(Math.round(event.clientY - rect.top), 0, Math.round(rect.height));
+      const clone = dragSource.cloneNode(true) as HTMLElement;
+      clone.style.position = "fixed";
+      clone.style.left = "-9999px";
+      clone.style.top = "0";
+      clone.style.width = `${rect.width}px`;
+      clone.style.height = `${rect.height}px`;
+      clone.style.pointerEvents = "none";
+      clone.style.borderRadius = "12px";
+      clone.style.boxShadow = "0 18px 36px rgba(15, 23, 42, 0.22)";
+      clone.style.background = "#ffffff";
+      clone.style.opacity = "0.98";
+      clone.style.zIndex = "9999";
+      document.body.appendChild(clone);
+      event.dataTransfer.setDragImage(clone, offsetX, offsetY);
+      window.setTimeout(() => {
+        if (clone.parentNode) {
+          clone.parentNode.removeChild(clone);
+        }
+      }, 0);
+    }
   };
 
-  const moveDraftAccountItem = (key: string, delta: number) => {
-    setDraftNavAccountItemOrder((previous) => {
-      const index = previous.indexOf(key);
-      if (index < 0) return previous;
-      return moveInList(previous, index, delta);
-    });
+  const readNavDragItem = (event?: DragEvent<HTMLElement>): NavDragItem | null => {
+    if (navDragItemRef.current) return navDragItemRef.current;
+    if (navDragItem) return navDragItem;
+    if (!event) return null;
+    const raw = event.dataTransfer.getData("text/plain");
+    if (!raw) return null;
+    const separatorIndex = raw.indexOf(":");
+    if (separatorIndex < 0) return null;
+    const kindRaw = raw.slice(0, separatorIndex);
+    const key = raw.slice(separatorIndex + 1);
+    if (!kindRaw || !key) return null;
+    if (kindRaw !== "section" && kindRaw !== "asset" && kindRaw !== "account") return null;
+    return { kind: kindRaw, key };
   };
+
+  const handleNavDragEnd = () => {
+    const currentDrag = navDragItemRef.current ?? navDragItem;
+    const hoveredTarget = navHoverTargetRef.current;
+    if (
+      navEditMode
+      && currentDrag
+      && hoveredTarget
+      && hoveredTarget.kind === currentDrag.kind
+      && hoveredTarget.key !== currentDrag.key
+    ) {
+      reorderDraftByDrag(currentDrag.kind, currentDrag.key, hoveredTarget.key);
+    }
+    navDragItemRef.current = null;
+    navHoverTargetRef.current = null;
+    setNavDragItem(null);
+    setNavDropTarget(null);
+  };
+
+  const handleNavTargetDragOver = (event: DragEvent<HTMLElement>, kind: NavDragKind, key: string) => {
+    if (!navEditMode) return;
+    const currentDrag = readNavDragItem(event);
+    if (!currentDrag || currentDrag.kind !== kind) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    let targetKey = key;
+    if (targetKey === currentDrag.key) {
+      // When hovering back over the dragged row, map to the row currently occupying the original slot.
+      // This preserves source-slot preview behavior without restoring initial flicker.
+      if (navDropTarget?.kind !== kind) return;
+      const baseOrder = kind === "section" ? sectionOrderForRender : kind === "asset" ? assetOrderForRender : accountOrderForRender;
+      const previewOrder = kind === "section" ? sectionOrderForView : kind === "asset" ? assetOrderForView : accountOrderForView;
+      const sourceIndex = baseOrder.indexOf(currentDrag.key);
+      const occupant = sourceIndex >= 0 ? previewOrder[sourceIndex] : null;
+      if (!occupant || occupant === currentDrag.key) return;
+      targetKey = occupant;
+    }
+    navHoverTargetRef.current = { kind, key: targetKey };
+    if (!navDropTarget || navDropTarget.kind !== kind || navDropTarget.key !== targetKey) {
+      setNavDropTarget({ kind, key: targetKey });
+    }
+  };
+
+  const handleNavTargetDrop = (event: DragEvent<HTMLElement>, kind: NavDragKind, key: string) => {
+    if (!navEditMode) return;
+    event.preventDefault();
+    const currentDrag = readNavDragItem(event);
+    if (!currentDrag || currentDrag.kind !== kind) {
+      navDragItemRef.current = null;
+      navHoverTargetRef.current = null;
+      setNavDragItem(null);
+      setNavDropTarget(null);
+      return;
+    }
+    navHoverTargetRef.current = { kind, key };
+    if (key !== currentDrag.key) {
+      reorderDraftByDrag(kind, currentDrag.key, key);
+    }
+    navDragItemRef.current = null;
+    navHoverTargetRef.current = null;
+    setNavDragItem(null);
+    setNavDropTarget(null);
+  };
+
+  const handleNavContainerDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!navEditMode) return;
+    const currentDrag = readNavDragItem(event);
+    if (!currentDrag) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const handleNavContainerDrop = (event: DragEvent<HTMLElement>) => {
+    if (!navEditMode) return;
+    event.preventDefault();
+    const currentDrag = readNavDragItem(event);
+    if (!currentDrag) {
+      navDragItemRef.current = null;
+      navHoverTargetRef.current = null;
+      setNavDragItem(null);
+      setNavDropTarget(null);
+      return;
+    }
+    const targetKey = navDropTarget?.kind === currentDrag.kind ? navDropTarget.key : null;
+    if (targetKey) {
+      navHoverTargetRef.current = { kind: currentDrag.kind, key: targetKey };
+    }
+    if (targetKey && targetKey !== currentDrag.key) {
+      reorderDraftByDrag(currentDrag.kind, currentDrag.key, targetKey);
+    }
+    navDragItemRef.current = null;
+    navHoverTargetRef.current = null;
+    setNavDragItem(null);
+    setNavDropTarget(null);
+  };
+
+  useEffect(() => {
+    if (!navEditMode || !navDragItem) return;
+    const listenerOptions: AddEventListenerOptions = { capture: true };
+    const onWindowDragEnter = (event: Event) => {
+      event.preventDefault();
+      const dragEvent = event as globalThis.DragEvent;
+      if (dragEvent.dataTransfer) {
+        dragEvent.dataTransfer.dropEffect = "move";
+      }
+    };
+    const onWindowDragOver = (event: Event) => {
+      event.preventDefault();
+      const dragEvent = event as globalThis.DragEvent;
+      const panel = navEditPanelRef.current;
+      if (panel) {
+        const rect = panel.getBoundingClientRect();
+        const inside =
+          dragEvent.clientX >= rect.left
+          && dragEvent.clientX <= rect.right
+          && dragEvent.clientY >= rect.top
+          && dragEvent.clientY <= rect.bottom;
+        if (!inside) {
+          navHoverTargetRef.current = null;
+          setNavDropTarget(null);
+        }
+      }
+      if (dragEvent.dataTransfer) {
+        dragEvent.dataTransfer.dropEffect = "move";
+      }
+    };
+    const onWindowDrop = (event: Event) => {
+      event.preventDefault();
+    };
+    window.addEventListener("dragenter", onWindowDragEnter, listenerOptions);
+    window.addEventListener("dragover", onWindowDragOver, listenerOptions);
+    window.addEventListener("drop", onWindowDrop, listenerOptions);
+    return () => {
+      window.removeEventListener("dragenter", onWindowDragEnter, listenerOptions);
+      window.removeEventListener("dragover", onWindowDragOver, listenerOptions);
+      window.removeEventListener("drop", onWindowDrop, listenerOptions);
+    };
+  }, [navDragItem, navEditMode]);
+
+  useEffect(() => {
+    if (!navDragItem) return;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.cursor = "grabbing";
+    return () => {
+      document.body.style.cursor = previousCursor;
+    };
+  }, [navDragItem]);
 
   const loadSidebarData = useCallback(async () => {
-    const [assetTypeResult, accountListResult, createOptionsResult] = await Promise.allSettled([
-      getAssetTypes(),
-      getAccountsList(),
-      getAccountCreateOptions(),
-    ]);
+    const fetchAll = async () =>
+      Promise.allSettled([getAssetTypes(), getAccountsList(), getAccountCreateOptions()]);
+
+    let [assetTypeResult, accountListResult, createOptionsResult] = await fetchAll();
+    const shouldRetry =
+      assetTypeResult.status === "rejected"
+      || accountListResult.status === "rejected"
+      || createOptionsResult.status === "rejected";
+
+    if (shouldRetry) {
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      [assetTypeResult, accountListResult, createOptionsResult] = await fetchAll();
+    }
 
     if (assetTypeResult.status === "fulfilled") {
       setAssetTypes(assetTypeResult.value);
-    } else {
-      setAssetTypes([]);
     }
 
     if (accountListResult.status === "fulfilled") {
       setAccountRows(accountListResult.value);
-    } else {
-      setAccountRows([]);
     }
 
     if (createOptionsResult.status === "fulfilled") {
       setAccountCreateOptions(createOptionsResult.value);
-    } else {
-      setAccountCreateOptions(null);
     }
   }, []);
 
@@ -1506,9 +1766,11 @@ export function AppHomePage() {
         : "max-w-[1320px]";
   const useCompactEditToolbar = windowWidth < 860 || editingViewport === "mobile";
   const useTabletEditToolbar = !useCompactEditToolbar && editingViewport === "tablet";
-  const portfolioSectionIndex = sectionOrderForRender.indexOf("portfolio");
-  const assetSectionIndex = sectionOrderForRender.indexOf("assetTypes");
-  const accountsSectionIndex = sectionOrderForRender.indexOf("accounts");
+  const portfolioSectionIndex = sectionOrderForView.indexOf("portfolio");
+  const assetSectionIndex = sectionOrderForView.indexOf("assetTypes");
+  const accountsSectionIndex = sectionOrderForView.indexOf("accounts");
+  const isNavDragging = (kind: NavDragKind, key: string) =>
+    navEditMode && navDragItem?.kind === kind && navDragItem.key === key;
 
   return (
     <main className="w-full pb-10 pt-4">
@@ -1517,7 +1779,12 @@ export function AppHomePage() {
           <section>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
               <Card className="h-fit border-border bg-[#f4f6fa] xl:sticky xl:top-24 xl:self-start">
-                <CardContent className="flex flex-col gap-5 p-4">
+                <CardContent
+                  ref={navEditPanelRef}
+                  className="flex flex-col gap-5 p-4"
+                  onDragOver={handleNavContainerDragOver}
+                  onDrop={handleNavContainerDrop}
+                >
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Navigation</p>
                             <div className="flex items-center gap-1">
@@ -1526,7 +1793,7 @@ export function AppHomePage() {
                                   <button
                                     type="button"
                                     onClick={saveNavigationEdit}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 transition-colors hover:bg-blue-50"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-900 text-slate-100 transition-colors hover:bg-slate-800"
                                     aria-label="Save navigation order"
                                   >
                                     <Check className="h-4 w-4" />
@@ -1552,29 +1819,37 @@ export function AppHomePage() {
                               )}
                             </div>
                           </div>
-                          <div className="space-y-3" style={{ order: portfolioSectionIndex + 1 }}>
+                          <div
+                            data-nav-draggable={navEditMode ? "true" : undefined}
+                            data-nav-target-kind="section"
+                            data-nav-target-key="portfolio"
+                            className={`space-y-3 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                              isNavDragging("section", "portfolio")
+                                ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
+                                : ""
+                            }`}
+                            style={{ order: portfolioSectionIndex + 1 }}
+                            onDragOver={(event) => handleNavTargetDragOver(event, "section", "portfolio")}
+                            onDrop={(event) => handleNavTargetDrop(event, "section", "portfolio")}
+                          >
                             <div className="flex items-center justify-between gap-2">
-                              <h2 className="text-base font-semibold text-slate-900">Portfolio</h2>
-                              {navEditMode ? (
-                                <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-2">
+                                {navEditMode ? (
                                   <button
                                     type="button"
-                                    onClick={() => moveDraftSection("portfolio", -1)}
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                    disabled={portfolioSectionIndex <= 0}
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "portfolio")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "portfolio") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Portfolio section"
                                   >
-                                    <ArrowUp className="h-3.5 w-3.5" />
+                                    <GripVertical className="h-3.5 w-3.5" />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => moveDraftSection("portfolio", 1)}
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                    disabled={portfolioSectionIndex >= sectionOrderForRender.length - 1}
-                                  >
-                                    <ArrowDown className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ) : null}
+                                ) : null}
+                                <h2 className="text-base font-semibold text-slate-900">Portfolio</h2>
+                              </div>
                             </div>
                             <button
                               type="button"
@@ -1598,11 +1873,34 @@ export function AppHomePage() {
                           </div>
 
                           <div
-                            className={`${assetSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"}`}
+                            data-nav-draggable={navEditMode ? "true" : undefined}
+                            data-nav-target-kind="section"
+                            data-nav-target-key="assetTypes"
+                            className={`${assetSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"} rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                              isNavDragging("section", "assetTypes")
+                                ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
+                                : ""
+                            }`}
                             style={{ order: assetSectionIndex + 1 }}
+                            onDragOver={(event) => handleNavTargetDragOver(event, "section", "assetTypes")}
+                            onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
+                                {navEditMode ? (
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Asset Types section"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
                                 <h2 className="text-base font-semibold text-slate-900">Asset Types</h2>
                                 <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                                   {orderedAssetEntries.length}
@@ -1617,26 +1915,7 @@ export function AppHomePage() {
                                 >
                                   {assetTypesCollapsed && !navEditMode ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                                 </button>
-                                {navEditMode ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => moveDraftSection("assetTypes", -1)}
-                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                      disabled={assetSectionIndex <= 0}
-                                    >
-                                      <ArrowUp className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => moveDraftSection("assetTypes", 1)}
-                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                      disabled={assetSectionIndex >= sectionOrderForRender.length - 1}
-                                    >
-                                      <ArrowDown className="h-3.5 w-3.5" />
-                                    </button>
-                                  </>
-                                ) : null}
+                                {!navEditMode ? (
                                 <div className="relative" data-dashboard-menu>
                                 <button
                                   type="button"
@@ -1663,6 +1942,7 @@ export function AppHomePage() {
                                   </div>
                                 ) : null}
                                 </div>
+                                ) : null}
                               </div>
                             </div>
                             {navEditMode || !assetTypesCollapsed ? (
@@ -1681,7 +1961,33 @@ export function AppHomePage() {
                                 const key = entry.key;
                                 const assetType = entry.assetType;
                                 return (
-                                  <div key={key} className="flex items-start gap-1">
+                                  <div
+                                    key={key}
+                                    data-nav-draggable={navEditMode ? "true" : undefined}
+                                    data-nav-target-kind="asset"
+                                    data-nav-target-key={key}
+                                    className={`flex items-start gap-1 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                                      isNavDragging("asset", key)
+                                        ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                        : ""
+                                    }`}
+                                    onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
+                                    onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
+                                  >
+                                    {navEditMode ? (
+                                      <button
+                                        type="button"
+                                        draggable
+                                        onDragStart={(event) => handleNavDragStart(event, "asset", key)}
+                                        onDragEnd={handleNavDragEnd}
+                                        className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                          isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                        }`}
+                                        aria-label={`Reorder ${assetType.name}`}
+                                      >
+                                        <GripVertical className="h-3 w-3" />
+                                      </button>
+                                    ) : null}
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1703,26 +2009,6 @@ export function AppHomePage() {
                                         <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
                                       ) : null}
                                     </button>
-                                    {navEditMode ? (
-                                      <div className="flex items-center gap-1 pt-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => moveDraftAssetItem(key, -1)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                          disabled={assetOrderForRender.indexOf(key) <= 0}
-                                        >
-                                          <ArrowUp className="h-3 w-3" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => moveDraftAssetItem(key, 1)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                          disabled={assetOrderForRender.indexOf(key) >= assetOrderForRender.length - 1}
-                                        >
-                                          <ArrowDown className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    ) : null}
                                   </div>
                                 );
                               })}
@@ -1735,7 +2021,33 @@ export function AppHomePage() {
                                 const key = entry.key;
                                 const assetType = entry.assetType;
                                 return (
-                                  <div key={key} className="flex items-start gap-1">
+                                  <div
+                                    key={key}
+                                    data-nav-draggable={navEditMode ? "true" : undefined}
+                                    data-nav-target-kind="asset"
+                                    data-nav-target-key={key}
+                                    className={`flex items-start gap-1 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                                      isNavDragging("asset", key)
+                                        ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                        : ""
+                                    }`}
+                                    onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
+                                    onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
+                                  >
+                                    {navEditMode ? (
+                                      <button
+                                        type="button"
+                                        draggable
+                                        onDragStart={(event) => handleNavDragStart(event, "asset", key)}
+                                        onDragEnd={handleNavDragEnd}
+                                        className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                          isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                        }`}
+                                        aria-label={`Reorder ${assetType.name}`}
+                                      >
+                                        <GripVertical className="h-3 w-3" />
+                                      </button>
+                                    ) : null}
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1757,26 +2069,6 @@ export function AppHomePage() {
                                         <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
                                       ) : null}
                                     </button>
-                                    {navEditMode ? (
-                                      <div className="flex items-center gap-1 pt-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => moveDraftAssetItem(key, -1)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                          disabled={assetOrderForRender.indexOf(key) <= 0}
-                                        >
-                                          <ArrowUp className="h-3 w-3" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => moveDraftAssetItem(key, 1)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                          disabled={assetOrderForRender.indexOf(key) >= assetOrderForRender.length - 1}
-                                        >
-                                          <ArrowDown className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    ) : null}
                                   </div>
                                 );
                               })}
@@ -1791,11 +2083,34 @@ export function AppHomePage() {
                           </div>
 
                           <div
-                            className={`${accountsSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"}`}
+                            data-nav-draggable={navEditMode ? "true" : undefined}
+                            data-nav-target-kind="section"
+                            data-nav-target-key="accounts"
+                            className={`${accountsSectionIndex > 0 ? "border-t border-blue-100 pt-4" : "pt-0"} rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                              isNavDragging("section", "accounts")
+                                ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
+                                : ""
+                            }`}
                             style={{ order: accountsSectionIndex + 1 }}
+                            onDragOver={(event) => handleNavTargetDragOver(event, "section", "accounts")}
+                            onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
+                                {navEditMode ? (
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "accounts")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Accounts section"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
                                 <h2 className="text-base font-semibold text-slate-900">Accounts</h2>
                                 <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
                                   {orderedAccountEntries.length}
@@ -1810,26 +2125,7 @@ export function AppHomePage() {
                                 >
                                   {accountsCollapsed && !navEditMode ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                                 </button>
-                                {navEditMode ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => moveDraftSection("accounts", -1)}
-                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                      disabled={accountsSectionIndex <= 0}
-                                    >
-                                      <ArrowUp className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => moveDraftSection("accounts", 1)}
-                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                      disabled={accountsSectionIndex >= sectionOrderForRender.length - 1}
-                                    >
-                                      <ArrowDown className="h-3.5 w-3.5" />
-                                    </button>
-                                  </>
-                                ) : null}
+                                {!navEditMode ? (
                                 <button
                                   type="button"
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
@@ -1837,6 +2133,7 @@ export function AppHomePage() {
                                 >
                                   <MoreHorizontal className="h-4.5 w-4.5" />
                                 </button>
+                                ) : null}
                               </div>
                             </div>
                             {navEditMode || !accountsCollapsed ? (
@@ -1859,7 +2156,33 @@ export function AppHomePage() {
                                   ? accountType.allowed_asset_type_slugs.map(formatSlugLabel).join(", ")
                                   : "Asset types not available";
                                 return (
-                                  <div key={account.id} className="flex items-start gap-1">
+                                  <div
+                                    key={account.id}
+                                    data-nav-draggable={navEditMode ? "true" : undefined}
+                                    data-nav-target-kind="account"
+                                    data-nav-target-key={key}
+                                    className={`flex items-start gap-1 rounded-lg px-1 py-1 transition-all duration-150 will-change-transform ${
+                                      isNavDragging("account", key)
+                                        ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                        : ""
+                                    }`}
+                                    onDragOver={(event) => handleNavTargetDragOver(event, "account", key)}
+                                    onDrop={(event) => handleNavTargetDrop(event, "account", key)}
+                                  >
+                                    {navEditMode ? (
+                                      <button
+                                        type="button"
+                                        draggable
+                                        onDragStart={(event) => handleNavDragStart(event, "account", key)}
+                                        onDragEnd={handleNavDragEnd}
+                                        className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                          isNavDragging("account", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                        }`}
+                                        aria-label={`Reorder ${account.name}`}
+                                      >
+                                        <GripVertical className="h-3 w-3" />
+                                      </button>
+                                    ) : null}
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1883,26 +2206,6 @@ export function AppHomePage() {
                                         <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
                                       ) : null}
                                     </button>
-                                    {navEditMode ? (
-                                      <div className="flex items-center gap-1 pt-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => moveDraftAccountItem(key, -1)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                          disabled={accountOrderForRender.indexOf(key) <= 0}
-                                        >
-                                          <ArrowUp className="h-3 w-3" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => moveDraftAccountItem(key, 1)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-40"
-                                          disabled={accountOrderForRender.indexOf(key) >= accountOrderForRender.length - 1}
-                                        >
-                                          <ArrowDown className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    ) : null}
                                   </div>
                                 );
                               })}
@@ -2328,7 +2631,7 @@ export function AppHomePage() {
                               title="Layout actions"
                               aria-label="Layout actions"
                             >
-                              <MoreHorizontal className="h-4 w-4" />
+                              <GripVertical className="h-4 w-4" />
                             </button>
                             {layoutActionsMenuOpen ? (
                               <div className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
@@ -2451,7 +2754,7 @@ export function AppHomePage() {
                                 title="Layout actions"
                                 aria-label="Layout actions"
                               >
-                                <MoreHorizontal className="h-4 w-4" />
+                                <GripVertical className="h-4 w-4" />
                               </button>
                               {layoutActionsMenuOpen ? (
                                 <div className="absolute left-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
@@ -2564,7 +2867,7 @@ export function AppHomePage() {
                               title="Layout actions"
                               aria-label="Layout actions"
                             >
-                              <MoreHorizontal className="h-4 w-4" />
+                              <GripVertical className="h-4 w-4" />
                             </button>
                             {layoutActionsMenuOpen ? (
                               <div className="absolute left-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
@@ -2764,7 +3067,7 @@ export function AppHomePage() {
                                   title="Storage options"
                                   aria-label="Storage options"
                                 >
-                                  <MoreHorizontal className="h-3 w-3" />
+                                  <GripVertical className="h-3 w-3" />
                                 </button>
                                 {holderMenuOpenId === holderTile.id ? (
                                   <div className="absolute left-0 top-full z-[80] mt-1 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
@@ -3103,7 +3406,7 @@ export function AppHomePage() {
                                     className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 transition-colors hover:bg-white"
                                     aria-label={`Open tile ${tile.id} menu`}
                                   >
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                    <GripVertical className="h-3.5 w-3.5" />
                                   </button>
                                   {tileMenuOpenId === tile.id ? (
                                     <div className="absolute left-1/2 top-7 z-40 w-28 -translate-x-1/2 rounded-xl border border-border bg-white p-1 shadow-lg">
