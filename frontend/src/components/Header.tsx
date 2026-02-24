@@ -49,7 +49,8 @@ export function Header() {
   };
 
   const onPortfolio = location.pathname === "/" && Boolean(user);
-  const onSettings = location.pathname.startsWith("/settings") && Boolean(user);
+  const onAccounts = location.pathname === "/" && location.hash === "#accounts" && Boolean(user);
+  const onAssetTypes = location.pathname === "/" && location.hash === "#asset-types" && Boolean(user);
   const onPricing = location.pathname.startsWith("/pricing");
   const onSecurity = location.pathname.startsWith("/security");
   const onLearn = location.pathname.startsWith("/learn");
@@ -75,11 +76,14 @@ export function Header() {
           <nav className="hidden items-center gap-10 pl-2 lg:pl-4 lg:flex" aria-label="Primary">
             {user ? (
               <>
-                <Link to="/" className={navTabClass(onPortfolio)}>
+                <Link to="/" className={navTabClass(onPortfolio && !location.hash)}>
                   Portfolio
                 </Link>
-                <Link to="/settings#account" className={navTabClass(onSettings)}>
-                  Settings
+                <Link to="/#accounts" className={navTabClass(onAccounts)}>
+                  Accounts
+                </Link>
+                <Link to="/#asset-types" className={navTabClass(onAssetTypes)}>
+                  Asset Types
                 </Link>
               </>
             ) : (
@@ -107,13 +111,10 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-2 py-1.5 hover:bg-secondary"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white hover:bg-secondary"
                 aria-label="Open profile menu"
               >
-                <CircleUserRound className="h-4 w-4 text-primary" />
-                <span className="hidden max-w-[140px] truncate text-xs font-medium text-foreground sm:inline">
-                  {user.email}
-                </span>
+                <CircleUserRound className="h-5 w-5 text-primary" />
               </button>
 
               {profileMenuOpen ? (
@@ -179,6 +180,20 @@ export function Header() {
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Portfolio
+                </Link>
+                <Link
+                  to="/#accounts"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Accounts
+                </Link>
+                <Link
+                  to="/#asset-types"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Asset Types
                 </Link>
                 <Link
                   to="/settings#account"

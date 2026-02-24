@@ -55,7 +55,7 @@ type HolderTile = {
   returnRowSpan?: number;
 };
 type ViewportHolders = Record<EditViewport, HolderTile[]>;
-type NavSectionKey = "portfolio" | "assetTypes" | "accounts";
+type NavSectionKey = "portfolio" | "addAssets" | "assetTypes" | "accounts";
 type NavDragKind = "section" | "asset" | "account";
 type NavDragItem = {
   kind: NavDragKind;
@@ -131,7 +131,7 @@ const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
   tablet: 4,
   desktop: 5,
 };
-const DEFAULT_NAV_SECTION_ORDER: NavSectionKey[] = ["portfolio", "assetTypes", "accounts"];
+const DEFAULT_NAV_SECTION_ORDER: NavSectionKey[] = ["portfolio", "addAssets", "assetTypes", "accounts"];
 const TILE_PRESETS: TilePreset[] = [
   {
     id: "compact",
@@ -236,9 +236,11 @@ export function AppHomePage() {
   const [assetTypeMenuOpen, setAssetTypeMenuOpen] = useState(false);
   const [accountsMenuOpen, setAccountsMenuOpen] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
-  const [accountsCollapsed, setAccountsCollapsed] = useState(true);
+  const [accountsCollapsed, setAccountsCollapsed] = useState(false);
   const [assetTypeSearch, setAssetTypeSearch] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
+  const [showAssetTypeSearchBar, setShowAssetTypeSearchBar] = useState(false);
+  const [showAccountSearchBar, setShowAccountSearchBar] = useState(false);
   const [hasHydratedNavState, setHasHydratedNavState] = useState(false);
   const [navEditMode, setNavEditMode] = useState(false);
   const [buttonEditTarget, setButtonEditTarget] = useState<"assetTypes" | "accounts" | null>(null);
@@ -452,7 +454,10 @@ export function AppHomePage() {
       })),
     [accountRows],
   );
-  const sectionOrderForRender = navEditMode ? draftNavSectionOrder : navSectionOrder;
+  const sectionOrderForRender = useMemo(
+    () => normalizeOrder(navEditMode ? draftNavSectionOrder : navSectionOrder, DEFAULT_NAV_SECTION_ORDER) as NavSectionKey[],
+    [draftNavSectionOrder, navEditMode, navSectionOrder],
+  );
   const assetOrderForRender = navEditMode ? draftNavAssetItemOrder : navAssetItemOrder;
   const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
   const sectionOrderForView = useMemo(() => {
@@ -498,6 +503,7 @@ export function AppHomePage() {
       (buttonEditTarget === "assetTypes" && kind === "asset")
       || (buttonEditTarget === "accounts" && kind === "account")
     );
+  const isManagingSections = navEditMode && buttonEditTarget === null;
   const canDragKind = (kind: NavDragKind) => kind === "section" || canEditButtonsForKind(kind);
   const orderedAssetEntries = useMemo(() => {
     const keyToEntry = new Map(assetTypeEntries.map((entry) => [entry.key, entry] as const));
@@ -703,6 +709,16 @@ export function AppHomePage() {
     setAccountsMenuOpen(false);
     setNavEditMode(true);
     setButtonEditTarget(target);
+    setDraftNavSectionOrder([...sectionOrderForRender]);
+    setDraftNavAssetItemOrder([...assetOrderForRender]);
+    setDraftNavAccountItemOrder([...accountOrderForRender]);
+  };
+
+  const startSectionNavigationEdit = () => {
+    setAssetTypeMenuOpen(false);
+    setAccountsMenuOpen(false);
+    setNavEditMode(true);
+    setButtonEditTarget(null);
     setDraftNavSectionOrder([...sectionOrderForRender]);
     setDraftNavAssetItemOrder([...assetOrderForRender]);
     setDraftNavAccountItemOrder([...accountOrderForRender]);
@@ -1056,7 +1072,8 @@ export function AppHomePage() {
         setNavAccountItemOrder(payload.account_item_order ?? []);
         setAssetTypesCollapsed(Boolean(payload.asset_types_collapsed));
         setAccountsCollapsed(Boolean(payload.accounts_collapsed));
-        setActiveSidebarCategory((payload.active_item_key || "portfolio").trim() || "portfolio");
+        const nextActiveKey = (payload.active_item_key ?? "").trim() || dashboardScope;
+        setActiveSidebarCategory(nextActiveKey);
         setHasHydratedNavState(true);
       } catch {
         if (isCancelled) return;
@@ -1064,8 +1081,8 @@ export function AppHomePage() {
         setNavAssetItemOrder([]);
         setNavAccountItemOrder([]);
         setAssetTypesCollapsed(false);
-        setAccountsCollapsed(true);
-        setActiveSidebarCategory("portfolio");
+        setAccountsCollapsed(false);
+        setActiveSidebarCategory(dashboardScope);
         setHasHydratedNavState(true);
       }
     };
@@ -1822,6 +1839,7 @@ export function AppHomePage() {
   const useCompactEditToolbar = windowWidth < 860 || editingViewport === "mobile";
   const useTabletEditToolbar = !useCompactEditToolbar && editingViewport === "tablet";
   const portfolioSectionIndex = sectionOrderForView.indexOf("portfolio");
+  const addAssetsSectionIndex = sectionOrderForView.indexOf("addAssets");
   const assetSectionIndex = sectionOrderForView.indexOf("assetTypes");
   const accountsSectionIndex = sectionOrderForView.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
@@ -1832,7 +1850,7 @@ export function AppHomePage() {
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[328px_minmax(0,1fr)]">
               <Card className="h-fit border-border bg-[#f4f6fa] xl:sticky xl:top-24 xl:self-start">
                 <CardContent
                   ref={navEditPanelRef}
@@ -1853,43 +1871,85 @@ export function AppHomePage() {
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "portfolio")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "portfolio")}
                           >
-                            <CardContent className="space-y-3 p-4">
-                            <div className="flex items-center justify-between gap-2">
+                            <CardContent className="p-2.5">
                               <div className="flex items-center gap-2">
+                                {isManagingSections ? (
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "portfolio")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "portfolio") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Portfolio section"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
-                                  draggable
-                                  onDragStart={(event) => handleNavDragStart(event, "section", "portfolio")}
-                                  onDragEnd={handleNavDragEnd}
-                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                    isNavDragging("section", "portfolio") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                  onClick={() => {
+                                    if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                    setActiveSidebarCategory("portfolio");
+                                    setActiveSidebarLabel("Portfolio");
+                                  }}
+                                  className={`relative flex flex-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
+                                    activeSidebarCategory === "portfolio"
+                                      ? "text-blue-700"
+                                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                                   }`}
-                                  aria-label="Reorder Portfolio section"
                                 >
-                                  <GripVertical className="h-3.5 w-3.5" />
+                                  <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+                                  <span className="truncate">Dashboard</span>
+                                  {activeSidebarCategory === "portfolio" ? (
+                                    <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
+                                  ) : null}
                                 </button>
-                                <h2 className="text-base font-semibold text-slate-900">Portfolio</h2>
                               </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                setActiveSidebarCategory("portfolio");
-                                setActiveSidebarLabel("Portfolio");
-                              }}
-                              className={`relative flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors ${
-                                activeSidebarCategory === "portfolio"
-                                  ? "text-blue-700"
-                                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                              }`}
-                            >
-                              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
-                              <span className="truncate">Portfolio Dashboard</span>
-                              {activeSidebarCategory === "portfolio" ? (
-                                <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
-                              ) : null}
-                            </button>
+                            </CardContent>
+                          </div>
+
+                          <div
+                            data-nav-draggable="true"
+                            data-nav-target-kind="section"
+                            data-nav-target-key="addAssets"
+                            className={`relative rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
+                              isNavDragging("section", "addAssets")
+                                ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
+                                : ""
+                            }`}
+                            style={{ order: addAssetsSectionIndex + 1 }}
+                            onDragOver={(event) => handleNavTargetDragOver(event, "section", "addAssets")}
+                            onDrop={(event) => handleNavTargetDrop(event, "section", "addAssets")}
+                          >
+                            <CardContent className="p-2.5">
+                              <div className="flex items-center gap-2">
+                                {isManagingSections ? (
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "addAssets")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "addAssets") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Add Assets section"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="flex h-full min-h-[56px] w-full flex-col items-center justify-center gap-2 rounded-lg px-2 py-2 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                  aria-label="Add assets"
+                                >
+                                  <span className="w-full whitespace-normal leading-tight">Add Assets</span>
+                                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white">
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </span>
+                                </button>
+                              </div>
                             </CardContent>
                           </div>
 
@@ -1897,7 +1957,9 @@ export function AppHomePage() {
                             data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="assetTypes"
-                            className={`rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
+                            className={`relative rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
+                              assetTypeMenuOpen ? "z-40" : "z-10"
+                            } ${
                               isNavDragging("section", "assetTypes")
                                 ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -1909,89 +1971,115 @@ export function AppHomePage() {
                             <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  draggable
-                                  onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
-                                  onDragEnd={handleNavDragEnd}
-                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                    isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                  }`}
-                                  aria-label="Reorder Asset Types section"
-                                >
-                                  <GripVertical className="h-3.5 w-3.5" />
-                                </button>
-                                <h2 className="text-base font-semibold text-slate-900">Asset Types</h2>
-                                <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                                  {orderedAssetEntries.length}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
-                                  aria-label={assetTypesCollapsed ? "Expand asset types" : "Collapse asset types"}
-                                >
-                                  {assetTypesCollapsed && !canEditButtonsForKind("asset") ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                </button>
-                                <div className="relative" data-dashboard-menu>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAccountsMenuOpen(false);
-                                    setAssetTypeMenuOpen((previous) => !previous);
-                                  }}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
-                                  aria-label="Asset type actions"
-                                >
-                                  <MoreHorizontal className="h-4.5 w-4.5" />
-                                </button>
-                                {assetTypeMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-border bg-white p-1 shadow-lg">
-                                    <button
-                                      type="button"
-                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      Add New Asset Type
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      Manage Existing
-                                    </button>
-                                    <div className="my-1 h-px bg-slate-200" />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (canEditButtonsForKind("asset")) {
-                                          saveNavigationEdit();
-                                        } else {
-                                          startNavigationEdit("assetTypes");
-                                        }
-                                      }}
-                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      {canEditButtonsForKind("asset") ? "Done rearranging" : "Rearrange buttons"}
-                                    </button>
-                                  </div>
+                                {isManagingSections ? (
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Asset Types section"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
                                 ) : null}
+                                <h2 className="text-base font-semibold text-slate-900">Asset Types</h2>
+                                <div className="relative" data-dashboard-menu>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAccountsMenuOpen(false);
+                                      setAssetTypeMenuOpen((previous) => !previous);
+                                    }}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                                    aria-label="Asset type actions"
+                                  >
+                                    <MoreHorizontal className="h-4.5 w-4.5" />
+                                  </button>
+                                  {assetTypeMenuOpen ? (
+                                    <div className="absolute left-0 z-50 mt-2 w-56 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setShowAssetTypeSearchBar((previous) => !previous);
+                                          setAssetTypeMenuOpen(false);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        {showAssetTypeSearchBar ? "Hide search bar" : "Show search bar"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setAssetTypeMenuOpen(false)}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        Add New Asset Type
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setAssetTypeMenuOpen(false)}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        Manage Existing
+                                      </button>
+                                      <div className="my-1 h-px bg-slate-200" />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (canEditButtonsForKind("asset")) {
+                                            saveNavigationEdit();
+                                          } else {
+                                            startNavigationEdit("assetTypes");
+                                          }
+                                          setAssetTypeMenuOpen(false);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        {canEditButtonsForKind("asset") ? "Done rearranging" : "Rearrange buttons"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (isManagingSections) {
+                                            saveNavigationEdit();
+                                          } else {
+                                            startSectionNavigationEdit();
+                                          }
+                                          setAssetTypeMenuOpen(false);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        {isManagingSections ? "Done managing sections" : "Manage sections"}
+                                      </button>
+                                    </div>
+                                  ) : null}
                                 </div>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => setAssetTypesCollapsed((previous) => !previous)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                                aria-label={assetTypesCollapsed ? "Expand asset types" : "Collapse asset types"}
+                              >
+                                {assetTypesCollapsed && !canEditButtonsForKind("asset") ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              </button>
                             </div>
                             {canEditButtonsForKind("asset") || !assetTypesCollapsed ? (
                             <div className="mt-3 space-y-2">
-                              <div className="relative">
-                                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                <input
-                                  value={assetTypeSearch}
-                                  onChange={(event) => setAssetTypeSearch(event.target.value)}
-                                  placeholder="Search asset types"
-                                  className="w-full rounded-lg border border-blue-100 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-200"
-                                />
-                              </div>
-                              <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
+                              {showAssetTypeSearchBar ? (
+                                <div className="relative">
+                                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    value={assetTypeSearch}
+                                    onChange={(event) => setAssetTypeSearch(event.target.value)}
+                                    placeholder="Search asset types"
+                                    className="w-full rounded-lg border border-blue-100 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-200"
+                                  />
+                                </div>
+                              ) : null}
+                              <div className="max-h-[22rem] space-y-1 overflow-y-auto pr-1">
                               {systemAssetTypes.map((entry) => {
                                 const key = entry.key;
                                 const assetType = entry.assetType;
@@ -2001,7 +2089,7 @@ export function AppHomePage() {
                                     data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
                                     data-nav-target-kind="asset"
                                     data-nav-target-key={key}
-                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-1 transition-colors duration-100 ${
+                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-0.5 transition-colors duration-100 ${
                                       isNavDragging("asset", key)
                                         ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                         : ""
@@ -2030,7 +2118,7 @@ export function AppHomePage() {
                                         setActiveSidebarCategory(key);
                                         setActiveSidebarLabel(assetType.name);
                                       }}
-                                      className={`relative flex-1 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                                      className={`relative flex-1 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
                                         activeSidebarCategory === key
                                           ? "text-blue-700"
                                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -2061,7 +2149,7 @@ export function AppHomePage() {
                                     data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
                                     data-nav-target-kind="asset"
                                     data-nav-target-key={key}
-                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-1 transition-colors duration-100 ${
+                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-0.5 transition-colors duration-100 ${
                                       isNavDragging("asset", key)
                                         ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                         : ""
@@ -2090,7 +2178,7 @@ export function AppHomePage() {
                                         setActiveSidebarCategory(key);
                                         setActiveSidebarLabel(assetType.name);
                                       }}
-                                      className={`relative flex-1 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                                      className={`relative flex-1 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
                                         activeSidebarCategory === key
                                           ? "text-blue-700"
                                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -2122,7 +2210,9 @@ export function AppHomePage() {
                             data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="accounts"
-                            className={`rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
+                            className={`relative rounded-xl border border-blue-100 bg-white transition-all duration-150 will-change-transform ${
+                              accountsMenuOpen ? "z-40" : "z-10"
+                            } ${
                               isNavDragging("section", "accounts")
                                 ? "border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -2134,32 +2224,21 @@ export function AppHomePage() {
                             <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  draggable
-                                  onDragStart={(event) => handleNavDragStart(event, "section", "accounts")}
-                                  onDragEnd={handleNavDragEnd}
-                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                    isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                  }`}
-                                  aria-label="Reorder Accounts section"
-                                >
-                                  <GripVertical className="h-3.5 w-3.5" />
-                                </button>
+                                {isManagingSections ? (
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(event) => handleNavDragStart(event, "section", "accounts")}
+                                    onDragEnd={handleNavDragEnd}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                    }`}
+                                    aria-label="Reorder Accounts section"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
                                 <h2 className="text-base font-semibold text-slate-900">Accounts</h2>
-                                <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
-                                  {orderedAccountEntries.length}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
-                                  aria-label={accountsCollapsed ? "Expand accounts" : "Collapse accounts"}
-                                >
-                                  {accountsCollapsed && !canEditButtonsForKind("account") ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                </button>
                                 <div className="relative" data-dashboard-menu>
                                   <button
                                     type="button"
@@ -2173,7 +2252,17 @@ export function AppHomePage() {
                                     <MoreHorizontal className="h-4.5 w-4.5" />
                                   </button>
                                   {accountsMenuOpen ? (
-                                    <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                    <div className="absolute left-0 z-50 mt-2 w-56 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setShowAccountSearchBar((previous) => !previous);
+                                          setAccountsMenuOpen(false);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        {showAccountSearchBar ? "Hide search bar" : "Show search bar"}
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -2182,28 +2271,53 @@ export function AppHomePage() {
                                           } else {
                                             startNavigationEdit("accounts");
                                           }
+                                          setAccountsMenuOpen(false);
                                         }}
                                         className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
                                       >
                                         {canEditButtonsForKind("account") ? "Done rearranging" : "Rearrange buttons"}
                                       </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (isManagingSections) {
+                                            saveNavigationEdit();
+                                          } else {
+                                            startSectionNavigationEdit();
+                                          }
+                                          setAccountsMenuOpen(false);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        {isManagingSections ? "Done managing sections" : "Manage sections"}
+                                      </button>
                                     </div>
                                   ) : null}
                                 </div>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => setAccountsCollapsed((previous) => !previous)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                                aria-label={accountsCollapsed ? "Expand accounts" : "Collapse accounts"}
+                              >
+                                {accountsCollapsed && !canEditButtonsForKind("account") ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              </button>
                             </div>
                             {canEditButtonsForKind("account") || !accountsCollapsed ? (
                             <div className="mt-3 space-y-2">
-                              <div className="relative">
-                                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                <input
-                                  value={accountSearch}
-                                  onChange={(event) => setAccountSearch(event.target.value)}
-                                  placeholder="Search accounts"
-                                  className="w-full rounded-lg border border-blue-100 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-200"
-                                />
-                              </div>
-                              <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
+                              {showAccountSearchBar ? (
+                                <div className="relative">
+                                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    value={accountSearch}
+                                    onChange={(event) => setAccountSearch(event.target.value)}
+                                    placeholder="Search accounts"
+                                    className="w-full rounded-lg border border-blue-100 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-700 outline-none transition-colors focus:border-blue-200"
+                                  />
+                                </div>
+                              ) : null}
+                              <div className="max-h-[22rem] space-y-1 overflow-y-auto pr-1">
                               {filteredOrderedAccountEntries.map((entry) => {
                                 const account = entry.account;
                                 const key = entry.key;
@@ -2217,7 +2331,7 @@ export function AppHomePage() {
                                     data-nav-draggable={canEditButtonsForKind("account") ? "true" : undefined}
                                     data-nav-target-kind="account"
                                     data-nav-target-key={key}
-                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-1 transition-colors duration-100 ${
+                                    className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-0.5 transition-colors duration-100 ${
                                       isNavDragging("account", key)
                                         ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                         : ""
@@ -2246,7 +2360,7 @@ export function AppHomePage() {
                                         setActiveSidebarCategory(key);
                                         setActiveSidebarLabel(account.name);
                                       }}
-                                      className={`relative flex-1 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                                      className={`relative flex-1 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
                                         activeSidebarCategory === key
                                           ? "text-blue-700"
                                           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
@@ -2279,43 +2393,45 @@ export function AppHomePage() {
               </Card>
               <div className="space-y-4">
               <Card className="border-blue-100 bg-white">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
-                    <div className="relative" data-dashboard-menu>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSettingsMenuOpen((previous) => !previous);
-                        }}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
-                      >
-                        <Settings className="h-5 w-5" />
-                      </button>
-                      {settingsMenuOpen ? (
-                        <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
-                          {!isEditing ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsEditing(true);
-                                setSettingsMenuOpen(false);
-                              }}
-                              className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                            >
-                              Edit Dashboard
-                            </button>
-                          ) : (
-                            <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
-                              Use the edit toolbar above the dashboard.
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
+                      <div className="flex items-center gap-2">
+                        <div className="relative" data-dashboard-menu>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSettingsMenuOpen((previous) => !previous);
+                            }}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                          >
+                            <Settings className="h-5 w-5" />
+                          </button>
+                          {settingsMenuOpen ? (
+                            <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
+                              {!isEditing ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsEditing(true);
+                                    setSettingsMenuOpen(false);
+                                  }}
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                >
+                                  Edit Dashboard
+                                </button>
+                              ) : (
+                                <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                                  Use the edit toolbar above the dashboard.
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ) : null}
                         </div>
-                      ) : null}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
               {!isEditing ? (
                 <Card className="overflow-visible border-border bg-[#f4f6fa]">
                   <CardContent className="min-h-[74vh] space-y-4 p-5">
