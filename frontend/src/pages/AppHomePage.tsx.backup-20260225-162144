@@ -1085,10 +1085,6 @@ export function AppHomePage() {
       setActiveSidebarLabel("Portfolio");
       return;
     }
-    if (activeSidebarCategory === "holdings") {
-      setActiveSidebarLabel("All Holdings");
-      return;
-    }
     if (activeSidebarCategory === "accounts") {
       setActiveSidebarLabel("Accounts");
       return;
@@ -1827,25 +1823,6 @@ export function AppHomePage() {
   const accountsSectionIndex = navSectionsBelowAddAssets.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
     navDragItem?.kind === kind && navDragItem.key === key;
-  const holdingsContext = useMemo(() => {
-    if (activeSidebarCategory === "portfolio") return { label: "All Holdings", query: {} as Record<string, string> };
-    if (activeSidebarCategory === "accounts") return { label: "All Accounts", query: { scope: "accounts" } };
-    const assetMatch = assetTypeEntries.find((entry) => entry.key === activeSidebarCategory);
-    if (assetMatch) {
-      return {
-        label: `Asset Type: ${assetMatch.assetType.name}`,
-        query: { scope: "asset_type", key: activeSidebarCategory, name: assetMatch.assetType.name },
-      };
-    }
-    const accountMatch = accountEntries.find((entry) => entry.key === activeSidebarCategory);
-    if (accountMatch) {
-      return {
-        label: `Account: ${accountMatch.account.name}`,
-        query: { scope: "account", key: activeSidebarCategory, name: accountMatch.account.name },
-      };
-    }
-    return { label: "All Holdings", query: {} as Record<string, string> };
-  }, [accountEntries, activeSidebarCategory, assetTypeEntries]);
   const goToHoldings = useCallback(
     (query: Record<string, string> = {}) => {
       const search = new URLSearchParams(query).toString();
@@ -1859,8 +1836,8 @@ export function AppHomePage() {
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[284px_minmax(0,1fr)]">
-              <Card className="h-fit border-0 bg-transparent shadow-none xl:sticky xl:top-24 xl:max-h-[calc(100vh-6.5rem)] xl:self-start">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_328px]">
+              <Card className="h-fit border-0 bg-transparent shadow-none xl:order-2 xl:sticky xl:top-24 xl:max-h-[calc(100vh-6.5rem)] xl:self-start">
                 <CardContent
                   ref={navEditPanelRef}
                   className="flex h-full flex-col gap-5 p-0 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto"
@@ -1901,13 +1878,26 @@ export function AppHomePage() {
                                   if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                   setIsAddAssetModalOpen(true);
                                 }}
-                                className="flex w-full min-h-[64px] items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-semibold text-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                className="flex w-full min-h-[86px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-center text-sm font-semibold text-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-100 hover:text-slate-900"
                                 aria-label="Add asset"
                               >
-                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white">
-                                  <Plus className="h-3.5 w-3.5" />
-                                </span>
                                 <span className="leading-tight">Add Asset</span>
+                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
+                                  <Plus className="h-4 w-4" />
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="relative z-10">
+                            <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white p-2.5 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
+                              <button
+                                type="button"
+                                onClick={() => goToHoldings()}
+                                className="relative flex flex-1 items-start gap-2 rounded-md px-2.5 py-3.5 text-left text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                              >
+                                <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+                                <span className="truncate text-base font-semibold">All Holdings</span>
                               </button>
                             </div>
                           </div>
@@ -1926,7 +1916,7 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
                           >
                             <CardContent className="p-0">
-                              <div className="space-y-2">
+                              <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white p-2.5 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
                                 {isManagingSections ? (
                                   <button
                                     type="button"
@@ -1937,62 +1927,35 @@ export function AppHomePage() {
                                     className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
                                       isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                     }`}
-                                    aria-label="Reorder Dashboards section"
+                                    aria-label="Reorder Portfolio section"
                                   >
                                     <GripVertical className="h-3.5 w-3.5" />
                                   </button>
                                 ) : null}
-                                <div className="grid grid-cols-2 gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                      setActiveSidebarCategory("portfolio");
-                                      setActiveSidebarLabel("Portfolio");
-                                    }}
-                                    className={`relative flex min-h-[72px] items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 py-3 text-center shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors focus:outline-none ${
-                                      activeSidebarCategory === "portfolio"
-                                        ? "font-extrabold text-slate-950"
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                    setActiveSidebarCategory("portfolio");
+                                    setActiveSidebarLabel("Portfolio");
+                                  }}
+                                  className={`relative flex flex-1 items-start gap-2 rounded-md px-2.5 py-3.5 text-left transition-colors ${
+                                    activeSidebarCategory === "portfolio"
+                                      ? "font-bold text-slate-950"
                                       : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                                  }`}
+                                >
+                                  <BriefcaseBusiness
+                                    className={`mt-0.5 h-4 w-4 shrink-0 ${
+                                      activeSidebarCategory === "portfolio" ? "text-slate-950" : "text-slate-600"
                                     }`}
-                                  >
-                                    <BriefcaseBusiness
-                                      className={`mt-0.5 h-4 w-4 shrink-0 ${
-                                        activeSidebarCategory === "portfolio" ? "text-slate-950" : "text-slate-600"
-                                      }`}
-                                      strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
-                                    />
-                                    <span
-                                      className={`truncate text-sm ${
-                                        activeSidebarCategory === "portfolio"
-                                          ? "font-extrabold border-b-2 border-current pb-0.5"
-                                          : "font-semibold"
-                                      }`}
-                                    >
-                                      Portfolio
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveSidebarCategory("holdings");
-                                      setActiveSidebarLabel("All Holdings");
-                                      goToHoldings();
-                                    }}
-                                    className="group relative flex min-h-[72px] items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 py-3 text-center text-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none"
-                                  >
-                                    <Columns3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
-                                    <span
-                                      className={`truncate text-sm ${
-                                        activeSidebarCategory === "holdings"
-                                          ? "font-extrabold border-b-2 border-current pb-0.5"
-                                          : "font-semibold"
-                                      }`}
-                                    >
-                                      All Holdings
-                                    </span>
-                                  </button>
-                                </div>
+                                    strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
+                                  />
+                                  <span className={`truncate text-base ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-semibold"}`}>Portfolio</span>
+                                  {activeSidebarCategory === "portfolio" ? (
+                                    <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                  ) : null}
+                                </button>
                               </div>
                             </CardContent>
                           </div>
@@ -2030,7 +1993,7 @@ export function AppHomePage() {
                                 ) : null}
                                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Asset Type Dashboards</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Assets</p>
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
@@ -2091,7 +2054,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950"
+                                                    ? "font-bold text-slate-950"
                                                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                                                 }`}
                                               >
@@ -2102,7 +2065,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
@@ -2156,7 +2119,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950"
+                                                    ? "font-bold text-slate-950"
                                                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                                                 }`}
                                               >
@@ -2167,7 +2130,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
@@ -2185,7 +2148,7 @@ export function AppHomePage() {
                                   </div>
                                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Account Dashboards</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Accounts</p>
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
@@ -2214,7 +2177,7 @@ export function AppHomePage() {
                                       }}
                                       className={`relative w-full rounded-md px-2.5 py-3 text-left text-sm font-semibold transition-colors ${
                                         activeSidebarCategory === "accounts"
-                                          ? "font-extrabold text-slate-950"
+                                          ? "font-bold text-slate-950"
                                           : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                                       }`}
                                     >
@@ -2225,7 +2188,7 @@ export function AppHomePage() {
                                           }`}
                                           strokeWidth={activeSidebarCategory === "accounts" ? 2.2 : 2}
                                         />
-                                        <span className={`truncate ${activeSidebarCategory === "accounts" ? "font-extrabold" : "font-semibold"}`}>All Accounts</span>
+                                        <span className={`truncate ${activeSidebarCategory === "accounts" ? "font-bold" : "font-semibold"}`}>All Accounts</span>
                                       </div>
                                       {activeSidebarCategory === "accounts" ? (
                                         <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
@@ -2272,7 +2235,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950"
+                                                    ? "font-bold text-slate-950"
                                                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                                                 }`}
                                               >
@@ -2283,7 +2246,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{account.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{account.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
@@ -2299,78 +2262,52 @@ export function AppHomePage() {
                                       ) : null}
                                     </div>
                                   </div>
-                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
-                                    <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Custom Dashboards</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                                    >
-                                      + Create Custom Dashboard
-                                    </button>
-                                  </div>
                               </div>
                             </CardContent>
                           </div>
                 </CardContent>
               </Card>
-              <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
-                <Card className="border-blue-100 bg-white">
-                    <CardContent className="p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
-                        <div className="flex items-center gap-2">
-                          <div className="relative" data-dashboard-menu>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSettingsMenuOpen((previous) => !previous);
-                              }}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
-                            >
-                              <Settings className="h-5 w-5" />
-                            </button>
-                            {settingsMenuOpen ? (
-                              <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
-                                {!isEditing ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setIsEditing(true);
-                                      setSettingsMenuOpen(false);
-                                    }}
-                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                  >
-                                    Edit Dashboard
-                                  </button>
-                                ) : (
-                                  <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
-                                    Use the edit toolbar above the dashboard.
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
-                          </div>
+              <div className="space-y-4 xl:order-1">
+              <Card className="border-blue-100 bg-white">
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
+                      <div className="flex items-center gap-2">
+                        <div className="relative" data-dashboard-menu>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSettingsMenuOpen((previous) => !previous);
+                            }}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                          >
+                            <Settings className="h-5 w-5" />
+                          </button>
+                          {settingsMenuOpen ? (
+                            <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
+                              {!isEditing ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsEditing(true);
+                                    setSettingsMenuOpen(false);
+                                  }}
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                >
+                                  Edit Dashboard
+                                </button>
+                              ) : (
+                                <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                                  Use the edit toolbar above the dashboard.
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveSidebarCategory("holdings");
-                    setActiveSidebarLabel("All Holdings");
-                    goToHoldings(holdingsContext.query);
-                  }}
-                  className="group relative flex min-h-[76px] items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white p-2.5 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 focus:outline-none"
-                  title={`View holdings for ${holdingsContext.label}`}
-                >
-                  <Columns3 className="h-4 w-4" />
-                  <span className={activeSidebarCategory === "holdings" ? "border-b-2 border-current pb-0.5" : ""}>View Holdings</span>
-                </button>
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
               {!isEditing ? (
                 <Card className="overflow-visible border-border bg-[#f4f6fa]">
                   <CardContent className="min-h-[74vh] space-y-4 p-5">

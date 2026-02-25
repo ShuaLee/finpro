@@ -13,6 +13,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LearnPage } from "./pages/LearnPage";
 import { LoginPage } from "./pages/LoginPage";
+import { HoldingsPage } from "./pages/HoldingsPage";
 import { PricingPage } from "./pages/PricingPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
@@ -76,6 +77,14 @@ function App() {
             element={(
               <ProtectedRoute>
                 <AddBrokerageAccountPage />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/holdings"
+            element={(
+              <ProtectedRoute>
+                <HoldingsPage />
               </ProtectedRoute>
             )}
           />
