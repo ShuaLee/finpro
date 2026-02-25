@@ -5,11 +5,13 @@ import {
   Boxes,
   Check,
   Columns3,
+  Ellipsis,
   GripVertical,
   Monitor,
   MoveDiagonal2,
   Plus,
   Settings,
+  SlidersHorizontal,
   Smartphone,
   Tablet,
   X,
@@ -232,7 +234,6 @@ export function AppHomePage() {
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
   const [accountsCollapsed, setAccountsCollapsed] = useState(false);
-  const [navListView, setNavListView] = useState<"assetTypes" | "accounts">("assetTypes");
   const [assetTypeSearch] = useState("");
   const [hasHydratedNavState, setHasHydratedNavState] = useState(false);
   const [navEditMode, setNavEditMode] = useState(false);
@@ -669,7 +670,6 @@ export function AppHomePage() {
   const startNavigationEdit = (target: "assetTypes" | "accounts") => {
     setNavEditMode(true);
     setButtonEditTarget(target);
-    setNavListView(target);
     setDraftNavSectionOrder([...sectionOrderForRender]);
     setDraftNavAssetItemOrder([...assetOrderForRender]);
     setDraftNavAccountItemOrder([...accountOrderForRender]);
@@ -1827,11 +1827,11 @@ export function AppHomePage() {
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[328px_minmax(0,1fr)]">
-              <Card className="h-fit border border-slate-700/30 bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm xl:sticky xl:top-24 xl:h-[calc(100vh-6.5rem)] xl:self-start">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_328px]">
+              <Card className="h-fit border-0 bg-transparent shadow-none xl:order-2 xl:sticky xl:top-24 xl:max-h-[calc(100vh-6.5rem)] xl:self-start">
                 <CardContent
                   ref={navEditPanelRef}
-                  className="flex h-full flex-col gap-5 overflow-y-auto p-4"
+                  className="flex h-full flex-col gap-5 p-0 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto"
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
@@ -1867,14 +1867,15 @@ export function AppHomePage() {
                                 type="button"
                                 onClick={() => {
                                   if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                  setNavListView("assetTypes");
                                   setIsAddAssetModalOpen(true);
                                 }}
-                                className="flex w-full min-h-[52px] items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                className="flex w-full min-h-[86px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-center text-sm font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.10)] transition-colors hover:bg-slate-100 hover:text-slate-900"
                                 aria-label="Add asset"
                               >
-                                <Plus className="h-4 w-4" />
                                 <span className="leading-tight">Add Asset</span>
+                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
+                                  <Plus className="h-4 w-4" />
+                                </span>
                               </button>
                             </div>
                           </div>
@@ -1893,13 +1894,18 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
                           >
                             <CardContent className="p-0">
-                              <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white p-2.5 shadow-[0_2px_6px_rgba(15,23,42,0.06)]">
+                              <div
+                                className={`flex items-center gap-2 rounded-xl border border-slate-300 p-2.5 shadow-[0_10px_22px_rgba(15,23,42,0.10)] transition-colors ${
+                                  activeSidebarCategory === "portfolio" ? "bg-slate-100" : "bg-white"
+                                }`}
+                              >
                                 {isManagingSections ? (
                                   <button
                                     type="button"
                                     draggable
                                     onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
                                     onDragEnd={handleNavDragEnd}
+                                    onClick={(event) => event.stopPropagation()}
                                     className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
                                       isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                     }`}
@@ -1915,17 +1921,14 @@ export function AppHomePage() {
                                     setActiveSidebarCategory("portfolio");
                                     setActiveSidebarLabel("Portfolio");
                                   }}
-                                  className={`relative flex flex-1 items-start gap-2 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
+                                  className={`relative flex flex-1 items-start gap-2 rounded-md px-2.5 py-3.5 text-left transition-colors ${
                                     activeSidebarCategory === "portfolio"
-                                      ? "bg-blue-50 text-blue-700"
-                                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                      ? "font-extrabold text-slate-900"
+                                      : "bg-slate-100 text-slate-700 hover:bg-slate-300"
                                   }`}
                                 >
                                   <BriefcaseBusiness className="mt-0.5 h-4 w-4 shrink-0" />
                                   <span className="truncate text-base font-semibold">Portfolio</span>
-                                  {activeSidebarCategory === "portfolio" ? (
-                                    <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
-                                  ) : null}
                                 </button>
                               </div>
                             </CardContent>
@@ -1945,9 +1948,9 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
                             <CardContent className="p-0">
-                              <div className="rounded-xl border border-slate-300 bg-white p-2.5 shadow-[0_2px_6px_rgba(15,23,42,0.06)]">
-                                <div className="flex items-center gap-2">
-                                  {isManagingSections ? (
+                              <div className="space-y-3">
+                                {isManagingSections ? (
+                                  <div className="flex items-center">
                                     <button
                                       type="button"
                                       draggable
@@ -1956,186 +1959,202 @@ export function AppHomePage() {
                                       className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
                                         isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                       }`}
-                                      aria-label="Reorder Navigation list section"
+                                      aria-label="Reorder Accounts section"
                                     >
                                       <GripVertical className="h-3.5 w-3.5" />
                                     </button>
-                                  ) : null}
-                                  <div className="grid flex-1 grid-cols-2 rounded-lg border border-blue-100 bg-slate-50 p-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => setNavListView("assetTypes")}
-                                      className={`rounded-md px-2 py-1.5 text-xs font-semibold transition-colors ${
-                                        navListView === "assetTypes"
-                                          ? "bg-blue-600 text-white"
-                                          : "text-slate-500 hover:text-slate-700"
-                                      }`}
-                                    >
-                                      Asset Types
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setNavListView("accounts")}
-                                      className={`rounded-md px-2 py-1.5 text-xs font-semibold transition-colors ${
-                                        navListView === "accounts"
-                                          ? "bg-blue-600 text-white"
-                                          : "text-slate-500 hover:text-slate-700"
-                                      }`}
-                                    >
-                                      Accounts
-                                    </button>
                                   </div>
-                                </div>
-                                <div className="mt-2 max-h-[26rem] space-y-1 overflow-y-auto pr-1">
-                                  {navListView === "assetTypes"
-                                    ? (
-                                      <>
-                                        {systemAssetTypes.map((entry) => {
-                                          const key = entry.key;
-                                          const assetType = entry.assetType;
-                                          return (
-                                            <div
-                                              key={key}
-                                              data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
-                                              data-nav-target-kind="asset"
-                                              data-nav-target-key={key}
-                                              className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-0.5 transition-colors duration-100 ${
-                                                isNavDragging("asset", key)
-                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
-                                                  : ""
-                                              }`}
-                                              onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
-                                              onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
-                                            >
-                                              {canEditButtonsForKind("asset") ? (
-                                                <button
-                                                  type="button"
-                                                  draggable
-                                                  onDragStart={(event) => handleNavDragStart(event, "asset", key)}
-                                                  onDragEnd={handleNavDragEnd}
-                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                                    isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                                  }`}
-                                                  aria-label={`Reorder ${assetType.name}`}
-                                                >
-                                                  <GripVertical className="h-3 w-3" />
-                                                </button>
-                                              ) : null}
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (canEditButtonsForKind("asset")) return;
-                                                  setActiveSidebarCategory(key);
-                                                  setActiveSidebarLabel(assetType.name);
-                                                }}
-                                                className={`relative flex-1 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
-                                                  activeSidebarCategory === key
-                                                    ? "text-blue-700"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                                                }`}
-                                              >
-                                                <div className="flex items-center gap-2">
-                                                  <Boxes className="h-4 w-4 shrink-0" />
-                                                  <span className="truncate text-sm font-medium">{assetType.name}</span>
-                                                </div>
-                                                {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
-                                                ) : null}
-                                              </button>
-                                            </div>
-                                          );
-                                        })}
-                                        {customAssetTypes.length > 0 ? (
-                                          <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                            Custom
-                                          </p>
-                                        ) : null}
-                                        {customAssetTypes.map((entry) => {
-                                          const key = entry.key;
-                                          const assetType = entry.assetType;
-                                          return (
-                                            <div
-                                              key={key}
-                                              data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
-                                              data-nav-target-kind="asset"
-                                              data-nav-target-key={key}
-                                              className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-0.5 transition-colors duration-100 ${
-                                                isNavDragging("asset", key)
-                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
-                                                  : ""
-                                              }`}
-                                              onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
-                                              onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
-                                            >
-                                              {canEditButtonsForKind("asset") ? (
-                                                <button
-                                                  type="button"
-                                                  draggable
-                                                  onDragStart={(event) => handleNavDragStart(event, "asset", key)}
-                                                  onDragEnd={handleNavDragEnd}
-                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
-                                                    isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                                  }`}
-                                                  aria-label={`Reorder ${assetType.name}`}
-                                                >
-                                                  <GripVertical className="h-3 w-3" />
-                                                </button>
-                                              ) : null}
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (canEditButtonsForKind("asset")) return;
-                                                  setActiveSidebarCategory(key);
-                                                  setActiveSidebarLabel(assetType.name);
-                                                }}
-                                                className={`relative flex-1 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
-                                                  activeSidebarCategory === key
-                                                    ? "text-blue-700"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                                                }`}
-                                              >
-                                                <div className="flex items-center gap-2">
-                                                  <Boxes className="h-4 w-4 shrink-0" />
-                                                  <span className="truncate text-sm font-medium">{assetType.name}</span>
-                                                </div>
-                                                {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
-                                                ) : null}
-                                              </button>
-                                            </div>
-                                          );
-                                        })}
-                                        {filteredOrderedAssetEntries.length === 0 ? (
-                                          <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                                            No asset types found.
-                                          </div>
-                                        ) : null}
-                                      </>
-                                      )
-                                    : (
-                                      <>
+                                ) : null}
+                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_10px_22px_rgba(15,23,42,0.10)]">
+                                    <div className="flex items-center justify-between px-1 pb-1">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Assets</p>
+                                      <div className="flex items-center gap-1">
                                         <button
                                           type="button"
-                                          onClick={() => {
-                                            if (canEditButtonsForKind("account")) return;
-                                            setActiveSidebarCategory("accounts");
-                                            setActiveSidebarLabel("Accounts");
-                                          }}
-                                          className={`relative w-full rounded-lg px-2.5 py-2.5 text-left text-sm font-medium transition-colors ${
-                                            activeSidebarCategory === "accounts"
-                                              ? "text-blue-700"
-                                              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                                          }`}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                          aria-label="Filter assets"
+                                          title="Filter assets"
                                         >
-                                          <div className="flex items-center gap-2">
-                                            <BadgeDollarSign className="h-4 w-4 shrink-0" />
-                                            <span className="truncate">All Accounts</span>
-                                          </div>
-                                          {activeSidebarCategory === "accounts" ? (
-                                            <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
-                                          ) : null}
+                                          <SlidersHorizontal className="h-3.5 w-3.5" />
                                         </button>
-                                        {orderedAccountEntries.map((entry) => {
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                          aria-label="More asset actions"
+                                          title="More asset actions"
+                                        >
+                                          <Ellipsis className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-0">
+                                      {systemAssetTypes.map((entry) => {
+                                          const key = entry.key;
+                                          const assetType = entry.assetType;
+                                          return (
+                                            <div
+                                              key={key}
+                                              data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
+                                              data-nav-target-kind="asset"
+                                              data-nav-target-key={key}
+                                              className={`flex items-start gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
+                                                isNavDragging("asset", key)
+                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                                  : ""
+                                              }`}
+                                              onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
+                                              onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
+                                            >
+                                              {canEditButtonsForKind("asset") ? (
+                                                <button
+                                                  type="button"
+                                                  draggable
+                                                  onDragStart={(event) => handleNavDragStart(event, "asset", key)}
+                                                  onDragEnd={handleNavDragEnd}
+                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                                    isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                                  }`}
+                                                  aria-label={`Reorder ${assetType.name}`}
+                                                >
+                                                  <GripVertical className="h-3 w-3" />
+                                                </button>
+                                              ) : null}
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (canEditButtonsForKind("asset")) return;
+                                                  setActiveSidebarCategory(key);
+                                                  setActiveSidebarLabel(assetType.name);
+                                                }}
+                                                className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                  activeSidebarCategory === key
+                                                    ? "font-extrabold text-slate-900"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                                                }`}
+                                              >
+                                                <div className="flex items-center gap-2">
+                                                  <Boxes className="h-4 w-4 shrink-0" />
+                                                  <span className="truncate text-sm font-medium">{assetType.name}</span>
+                                                </div>
+                                                {activeSidebarCategory === key ? (
+                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                ) : null}
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
+                                      {customAssetTypes.length > 0 ? (
+                                        <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                            Custom
+                                        </p>
+                                      ) : null}
+                                      {customAssetTypes.map((entry) => {
+                                          const key = entry.key;
+                                          const assetType = entry.assetType;
+                                          return (
+                                            <div
+                                              key={key}
+                                              data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
+                                              data-nav-target-kind="asset"
+                                              data-nav-target-key={key}
+                                              className={`flex items-start gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
+                                                isNavDragging("asset", key)
+                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                                  : ""
+                                              }`}
+                                              onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
+                                              onDrop={(event) => handleNavTargetDrop(event, "asset", key)}
+                                            >
+                                              {canEditButtonsForKind("asset") ? (
+                                                <button
+                                                  type="button"
+                                                  draggable
+                                                  onDragStart={(event) => handleNavDragStart(event, "asset", key)}
+                                                  onDragEnd={handleNavDragEnd}
+                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                                    isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+                                                  }`}
+                                                  aria-label={`Reorder ${assetType.name}`}
+                                                >
+                                                  <GripVertical className="h-3 w-3" />
+                                                </button>
+                                              ) : null}
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (canEditButtonsForKind("asset")) return;
+                                                  setActiveSidebarCategory(key);
+                                                  setActiveSidebarLabel(assetType.name);
+                                                }}
+                                                className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                  activeSidebarCategory === key
+                                                    ? "font-extrabold text-slate-900"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                                                }`}
+                                              >
+                                                <div className="flex items-center gap-2">
+                                                  <Boxes className="h-4 w-4 shrink-0" />
+                                                  <span className="truncate text-sm font-medium">{assetType.name}</span>
+                                                </div>
+                                                {activeSidebarCategory === key ? (
+                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                ) : null}
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
+                                      {filteredOrderedAssetEntries.length === 0 ? (
+                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                          No asset types found.
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_10px_22px_rgba(15,23,42,0.10)]">
+                                    <div className="flex items-center justify-between px-1 pb-1">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Accounts</p>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                          aria-label="Filter accounts"
+                                          title="Filter accounts"
+                                        >
+                                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                          aria-label="More account actions"
+                                          title="More account actions"
+                                        >
+                                          <Ellipsis className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (canEditButtonsForKind("account")) return;
+                                        setActiveSidebarCategory("accounts");
+                                        setActiveSidebarLabel("Accounts");
+                                      }}
+                                      className={`relative w-full rounded-md px-2.5 py-3 text-left text-sm font-semibold transition-colors ${
+                                        activeSidebarCategory === "accounts"
+                                          ? "font-extrabold text-slate-900"
+                                          : "text-slate-700 hover:bg-slate-200 hover:text-slate-900"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <BadgeDollarSign className="h-4 w-4 shrink-0" />
+                                        <span className="truncate">All Accounts</span>
+                                      </div>
+                                      {activeSidebarCategory === "accounts" ? (
+                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                      ) : null}
+                                    </button>
+                                    <div className="mt-0 space-y-0">
+                                      {orderedAccountEntries.map((entry) => {
                                           const account = entry.account;
                                           const key = entry.key;
                                           return (
@@ -2144,7 +2163,7 @@ export function AppHomePage() {
                                               data-nav-draggable={canEditButtonsForKind("account") ? "true" : undefined}
                                               data-nav-target-kind="account"
                                               data-nav-target-key={key}
-                                              className={`flex items-start gap-1 rounded-lg border border-transparent px-1 py-0.5 transition-colors duration-100 ${
+                                              className={`flex items-start gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("account", key)
                                                   ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
                                                   : ""
@@ -2173,10 +2192,10 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(account.name);
                                                 }}
-                                                className={`relative flex-1 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
+                                                className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "text-blue-700"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                    ? "font-extrabold text-slate-900"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
@@ -2184,26 +2203,25 @@ export function AppHomePage() {
                                                   <span className="truncate text-sm font-medium">{account.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-blue-600" />
+                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
                                                 ) : null}
                                               </button>
                                             </div>
                                           );
-                                        })}
-                                        {orderedAccountEntries.length === 0 ? (
-                                          <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                                            No accounts found.
-                                          </div>
-                                        ) : null}
-                                      </>
-                                      )}
-                                </div>
+                                      })}
+                                      {orderedAccountEntries.length === 0 ? (
+                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                          No accounts found.
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
                               </div>
                             </CardContent>
                           </div>
                 </CardContent>
               </Card>
-              <div className="space-y-4">
+              <div className="space-y-4 xl:order-1">
               <Card className="border-blue-100 bg-white">
                   <CardContent className="p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2552,7 +2570,6 @@ export function AppHomePage() {
               <button
                 type="button"
                 onClick={() => {
-                  setNavListView("accounts");
                   setActiveSidebarCategory("accounts");
                   setActiveSidebarLabel("Accounts");
                   setIsAddAssetModalOpen(false);
@@ -2565,7 +2582,6 @@ export function AppHomePage() {
               <button
                 type="button"
                 onClick={() => {
-                  setNavListView("accounts");
                   setActiveSidebarCategory("accounts");
                   setActiveSidebarLabel("Accounts");
                   setIsAddAssetModalOpen(false);
@@ -2578,7 +2594,6 @@ export function AppHomePage() {
               <button
                 type="button"
                 onClick={() => {
-                  setNavListView("assetTypes");
                   setActiveSidebarCategory("portfolio");
                   setActiveSidebarLabel("Portfolio");
                   setIsAddAssetModalOpen(false);
@@ -2594,7 +2609,6 @@ export function AppHomePage() {
               <button
                 type="button"
                 onClick={() => {
-                  setNavListView("accounts");
                   setActiveSidebarCategory("accounts");
                   setActiveSidebarLabel("Accounts");
                   setIsAddAssetModalOpen(false);
@@ -2606,7 +2620,6 @@ export function AppHomePage() {
               <button
                 type="button"
                 onClick={() => {
-                  setNavListView("assetTypes");
                   setIsAddAssetModalOpen(false);
                 }}
                 className="rounded-md border border-blue-100 px-2 py-1 transition-colors hover:bg-blue-50"
