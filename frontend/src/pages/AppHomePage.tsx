@@ -281,6 +281,9 @@ export function AppHomePage() {
   const navSectionSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
   const navAssetSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
   const navAccountSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
+  const transparentDragImageRef = useRef<HTMLImageElement | null>(null);
+  const navButtonDragImageRef = useRef<HTMLElement | null>(null);
+  const navButtonDragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const navTileDragImageRef = useRef<HTMLElement | null>(null);
   const navTileDragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [pendingLayoutName, setPendingLayoutName] = useState("");
@@ -484,8 +487,9 @@ export function AppHomePage() {
         : normalizeOrder(navDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER)) as NavDashboardTileKey[],
     [dashboardTilesEditMode, draftNavDashboardTileOrder, navDashboardTileOrder, navEditMode],
   );
-  const assetOrderForRender = navEditMode ? draftNavAssetItemOrder : navAssetItemOrder;
-  const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
+  const isButtonSortMode = dashboardTilesEditMode || navEditMode;
+  const assetOrderForRender = isButtonSortMode ? draftNavAssetItemOrder : navAssetItemOrder;
+  const accountOrderForRender = isButtonSortMode ? draftNavAccountItemOrder : navAccountItemOrder;
   const sectionOrderForView = useMemo(() => {
     if (
       !navDragItem
@@ -499,8 +503,11 @@ export function AppHomePage() {
     return moveKeyForDrag(sectionOrderForRender, navDragItem.key, navDropTarget.key) as NavSectionKey[];
   }, [navDragItem, navDropTarget, sectionOrderForRender]);
   const assetOrderForView = useMemo(() => {
+    if (dashboardTilesEditMode) {
+      return assetOrderForRender;
+    }
     if (
-      !navEditMode
+      !isButtonSortMode
       || !navDragItem
       || !navDropTarget
       || navDragItem.kind !== "asset"
@@ -510,12 +517,29 @@ export function AppHomePage() {
       return assetOrderForRender;
     }
     return moveKeyForDrag(assetOrderForRender, navDragItem.key, navDropTarget.key);
-  }, [assetOrderForRender, navDragItem, navDropTarget, navEditMode]);
+  }, [assetOrderForRender, isButtonSortMode, navDragItem, navDropTarget]);
+  const accountOrderForView = useMemo(() => {
+    if (dashboardTilesEditMode) {
+      return accountOrderForRender;
+    }
+    if (
+      !isButtonSortMode
+      || !navDragItem
+      || !navDropTarget
+      || navDragItem.kind !== "account"
+      || navDropTarget.kind !== "account"
+      || navDropTarget.key === navDragItem.key
+    ) {
+      return accountOrderForRender;
+    }
+    return moveKeyForDrag(accountOrderForRender, navDragItem.key, navDropTarget.key);
+  }, [accountOrderForRender, dashboardTilesEditMode, isButtonSortMode, navDragItem, navDropTarget]);
   const canEditButtonsForKind = (kind: NavDragKind) =>
-    navEditMode && (
+    (dashboardTilesEditMode && (kind === "asset" || kind === "account"))
+    || (navEditMode && (
       (buttonEditTarget === "assetTypes" && kind === "asset")
       || (buttonEditTarget === "accounts" && kind === "account")
-    );
+    ));
   const isManagingSections = navEditMode && (buttonEditTarget === null || buttonEditTarget === "all");
   const canDragKind = (kind: NavDragKind) => kind === "section" || canEditButtonsForKind(kind);
   const orderedAssetEntries = useMemo(() => {
@@ -534,6 +558,9 @@ export function AppHomePage() {
       if (assetFilterMode === "custom") return !entry.assetType.is_system;
       return true;
     });
+    if (dashboardTilesEditMode) {
+      return filtered;
+    }
     const ranked = [...filtered];
     ranked.sort((left, right) =>
       assetSortMode === "name_desc"
@@ -541,7 +568,7 @@ export function AppHomePage() {
         : left.assetType.name.localeCompare(right.assetType.name),
     );
     return ranked;
-  }, [assetFilterMode, assetSortMode, filteredOrderedAssetEntries]);
+  }, [assetFilterMode, assetSortMode, dashboardTilesEditMode, filteredOrderedAssetEntries]);
   const systemAssetTypes = useMemo(
     () => displayedAssetEntries.filter((entry) => entry.assetType.is_system),
     [displayedAssetEntries],
@@ -552,9 +579,9 @@ export function AppHomePage() {
   );
   const orderedAccountEntries = useMemo(() => {
     const keyToEntry = new Map(accountEntries.map((entry) => [entry.key, entry] as const));
-    const orderedKeys = normalizeOrder(accountOrderForRender, accountEntries.map((entry) => entry.key));
+    const orderedKeys = normalizeOrder(accountOrderForView, accountEntries.map((entry) => entry.key));
     return orderedKeys.map((key) => keyToEntry.get(key)).filter(Boolean) as typeof accountEntries;
-  }, [accountEntries, accountOrderForRender]);
+  }, [accountEntries, accountOrderForView]);
   const accountTypeNameById = useMemo(
     () => new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type.name] as const)),
     [accountCreateOptions],
@@ -563,6 +590,9 @@ export function AppHomePage() {
     const filtered = selectedAccountTypeIds.length > 0
       ? orderedAccountEntries.filter((entry) => selectedAccountTypeIds.includes(entry.account.account_type))
       : orderedAccountEntries;
+    if (dashboardTilesEditMode) {
+      return filtered;
+    }
     const ranked = [...filtered];
     ranked.sort((left, right) => {
       const leftValue = ((left.account as AccountListItem & { total_value?: number }).total_value ?? left.account.holdings_count);
@@ -580,7 +610,7 @@ export function AppHomePage() {
       return left.account.name.localeCompare(right.account.name);
     });
     return ranked;
-  }, [accountSortMode, orderedAccountEntries, selectedAccountTypeIds, accountTypeNameById]);
+  }, [accountSortMode, dashboardTilesEditMode, orderedAccountEntries, selectedAccountTypeIds, accountTypeNameById]);
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
     const currentSignature = JSON.stringify({
@@ -802,10 +832,18 @@ export function AppHomePage() {
       return;
     }
     if (kind === "asset") {
-      setDraftNavAssetItemOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey));
+      const assetKeys = assetTypeEntries.map((entry) => entry.key);
+      setDraftNavAssetItemOrder((previous) => {
+        const base = normalizeOrder(previous, assetKeys);
+        return moveKeyForDrag(base, sourceKey, targetKey);
+      });
       return;
     }
-    setDraftNavAccountItemOrder((previous) => moveKeyForDrag(previous, sourceKey, targetKey));
+    const accountKeys = accountEntries.map((entry) => entry.key);
+    setDraftNavAccountItemOrder((previous) => {
+      const base = normalizeOrder(previous, accountKeys);
+      return moveKeyForDrag(base, sourceKey, targetKey);
+    });
   };
 
   const handleNavDragStart = (event: DragEvent<HTMLButtonElement>, kind: NavDragKind, key: string) => {
@@ -839,28 +877,31 @@ export function AppHomePage() {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", `${kind}:${key}`);
     if (dragSource) {
+      cleanupNavButtonDragMirror();
       const rect = dragSource.getBoundingClientRect();
       const offsetX = clamp(Math.round(event.clientX - rect.left), 0, Math.round(rect.width));
       const offsetY = clamp(Math.round(event.clientY - rect.top), 0, Math.round(rect.height));
-      const clone = dragSource.cloneNode(true) as HTMLElement;
-      clone.style.position = "fixed";
-      clone.style.left = "-9999px";
-      clone.style.top = "0";
-      clone.style.width = `${rect.width}px`;
-      clone.style.height = `${rect.height}px`;
-      clone.style.pointerEvents = "none";
-      clone.style.borderRadius = "12px";
-      clone.style.boxShadow = "0 18px 36px rgba(15, 23, 42, 0.22)";
-      clone.style.background = "#ffffff";
-      clone.style.opacity = "0.98";
-      clone.style.zIndex = "9999";
-      document.body.appendChild(clone);
-      event.dataTransfer.setDragImage(clone, offsetX, offsetY);
-      window.setTimeout(() => {
-        if (clone.parentNode) {
-          clone.parentNode.removeChild(clone);
-        }
-      }, 0);
+      const dragClone = dragSource.cloneNode(true) as HTMLElement;
+      dragClone.style.position = "fixed";
+      dragClone.style.top = "0px";
+      dragClone.style.left = "0px";
+      dragClone.style.width = `${rect.width}px`;
+      dragClone.style.height = `${rect.height}px`;
+      dragClone.style.margin = "0";
+      dragClone.style.pointerEvents = "none";
+      dragClone.style.opacity = "1";
+      dragClone.style.zIndex = "9999";
+      dragClone.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+      dragClone.style.boxShadow = "0 14px 32px rgba(15,23,42,0.28)";
+      const appRoot = document.querySelector(".app-home");
+      if (appRoot) {
+        appRoot.appendChild(dragClone);
+      } else {
+        document.body.appendChild(dragClone);
+      }
+      navButtonDragOffsetRef.current = { x: offsetX, y: offsetY };
+      navButtonDragImageRef.current = dragClone;
+      event.dataTransfer.setDragImage(transparentDragImageRef.current ?? dragClone, 0, 0);
     }
   };
 
@@ -880,6 +921,16 @@ export function AppHomePage() {
   };
 
   const handleNavDragEnd = () => {
+    const currentDrag = navDragItemRef.current;
+    const pendingTarget = navDropTargetRef.current;
+    if (
+      currentDrag
+      && pendingTarget
+      && currentDrag.kind === pendingTarget.kind
+      && currentDrag.key !== pendingTarget.key
+    ) {
+      reorderDraftByDrag(currentDrag.kind, currentDrag.key, pendingTarget.key);
+    }
     navDragItemRef.current = null;
     navHoverTargetRef.current = null;
     navDropTargetRef.current = null;
@@ -888,6 +939,7 @@ export function AppHomePage() {
     navAccountSlotRef.current = [];
     setNavDragItem(null);
     setNavDropTarget(null);
+    cleanupNavButtonDragMirror();
   };
 
   const handleNavTargetDragOver = (event: DragEvent<HTMLElement>, kind: NavDragKind, key: string) => {
@@ -940,6 +992,7 @@ export function AppHomePage() {
       navAccountSlotRef.current = [];
       setNavDragItem(null);
       setNavDropTarget(null);
+      cleanupNavButtonDragMirror();
       return;
     }
     const targetKey = navDropTargetRef.current?.kind === kind ? navDropTargetRef.current.key : key;
@@ -955,6 +1008,7 @@ export function AppHomePage() {
     navAccountSlotRef.current = [];
     setNavDragItem(null);
     setNavDropTarget(null);
+    cleanupNavButtonDragMirror();
   };
 
   const handleNavContainerDragOver = (event: DragEvent<HTMLElement>) => {
@@ -976,6 +1030,7 @@ export function AppHomePage() {
       navAccountSlotRef.current = [];
       setNavDragItem(null);
       setNavDropTarget(null);
+      cleanupNavButtonDragMirror();
       return;
     }
     const targetKey = navDropTargetRef.current?.kind === currentDrag.kind ? navDropTargetRef.current.key : null;
@@ -993,6 +1048,7 @@ export function AppHomePage() {
     navAccountSlotRef.current = [];
     setNavDragItem(null);
     setNavDropTarget(null);
+    cleanupNavButtonDragMirror();
   };
 
   useEffect(() => {
@@ -1043,6 +1099,13 @@ export function AppHomePage() {
   }, [navDragItem, navEditMode, buttonEditTarget]);
 
   useEffect(() => {
+    if (transparentDragImageRef.current) return;
+    const img = new Image();
+    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    transparentDragImageRef.current = img;
+  }, []);
+
+  useEffect(() => {
     if (!navDragItem) return;
     const previousCursor = document.body.style.cursor;
     document.body.style.cursor = "grabbing";
@@ -1056,6 +1119,13 @@ export function AppHomePage() {
       navTileDragImageRef.current.parentElement.removeChild(navTileDragImageRef.current);
     }
     navTileDragImageRef.current = null;
+  }, []);
+
+  const cleanupNavButtonDragMirror = useCallback(() => {
+    if (navButtonDragImageRef.current?.parentElement) {
+      navButtonDragImageRef.current.parentElement.removeChild(navButtonDragImageRef.current);
+    }
+    navButtonDragImageRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -1072,20 +1142,40 @@ export function AppHomePage() {
   }, [navTileDragKey]);
 
   useEffect(() => {
-    if (dashboardTilesEditMode) return;
-    cleanupDashboardTileDragMirror();
-  }, [cleanupDashboardTileDragMirror, dashboardTilesEditMode]);
+    if (!navDragItem || !navButtonDragImageRef.current) return;
+    const onWindowDragOver = (event: globalThis.DragEvent) => {
+      const mirror = navButtonDragImageRef.current;
+      if (!mirror) return;
+      const x = event.clientX - navButtonDragOffsetRef.current.x;
+      const y = event.clientY - navButtonDragOffsetRef.current.y;
+      mirror.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    window.addEventListener("dragover", onWindowDragOver);
+    return () => window.removeEventListener("dragover", onWindowDragOver);
+  }, [navDragItem]);
 
   useEffect(() => {
-    const onWindowDrop = () => cleanupDashboardTileDragMirror();
-    const onWindowDragEnd = () => cleanupDashboardTileDragMirror();
+    if (dashboardTilesEditMode) return;
+    cleanupDashboardTileDragMirror();
+    cleanupNavButtonDragMirror();
+  }, [cleanupDashboardTileDragMirror, cleanupNavButtonDragMirror, dashboardTilesEditMode]);
+
+  useEffect(() => {
+    const onWindowDrop = () => {
+      cleanupDashboardTileDragMirror();
+      cleanupNavButtonDragMirror();
+    };
+    const onWindowDragEnd = () => {
+      cleanupDashboardTileDragMirror();
+      cleanupNavButtonDragMirror();
+    };
     window.addEventListener("drop", onWindowDrop);
     window.addEventListener("dragend", onWindowDragEnd);
     return () => {
       window.removeEventListener("drop", onWindowDrop);
       window.removeEventListener("dragend", onWindowDragEnd);
     };
-  }, [cleanupDashboardTileDragMirror]);
+  }, [cleanupDashboardTileDragMirror, cleanupNavButtonDragMirror]);
 
   const loadSidebarData = useCallback(async () => {
     const fetchAll = async () =>
@@ -2030,9 +2120,7 @@ export function AppHomePage() {
       }
       navTileDragOffsetRef.current = { x: offsetX, y: offsetY };
       navTileDragImageRef.current = dragClone;
-      const transparentPixel = new Image();
-      transparentPixel.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-      event.dataTransfer.setDragImage(transparentPixel, 0, 0);
+      event.dataTransfer.setDragImage(transparentDragImageRef.current ?? dragClone, 0, 0);
     }
     setNavTileDragKey(key);
     setNavTileDropKey(null);
@@ -2060,12 +2148,35 @@ export function AppHomePage() {
   const getDashboardTileOrder = (key: NavDashboardTileKey) => dashboardTileOrderForRender.indexOf(key);
   const saveDashboardTilesEdit = () => {
     const nextDashboardTileOrder = normalizeOrder(draftNavDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER) as NavDashboardTileKey[];
+    const assetKeys = assetTypeEntries.map((entry) => entry.key);
+    const accountKeys = accountEntries.map((entry) => entry.key);
+    const nextAssetOrder = normalizeOrder(draftNavAssetItemOrder, assetKeys);
+    const nextAccountOrder = normalizeOrder(draftNavAccountItemOrder, accountKeys);
     setNavDashboardTileOrder(nextDashboardTileOrder);
+    setNavAssetItemOrder(nextAssetOrder);
+    setNavAccountItemOrder(nextAccountOrder);
     setDraftNavDashboardTileOrder(nextDashboardTileOrder);
+    setDraftNavAssetItemOrder(nextAssetOrder);
+    setDraftNavAccountItemOrder(nextAccountOrder);
+    if (hasHydratedNavState) {
+      void upsertNavigationState({
+        scope: navigationScope,
+        section_order: navSectionOrder,
+        asset_item_order: nextAssetOrder,
+        account_item_order: nextAccountOrder,
+        asset_types_collapsed: assetTypesCollapsed,
+        accounts_collapsed: accountsCollapsed,
+        active_item_key: activeSidebarCategory,
+      }).catch(() => {
+        // Keep UI responsive if persistence fails.
+      });
+    }
     setDashboardTilesEditMode(false);
   };
   const cancelDashboardTilesEdit = () => {
     setDraftNavDashboardTileOrder([...navDashboardTileOrder]);
+    setDraftNavAssetItemOrder([...navAssetItemOrder]);
+    setDraftNavAccountItemOrder([...navAccountItemOrder]);
     setDashboardTilesEditMode(false);
     setNavTileDragKey(null);
     setNavTileDropKey(null);
@@ -2301,6 +2412,8 @@ export function AppHomePage() {
                                               type="button"
                                               onClick={() => {
                                                 setDraftNavDashboardTileOrder([...navDashboardTileOrder]);
+                                                setDraftNavAssetItemOrder([...navAssetItemOrder]);
+                                                setDraftNavAccountItemOrder([...navAccountItemOrder]);
                                                 setDashboardTilesEditMode(true);
                                                 setDashboardTilesMenuOpen(false);
                                               }}
@@ -2316,15 +2429,14 @@ export function AppHomePage() {
                                 </div>
                                   <div
                                     data-dashboard-tile="favorites"
-                                    draggable={isSortNavAndButtons}
-                                    onDragStart={(event) => handleDashboardTileDragStart(event, "favorites")}
+                                    draggable={false}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "favorites")}
                                     onDrop={(event) => handleDashboardTileDrop(event, "favorites")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("favorites") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
                                       navTileDropKey === "favorites" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
-                                    }`}
+                                    } ${navTileDragKey === "favorites" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Favorites</p>
@@ -2493,15 +2605,14 @@ export function AppHomePage() {
                                   </div>
                                   <div
                                     data-dashboard-tile="assets"
-                                    draggable={isSortNavAndButtons}
-                                    onDragStart={(event) => handleDashboardTileDragStart(event, "assets")}
+                                    draggable={false}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "assets")}
                                     onDrop={(event) => handleDashboardTileDrop(event, "assets")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("assets") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
                                       navTileDropKey === "assets" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
-                                    }`}
+                                    } ${navTileDragKey === "assets" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Assets</p>
@@ -2672,7 +2783,9 @@ export function AppHomePage() {
                                               data-nav-target-key={key}
                                               className={`flex items-start gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("asset", key)
-                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                                  ? "opacity-0"
+                                                  : navDropTarget?.kind === "asset" && navDropTarget.key === key
+                                                    ? "ring-2 ring-slate-400"
                                                   : ""
                                               }`}
                                               onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
@@ -2737,7 +2850,9 @@ export function AppHomePage() {
                                               data-nav-target-key={key}
                                               className={`flex items-start gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("asset", key)
-                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                                  ? "opacity-0"
+                                                  : navDropTarget?.kind === "asset" && navDropTarget.key === key
+                                                    ? "ring-2 ring-slate-400"
                                                   : ""
                                               }`}
                                               onDragOver={(event) => handleNavTargetDragOver(event, "asset", key)}
@@ -2796,15 +2911,14 @@ export function AppHomePage() {
                                   </div>
                                   <div
                                     data-dashboard-tile="accounts"
-                                    draggable={isSortNavAndButtons}
-                                    onDragStart={(event) => handleDashboardTileDragStart(event, "accounts")}
+                                    draggable={false}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "accounts")}
                                     onDrop={(event) => handleDashboardTileDrop(event, "accounts")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("accounts") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
                                       navTileDropKey === "accounts" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
-                                    }`}
+                                    } ${navTileDragKey === "accounts" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Accounts</p>
@@ -3008,7 +3122,9 @@ export function AppHomePage() {
                                               data-nav-target-key={key}
                                               className={`flex items-start gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("account", key)
-                                                  ? "border-dashed border-slate-500 bg-slate-100/90 shadow-[0_12px_24px_rgba(15,23,42,0.18)]"
+                                                  ? "opacity-0"
+                                                  : navDropTarget?.kind === "account" && navDropTarget.key === key
+                                                    ? "ring-2 ring-slate-400"
                                                   : ""
                                               }`}
                                               onDragOver={(event) => handleNavTargetDragOver(event, "account", key)}
@@ -3070,15 +3186,14 @@ export function AppHomePage() {
                                   </div>
                                   <div
                                     data-dashboard-tile="custom"
-                                    draggable={isSortNavAndButtons}
-                                    onDragStart={(event) => handleDashboardTileDragStart(event, "custom")}
+                                    draggable={false}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "custom")}
                                     onDrop={(event) => handleDashboardTileDrop(event, "custom")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("custom") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
                                       navTileDropKey === "custom" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
-                                    }`}
+                                    } ${navTileDragKey === "custom" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Custom Dashboards</p>
