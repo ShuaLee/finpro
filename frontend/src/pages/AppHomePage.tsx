@@ -553,22 +553,12 @@ export function AppHomePage() {
     return orderedAssetEntries.filter((entry) => entry.assetType.name.toLowerCase().includes(term));
   }, [assetTypeSearch, orderedAssetEntries]);
   const displayedAssetEntries = useMemo(() => {
-    const filtered = filteredOrderedAssetEntries.filter((entry) => {
+    return filteredOrderedAssetEntries.filter((entry) => {
       if (assetFilterMode === "system") return entry.assetType.is_system;
       if (assetFilterMode === "custom") return !entry.assetType.is_system;
       return true;
     });
-    if (dashboardTilesEditMode) {
-      return filtered;
-    }
-    const ranked = [...filtered];
-    ranked.sort((left, right) =>
-      assetSortMode === "name_desc"
-        ? right.assetType.name.localeCompare(left.assetType.name)
-        : left.assetType.name.localeCompare(right.assetType.name),
-    );
-    return ranked;
-  }, [assetFilterMode, assetSortMode, dashboardTilesEditMode, filteredOrderedAssetEntries]);
+  }, [assetFilterMode, filteredOrderedAssetEntries]);
   const systemAssetTypes = useMemo(
     () => displayedAssetEntries.filter((entry) => entry.assetType.is_system),
     [displayedAssetEntries],
@@ -587,30 +577,10 @@ export function AppHomePage() {
     [accountCreateOptions],
   );
   const displayedAccountEntries = useMemo(() => {
-    const filtered = selectedAccountTypeIds.length > 0
+    return selectedAccountTypeIds.length > 0
       ? orderedAccountEntries.filter((entry) => selectedAccountTypeIds.includes(entry.account.account_type))
       : orderedAccountEntries;
-    if (dashboardTilesEditMode) {
-      return filtered;
-    }
-    const ranked = [...filtered];
-    ranked.sort((left, right) => {
-      const leftValue = ((left.account as AccountListItem & { total_value?: number }).total_value ?? left.account.holdings_count);
-      const rightValue = ((right.account as AccountListItem & { total_value?: number }).total_value ?? right.account.holdings_count);
-      if (accountSortMode === "type_asc") {
-        const leftType = accountTypeNameById.get(left.account.account_type) ?? "Uncategorized";
-        const rightType = accountTypeNameById.get(right.account.account_type) ?? "Uncategorized";
-        const typeCompare = leftType.localeCompare(rightType);
-        if (typeCompare !== 0) return typeCompare;
-        return left.account.name.localeCompare(right.account.name);
-      }
-      if (accountSortMode === "name_desc") return right.account.name.localeCompare(left.account.name);
-      if (accountSortMode === "value_desc") return rightValue - leftValue;
-      if (accountSortMode === "value_asc") return leftValue - rightValue;
-      return left.account.name.localeCompare(right.account.name);
-    });
-    return ranked;
-  }, [accountSortMode, dashboardTilesEditMode, orderedAccountEntries, selectedAccountTypeIds, accountTypeNameById]);
+  }, [orderedAccountEntries, selectedAccountTypeIds]);
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
     const currentSignature = JSON.stringify({
