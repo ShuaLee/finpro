@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import {
+  ArrowLeftRight,
   BadgeDollarSign,
   BriefcaseBusiness,
   Boxes,
   Check,
+  ChevronDown,
   Columns3,
   Ellipsis,
   GripVertical,
@@ -12,7 +13,6 @@ import {
   MoveDiagonal2,
   Plus,
   Settings,
-  SlidersHorizontal,
   Smartphone,
   Tablet,
   X,
@@ -219,7 +219,6 @@ const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) =
 
 export function AppHomePage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
@@ -1086,7 +1085,7 @@ export function AppHomePage() {
       return;
     }
     if (activeSidebarCategory === "holdings") {
-      setActiveSidebarLabel("All Holdings");
+      setActiveSidebarLabel("Holdings");
       return;
     }
     if (activeSidebarCategory === "accounts") {
@@ -1827,43 +1826,16 @@ export function AppHomePage() {
   const accountsSectionIndex = navSectionsBelowAddAssets.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
     navDragItem?.kind === kind && navDragItem.key === key;
-  const holdingsContext = useMemo(() => {
-    if (activeSidebarCategory === "portfolio") return { label: "All Holdings", query: {} as Record<string, string> };
-    if (activeSidebarCategory === "accounts") return { label: "All Accounts", query: { scope: "accounts" } };
-    const assetMatch = assetTypeEntries.find((entry) => entry.key === activeSidebarCategory);
-    if (assetMatch) {
-      return {
-        label: `Asset Type: ${assetMatch.assetType.name}`,
-        query: { scope: "asset_type", key: activeSidebarCategory, name: assetMatch.assetType.name },
-      };
-    }
-    const accountMatch = accountEntries.find((entry) => entry.key === activeSidebarCategory);
-    if (accountMatch) {
-      return {
-        label: `Account: ${accountMatch.account.name}`,
-        query: { scope: "account", key: activeSidebarCategory, name: accountMatch.account.name },
-      };
-    }
-    return { label: "All Holdings", query: {} as Record<string, string> };
-  }, [accountEntries, activeSidebarCategory, assetTypeEntries]);
-  const goToHoldings = useCallback(
-    (query: Record<string, string> = {}) => {
-      const search = new URLSearchParams(query).toString();
-      navigate({ pathname: "/holdings", search: search ? `?${search}` : "" });
-    },
-    [navigate],
-  );
-
   return (
-    <main className="w-full pb-10 pt-4">
+    <main className="app-home w-full pb-10 pt-4">
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[284px_minmax(0,1fr)]">
-              <Card className="h-fit border-0 bg-transparent shadow-none xl:sticky xl:top-24 xl:max-h-[calc(100vh-6.5rem)] xl:self-start">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+              <Card className="h-fit border-0 bg-transparent shadow-none xl:sticky xl:bottom-6 xl:self-start">
                 <CardContent
                   ref={navEditPanelRef}
-                  className="flex h-full flex-col gap-5 p-0 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto"
+                  className="flex h-full flex-col gap-5 p-0"
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
@@ -1895,20 +1867,33 @@ export function AppHomePage() {
                                   <GripVertical className="h-3.5 w-3.5" />
                                 </button>
                               ) : null}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                  setIsAddAssetModalOpen(true);
-                                }}
-                                className="flex w-full min-h-[64px] items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-semibold text-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-100 hover:text-slate-900"
-                                aria-label="Add asset"
-                              >
-                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white">
-                                  <Plus className="h-3.5 w-3.5" />
-                                </span>
-                                <span className="leading-tight">Add Asset</span>
-                              </button>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                    setIsAddAssetModalOpen(true);
+                                  }}
+                                  className="flex h-[92px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900"
+                                  aria-label="Add assets"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  <span className="leading-tight">Add Assets</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                    setActiveSidebarCategory("holdings");
+                                    setActiveSidebarLabel("Accounts / Holdings");
+                                  }}
+                                  className="flex h-[92px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900"
+                                  aria-label="Modify holdings"
+                                >
+                                  <ArrowLeftRight className="h-4 w-4" />
+                                  <span className="leading-tight">Modify Holdings</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
 
@@ -1942,56 +1927,35 @@ export function AppHomePage() {
                                     <GripVertical className="h-3.5 w-3.5" />
                                   </button>
                                 ) : null}
-                                <div className="grid grid-cols-2 gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                      setActiveSidebarCategory("portfolio");
-                                      setActiveSidebarLabel("Portfolio");
-                                    }}
-                                    className={`relative flex min-h-[72px] items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 py-3 text-center shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors focus:outline-none ${
-                                      activeSidebarCategory === "portfolio"
-                                        ? "font-extrabold text-slate-950"
-                                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                                    }`}
-                                  >
-                                    <BriefcaseBusiness
-                                      className={`mt-0.5 h-4 w-4 shrink-0 ${
-                                        activeSidebarCategory === "portfolio" ? "text-slate-950" : "text-slate-600"
-                                      }`}
-                                      strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
-                                    />
-                                    <span
-                                      className={`truncate text-sm ${
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                                  <div className="space-y-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                        setActiveSidebarCategory("portfolio");
+                                        setActiveSidebarLabel("Portfolio");
+                                      }}
+                                      className={`relative flex w-full items-center gap-2.5 rounded-[3px] px-3 py-3.5 text-left transition-colors ${
                                         activeSidebarCategory === "portfolio"
-                                          ? "font-extrabold border-b-2 border-current pb-0.5"
-                                          : "font-semibold"
+                                          ? "font-extrabold text-slate-950"
+                                        : "text-slate-700 hover:bg-zinc-100 hover:text-slate-900"
                                       }`}
                                     >
-                                      Portfolio
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveSidebarCategory("holdings");
-                                      setActiveSidebarLabel("All Holdings");
-                                      goToHoldings();
-                                    }}
-                                    className="group relative flex min-h-[72px] items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 py-3 text-center text-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none"
-                                  >
-                                    <Columns3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
-                                    <span
-                                      className={`truncate text-sm ${
-                                        activeSidebarCategory === "holdings"
-                                          ? "font-extrabold border-b-2 border-current pb-0.5"
-                                          : "font-semibold"
-                                      }`}
-                                    >
-                                      All Holdings
-                                    </span>
-                                  </button>
+                                      <BriefcaseBusiness
+                                        className={`h-4 w-4 shrink-0 ${
+                                          activeSidebarCategory === "portfolio" ? "text-slate-950" : "text-slate-600"
+                                        }`}
+                                        strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
+                                      />
+                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-extrabold" : "font-semibold"}`}>
+                                        Portfolio Dashboard
+                                      </span>
+                                      {activeSidebarCategory === "portfolio" ? (
+                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-800" />
+                                      ) : null}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </CardContent>
@@ -2030,15 +1994,16 @@ export function AppHomePage() {
                                 ) : null}
                                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Asset Type Dashboards</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Assets</p>
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
+                                          onClick={() => setAssetTypesCollapsed((previous) => !previous)}
                                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                                          aria-label="Filter assets"
-                                          title="Filter assets"
+                                          aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
+                                          title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                         >
-                                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${assetTypesCollapsed ? "" : "rotate-180"}`} />
                                         </button>
                                         <button
                                           type="button"
@@ -2050,7 +2015,8 @@ export function AppHomePage() {
                                         </button>
                                       </div>
                                     </div>
-                                    <div className="space-y-0">
+                                    {!assetTypesCollapsed ? (
+                                      <div className="space-y-0">
                                       {systemAssetTypes.map((entry) => {
                                           const key = entry.key;
                                           const assetType = entry.assetType;
@@ -2181,7 +2147,8 @@ export function AppHomePage() {
                                           No asset types found.
                                         </div>
                                       ) : null}
-                                    </div>
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
                                     <div className="flex items-center justify-between px-1 pb-1">
@@ -2189,11 +2156,12 @@ export function AppHomePage() {
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
+                                          onClick={() => setAccountsCollapsed((previous) => !previous)}
                                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                                          aria-label="Filter accounts"
-                                          title="Filter accounts"
+                                          aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
+                                          title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                         >
-                                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountsCollapsed ? "" : "rotate-180"}`} />
                                         </button>
                                         <button
                                           type="button"
@@ -2205,33 +2173,8 @@ export function AppHomePage() {
                                         </button>
                                       </div>
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (canEditButtonsForKind("account")) return;
-                                        setActiveSidebarCategory("accounts");
-                                        setActiveSidebarLabel("Accounts");
-                                      }}
-                                      className={`relative w-full rounded-md px-2.5 py-3 text-left text-sm font-semibold transition-colors ${
-                                        activeSidebarCategory === "accounts"
-                                          ? "font-extrabold text-slate-950"
-                                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <BadgeDollarSign
-                                          className={`h-4 w-4 shrink-0 ${
-                                            activeSidebarCategory === "accounts" ? "text-slate-950" : "text-slate-600"
-                                          }`}
-                                          strokeWidth={activeSidebarCategory === "accounts" ? 2.2 : 2}
-                                        />
-                                        <span className={`truncate ${activeSidebarCategory === "accounts" ? "font-extrabold" : "font-semibold"}`}>All Accounts</span>
-                                      </div>
-                                      {activeSidebarCategory === "accounts" ? (
-                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
-                                      ) : null}
-                                    </button>
-                                    <div className="mt-0 space-y-0">
+                                    {!accountsCollapsed ? (
+                                      <div className="mt-0 space-y-0">
                                       {orderedAccountEntries.map((entry) => {
                                           const account = entry.account;
                                           const key = entry.key;
@@ -2297,7 +2240,8 @@ export function AppHomePage() {
                                           No accounts found.
                                         </div>
                                       ) : null}
-                                    </div>
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
                                     <div className="flex items-center justify-between px-1 pb-1">
@@ -2316,11 +2260,11 @@ export function AppHomePage() {
                 </CardContent>
               </Card>
               <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(240px,280px)]">
                 <Card className="border-blue-100 bg-white">
-                    <CardContent className="p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
+                    <CardContent className="h-[90px] p-3">
+                      <div className="flex h-full items-center justify-between gap-3">
+                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
                           <div className="relative" data-dashboard-menu>
                             <button
@@ -2360,296 +2304,70 @@ export function AppHomePage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveSidebarCategory("holdings");
-                    setActiveSidebarLabel("All Holdings");
-                    goToHoldings(holdingsContext.query);
+                    if (activeSidebarCategory === "holdings") {
+                      setActiveSidebarCategory("portfolio");
+                      setActiveSidebarLabel("Portfolio");
+                    } else {
+                      setActiveSidebarCategory("holdings");
+                      setActiveSidebarLabel("Accounts / Holdings");
+                    }
                   }}
-                  className="group relative flex min-h-[76px] items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white p-2.5 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 focus:outline-none"
-                  title={`View holdings for ${holdingsContext.label}`}
+                  className="inline-flex h-[92px] w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-zinc-100 hover:text-slate-900"
                 >
-                  <Columns3 className="h-4 w-4" />
-                  <span className={activeSidebarCategory === "holdings" ? "border-b-2 border-current pb-0.5" : ""}>View Holdings</span>
+                  <ArrowLeftRight className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {activeSidebarCategory === "holdings" ? "Show Dashboard" : "Show Accounts / Holdings"}
+                  </span>
                 </button>
-              </div>
+               </div>
               {!isEditing ? (
                 <Card className="overflow-visible border-border bg-[#f4f6fa]">
-                  <CardContent className="min-h-[74vh] space-y-4 p-5">
-                {isEditing ? (
-                  <p className="text-sm text-muted-foreground">
-                    Drag and resize tiles. Drop zones and row controls are edit-only.
-                  </p>
-                ) : null}
-                <div className="flex items-start gap-2">
-                  <div className="relative flex-1 overflow-hidden">
-                    {isEditing && isDeleteStructureMode ? (
-                      <div className="absolute left-0 right-0 top-1 z-30 h-7">
-                        {Array.from({ length: columns }, (_, colIndex) => {
-                          const colCenter =
-                            colIndex * ((gridMetrics?.cellWidth ?? 0) + (gridMetrics?.colGap ?? 0)) + (gridMetrics?.cellWidth ?? 0) / 2;
-                          const deletable = columns > VIEWPORT_MIN_COLUMNS && deletableColumns.includes(colIndex);
-                          const selected = selectedDeleteCols.includes(colIndex);
-                          return (
-                            <button
-                              key={`col-del-${colIndex}`}
-                              type="button"
-                              onClick={() => {
-                                setSelectedDeleteCols((previous) =>
-                                  previous.includes(colIndex)
-                                    ? previous.filter((item) => item !== colIndex)
-                                    : [...previous, colIndex],
-                                );
-                              }}
-                              className="absolute inline-flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-md border-2 text-[10px] font-bold"
-                              style={{
-                                left: `${colCenter}px`,
-                                borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
-                                backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
-                                color: deletable ? "#b91c1c" : "#475569",
-                              }}
-                              title={deletable ? "Select column to delete" : "Column currently occupied"}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                    <div
-                      ref={gridRef}
-                      className="grid auto-rows-[120px] gap-3 md:auto-rows-[132px]"
-                      style={{ gridTemplateColumns: `repeat(${Math.max(1, columns)}, minmax(0, 1fr))` }}
-                    >
-                      {Array.from({ length: totalSlots }, (_, slot) => {
-                        const slotPos = getGridPosition(slot, columns);
-                        const selectedForDelete =
-                          isDeleteStructureMode
-                          && (selectedDeleteRows.includes(slotPos.row) || selectedDeleteCols.includes(slotPos.col));
-                        return (
-                        <div
-                          key={`slot-${slot}`}
-                          className={
-                            isEditing
-                              ? `rounded-xl border border-dashed ${
-                                  selectedForDelete
-                                    ? "border-red-400 bg-red-100/40"
-                                    : activeDropSlot === slot
-                                      ? "border-primary/60 bg-primary/10"
-                                      : "border-border/60 bg-muted/15"
-                                }`
-                              : "pointer-events-none rounded-xl border border-transparent bg-transparent"
-                          }
-                        >
-                          {isEditing ? (
-                            <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
-                              {occupiedSlots.has(slot) ? "" : "Drop tile here"}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                      })}
-                    </div>
-
-                    <div
-                      ref={overlayRef}
-                      className="absolute inset-0 z-10"
-                    >
-                    {tiles.map((tile) => {
-                      const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
-                      const liveSlot = resizeSnapPreview ? resizeSnapPreview.slot : tile.slot;
-                      const liveColSpan = resizeSnapPreview ? resizeSnapPreview.colSpan : tile.colSpan;
-                      const liveRowSpan = resizeSnapPreview ? resizeSnapPreview.rowSpan : tile.rowSpan;
-                      const pos = getGridPosition(liveSlot, columns);
-                      const deleteHighlight =
-                        isDeleteStructureMode
-                        && (selectedDeleteRows.some((row) => row >= pos.row && row < pos.row + liveRowSpan)
-                          || selectedDeleteCols.some((col) => col >= pos.col && col < pos.col + liveColSpan));
-                        const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
-                        const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
-                        const snappedWidth =
-                          liveColSpan * (gridMetrics?.cellWidth ?? 0) + (liveColSpan - 1) * (gridMetrics?.colGap ?? 0);
-                            const snappedHeight =
-                              liveRowSpan * (gridMetrics?.cellHeight ?? 0) + (liveRowSpan - 1) * (gridMetrics?.rowGap ?? 0);
-                            const resizeLivePreview = resizeVisual?.tileId === tile.id ? resizeVisual : null;
-
-                        return (
+                  <CardContent className="min-h-[74vh] p-5">
+                    {activeSidebarCategory === "holdings" ? (
+                      <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70" />
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <div className="relative flex-1 overflow-hidden">
                           <div
-                            key={`tile-${tile.id}`}
-                            ref={(element) => {
-                              tileRefs.current[tile.id] = element;
-                            }}
-                            onMouseDown={(event) => {
-                              if (!isEditing) return;
-                              if (event.button !== 0) return;
-                              if (resizeSession?.tileId === tile.id) return;
-                              if (!gridMetrics) return;
-                              event.preventDefault();
-                              setDraggingTileId(tile.id);
-                              setActiveDropSlot(null);
-                              const tileRect = event.currentTarget.getBoundingClientRect();
-                              const relativeX = event.clientX - tileRect.left;
-                              const relativeY = event.clientY - tileRect.top;
-                              const colStep = Math.max(1, snappedWidth / Math.max(1, tile.colSpan));
-                              const rowStep = Math.max(1, snappedHeight / Math.max(1, tile.rowSpan));
-                              const anchorCol = clamp(Math.floor(relativeX / colStep), 0, tile.colSpan - 1);
-                              const anchorRow = clamp(Math.floor(relativeY / rowStep), 0, tile.rowSpan - 1);
-
-                              setDragSession({
-                                source: "grid",
-                                tileId: tile.id,
-                                startX: event.clientX,
-                                startY: event.clientY,
-                                pointerOffsetX: relativeX,
-                                pointerOffsetY: relativeY,
-                                ghostWidth: snappedWidth,
-                                ghostHeight: snappedHeight,
-                                ghostColSpan: tile.colSpan,
-                                ghostRowSpan: tile.rowSpan,
-                                anchorCol,
-                                anchorRow,
-                              });
-                              setDragPreview({
-                                tileId: tile.id,
-                                x: event.clientX - relativeX,
-                                y: event.clientY - relativeY,
-                                width: snappedWidth,
-                                height: snappedHeight,
-                              });
-                            }}
-                            style={{
-                              left: `${resizeLivePreview ? resizeLivePreview.left : left}px`,
-                              top: `${resizeLivePreview ? resizeLivePreview.top : top}px`,
-                              width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
-                              height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
-                            }}
-                            className={`absolute rounded-xl border p-3 text-primary-foreground shadow-sm ${
-                              deleteHighlight ? "border-red-300 bg-red-400/85" : "border-primary/20 bg-primary"
-                            } ${
-                              isEditing ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-                            } ${
-                              draggingTileId === tile.id ? "z-40 opacity-30" : "z-10"
-                            }`}
+                            ref={gridRef}
+                            className="grid auto-rows-[120px] gap-3 md:auto-rows-[132px]"
+                            style={{ gridTemplateColumns: `repeat(${Math.max(1, columns)}, minmax(0, 1fr))` }}
                           >
-                            <div className="flex h-full flex-col justify-between">
-                              <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
-                              <div className="text-[11px] opacity-85">
-                                {liveColSpan}x{liveRowSpan} tile
-                              </div>
-                            </div>
-                            {isEditing
-                              ? [
-                              { key: "tl", style: { left: "-8px", top: "-8px" }, cursor: "cursor-nwse-resize", icon: "rotate-180" },
-                              { key: "tr", style: { right: "-8px", top: "-8px" }, cursor: "cursor-nesw-resize", icon: "rotate-90" },
-                              { key: "bl", style: { left: "-8px", bottom: "-8px" }, cursor: "cursor-nesw-resize", icon: "-rotate-90" },
-                              { key: "br", style: { right: "-8px", bottom: "-8px" }, cursor: "cursor-se-resize", icon: "" },
-                            ].map((handle) => (
-                              <button
-                                key={`${tile.id}-${handle.key}`}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                              setResizeSession({
-                                tileId: tile.id,
-                                startX: event.clientX,
-                                startY: event.clientY,
-                                startSlot: tile.slot,
-                                startColSpan: tile.colSpan,
-                                startRowSpan: tile.rowSpan,
-                                startLeft: left,
-                                startTop: top,
-                                startWidth:
-                                  tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0),
-                                startHeight:
-                                  tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0),
-                                handle: handle.key as "tl" | "tr" | "bl" | "br",
-                              });
-                              setResizePreview({
-                                tileId: tile.id,
-                                slot: tile.slot,
-                                colSpan: tile.colSpan,
-                                rowSpan: tile.rowSpan,
-                              });
-                            }}
-                                style={handle.style}
-                                className={`absolute z-20 inline-flex h-5 w-5 items-center justify-center rounded-md border-2 border-slate-300 bg-white text-slate-700 shadow-md ${handle.cursor}`}
-                                aria-label={`Resize tile ${tile.id}`}
-                                title="Resize"
-                              >
-                                <MoveDiagonal2 className={`pointer-events-none h-3 w-3 ${handle.icon}`} />
-                              </button>
-                            ))
-                              : null}
+                            {Array.from({ length: totalSlots }, (_, slot) => (
+                              <div key={`slot-${slot}`} className="pointer-events-none rounded-xl border border-transparent bg-transparent" />
+                            ))}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                    {isEditing && isDeleteStructureMode ? (
-                      <div className="relative w-8">
-                        {Array.from({ length: totalRows }, (_, rowIndex) => {
-                          const deletable = trailingEmptyRows.includes(rowIndex);
-                          const top = rowIndex * ((gridMetrics?.cellHeight ?? 132) + (gridMetrics?.rowGap ?? 12));
-                          const selected = selectedDeleteRows.includes(rowIndex);
-                          return (
-                            <button
-                              key={`del-row-${rowIndex}`}
-                              type="button"
-                              onClick={() => {
-                                setSelectedDeleteRows((previous) =>
-                                  previous.includes(rowIndex) ? previous.filter((item) => item !== rowIndex) : [...previous, rowIndex],
-                                );
-                              }}
-                              className="absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold hover:opacity-90"
-                              style={{
-                                top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
-                                borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
-                                backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
-                                color: deletable ? "#b91c1c" : "#475569",
-                              }}
-                              title={deletable ? "Select row to delete" : "Only trailing empty rows can be deleted"}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          );
-                        })}
+                          <div ref={overlayRef} className="absolute inset-0 z-10">
+                            {tiles.map((tile) => {
+                              const pos = getGridPosition(tile.slot, columns);
+                              const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
+                              const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
+                              const width = tile.colSpan * (gridMetrics?.cellWidth ?? 0) + (tile.colSpan - 1) * (gridMetrics?.colGap ?? 0);
+                              const height = tile.rowSpan * (gridMetrics?.cellHeight ?? 0) + (tile.rowSpan - 1) * (gridMetrics?.rowGap ?? 0);
+                              return (
+                                <div
+                                  key={`tile-${tile.id}`}
+                                  style={{
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${width}px`,
+                                    height: `${height}px`,
+                                  }}
+                                  className="absolute rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm"
+                                >
+                                  <div className="flex h-full flex-col justify-between">
+                                    <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
+                                    <div className="text-[11px] opacity-85">
+                                      {tile.colSpan}x{tile.rowSpan} tile
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
-                {isEditing ? (
-                  <div className="flex w-full items-center gap-3">
-                    <ul className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <li>rows:{totalRows}</li>
-                      <li>|</li>
-                      <li>tiles:{tiles.length}</li>
-                    </ul>
-                    <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!canAddRow) return;
-                        setTargetRows((previous) => previous + 1);
-                      }}
-                      className={`inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${
-                        canAddRow ? "hover:opacity-90" : "cursor-not-allowed opacity-55"
-                      }`}
-                      style={{
-                        backgroundColor: "rgba(22,163,74,0.14)",
-                        borderColor: "rgba(21,128,61,0.35)",
-                        color: "#166534",
-                      }}
-                      title={canAddRow ? "Add Row" : "Max blank rows reached"}
-                    >
-                      Add Row
-                    </button>
-                    <div className="h-[1px] flex-1" style={{ backgroundColor: "rgba(22,163,74,0.35)" }} />
-                    <ul className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <li>min:1</li>
-                      <li>|</li>
-                      <li>set:{targetRows}</li>
-                    </ul>
-                  </div>
-                ) : null}
+                    )}
                   </CardContent>
                 </Card>
               ) : null}
