@@ -18,13 +18,12 @@ export function Header() {
   useEffect(() => {
     const storedTheme = localStorage.getItem("finpro-theme");
     const initialTheme: "light" | "dark" =
-      storedTheme === "dark" || storedTheme === "light"
-        ? storedTheme
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
+      storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
     setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
+    if (storedTheme !== "dark" && storedTheme !== "light") {
+      localStorage.setItem("finpro-theme", initialTheme);
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -85,7 +84,7 @@ export function Header() {
     }`;
 
   return (
-    <header className="sticky top-0 z-40 relative border-b border-black/10 bg-background/97 backdrop-blur supports-[backdrop-filter]:bg-background/95">
+    <header className="sticky top-0 z-40 relative border-b border-black/10 bg-background dark:bg-[#07090d]">
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <Link to="/" className="inline-flex items-center gap-2">
@@ -129,67 +128,69 @@ export function Header() {
 
         <nav className="hidden items-center gap-2 lg:flex" aria-label="Account">
           {user ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                onClick={() => setProfileMenuOpen((prev) => !prev)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card hover:bg-secondary"
-                aria-label="Open profile menu"
-              >
-                <CircleUserRound className="h-5 w-5 text-primary" />
-              </button>
+            <div className="flex items-center gap-2">
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  onClick={() => setProfileMenuOpen((prev) => !prev)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card hover:bg-secondary"
+                  aria-label="Open profile menu"
+                >
+                  <CircleUserRound className="h-5 w-5 text-primary" />
+                </button>
 
-              {profileMenuOpen ? (
-                <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-[0_16px_34px_rgba(15,23,42,0.14)]">
-                  <ul className="p-2 text-sm">
-                    <li>
-                      <Link
-                        to="/settings#account"
-                        onClick={() => setProfileMenuOpen(false)}
-                        className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-secondary"
-                      >
-                        <Settings className="h-4 w-4 text-muted-foreground" />
-                        Settings
-                      </Link>
-                    </li>
-                    <li className="mt-1">
-                      <button
-                        type="button"
-                        onClick={toggleTheme}
-                        className="inline-flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-secondary"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          {theme === "dark" ? <Moon className="h-4 w-4 text-muted-foreground" /> : <Sun className="h-4 w-4 text-muted-foreground" />}
-                          Dark mode
-                        </span>
-                        <span
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            theme === "dark" ? "bg-emerald-500" : "bg-slate-300"
-                          }`}
-                          aria-hidden
+                {profileMenuOpen ? (
+                  <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-[0_16px_34px_rgba(15,23,42,0.14)]">
+                    <ul className="p-2 text-sm">
+                      <li>
+                        <Link
+                          to="/settings#account"
+                          onClick={() => setProfileMenuOpen(false)}
+                          className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-secondary"
                         >
+                          <Settings className="h-4 w-4 text-muted-foreground" />
+                          Settings
+                        </Link>
+                      </li>
+                      <li className="mt-1">
+                        <button
+                          type="button"
+                          onClick={toggleTheme}
+                          className="inline-flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-secondary"
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            {theme === "dark" ? <Moon className="h-4 w-4 text-muted-foreground" /> : <Sun className="h-4 w-4 text-muted-foreground" />}
+                            Appearance
+                          </span>
                           <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-card transition-transform ${
-                              theme === "dark" ? "translate-x-5" : "translate-x-1"
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              theme === "dark" ? "bg-emerald-500" : "bg-slate-300"
                             }`}
-                          />
-                        </span>
-                      </button>
-                    </li>
-                    <li className="mt-1 border-t border-border pt-1">
-                      <button
-                        type="button"
-                        onClick={onLogout}
-                        disabled={loggingOut}
-                        className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-destructive hover:bg-secondary disabled:opacity-60"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        {loggingOut ? "Signing out..." : "Sign out"}
-                      </button>
-                    </li>
-                  </ul>
+                            aria-hidden
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-card transition-transform ${
+                                theme === "dark" ? "translate-x-5" : "translate-x-1"
+                              }`}
+                            />
+                          </span>
+                        </button>
+                      </li>
+                      <li className="mt-1 border-t border-border pt-1">
+                        <button
+                          type="button"
+                          onClick={onLogout}
+                          disabled={loggingOut}
+                          className="inline-flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-destructive hover:bg-secondary disabled:opacity-60"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          {loggingOut ? "Signing out..." : "Sign out"}
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                ) : null}
                 </div>
-              ) : null}
             </div>
           ) : (
             <>
@@ -240,6 +241,13 @@ export function Header() {
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Asset Types
+                </Link>
+                <Link
+                  to="/?action=add-modify"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Add / Modify Assets
                 </Link>
                 <Link
                   to="/settings#account"

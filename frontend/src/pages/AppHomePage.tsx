@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useLocation } from "react-router-dom";
 import {
   ArrowLeftRight,
   BadgeDollarSign,
@@ -55,6 +56,7 @@ type HolderTile = {
 };
 type ViewportHolders = Record<EditViewport, HolderTile[]>;
 type NavSectionKey = "addAssets" | "assetTypes" | "accounts";
+type NavDashboardTileKey = "favorites" | "assets" | "accounts" | "custom";
 type NavDragKind = "section" | "asset" | "account";
 type NavDragItem = {
   kind: NavDragKind;
@@ -131,6 +133,7 @@ const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
   desktop: 5,
 };
 const DEFAULT_NAV_SECTION_ORDER: NavSectionKey[] = ["addAssets", "assetTypes", "accounts"];
+const DEFAULT_NAV_DASHBOARD_TILE_ORDER: NavDashboardTileKey[] = ["favorites", "assets", "accounts", "custom"];
 const TILE_PRESETS: TilePreset[] = [
   {
     id: "compact",
@@ -219,6 +222,7 @@ const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) =
 
 export function AppHomePage() {
   const { user } = useAuth();
+  const location = useLocation();
   const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
@@ -233,20 +237,42 @@ export function AppHomePage() {
   const [layoutNameDialogMode, setLayoutNameDialogMode] = useState<"create" | "rename">("create");
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
+  const [favoritesCollapsed, setFavoritesCollapsed] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
   const [accountsCollapsed, setAccountsCollapsed] = useState(false);
+  const [customDashboardsCollapsed, setCustomDashboardsCollapsed] = useState(false);
+  const [favoritesActionsMenuOpen, setFavoritesActionsMenuOpen] = useState(false);
+  const [assetsActionsMenuOpen, setAssetsActionsMenuOpen] = useState(false);
+  const [customActionsMenuOpen, setCustomActionsMenuOpen] = useState(false);
+  const [favoritesActionsSubmenu, setFavoritesActionsSubmenu] = useState<"filter" | "sort" | null>(null);
+  const [assetsActionsSubmenu, setAssetsActionsSubmenu] = useState<"filter" | "sort" | null>(null);
+  const [customActionsSubmenu, setCustomActionsSubmenu] = useState<"filter" | "sort" | null>(null);
+  const [accountsActionsSubmenu, setAccountsActionsSubmenu] = useState<"filter" | "sort" | null>(null);
+  const [accountsActionsMenuOpen, setAccountsActionsMenuOpen] = useState(false);
+  const [assetFilterMode, setAssetFilterMode] = useState<"all" | "system" | "custom">("all");
+  const [assetSortMode, setAssetSortMode] = useState<"name_asc" | "name_desc">("name_asc");
+  const [favoritesFilterMode, setFavoritesFilterMode] = useState<"all" | "asset_type" | "account">("all");
+  const [favoritesSortMode, setFavoritesSortMode] = useState<"name_asc" | "name_desc">("name_asc");
+  const [customFilterMode, setCustomFilterMode] = useState<"all" | "portfolio" | "accounts">("all");
+  const [customSortMode, setCustomSortMode] = useState<"recent" | "name_asc" | "name_desc">("recent");
+  const [selectedAccountTypeIds, setSelectedAccountTypeIds] = useState<number[]>([]);
+  const [accountSortMode, setAccountSortMode] = useState<"name_asc" | "name_desc" | "value_desc" | "value_asc" | "type_asc">("name_asc");
   const [assetTypeSearch] = useState("");
   const [hasHydratedNavState, setHasHydratedNavState] = useState(false);
   const [navEditMode, setNavEditMode] = useState(false);
-  const [buttonEditTarget, setButtonEditTarget] = useState<"assetTypes" | "accounts" | null>(null);
+  const [buttonEditTarget, setButtonEditTarget] = useState<"assetTypes" | "accounts" | "all" | null>(null);
   const [navSectionOrder, setNavSectionOrder] = useState<NavSectionKey[]>(DEFAULT_NAV_SECTION_ORDER);
+  const [navDashboardTileOrder, setNavDashboardTileOrder] = useState<NavDashboardTileKey[]>(DEFAULT_NAV_DASHBOARD_TILE_ORDER);
   const [navAssetItemOrder, setNavAssetItemOrder] = useState<string[]>([]);
   const [navAccountItemOrder, setNavAccountItemOrder] = useState<string[]>([]);
   const [draftNavSectionOrder, setDraftNavSectionOrder] = useState<NavSectionKey[]>(DEFAULT_NAV_SECTION_ORDER);
+  const [draftNavDashboardTileOrder, setDraftNavDashboardTileOrder] = useState<NavDashboardTileKey[]>(DEFAULT_NAV_DASHBOARD_TILE_ORDER);
   const [draftNavAssetItemOrder, setDraftNavAssetItemOrder] = useState<string[]>([]);
   const [draftNavAccountItemOrder, setDraftNavAccountItemOrder] = useState<string[]>([]);
   const [navDragItem, setNavDragItem] = useState<NavDragItem | null>(null);
   const [navDropTarget, setNavDropTarget] = useState<NavDragItem | null>(null);
+  const [navTileDragKey, setNavTileDragKey] = useState<NavDashboardTileKey | null>(null);
+  const [navTileDropKey, setNavTileDropKey] = useState<NavDashboardTileKey | null>(null);
   const navDragItemRef = useRef<NavDragItem | null>(null);
   const navHoverTargetRef = useRef<NavDragItem | null>(null);
   const navDropTargetRef = useRef<NavDragItem | null>(null);
@@ -447,6 +473,13 @@ export function AppHomePage() {
     () => normalizeOrder(navEditMode ? draftNavSectionOrder : navSectionOrder, DEFAULT_NAV_SECTION_ORDER) as NavSectionKey[],
     [draftNavSectionOrder, navEditMode, navSectionOrder],
   );
+  const dashboardTileOrderForRender = useMemo(
+    () =>
+      (navEditMode
+        ? normalizeOrder(draftNavDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER)
+        : normalizeOrder(navDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER)) as NavDashboardTileKey[],
+    [draftNavDashboardTileOrder, navDashboardTileOrder, navEditMode],
+  );
   const assetOrderForRender = navEditMode ? draftNavAssetItemOrder : navAssetItemOrder;
   const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
   const sectionOrderForView = useMemo(() => {
@@ -479,7 +512,7 @@ export function AppHomePage() {
       (buttonEditTarget === "assetTypes" && kind === "asset")
       || (buttonEditTarget === "accounts" && kind === "account")
     );
-  const isManagingSections = navEditMode && buttonEditTarget === null;
+  const isManagingSections = navEditMode && (buttonEditTarget === null || buttonEditTarget === "all");
   const canDragKind = (kind: NavDragKind) => kind === "section" || canEditButtonsForKind(kind);
   const orderedAssetEntries = useMemo(() => {
     const keyToEntry = new Map(assetTypeEntries.map((entry) => [entry.key, entry] as const));
@@ -491,19 +524,59 @@ export function AppHomePage() {
     if (!term) return orderedAssetEntries;
     return orderedAssetEntries.filter((entry) => entry.assetType.name.toLowerCase().includes(term));
   }, [assetTypeSearch, orderedAssetEntries]);
+  const displayedAssetEntries = useMemo(() => {
+    const filtered = filteredOrderedAssetEntries.filter((entry) => {
+      if (assetFilterMode === "system") return entry.assetType.is_system;
+      if (assetFilterMode === "custom") return !entry.assetType.is_system;
+      return true;
+    });
+    const ranked = [...filtered];
+    ranked.sort((left, right) =>
+      assetSortMode === "name_desc"
+        ? right.assetType.name.localeCompare(left.assetType.name)
+        : left.assetType.name.localeCompare(right.assetType.name),
+    );
+    return ranked;
+  }, [assetFilterMode, assetSortMode, filteredOrderedAssetEntries]);
   const systemAssetTypes = useMemo(
-    () => filteredOrderedAssetEntries.filter((entry) => entry.assetType.is_system),
-    [filteredOrderedAssetEntries],
+    () => displayedAssetEntries.filter((entry) => entry.assetType.is_system),
+    [displayedAssetEntries],
   );
   const customAssetTypes = useMemo(
-    () => filteredOrderedAssetEntries.filter((entry) => !entry.assetType.is_system),
-    [filteredOrderedAssetEntries],
+    () => displayedAssetEntries.filter((entry) => !entry.assetType.is_system),
+    [displayedAssetEntries],
   );
   const orderedAccountEntries = useMemo(() => {
     const keyToEntry = new Map(accountEntries.map((entry) => [entry.key, entry] as const));
     const orderedKeys = normalizeOrder(accountOrderForRender, accountEntries.map((entry) => entry.key));
     return orderedKeys.map((key) => keyToEntry.get(key)).filter(Boolean) as typeof accountEntries;
   }, [accountEntries, accountOrderForRender]);
+  const accountTypeNameById = useMemo(
+    () => new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type.name] as const)),
+    [accountCreateOptions],
+  );
+  const displayedAccountEntries = useMemo(() => {
+    const filtered = selectedAccountTypeIds.length > 0
+      ? orderedAccountEntries.filter((entry) => selectedAccountTypeIds.includes(entry.account.account_type))
+      : orderedAccountEntries;
+    const ranked = [...filtered];
+    ranked.sort((left, right) => {
+      const leftValue = ((left.account as AccountListItem & { total_value?: number }).total_value ?? left.account.holdings_count);
+      const rightValue = ((right.account as AccountListItem & { total_value?: number }).total_value ?? right.account.holdings_count);
+      if (accountSortMode === "type_asc") {
+        const leftType = accountTypeNameById.get(left.account.account_type) ?? "Uncategorized";
+        const rightType = accountTypeNameById.get(right.account.account_type) ?? "Uncategorized";
+        const typeCompare = leftType.localeCompare(rightType);
+        if (typeCompare !== 0) return typeCompare;
+        return left.account.name.localeCompare(right.account.name);
+      }
+      if (accountSortMode === "name_desc") return right.account.name.localeCompare(left.account.name);
+      if (accountSortMode === "value_desc") return rightValue - leftValue;
+      if (accountSortMode === "value_asc") return leftValue - rightValue;
+      return left.account.name.localeCompare(right.account.name);
+    });
+    return ranked;
+  }, [accountSortMode, orderedAccountEntries, selectedAccountTypeIds, accountTypeNameById]);
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
     const currentSignature = JSON.stringify({
@@ -672,6 +745,7 @@ export function AppHomePage() {
     setNavEditMode(true);
     setButtonEditTarget(target);
     setDraftNavSectionOrder([...sectionOrderForRender]);
+    setDraftNavDashboardTileOrder([...dashboardTileOrderForRender]);
     setDraftNavAssetItemOrder([...assetOrderForRender]);
     setDraftNavAccountItemOrder([...accountOrderForRender]);
   };
@@ -680,23 +754,37 @@ export function AppHomePage() {
     setNavEditMode(true);
     setButtonEditTarget(null);
     setDraftNavSectionOrder([...sectionOrderForRender]);
+    setDraftNavDashboardTileOrder([...dashboardTileOrderForRender]);
     setDraftNavAssetItemOrder([...assetOrderForRender]);
     setDraftNavAccountItemOrder([...accountOrderForRender]);
   };
-
   const saveNavigationEdit = () => {
     const assetKeys = assetTypeEntries.map((entry) => entry.key);
     const accountKeys = accountEntries.map((entry) => entry.key);
     const nextSectionOrder = normalizeOrder(draftNavSectionOrder, DEFAULT_NAV_SECTION_ORDER) as NavSectionKey[];
+    const nextDashboardTileOrder = normalizeOrder(draftNavDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER) as NavDashboardTileKey[];
     const nextAssetOrder = normalizeOrder(draftNavAssetItemOrder, assetKeys);
     const nextAccountOrder = normalizeOrder(draftNavAccountItemOrder, accountKeys);
     setNavSectionOrder(nextSectionOrder);
+    setNavDashboardTileOrder(nextDashboardTileOrder);
     setNavAssetItemOrder(nextAssetOrder);
     setNavAccountItemOrder(nextAccountOrder);
     setNavEditMode(false);
     setButtonEditTarget(null);
     setNavDragItem(null);
     setNavDropTarget(null);
+    setNavTileDragKey(null);
+    setNavTileDropKey(null);
+  };
+  const cancelNavigationEdit = () => {
+    setNavEditMode(false);
+    setButtonEditTarget(null);
+    setNavDragItem(null);
+    setNavDropTarget(null);
+    setNavTileDragKey(null);
+    setNavTileDropKey(null);
+    setAccountsActionsMenuOpen(false);
+    setAccountsActionsSubmenu(null);
   };
 
   const reorderDraftByDrag = (kind: NavDragKind, sourceKey: string, targetKey: string) => {
@@ -991,14 +1079,36 @@ export function AppHomePage() {
     const onDocClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest("[data-dashboard-menu]")) return;
-      if (target.closest("[data-tile-menu]")) return;
-      if (target.closest("[data-holder-menu]")) return;
-      setSettingsMenuOpen(false);
-      setLayoutActionsMenuOpen(false);
-      setGridActionsMenuOpen(false);
-      setTileMenuOpenId(null);
-      setHolderMenuOpenId(null);
+      const inDashboardMenu = Boolean(target.closest("[data-dashboard-menu]"));
+      const inTileMenu = Boolean(target.closest("[data-tile-menu]"));
+      const inHolderMenu = Boolean(target.closest("[data-holder-menu]"));
+      const inAccountActionsMenu = Boolean(target.closest("[data-account-actions-menu]"));
+      const inFavoritesActionsMenu = Boolean(target.closest("[data-favorites-actions-menu]"));
+      const inAssetsActionsMenu = Boolean(target.closest("[data-assets-actions-menu]"));
+      const inCustomActionsMenu = Boolean(target.closest("[data-custom-actions-menu]"));
+
+      if (!inDashboardMenu) setSettingsMenuOpen(false);
+      if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
+      if (!inDashboardMenu) setGridActionsMenuOpen(false);
+      if (!inTileMenu) setTileMenuOpenId(null);
+      if (!inHolderMenu) setHolderMenuOpenId(null);
+
+      if (!inAccountActionsMenu) {
+        setAccountsActionsMenuOpen(false);
+        setAccountsActionsSubmenu(null);
+      }
+      if (!inFavoritesActionsMenu) {
+        setFavoritesActionsMenuOpen(false);
+        setFavoritesActionsSubmenu(null);
+      }
+      if (!inAssetsActionsMenu) {
+        setAssetsActionsMenuOpen(false);
+        setAssetsActionsSubmenu(null);
+      }
+      if (!inCustomActionsMenu) {
+        setCustomActionsMenuOpen(false);
+        setCustomActionsSubmenu(null);
+      }
     };
 
     window.addEventListener("mousedown", onDocClick);
@@ -1080,6 +1190,19 @@ export function AppHomePage() {
   }, [accountEntries, assetTypeEntries, navEditMode]);
 
   useEffect(() => {
+    const isSortMode = navEditMode && buttonEditTarget === "all";
+    if (!isSortMode) {
+      document.body.style.overflow = "";
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [buttonEditTarget, navEditMode]);
+
+  useEffect(() => {
     if (activeSidebarCategory === "portfolio") {
       setActiveSidebarLabel("Portfolio");
       return;
@@ -1105,6 +1228,13 @@ export function AppHomePage() {
     setActiveSidebarCategory("portfolio");
     setActiveSidebarLabel("Portfolio");
   }, [accountEntries, activeSidebarCategory, assetTypeEntries]);
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    if (query.get("action") !== "add-modify") return;
+    if (isEditing) return;
+    setIsAddAssetModalOpen(true);
+  }, [isEditing, location.search]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1826,16 +1956,43 @@ export function AppHomePage() {
   const accountsSectionIndex = navSectionsBelowAddAssets.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
     navDragItem?.kind === kind && navDragItem.key === key;
+  const handleDashboardTileDragStart = (event: DragEvent<HTMLElement>, key: NavDashboardTileKey) => {
+    if (!isSortNavAndButtons) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", key);
+    setNavTileDragKey(key);
+    setNavTileDropKey(null);
+  };
+  const handleDashboardTileDragOver = (event: DragEvent<HTMLElement>, key: NavDashboardTileKey) => {
+    if (!isSortNavAndButtons || !navTileDragKey) return;
+    event.preventDefault();
+    if (navTileDropKey !== key) setNavTileDropKey(key);
+  };
+  const handleDashboardTileDrop = (event: DragEvent<HTMLElement>, key: NavDashboardTileKey) => {
+    if (!isSortNavAndButtons || !navTileDragKey) return;
+    event.preventDefault();
+    setDraftNavDashboardTileOrder((previous) => moveKeyForDrag(previous, navTileDragKey, key) as NavDashboardTileKey[]);
+    setNavTileDragKey(null);
+    setNavTileDropKey(null);
+  };
+  const handleDashboardTileDragEnd = () => {
+    setNavTileDragKey(null);
+    setNavTileDropKey(null);
+  };
+  const getDashboardTileOrder = (key: NavDashboardTileKey) => dashboardTileOrderForRender.indexOf(key);
+  const isSortNavAndButtons = false;
+  const isNavRearranging = false;
   return (
-    <main className="app-home w-full pb-10 pt-4">
+    <main className="app-home w-full pb-10 pt-4 dark:bg-[#07090d] dark:text-white">
+      {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-              <Card className="h-fit border-0 bg-transparent shadow-none xl:sticky xl:bottom-6 xl:self-start">
+              <Card className={`relative h-fit overflow-visible border-0 bg-transparent shadow-none xl:sticky xl:bottom-6 xl:self-start ${isNavRearranging ? "z-auto" : "z-30"}`}>
                 <CardContent
                   ref={navEditPanelRef}
-                  className="flex h-full flex-col gap-5 p-0"
+                  className="flex h-full flex-col gap-2 overflow-visible p-0"
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
@@ -1847,7 +2004,7 @@ export function AppHomePage() {
                               isNavDragging("section", "addAssets")
                                 ? "rounded-lg border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
-                            }`}
+                            } ${isNavRearranging ? "pointer-events-none select-none opacity-45 blur-[1px]" : ""}`}
                             style={{ order: 0 }}
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "addAssets")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "addAssets")}
@@ -1874,7 +2031,7 @@ export function AppHomePage() {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                     setIsAddAssetModalOpen(true);
                                   }}
-                                  className="flex h-[92px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-white dark:hover:bg-[#25292f]"
                                   aria-label="Add assets"
                                 >
                                   <Plus className="h-4 w-4" />
@@ -1887,7 +2044,7 @@ export function AppHomePage() {
                                     setActiveSidebarCategory("holdings");
                                     setActiveSidebarLabel("Accounts / Holdings");
                                   }}
-                                  className="flex h-[92px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-white dark:hover:bg-[#25292f]"
                                   aria-label="Modify holdings"
                                 >
                                   <ArrowLeftRight className="h-4 w-4" />
@@ -1905,7 +2062,7 @@ export function AppHomePage() {
                               isNavDragging("section", "assetTypes")
                                 ? "rounded-xl border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
-                            }`}
+                            } ${isNavRearranging ? "pointer-events-none select-none opacity-45 blur-[1px]" : ""}`}
                             style={{ order: assetSectionIndex + 1 }}
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "assetTypes")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
@@ -1927,7 +2084,7 @@ export function AppHomePage() {
                                     <GripVertical className="h-3.5 w-3.5" />
                                   </button>
                                 ) : null}
-                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-white/10 dark:bg-[#1b1d21]">
                                   <div className="space-y-2">
                                     <button
                                       type="button"
@@ -1938,13 +2095,13 @@ export function AppHomePage() {
                                       }}
                                       className={`relative flex w-full items-center gap-2.5 rounded-[3px] px-3 py-3.5 text-left transition-colors ${
                                         activeSidebarCategory === "portfolio"
-                                          ? "font-extrabold text-slate-950"
-                                        : "text-slate-700 hover:bg-zinc-100 hover:text-slate-900"
+                                          ? "font-extrabold text-slate-950 dark:text-white"
+                                        : "text-slate-700 hover:bg-zinc-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                       }`}
                                     >
                                       <BriefcaseBusiness
                                         className={`h-4 w-4 shrink-0 ${
-                                          activeSidebarCategory === "portfolio" ? "text-slate-950" : "text-slate-600"
+                                          activeSidebarCategory === "portfolio" ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
                                         }`}
                                         strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
                                       />
@@ -1952,8 +2109,20 @@ export function AppHomePage() {
                                         Portfolio Dashboard
                                       </span>
                                       {activeSidebarCategory === "portfolio" ? (
-                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-800" />
+                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-800 dark:bg-white/80" />
                                       ) : null}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                        setIsAddAssetModalOpen(true);
+                                      }}
+                                      className="relative flex w-full items-center gap-2.5 rounded-[3px] px-3 py-3.5 text-left text-slate-700 transition-colors hover:bg-zinc-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                      aria-label="Assets and liabilities"
+                                    >
+                                      <BadgeDollarSign className="h-4 w-4" />
+                                      <span className="truncate text-sm font-semibold">Assets & Liabilities</span>
                                     </button>
                                   </div>
                                 </div>
@@ -1965,7 +2134,7 @@ export function AppHomePage() {
                             data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="accounts"
-                            className={`relative z-10 transition-all duration-150 will-change-transform ${
+                            className={`relative overflow-visible transition-all duration-150 will-change-transform ${isNavRearranging ? "z-[70] max-h-[calc(100vh-7.5rem)] overflow-y-auto pr-1" : "z-20"} ${
                               isNavDragging("section", "accounts")
                                 ? "rounded-xl border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -1975,7 +2144,7 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
                             <CardContent className="p-0">
-                              <div className="space-y-3">
+                              <div className="flex flex-col gap-2 dark:text-white">
                                 {isManagingSections ? (
                                   <div className="flex items-center">
                                     <button
@@ -1992,29 +2161,295 @@ export function AppHomePage() {
                                     </button>
                                   </div>
                                 ) : null}
-                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
+                                  <div
+                                    draggable={isSortNavAndButtons}
+                                    onDragStart={(event) => handleDashboardTileDragStart(event, "favorites")}
+                                    onDragOver={(event) => handleDashboardTileDragOver(event, "favorites")}
+                                    onDrop={(event) => handleDashboardTileDrop(event, "favorites")}
+                                    onDragEnd={handleDashboardTileDragEnd}
+                                    style={{ order: getDashboardTileOrder("favorites") }}
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
+                                      navTileDropKey === "favorites" ? "ring-1 ring-slate-400" : ""
+                                    }`}
+                                  >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Assets</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Favorites</p>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => setFavoritesCollapsed((previous) => !previous)}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                          aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
+                                          title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
+                                        >
+                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${favoritesCollapsed ? "" : "rotate-180"}`} />
+                                        </button>
+                                        <div className="relative" data-favorites-actions-menu>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setFavoritesActionsMenuOpen((previous) => {
+                                                const next = !previous;
+                                                if (!next) setFavoritesActionsSubmenu(null);
+                                                setAssetsActionsMenuOpen(false);
+                                                setCustomActionsMenuOpen(false);
+                                                setAccountsActionsMenuOpen(false);
+                                                return next;
+                                              })
+                                            }
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                              favoritesActionsMenuOpen
+                                                ? "border-slate-300 bg-slate-200 text-slate-800"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                            }`}
+                                            aria-label="More favorite actions"
+                                            title="More favorite actions"
+                                          >
+                                            <Ellipsis className="h-3.5 w-3.5" />
+                                          </button>
+                                          {favoritesActionsMenuOpen ? (
+                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d] dark:border-white/10 dark:bg-[#16181d]">
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setFavoritesActionsSubmenu((previous) => (previous === "filter" ? null : "filter"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    favoritesActionsSubmenu === "filter"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Filter by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {favoritesActionsSubmenu === "filter" ? (
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d] dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="favorites-filter-mode">
+                                                      Type
+                                                    </label>
+                                                    <select
+                                                      id="favorites-filter-mode"
+                                                      value={favoritesFilterMode}
+                                                      onChange={(event) => setFavoritesFilterMode(event.target.value as typeof favoritesFilterMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="all">All favorites</option>
+                                                      <option value="asset_type">Asset favorites</option>
+                                                      <option value="account">Account favorites</option>
+                                                    </select>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setFavoritesActionsSubmenu((previous) => (previous === "sort" ? null : "sort"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    favoritesActionsSubmenu === "sort"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Sort by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {favoritesActionsSubmenu === "sort" ? (
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d] dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="favorites-sort-mode">
+                                                      Sort
+                                                    </label>
+                                                    <select
+                                                      id="favorites-sort-mode"
+                                                      value={favoritesSortMode}
+                                                      onChange={(event) => setFavoritesSortMode(event.target.value as typeof favoritesSortMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="name_asc">Name (A-Z)</option>
+                                                      <option value="name_desc">Name (Z-A)</option>
+                                                    </select>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {isNavRearranging ? (
+                                      <div className="mb-1 flex items-center gap-2 px-1">
+                                        <button
+                                          type="button"
+                                          onClick={saveNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                                          aria-label="Save sidebar order"
+                                          title="Save sidebar order"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100"
+                                          aria-label="Cancel sidebar rearrange"
+                                          title="Cancel sidebar rearrange"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                    {!favoritesCollapsed ? (
+                                      <button
+                                        type="button"
+                                        className="w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                      >
+                                        + Add Favourite Dashboards
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  <div
+                                    draggable={isSortNavAndButtons}
+                                    onDragStart={(event) => handleDashboardTileDragStart(event, "assets")}
+                                    onDragOver={(event) => handleDashboardTileDragOver(event, "assets")}
+                                    onDrop={(event) => handleDashboardTileDrop(event, "assets")}
+                                    onDragEnd={handleDashboardTileDragEnd}
+                                    style={{ order: getDashboardTileOrder("assets") }}
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
+                                      navTileDropKey === "assets" ? "ring-1 ring-slate-400" : ""
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between px-1 pb-1">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Assets</p>
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
                                           onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
                                           aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                           title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                         >
                                           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${assetTypesCollapsed ? "" : "rotate-180"}`} />
                                         </button>
-                                        <button
-                                          type="button"
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                                          aria-label="More asset actions"
-                                          title="More asset actions"
-                                        >
-                                          <Ellipsis className="h-3.5 w-3.5" />
-                                        </button>
+                                        <div className="relative" data-assets-actions-menu>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setAssetsActionsMenuOpen((previous) => {
+                                                const next = !previous;
+                                                if (!next) setAssetsActionsSubmenu(null);
+                                                setFavoritesActionsMenuOpen(false);
+                                                setCustomActionsMenuOpen(false);
+                                                setAccountsActionsMenuOpen(false);
+                                                return next;
+                                              })
+                                            }
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                              assetsActionsMenuOpen
+                                                ? "border-slate-300 bg-slate-200 text-slate-800"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                            }`}
+                                            aria-label="More asset actions"
+                                            title="More asset actions"
+                                          >
+                                            <Ellipsis className="h-3.5 w-3.5" />
+                                          </button>
+                                          {assetsActionsMenuOpen ? (
+                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setAssetsActionsSubmenu((previous) => (previous === "filter" ? null : "filter"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    assetsActionsSubmenu === "filter"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Filter by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {assetsActionsSubmenu === "filter" ? (
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="assets-filter-mode">
+                                                      Asset type
+                                                    </label>
+                                                    <select
+                                                      id="assets-filter-mode"
+                                                      value={assetFilterMode}
+                                                      onChange={(event) => setAssetFilterMode(event.target.value as typeof assetFilterMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="all">All assets</option>
+                                                      <option value="system">System assets</option>
+                                                      <option value="custom">Custom assets</option>
+                                                    </select>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setAssetsActionsSubmenu((previous) => (previous === "sort" ? null : "sort"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    assetsActionsSubmenu === "sort"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Sort by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {assetsActionsSubmenu === "sort" ? (
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="assets-sort-mode">
+                                                      Sort
+                                                    </label>
+                                                    <select
+                                                      id="assets-sort-mode"
+                                                      value={assetSortMode}
+                                                      onChange={(event) => setAssetSortMode(event.target.value as typeof assetSortMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="name_asc">Name (A-Z)</option>
+                                                      <option value="name_desc">Name (Z-A)</option>
+                                                    </select>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                          ) : null}
+                                        </div>
                                       </div>
                                     </div>
+                                    {isNavRearranging ? (
+                                      <div className="mb-1 flex items-center gap-2 px-1">
+                                        <button
+                                          type="button"
+                                          onClick={saveNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                                          aria-label="Save asset order"
+                                          title="Save asset order"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100"
+                                          aria-label="Cancel asset rearrange"
+                                          title="Cancel asset rearrange"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    ) : null}
                                     {!assetTypesCollapsed ? (
                                       <div className="space-y-0">
                                       {systemAssetTypes.map((entry) => {
@@ -2057,28 +2492,28 @@ export function AppHomePage() {
                                                 }}
                                                 className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                    ? "font-extrabold text-slate-950 dark:text-white"
+                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
                                                   <Boxes
                                                     className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950" : "text-slate-600"
+                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700 dark:bg-white/80" />
                                                 ) : null}
                                               </button>
                                             </div>
                                           );
                                         })}
                                       {customAssetTypes.length > 0 ? (
-                                        <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                        <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
                                             Custom
                                         </p>
                                       ) : null}
@@ -2122,62 +2557,220 @@ export function AppHomePage() {
                                                 }}
                                                 className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                    ? "font-extrabold text-slate-950 dark:text-white"
+                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
                                                   <Boxes
                                                     className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950" : "text-slate-600"
+                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700 dark:bg-white/80" />
                                                 ) : null}
                                               </button>
                                             </div>
                                           );
                                         })}
-                                      {filteredOrderedAssetEntries.length === 0 ? (
-                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                      {displayedAssetEntries.length === 0 ? (
+                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-white/30 dark:bg-[#1b1d21] dark:text-slate-200">
                                           No asset types found.
                                         </div>
                                       ) : null}
                                       </div>
                                     ) : null}
                                   </div>
-                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
+                                  <div
+                                    draggable={isSortNavAndButtons}
+                                    onDragStart={(event) => handleDashboardTileDragStart(event, "accounts")}
+                                    onDragOver={(event) => handleDashboardTileDragOver(event, "accounts")}
+                                    onDrop={(event) => handleDashboardTileDrop(event, "accounts")}
+                                    onDragEnd={handleDashboardTileDragEnd}
+                                    style={{ order: getDashboardTileOrder("accounts") }}
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
+                                      navTileDropKey === "accounts" ? "ring-1 ring-slate-400" : ""
+                                    }`}
+                                  >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Account Dashboards</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Accounts</p>
                                       <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                                          aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
-                                          title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
-                                        >
-                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountsCollapsed ? "" : "rotate-180"}`} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                                          aria-label="More account actions"
-                                          title="More account actions"
-                                        >
-                                          <Ellipsis className="h-3.5 w-3.5" />
-                                        </button>
+                                        {isSortNavAndButtons ? (
+                                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600">
+                                            <GripVertical className="h-3.5 w-3.5" />
+                                          </span>
+                                        ) : (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setAccountsCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
+                                              title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountsCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <div className="relative" data-account-actions-menu>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setAccountsActionsMenuOpen((previous) => {
+                                                    const next = !previous;
+                                                    if (!next) setAccountsActionsSubmenu(null);
+                                                    setFavoritesActionsMenuOpen(false);
+                                                    setAssetsActionsMenuOpen(false);
+                                                    setCustomActionsMenuOpen(false);
+                                                    return next;
+                                                  })
+                                                }
+                                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                                  accountsActionsMenuOpen
+                                                    ? "border-slate-300 bg-slate-200 text-slate-800"
+                                                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                }`}
+                                                aria-label="Account actions"
+                                                title="Account actions"
+                                              >
+                                                <Ellipsis className="h-3.5 w-3.5" />
+                                              </button>
+                                          {accountsActionsMenuOpen ? (
+                                            <div className="pointer-events-auto absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setAccountsActionsSubmenu((previous) => (previous === "filter" ? null : "filter"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    accountsActionsSubmenu === "filter"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Filter by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {accountsActionsSubmenu === "filter" ? (
+                                                  <div className="pointer-events-auto absolute left-full top-0 z-[80] ml-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Account Type</p>
+                                                    <div className="mt-1 flex flex-wrap gap-1">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setSelectedAccountTypeIds([])}
+                                                        className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                                                          selectedAccountTypeIds.length === 0
+                                                            ? "border-slate-300 bg-slate-200 text-slate-900"
+                                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                                        }`}
+                                                      >
+                                                        All
+                                                      </button>
+                                                      {(accountCreateOptions?.account_types ?? []).map((type) => {
+                                                        const selected = selectedAccountTypeIds.includes(type.id);
+                                                        return (
+                                                          <button
+                                                            key={`acct-type-filter-${type.id}`}
+                                                            type="button"
+                                                            onClick={() =>
+                                                              setSelectedAccountTypeIds((previous) =>
+                                                                previous.includes(type.id) ? previous.filter((id) => id !== type.id) : [...previous, type.id],
+                                                              )
+                                                            }
+                                                            className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                                                              selected
+                                                                ? "border-slate-300 bg-slate-200 text-slate-900"
+                                                                : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                                            }`}
+                                                          >
+                                                            {type.name}
+                                                          </button>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setAccountsActionsSubmenu((previous) => (previous === "sort" ? null : "sort"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    accountsActionsSubmenu === "sort"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Sort by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {accountsActionsSubmenu === "sort" ? (
+                                                  <div className="pointer-events-auto absolute left-full top-0 z-[80] ml-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="accounts-sort-mode">
+                                                      Sort
+                                                    </label>
+                                                    <select
+                                                      id="accounts-sort-mode"
+                                                      value={accountSortMode}
+                                                      onChange={(event) => setAccountSortMode(event.target.value as typeof accountSortMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="name_asc">Name (A-Z)</option>
+                                                      <option value="name_desc">Name (Z-A)</option>
+                                                      <option value="type_asc">Account Type (A-Z)</option>
+                                                      <option value="value_desc">Account value (High-Low)</option>
+                                                      <option value="value_asc">Account value (Low-High)</option>
+                                                    </select>
+                                                    <p className="mt-1 text-[10px] text-slate-400">
+                                                      Value sort uses account value when available, otherwise holdings count.
+                                                    </p>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                          ) : null}
+                                            </div>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
+                                    {isNavRearranging ? (
+                                      <div className="mb-1 flex items-center gap-2 px-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            saveNavigationEdit();
+                                            setAccountsActionsMenuOpen(false);
+                                            setAccountsActionsSubmenu(null);
+                                          }}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                                          aria-label="Save account order"
+                                          title="Save account order"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100"
+                                          aria-label="Cancel account rearrange"
+                                          title="Cancel account rearrange"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    ) : null}
                                     {!accountsCollapsed ? (
                                       <div className="mt-0 space-y-0">
-                                      {orderedAccountEntries.map((entry) => {
+                                      {displayedAccountEntries.map((entry) => {
                                           const account = entry.account;
                                           const key = entry.key;
+                                          const typeName = accountTypeNameById.get(account.account_type);
                                           return (
                                             <div
                                               key={account.id}
@@ -2213,58 +2806,200 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(account.name);
                                                 }}
-                                                className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                className={`relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                    ? "font-extrabold text-slate-950 dark:text-white"
+                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-start gap-2">
                                                   <BadgeDollarSign
-                                                    className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950" : "text-slate-600"
+                                                    className={`mt-0.5 h-4 w-4 shrink-0 ${
+                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{account.name}</span>
+                                                  <div className="min-w-0">
+                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{account.name}</p>
+                                                    {typeName ? <p className="truncate text-[11px] text-slate-400 dark:text-slate-300">{typeName}</p> : null}
+                                                  </div>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700 dark:bg-white/80" />
                                                 ) : null}
                                               </button>
                                             </div>
                                           );
                                       })}
-                                      {orderedAccountEntries.length === 0 ? (
-                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                      {displayedAccountEntries.length === 0 ? (
+                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-white/30 dark:bg-[#1b1d21] dark:text-slate-200">
                                           No accounts found.
                                         </div>
                                       ) : null}
                                       </div>
                                     ) : null}
                                   </div>
-                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)]">
+                                  <div
+                                    draggable={isSortNavAndButtons}
+                                    onDragStart={(event) => handleDashboardTileDragStart(event, "custom")}
+                                    onDragOver={(event) => handleDashboardTileDragOver(event, "custom")}
+                                    onDrop={(event) => handleDashboardTileDrop(event, "custom")}
+                                    onDragEnd={handleDashboardTileDragEnd}
+                                    style={{ order: getDashboardTileOrder("custom") }}
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
+                                      navTileDropKey === "custom" ? "ring-1 ring-slate-400" : ""
+                                    }`}
+                                  >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Custom Dashboards</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Custom Dashboards</p>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                          aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
+                                          title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
+                                        >
+                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${customDashboardsCollapsed ? "" : "rotate-180"}`} />
+                                        </button>
+                                        <div className="relative" data-custom-actions-menu>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setCustomActionsMenuOpen((previous) => {
+                                                const next = !previous;
+                                                if (!next) setCustomActionsSubmenu(null);
+                                                setFavoritesActionsMenuOpen(false);
+                                                setAssetsActionsMenuOpen(false);
+                                                setAccountsActionsMenuOpen(false);
+                                                return next;
+                                              })
+                                            }
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                              customActionsMenuOpen
+                                                ? "border-slate-300 bg-slate-200 text-slate-800"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                            }`}
+                                            aria-label="More custom actions"
+                                            title="More custom actions"
+                                          >
+                                            <Ellipsis className="h-3.5 w-3.5" />
+                                          </button>
+                                          {customActionsMenuOpen ? (
+                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setCustomActionsSubmenu((previous) => (previous === "filter" ? null : "filter"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    customActionsSubmenu === "filter"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Filter by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {customActionsSubmenu === "filter" ? (
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="custom-filter-mode">
+                                                      Scope
+                                                    </label>
+                                                    <select
+                                                      id="custom-filter-mode"
+                                                      value={customFilterMode}
+                                                      onChange={(event) => setCustomFilterMode(event.target.value as typeof customFilterMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="all">All custom dashboards</option>
+                                                      <option value="portfolio">Portfolio dashboards</option>
+                                                      <option value="accounts">Account dashboards</option>
+                                                    </select>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                              <div className="relative">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setCustomActionsSubmenu((previous) => (previous === "sort" ? null : "sort"))
+                                                  }
+                                                  className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                                    customActionsSubmenu === "sort"
+                                                      ? "bg-slate-100 text-slate-900"
+                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                  }`}
+                                                >
+                                                  <span>Sort by</span>
+                                                  <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
+                                                </button>
+                                                {customActionsSubmenu === "sort" ? (
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                    <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="custom-sort-mode">
+                                                      Sort
+                                                    </label>
+                                                    <select
+                                                      id="custom-sort-mode"
+                                                      value={customSortMode}
+                                                      onChange={(event) => setCustomSortMode(event.target.value as typeof customSortMode)}
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                    >
+                                                      <option value="recent">Recently updated</option>
+                                                      <option value="name_asc">Name (A-Z)</option>
+                                                      <option value="name_desc">Name (Z-A)</option>
+                                                    </select>
+                                                  </div>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
                                     </div>
-                                    <button
-                                      type="button"
-                                      className="w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                                    >
-                                      + Create Custom Dashboard
-                                    </button>
+                                    {isNavRearranging ? (
+                                      <div className="mb-1 flex items-center gap-2 px-1">
+                                        <button
+                                          type="button"
+                                          onClick={saveNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                                          aria-label="Save nav and button order"
+                                          title="Save nav and button order"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelNavigationEdit}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100"
+                                          aria-label="Cancel nav and button rearrange"
+                                          title="Cancel nav and button rearrange"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                    {!customDashboardsCollapsed ? (
+                                      <button
+                                        type="button"
+                                        className="w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                      >
+                                        + Create Custom Dashboard
+                                      </button>
+                                    ) : null}
                                   </div>
                               </div>
                             </CardContent>
                           </div>
                 </CardContent>
               </Card>
-              <div className="space-y-4">
+              <div className={`space-y-4 ${isNavRearranging ? "pointer-events-none select-none opacity-45" : ""}`}>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(240px,280px)]">
-                <Card className="border-blue-100 bg-white">
-                    <CardContent className="h-[90px] p-3">
+                <Card className="border-blue-100 bg-white dark:border-white/10 dark:bg-[#1b1d21] dark:text-white">
+                    <CardContent className="h-[86px] p-3">
                       <div className="flex h-full items-center justify-between gap-3">
-                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900">{activeSidebarLabel} Dashboard</h1>
+                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900 dark:text-white">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
                           <div className="relative" data-dashboard-menu>
                             <button
@@ -2272,12 +3007,12 @@ export function AppHomePage() {
                               onClick={() => {
                                 setSettingsMenuOpen((previous) => !previous);
                               }}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
                             >
                               <Settings className="h-5 w-5" />
                             </button>
                             {settingsMenuOpen ? (
-                              <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg">
+                              <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-white/10 dark:bg-[#16181d]">
                                 {!isEditing ? (
                                   <button
                                     type="button"
@@ -2312,7 +3047,7 @@ export function AppHomePage() {
                       setActiveSidebarLabel("Accounts / Holdings");
                     }
                   }}
-                  className="inline-flex h-[92px] w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-zinc-100 hover:text-slate-900"
+                  className="inline-flex h-[86px] w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-zinc-100 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-white dark:hover:bg-[#25292f]"
                 >
                   <ArrowLeftRight className="h-4 w-4 shrink-0" />
                   <span className="truncate">
@@ -2321,10 +3056,10 @@ export function AppHomePage() {
                 </button>
                </div>
               {!isEditing ? (
-                <Card className="overflow-visible border-border bg-[#f4f6fa]">
+                <Card className="overflow-visible border-border bg-[#f4f6fa] dark:border-white/10 dark:bg-[#0b0f16]">
                   <CardContent className="min-h-[74vh] p-5">
                     {activeSidebarCategory === "holdings" ? (
-                      <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70" />
+                      <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-white/10 dark:bg-[#1b1d21]" />
                     ) : (
                       <div className="flex items-start gap-2">
                         <div className="relative flex-1 overflow-hidden">
@@ -4061,6 +4796,13 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
+
+
+
+
+
+
 
 
 
