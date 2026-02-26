@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChartNoAxesCombined, CircleUserRound, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react";
+import { ChartNoAxesCombined, CircleUserRound, LogOut, Menu, Settings, X } from "lucide-react";
 
 import { ApiError } from "../api/http";
 import { useAuth } from "../context/AuthContext";
@@ -12,28 +12,17 @@ export function Header() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("finpro-theme");
     const initialTheme: "light" | "dark" =
       storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
-    setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
     if (storedTheme !== "dark" && storedTheme !== "light") {
       localStorage.setItem("finpro-theme", initialTheme);
     }
   }, []);
-
-  const toggleTheme = () => {
-    setTheme((previous) => {
-      const next: "light" | "dark" = previous === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", next === "dark");
-      localStorage.setItem("finpro-theme", next);
-      return next;
-    });
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -151,30 +140,6 @@ export function Header() {
                           <Settings className="h-4 w-4 text-muted-foreground" />
                           Settings
                         </Link>
-                      </li>
-                      <li className="mt-1">
-                        <button
-                          type="button"
-                          onClick={toggleTheme}
-                          className="inline-flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-secondary"
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            {theme === "dark" ? <Moon className="h-4 w-4 text-muted-foreground" /> : <Sun className="h-4 w-4 text-muted-foreground" />}
-                            Appearance
-                          </span>
-                          <span
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              theme === "dark" ? "bg-emerald-500" : "bg-slate-300"
-                            }`}
-                            aria-hidden
-                          >
-                            <span
-                              className={`inline-block h-5 w-5 transform rounded-full bg-card transition-transform ${
-                                theme === "dark" ? "translate-x-5" : "translate-x-1"
-                              }`}
-                            />
-                          </span>
-                        </button>
                       </li>
                       <li className="mt-1 border-t border-border pt-1">
                         <button

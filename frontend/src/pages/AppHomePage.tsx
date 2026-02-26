@@ -249,6 +249,8 @@ export function AppHomePage() {
   const [customActionsSubmenu, setCustomActionsSubmenu] = useState<"filter" | "sort" | null>(null);
   const [accountsActionsSubmenu, setAccountsActionsSubmenu] = useState<"filter" | "sort" | null>(null);
   const [accountsActionsMenuOpen, setAccountsActionsMenuOpen] = useState(false);
+  const [dashboardTilesEditMode, setDashboardTilesEditMode] = useState(false);
+  const [dashboardTilesMenuOpen, setDashboardTilesMenuOpen] = useState(false);
   const [assetFilterMode, setAssetFilterMode] = useState<"all" | "system" | "custom">("all");
   const [assetSortMode, setAssetSortMode] = useState<"name_asc" | "name_desc">("name_asc");
   const [favoritesFilterMode, setFavoritesFilterMode] = useState<"all" | "asset_type" | "account">("all");
@@ -279,6 +281,8 @@ export function AppHomePage() {
   const navSectionSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
   const navAssetSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
   const navAccountSlotRef = useRef<Array<{ key: string; top: number; bottom: number }>>([]);
+  const navTileDragImageRef = useRef<HTMLElement | null>(null);
+  const navTileDragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [pendingLayoutName, setPendingLayoutName] = useState("");
   const [layoutNameError, setLayoutNameError] = useState<string | null>(null);
   const [isSwitchLayoutDialogOpen, setIsSwitchLayoutDialogOpen] = useState(false);
@@ -475,10 +479,10 @@ export function AppHomePage() {
   );
   const dashboardTileOrderForRender = useMemo(
     () =>
-      (navEditMode
+      (dashboardTilesEditMode || navEditMode
         ? normalizeOrder(draftNavDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER)
         : normalizeOrder(navDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER)) as NavDashboardTileKey[],
-    [draftNavDashboardTileOrder, navDashboardTileOrder, navEditMode],
+    [dashboardTilesEditMode, draftNavDashboardTileOrder, navDashboardTileOrder, navEditMode],
   );
   const assetOrderForRender = navEditMode ? draftNavAssetItemOrder : navAssetItemOrder;
   const accountOrderForRender = navEditMode ? draftNavAccountItemOrder : navAccountItemOrder;
@@ -1047,6 +1051,42 @@ export function AppHomePage() {
     };
   }, [navDragItem]);
 
+  const cleanupDashboardTileDragMirror = useCallback(() => {
+    if (navTileDragImageRef.current?.parentElement) {
+      navTileDragImageRef.current.parentElement.removeChild(navTileDragImageRef.current);
+    }
+    navTileDragImageRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!navTileDragKey || !navTileDragImageRef.current) return;
+    const onWindowDragOver = (event: globalThis.DragEvent) => {
+      const mirror = navTileDragImageRef.current;
+      if (!mirror) return;
+      const x = event.clientX - navTileDragOffsetRef.current.x;
+      const y = event.clientY - navTileDragOffsetRef.current.y;
+      mirror.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    window.addEventListener("dragover", onWindowDragOver);
+    return () => window.removeEventListener("dragover", onWindowDragOver);
+  }, [navTileDragKey]);
+
+  useEffect(() => {
+    if (dashboardTilesEditMode) return;
+    cleanupDashboardTileDragMirror();
+  }, [cleanupDashboardTileDragMirror, dashboardTilesEditMode]);
+
+  useEffect(() => {
+    const onWindowDrop = () => cleanupDashboardTileDragMirror();
+    const onWindowDragEnd = () => cleanupDashboardTileDragMirror();
+    window.addEventListener("drop", onWindowDrop);
+    window.addEventListener("dragend", onWindowDragEnd);
+    return () => {
+      window.removeEventListener("drop", onWindowDrop);
+      window.removeEventListener("dragend", onWindowDragEnd);
+    };
+  }, [cleanupDashboardTileDragMirror]);
+
   const loadSidebarData = useCallback(async () => {
     const fetchAll = async () =>
       Promise.allSettled([getAssetTypes(), getAccountsList(), getAccountCreateOptions()]);
@@ -1086,6 +1126,7 @@ export function AppHomePage() {
       const inFavoritesActionsMenu = Boolean(target.closest("[data-favorites-actions-menu]"));
       const inAssetsActionsMenu = Boolean(target.closest("[data-assets-actions-menu]"));
       const inCustomActionsMenu = Boolean(target.closest("[data-custom-actions-menu]"));
+      const inDashboardTilesMenu = Boolean(target.closest("[data-dashboard-tiles-menu]"));
 
       if (!inDashboardMenu) setSettingsMenuOpen(false);
       if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
@@ -1108,6 +1149,9 @@ export function AppHomePage() {
       if (!inCustomActionsMenu) {
         setCustomActionsMenuOpen(false);
         setCustomActionsSubmenu(null);
+      }
+      if (!inDashboardTilesMenu) {
+        setDashboardTilesMenuOpen(false);
       }
     };
 
@@ -1960,6 +2004,36 @@ export function AppHomePage() {
     if (!isSortNavAndButtons) return;
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", key);
+    const tileElement = (event.target as HTMLElement | null)?.closest("[data-dashboard-tile]") as HTMLElement | null;
+    if (tileElement) {
+      cleanupDashboardTileDragMirror();
+      const rect = tileElement.getBoundingClientRect();
+      const offsetX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+      const offsetY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+      const dragClone = tileElement.cloneNode(true) as HTMLElement;
+      dragClone.style.position = "fixed";
+      dragClone.style.top = "0px";
+      dragClone.style.left = "0px";
+      dragClone.style.width = `${rect.width}px`;
+      dragClone.style.height = `${rect.height}px`;
+      dragClone.style.margin = "0";
+      dragClone.style.pointerEvents = "none";
+      dragClone.style.opacity = "1";
+      dragClone.style.zIndex = "9999";
+      dragClone.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+      dragClone.style.boxShadow = "0 14px 32px rgba(15,23,42,0.28)";
+      const appRoot = document.querySelector(".app-home");
+      if (appRoot) {
+        appRoot.appendChild(dragClone);
+      } else {
+        document.body.appendChild(dragClone);
+      }
+      navTileDragOffsetRef.current = { x: offsetX, y: offsetY };
+      navTileDragImageRef.current = dragClone;
+      const transparentPixel = new Image();
+      transparentPixel.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+      event.dataTransfer.setDragImage(transparentPixel, 0, 0);
+    }
     setNavTileDragKey(key);
     setNavTileDropKey(null);
   };
@@ -1968,28 +2042,49 @@ export function AppHomePage() {
     event.preventDefault();
     if (navTileDropKey !== key) setNavTileDropKey(key);
   };
-  const handleDashboardTileDrop = (event: DragEvent<HTMLElement>, key: NavDashboardTileKey) => {
+  const handleDashboardTileDrop = (event: DragEvent<HTMLElement>, _key: NavDashboardTileKey) => {
     if (!isSortNavAndButtons || !navTileDragKey) return;
     event.preventDefault();
-    setDraftNavDashboardTileOrder((previous) => moveKeyForDrag(previous, navTileDragKey, key) as NavDashboardTileKey[]);
+    if (navTileDropKey) {
+      setDraftNavDashboardTileOrder((previous) => moveKeyForDrag(previous, navTileDragKey, navTileDropKey) as NavDashboardTileKey[]);
+    }
     setNavTileDragKey(null);
     setNavTileDropKey(null);
+    cleanupDashboardTileDragMirror();
   };
   const handleDashboardTileDragEnd = () => {
     setNavTileDragKey(null);
     setNavTileDropKey(null);
+    cleanupDashboardTileDragMirror();
   };
   const getDashboardTileOrder = (key: NavDashboardTileKey) => dashboardTileOrderForRender.indexOf(key);
-  const isSortNavAndButtons = false;
+  const saveDashboardTilesEdit = () => {
+    const nextDashboardTileOrder = normalizeOrder(draftNavDashboardTileOrder, DEFAULT_NAV_DASHBOARD_TILE_ORDER) as NavDashboardTileKey[];
+    setNavDashboardTileOrder(nextDashboardTileOrder);
+    setDraftNavDashboardTileOrder(nextDashboardTileOrder);
+    setDashboardTilesEditMode(false);
+  };
+  const cancelDashboardTilesEdit = () => {
+    setDraftNavDashboardTileOrder([...navDashboardTileOrder]);
+    setDashboardTilesEditMode(false);
+    setNavTileDragKey(null);
+    setNavTileDropKey(null);
+  };
+  const isSortNavAndButtons = dashboardTilesEditMode;
   const isNavRearranging = false;
   return (
     <main className="app-home w-full pb-10 pt-4 dark:bg-[#07090d] dark:text-white">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
+      {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-40 bg-slate-900/15 backdrop-blur-[3px] dark:bg-black/30" aria-hidden="true" /> : null}
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_312px]">
-              <Card className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${isNavRearranging ? "z-auto" : "z-30"}`}>
+              <Card
+                className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${
+                  dashboardTilesEditMode ? "z-[60]" : isNavRearranging ? "z-auto" : "z-30"
+                }`}
+              >
                 <CardContent
                   ref={navEditPanelRef}
                   className="flex h-full flex-col gap-5 overflow-visible p-0"
@@ -2004,7 +2099,7 @@ export function AppHomePage() {
                               isNavDragging("section", "addAssets")
                                 ? "rounded-lg border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
-                            } ${isNavRearranging ? "pointer-events-none select-none opacity-45 blur-[1px]" : ""}`}
+                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}
                             style={{ order: 0 }}
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "addAssets")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "addAssets")}
@@ -2062,7 +2157,7 @@ export function AppHomePage() {
                               isNavDragging("section", "assetTypes")
                                 ? "rounded-xl border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
-                            } ${isNavRearranging ? "pointer-events-none select-none opacity-45 blur-[1px]" : ""}`}
+                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}
                             style={{ order: assetSectionIndex + 1 }}
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "assetTypes")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
@@ -2095,7 +2190,7 @@ export function AppHomePage() {
                                       }}
                                       className={`sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
                                         activeSidebarCategory === "portfolio"
-                                          ? "font-bold text-slate-900 dark:text-white"
+                                          ? "sidebar-nav-item-active font-bold text-slate-900 dark:text-white"
                                         : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                       }`}
                                     >
@@ -2131,10 +2226,17 @@ export function AppHomePage() {
                           </div>
 
                           <div
+                            data-dashboard-tiles-scroll
                             data-nav-draggable="true"
                             data-nav-target-kind="section"
                             data-nav-target-key="accounts"
-                            className={`relative overflow-visible transition-all duration-150 will-change-transform ${isNavRearranging ? "z-[70] max-h-[calc(100vh-7.5rem)] overflow-y-auto pr-1" : "z-20"} ${
+                            className={`relative overflow-visible transition-all duration-150 will-change-transform ${
+                              dashboardTilesEditMode
+                                ? "z-[60]"
+                                : isNavRearranging
+                                  ? "z-[70] max-h-[calc(100vh-7.5rem)] overflow-y-auto pr-1"
+                                  : "z-20"
+                            } ${
                               isNavDragging("section", "accounts")
                                 ? "rounded-xl border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
@@ -2161,7 +2263,59 @@ export function AppHomePage() {
                                     </button>
                                   </div>
                                 ) : null}
+                                <div className="flex items-center justify-between px-1">
+                                  <p className="text-base font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-white">Dashboards</p>
+                                  <div className="relative" data-dashboard-tiles-menu>
+                                    {dashboardTilesEditMode ? (
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={saveDashboardTilesEdit}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048]"
+                                          aria-label="Save dashboard tiles order"
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelDashboardTilesEdit}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048]"
+                                          aria-label="Cancel dashboard tiles edit"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => setDashboardTilesMenuOpen((previous) => !previous)}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048]"
+                                          aria-label="Dashboard tile settings"
+                                        >
+                                          <Ellipsis className="h-3.5 w-3.5" />
+                                        </button>
+                                        {dashboardTilesMenuOpen ? (
+                                          <div className="absolute right-0 z-[75] mt-1 w-44 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setDraftNavDashboardTileOrder([...navDashboardTileOrder]);
+                                                setDashboardTilesEditMode(true);
+                                                setDashboardTilesMenuOpen(false);
+                                              }}
+                                              className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-700 transition-colors hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                            >
+                                              Edit Dashboard Tiles
+                                            </button>
+                                          </div>
+                                        ) : null}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
                                   <div
+                                    data-dashboard-tile="favorites"
                                     draggable={isSortNavAndButtons}
                                     onDragStart={(event) => handleDashboardTileDragStart(event, "favorites")}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "favorites")}
@@ -2169,22 +2323,47 @@ export function AppHomePage() {
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("favorites") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "favorites" ? "ring-1 ring-slate-400" : ""
+                                      navTileDropKey === "favorites" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
                                     }`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Favorites</p>
                                       <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => setFavoritesCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
-                                          aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
-                                          title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
-                                        >
-                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${favoritesCollapsed ? "" : "rotate-180"}`} />
-                                        </button>
-                                        <div className="relative" data-favorites-actions-menu>
+                                        {dashboardTilesEditMode ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setFavoritesCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
+                                              title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${favoritesCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              draggable
+                                              onDragStart={(event) => handleDashboardTileDragStart(event, "favorites")}
+                                              onDragEnd={handleDashboardTileDragEnd}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] cursor-grab active:cursor-grabbing"
+                                              aria-label="Reorder favorites tile"
+                                              title="Reorder favorites tile"
+                                            >
+                                              <GripVertical className="h-3.5 w-3.5" />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setFavoritesCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
+                                              title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${favoritesCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <div className="relative" data-favorites-actions-menu>
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -2276,7 +2455,9 @@ export function AppHomePage() {
                                               </div>
                                             </div>
                                           ) : null}
-                                        </div>
+                                            </div>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
                                     {isNavRearranging ? (
@@ -2311,6 +2492,7 @@ export function AppHomePage() {
                                     ) : null}
                                   </div>
                                   <div
+                                    data-dashboard-tile="assets"
                                     draggable={isSortNavAndButtons}
                                     onDragStart={(event) => handleDashboardTileDragStart(event, "assets")}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "assets")}
@@ -2318,22 +2500,47 @@ export function AppHomePage() {
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("assets") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "assets" ? "ring-1 ring-slate-400" : ""
+                                      navTileDropKey === "assets" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
                                     }`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Assets</p>
                                       <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
-                                          aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
-                                          title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
-                                        >
-                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${assetTypesCollapsed ? "" : "rotate-180"}`} />
-                                        </button>
-                                        <div className="relative" data-assets-actions-menu>
+                                        {dashboardTilesEditMode ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setAssetTypesCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
+                                              title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${assetTypesCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              draggable
+                                              onDragStart={(event) => handleDashboardTileDragStart(event, "assets")}
+                                              onDragEnd={handleDashboardTileDragEnd}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] cursor-grab active:cursor-grabbing"
+                                              aria-label="Reorder assets tile"
+                                              title="Reorder assets tile"
+                                            >
+                                              <GripVertical className="h-3.5 w-3.5" />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setAssetTypesCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
+                                              title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${assetTypesCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <div className="relative" data-assets-actions-menu>
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -2425,7 +2632,9 @@ export function AppHomePage() {
                                               </div>
                                             </div>
                                           ) : null}
-                                        </div>
+                                            </div>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
                                     {isNavRearranging ? (
@@ -2492,7 +2701,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-bold text-slate-950 dark:text-white"
+                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-white"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
@@ -2557,7 +2766,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-bold text-slate-950 dark:text-white"
+                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-white"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
@@ -2586,6 +2795,7 @@ export function AppHomePage() {
                                     ) : null}
                                   </div>
                                   <div
+                                    data-dashboard-tile="accounts"
                                     draggable={isSortNavAndButtons}
                                     onDragStart={(event) => handleDashboardTileDragStart(event, "accounts")}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "accounts")}
@@ -2593,16 +2803,35 @@ export function AppHomePage() {
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("accounts") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "accounts" ? "ring-1 ring-slate-400" : ""
+                                      navTileDropKey === "accounts" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
                                     }`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Accounts</p>
                                       <div className="flex items-center gap-1">
                                         {isSortNavAndButtons ? (
-                                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600">
-                                            <GripVertical className="h-3.5 w-3.5" />
-                                          </span>
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setAccountsCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
+                                              title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountsCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              draggable
+                                              onDragStart={(event) => handleDashboardTileDragStart(event, "accounts")}
+                                              onDragEnd={handleDashboardTileDragEnd}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 cursor-grab active:cursor-grabbing dark:border-transparent dark:bg-[#2f343b] dark:text-white"
+                                              aria-label="Reorder accounts tile"
+                                              title="Reorder accounts tile"
+                                            >
+                                              <GripVertical className="h-3.5 w-3.5" />
+                                            </button>
+                                          </>
                                         ) : (
                                           <>
                                             <button
@@ -2808,7 +3037,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-bold text-slate-950 dark:text-white"
+                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-white"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
@@ -2840,6 +3069,7 @@ export function AppHomePage() {
                                     ) : null}
                                   </div>
                                   <div
+                                    data-dashboard-tile="custom"
                                     draggable={isSortNavAndButtons}
                                     onDragStart={(event) => handleDashboardTileDragStart(event, "custom")}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "custom")}
@@ -2847,22 +3077,47 @@ export function AppHomePage() {
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("custom") }}
                                     className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "custom" ? "ring-1 ring-slate-400" : ""
+                                      navTileDropKey === "custom" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
                                     }`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Custom Dashboards</p>
                                       <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
-                                          aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
-                                          title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
-                                        >
-                                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${customDashboardsCollapsed ? "" : "rotate-180"}`} />
-                                        </button>
-                                        <div className="relative" data-custom-actions-menu>
+                                        {dashboardTilesEditMode ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
+                                              title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${customDashboardsCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              draggable
+                                              onDragStart={(event) => handleDashboardTileDragStart(event, "custom")}
+                                              onDragEnd={handleDashboardTileDragEnd}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] cursor-grab active:cursor-grabbing"
+                                              aria-label="Reorder custom dashboards tile"
+                                              title="Reorder custom dashboards tile"
+                                            >
+                                              <GripVertical className="h-3.5 w-3.5" />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
+                                              title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
+                                            >
+                                              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${customDashboardsCollapsed ? "" : "rotate-180"}`} />
+                                            </button>
+                                            <div className="relative" data-custom-actions-menu>
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -2955,7 +3210,9 @@ export function AppHomePage() {
                                               </div>
                                             </div>
                                           ) : null}
-                                        </div>
+                                            </div>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
                                     {isNavRearranging ? (
@@ -2994,7 +3251,7 @@ export function AppHomePage() {
                           </div>
                 </CardContent>
               </Card>
-              <div className={`space-y-4 xl:order-1 ${isNavRearranging ? "pointer-events-none select-none opacity-45" : ""}`}>
+              <div className={`space-y-4 xl:order-1 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}>
               <div className="grid grid-cols-1 gap-3">
                 <Card className="border-0 bg-transparent shadow-none dark:text-white">
                     <CardContent className="h-[86px] p-5">

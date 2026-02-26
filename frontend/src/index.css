@@ -133,9 +133,14 @@
     background-color: currentColor !important;
   }
 
-  .dark .app-home .sidebar-nav-item:hover {
+  .dark .app-home .sidebar-nav-item:not(.sidebar-nav-item-active):hover {
     background-color: #4B4644 !important;
     color: #f3f4f6 !important;
+  }
+
+  .dark .app-home .sidebar-nav-item.sidebar-nav-item-active:hover {
+    background-color: transparent !important;
+    color: hsl(var(--foreground)) !important;
   }
 
   .dark .app-home .sidebar-add-dashed:hover {
