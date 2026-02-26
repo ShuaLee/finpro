@@ -1988,11 +1988,11 @@ export function AppHomePage() {
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-              <Card className={`relative h-fit overflow-visible border-0 bg-transparent shadow-none xl:sticky xl:bottom-6 xl:self-start ${isNavRearranging ? "z-auto" : "z-30"}`}>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_312px]">
+              <Card className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${isNavRearranging ? "z-auto" : "z-30"}`}>
                 <CardContent
                   ref={navEditPanelRef}
-                  className="flex h-full flex-col gap-2 overflow-visible p-0"
+                  className="flex h-full flex-col gap-5 overflow-visible p-0"
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
@@ -2009,14 +2009,14 @@ export function AppHomePage() {
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "addAssets")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "addAssets")}
                           >
-                            <div className="space-y-2">
+                            <div className="space-y-5">
                               {isManagingSections ? (
                                 <button
                                   type="button"
                                   draggable
                                   onDragStart={(event) => handleNavDragStart(event, "section", "addAssets")}
                                   onDragEnd={handleNavDragEnd}
-                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
                                     isNavDragging("section", "addAssets") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                   }`}
                                   aria-label="Reorder Add Assets section"
@@ -2024,18 +2024,18 @@ export function AppHomePage() {
                                   <GripVertical className="h-3.5 w-3.5" />
                                 </button>
                               ) : null}
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-2 gap-5">
                                 <button
                                   type="button"
                                   onClick={() => {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                     setIsAddAssetModalOpen(true);
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-white dark:hover:bg-[#25292f]"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-slate-200 dark:hover:bg-[#25292f] dark:hover:text-white"
                                   aria-label="Add assets"
                                 >
-                                  <Plus className="h-4 w-4" />
-                                  <span className="leading-tight">Add Assets</span>
+                                  <Plus className="h-4 w-4 text-current" />
+                                  <span className="text-sm font-medium leading-tight">Add Assets</span>
                                 </button>
                                 <button
                                   type="button"
@@ -2044,11 +2044,11 @@ export function AppHomePage() {
                                     setActiveSidebarCategory("holdings");
                                     setActiveSidebarLabel("Accounts / Holdings");
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-zinc-200/60 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-white dark:hover:bg-[#25292f]"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-slate-200 dark:hover:bg-[#25292f] dark:hover:text-white"
                                   aria-label="Modify holdings"
                                 >
-                                  <ArrowLeftRight className="h-4 w-4" />
-                                  <span className="leading-tight">Modify Holdings</span>
+                                  <ArrowLeftRight className="h-4 w-4 text-current" />
+                                  <span className="text-sm font-medium leading-tight">Modify Holdings</span>
                                 </button>
                               </div>
                             </div>
@@ -2068,7 +2068,7 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
                           >
                             <CardContent className="p-0">
-                              <div className="space-y-2">
+                              <div className="space-y-5">
                                 {isManagingSections ? (
                                   <button
                                     type="button"
@@ -2076,7 +2076,7 @@ export function AppHomePage() {
                                     onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
                                     onDragEnd={handleNavDragEnd}
                                     onClick={(event) => event.stopPropagation()}
-                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
                                       isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                     }`}
                                     aria-label="Reorder Dashboards section"
@@ -2093,23 +2093,23 @@ export function AppHomePage() {
                                         setActiveSidebarCategory("portfolio");
                                         setActiveSidebarLabel("Portfolio");
                                       }}
-                                      className={`relative flex w-full items-center gap-2.5 rounded-[3px] px-3 py-3.5 text-left transition-colors ${
+                                      className={`sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
                                         activeSidebarCategory === "portfolio"
-                                          ? "font-extrabold text-slate-950 dark:text-white"
-                                        : "text-slate-700 hover:bg-zinc-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                          ? "font-bold text-slate-900 dark:text-white"
+                                        : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                       }`}
                                     >
                                       <BriefcaseBusiness
                                         className={`h-4 w-4 shrink-0 ${
-                                          activeSidebarCategory === "portfolio" ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
+                                          activeSidebarCategory === "portfolio" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-200"
                                         }`}
                                         strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
                                       />
-                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-extrabold" : "font-semibold"}`}>
+                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-medium"}`}>
                                         Portfolio Dashboard
                                       </span>
                                       {activeSidebarCategory === "portfolio" ? (
-                                        <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-800 dark:bg-white/80" />
+                                        <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
                                       ) : null}
                                     </button>
                                     <button
@@ -2118,11 +2118,11 @@ export function AppHomePage() {
                                         if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                         setIsAddAssetModalOpen(true);
                                       }}
-                                      className="relative flex w-full items-center gap-2.5 rounded-[3px] px-3 py-3.5 text-left text-slate-700 transition-colors hover:bg-zinc-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                      className="sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left text-slate-600 transition-colors hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                       aria-label="Assets and liabilities"
                                     >
-                                      <BadgeDollarSign className="h-4 w-4" />
-                                      <span className="truncate text-sm font-semibold">Assets & Liabilities</span>
+                                      <BadgeDollarSign className="h-4 w-4 text-current" />
+                                      <span className="truncate text-sm font-medium">Assets & Liabilities</span>
                                     </button>
                                   </div>
                                 </div>
@@ -2144,7 +2144,7 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
                             <CardContent className="p-0">
-                              <div className="flex flex-col gap-2 dark:text-white">
+                              <div className="flex flex-col gap-5 dark:text-white">
                                 {isManagingSections ? (
                                   <div className="flex items-center">
                                     <button
@@ -2152,7 +2152,7 @@ export function AppHomePage() {
                                       draggable
                                       onDragStart={(event) => handleNavDragStart(event, "section", "accounts")}
                                       onDragEnd={handleNavDragEnd}
-                                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
                                         isNavDragging("section", "accounts") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                       }`}
                                       aria-label="Reorder Accounts section"
@@ -2178,7 +2178,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={() => setFavoritesCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
                                           aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                           title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                         >
@@ -2200,7 +2200,7 @@ export function AppHomePage() {
                                             className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
                                               favoritesActionsMenuOpen
                                                 ? "border-slate-300 bg-slate-200 text-slate-800"
-                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                                             }`}
                                             aria-label="More favorite actions"
                                             title="More favorite actions"
@@ -2218,7 +2218,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     favoritesActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
@@ -2251,7 +2251,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     favoritesActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
@@ -2304,7 +2304,7 @@ export function AppHomePage() {
                                     {!favoritesCollapsed ? (
                                       <button
                                         type="button"
-                                        className="w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                       >
                                         + Add Favourite Dashboards
                                       </button>
@@ -2327,7 +2327,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
                                           aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                           title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                         >
@@ -2349,7 +2349,7 @@ export function AppHomePage() {
                                             className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
                                               assetsActionsMenuOpen
                                                 ? "border-slate-300 bg-slate-200 text-slate-800"
-                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                                             }`}
                                             aria-label="More asset actions"
                                             title="More asset actions"
@@ -2367,7 +2367,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     assetsActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
@@ -2400,7 +2400,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     assetsActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
@@ -2475,7 +2475,7 @@ export function AppHomePage() {
                                                   draggable
                                                   onDragStart={(event) => handleNavDragStart(event, "asset", key)}
                                                   onDragEnd={handleNavDragEnd}
-                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
                                                     isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                                   }`}
                                                   aria-label={`Reorder ${assetType.name}`}
@@ -2490,10 +2490,10 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(assetType.name);
                                                 }}
-                                                className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950 dark:text-white"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                                    ? "font-bold text-slate-950 dark:text-white"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
@@ -2503,10 +2503,10 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700 dark:bg-white/80" />
+                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
                                                 ) : null}
                                               </button>
                                             </div>
@@ -2540,7 +2540,7 @@ export function AppHomePage() {
                                                   draggable
                                                   onDragStart={(event) => handleNavDragStart(event, "asset", key)}
                                                   onDragEnd={handleNavDragEnd}
-                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
                                                     isNavDragging("asset", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                                   }`}
                                                   aria-label={`Reorder ${assetType.name}`}
@@ -2555,10 +2555,10 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(assetType.name);
                                                 }}
-                                                className={`relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950 dark:text-white"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                                    ? "font-bold text-slate-950 dark:text-white"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
@@ -2568,10 +2568,10 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700 dark:bg-white/80" />
+                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
                                                 ) : null}
                                               </button>
                                             </div>
@@ -2608,7 +2608,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
                                               aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                               title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                             >
@@ -2630,7 +2630,7 @@ export function AppHomePage() {
                                                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
                                                   accountsActionsMenuOpen
                                                     ? "border-slate-300 bg-slate-200 text-slate-800"
-                                                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                                                 }`}
                                                 aria-label="Account actions"
                                                 title="Account actions"
@@ -2648,7 +2648,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     accountsActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
@@ -2664,7 +2664,7 @@ export function AppHomePage() {
                                                         className={`rounded-md border px-2 py-1 text-xs transition-colors ${
                                                           selectedAccountTypeIds.length === 0
                                                             ? "border-slate-300 bg-slate-200 text-slate-900"
-                                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200"
                                                         }`}
                                                       >
                                                         All
@@ -2683,7 +2683,7 @@ export function AppHomePage() {
                                                             className={`rounded-md border px-2 py-1 text-xs transition-colors ${
                                                               selected
                                                                 ? "border-slate-300 bg-slate-200 text-slate-900"
-                                                                : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                                                : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200"
                                                             }`}
                                                           >
                                                             {type.name}
@@ -2703,7 +2703,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     accountsActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
@@ -2791,7 +2791,7 @@ export function AppHomePage() {
                                                   draggable
                                                   onDragStart={(event) => handleNavDragStart(event, "account", key)}
                                                   onDragEnd={handleNavDragEnd}
-                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100 ${
+                                                  className={`mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
                                                     isNavDragging("account", key) ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
                                                   }`}
                                                   aria-label={`Reorder ${account.name}`}
@@ -2806,10 +2806,10 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(account.name);
                                                 }}
-                                                className={`relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
+                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "font-extrabold text-slate-950 dark:text-white"
-                                                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                                    ? "font-bold text-slate-950 dark:text-white"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                                 }`}
                                               >
                                                 <div className="flex items-start gap-2">
@@ -2820,12 +2820,12 @@ export function AppHomePage() {
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <div className="min-w-0">
-                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-extrabold" : "font-medium"}`}>{account.name}</p>
+                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{account.name}</p>
                                                     {typeName ? <p className="truncate text-[11px] text-slate-400 dark:text-slate-300">{typeName}</p> : null}
                                                   </div>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700 dark:bg-white/80" />
+                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
                                                 ) : null}
                                               </button>
                                             </div>
@@ -2856,7 +2856,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
                                           aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                           title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                         >
@@ -2878,7 +2878,7 @@ export function AppHomePage() {
                                             className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
                                               customActionsMenuOpen
                                                 ? "border-slate-300 bg-slate-200 text-slate-800"
-                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                                             }`}
                                             aria-label="More custom actions"
                                             title="More custom actions"
@@ -2896,7 +2896,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     customActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
@@ -2929,7 +2929,7 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     customActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
@@ -2983,7 +2983,7 @@ export function AppHomePage() {
                                     {!customDashboardsCollapsed ? (
                                       <button
                                         type="button"
-                                        className="w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
                                       >
                                         + Create Custom Dashboard
                                       </button>
@@ -2994,11 +2994,11 @@ export function AppHomePage() {
                           </div>
                 </CardContent>
               </Card>
-              <div className={`space-y-4 ${isNavRearranging ? "pointer-events-none select-none opacity-45" : ""}`}>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(240px,280px)]">
-                <Card className="border-blue-100 bg-white dark:border-white/10 dark:bg-[#1b1d21] dark:text-white">
-                    <CardContent className="h-[86px] p-3">
-                      <div className="flex h-full items-center justify-between gap-3">
+              <div className={`space-y-4 xl:order-1 ${isNavRearranging ? "pointer-events-none select-none opacity-45" : ""}`}>
+              <div className="grid grid-cols-1 gap-3">
+                <Card className="border-0 bg-transparent shadow-none dark:text-white">
+                    <CardContent className="h-[86px] p-5">
+                      <div className="flex h-full items-end justify-between gap-3">
                         <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900 dark:text-white">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
                           <div className="relative" data-dashboard-menu>
@@ -3036,27 +3036,9 @@ export function AppHomePage() {
                       </div>
                     </CardContent>
                   </Card>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeSidebarCategory === "holdings") {
-                      setActiveSidebarCategory("portfolio");
-                      setActiveSidebarLabel("Portfolio");
-                    } else {
-                      setActiveSidebarCategory("holdings");
-                      setActiveSidebarLabel("Accounts / Holdings");
-                    }
-                  }}
-                  className="inline-flex h-[86px] w-full items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-zinc-100 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-white dark:hover:bg-[#25292f]"
-                >
-                  <ArrowLeftRight className="h-4 w-4 shrink-0" />
-                  <span className="truncate">
-                    {activeSidebarCategory === "holdings" ? "Show Dashboard" : "Show Accounts / Holdings"}
-                  </span>
-                </button>
                </div>
               {!isEditing ? (
-                <Card className="overflow-visible border-border bg-[#f4f6fa] dark:border-white/10 dark:bg-[#0b0f16]">
+                <Card className="overflow-visible border-0 bg-transparent shadow-none">
                   <CardContent className="min-h-[74vh] p-5">
                     {activeSidebarCategory === "holdings" ? (
                       <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-white/10 dark:bg-[#1b1d21]" />
@@ -3122,7 +3104,7 @@ export function AppHomePage() {
               <button
                 type="button"
                 onClick={() => setIsAddAssetModalOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200"
                 aria-label="Close add flow"
               >
                 <X className="h-4 w-4" />
@@ -4796,6 +4778,10 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
+
+
+
 
 
 
