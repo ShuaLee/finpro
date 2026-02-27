@@ -2156,7 +2156,7 @@ export function AppHomePage() {
   return (
     <main className="app-home w-full pb-10 pt-4 dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
-      {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-40 bg-slate-900/15 backdrop-blur-[3px] dark:bg-black/30" aria-hidden="true" /> : null}
+      {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-40" aria-hidden="true" /> : null}
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
@@ -2180,7 +2180,7 @@ export function AppHomePage() {
                               isNavDragging("section", "addAssets")
                                 ? "rounded-lg border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
-                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}
+                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}
                             style={{ order: 0 }}
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "addAssets")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "addAssets")}
@@ -2207,11 +2207,11 @@ export function AppHomePage() {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                     setIsAddAssetModalOpen(true);
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                   aria-label="Add assets"
                                 >
                                   <Plus className="h-4 w-4 text-current" />
-                                  <span className="text-sm font-medium leading-tight">Add Assets</span>
+                                  <span className="text-sm font-normal leading-tight">Add Assets</span>
                                 </button>
                                 <button
                                   type="button"
@@ -2220,11 +2220,11 @@ export function AppHomePage() {
                                     setActiveSidebarCategory("holdings");
                                     setActiveSidebarLabel("Accounts / Holdings");
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                   aria-label="Modify holdings"
                                 >
                                   <ArrowLeftRight className="h-4 w-4 text-current" />
-                                  <span className="text-sm font-medium leading-tight">Modify Holdings</span>
+                                  <span className="text-sm font-normal leading-tight">Modify Holdings</span>
                                 </button>
                               </div>
                             </div>
@@ -2238,7 +2238,7 @@ export function AppHomePage() {
                               isNavDragging("section", "assetTypes")
                                 ? "rounded-xl border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
                                 : ""
-                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}
+                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}
                             style={{ order: assetSectionIndex + 1 }}
                             onDragOver={(event) => handleNavTargetDragOver(event, "section", "assetTypes")}
                             onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
@@ -2271,17 +2271,17 @@ export function AppHomePage() {
                                       }}
                                       className={`sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
                                         activeSidebarCategory === "portfolio"
-                                          ? "sidebar-nav-item-active font-bold text-slate-900 dark:text-foreground"
+                                          ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
                                         : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       }`}
                                     >
                                       <BriefcaseBusiness
                                         className={`h-4 w-4 shrink-0 ${
-                                          activeSidebarCategory === "portfolio" ? "text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
+                                          activeSidebarCategory === "portfolio" ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                         }`}
                                         strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
                                       />
-                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-medium"}`}>
+                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
                                         Portfolio Dashboard
                                       </span>
                                       {activeSidebarCategory === "portfolio" ? (
@@ -2298,7 +2298,7 @@ export function AppHomePage() {
                                       aria-label="Assets and liabilities"
                                     >
                                       <BadgeDollarSign className="h-4 w-4 text-current" />
-                                      <span className="truncate text-sm font-medium">Assets & Liabilities</span>
+                                      <span className="truncate text-sm font-normal">Assets & Liabilities</span>
                                     </button>
                                   </div>
                                 </div>
@@ -2352,7 +2352,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={saveDashboardTilesEdit}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
                                           aria-label="Save dashboard tiles order"
                                         >
                                           <Check className="h-4 w-4" />
@@ -2360,7 +2360,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={cancelDashboardTilesEdit}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
                                           aria-label="Cancel dashboard tiles edit"
                                         >
                                           <X className="h-4 w-4" />
@@ -2371,7 +2371,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={() => setDashboardTilesMenuOpen((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
                                           aria-label="Dashboard tile settings"
                                         >
                                           <Ellipsis className="h-3.5 w-3.5" />
@@ -2416,7 +2416,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setFavoritesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                               title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                             >
@@ -2427,7 +2427,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "favorites")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
                                               aria-label="Reorder favorites tile"
                                               title="Reorder favorites tile"
                                             >
@@ -2439,7 +2439,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setFavoritesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                               title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                             >
@@ -2567,7 +2567,7 @@ export function AppHomePage() {
                                     {!favoritesCollapsed ? (
                                       <button
                                         type="button"
-                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-normal text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       >
                                         + Add Favourite Dashboards
                                       </button>
@@ -2592,7 +2592,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                               title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                             >
@@ -2603,7 +2603,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "assets")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
                                               aria-label="Reorder assets tile"
                                               title="Reorder assets tile"
                                             >
@@ -2615,7 +2615,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                               title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                             >
@@ -2784,18 +2784,18 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-foreground"
+                                                    ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
                                                   <Boxes
                                                     className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
+                                                      activeSidebarCategory === key ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-normal"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
@@ -2851,18 +2851,18 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-foreground"
+                                                    ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
                                                   <Boxes
                                                     className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
+                                                      activeSidebarCategory === key ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-normal"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
@@ -2898,7 +2898,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                               title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                             >
@@ -2921,7 +2921,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                               title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                             >
@@ -3123,20 +3123,20 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-foreground"
+                                                    ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 }`}
                                               >
                                                 <div className="flex items-start gap-2">
                                                   <BadgeDollarSign
                                                     className={`mt-0.5 h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
+                                                      activeSidebarCategory === key ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <div className="min-w-0">
-                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{account.name}</p>
-                                                    {typeName ? <p className="truncate text-[11px] text-slate-400 dark:text-slate-300">{typeName}</p> : null}
+                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-normal"}`}>{account.name}</p>
+                                                    {typeName ? <p className="truncate text-[11px] text-muted-foreground dark:text-muted-foreground">{typeName}</p> : null}
                                                   </div>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
@@ -3173,7 +3173,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                               title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                             >
@@ -3184,7 +3184,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "custom")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
                                               aria-label="Reorder custom dashboards tile"
                                               title="Reorder custom dashboards tile"
                                             >
@@ -3196,7 +3196,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                               title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                             >
@@ -3325,7 +3325,7 @@ export function AppHomePage() {
                                     {!customDashboardsCollapsed ? (
                                       <button
                                         type="button"
-                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-normal text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       >
                                         + Create Custom Dashboard
                                       </button>
@@ -3336,12 +3336,12 @@ export function AppHomePage() {
                           </div>
                 </CardContent>
               </Card>
-              <div className={`space-y-4 xl:order-1 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}>
+              <div className={`space-y-4 xl:order-1 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
               <div className="grid grid-cols-1 gap-3">
                 <Card className="border-0 bg-transparent shadow-none dark:text-foreground">
                     <CardContent className="h-[86px] p-5">
                       <div className="flex h-full items-end justify-between gap-3">
-                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900 dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
+                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-foreground dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
                           <div className="relative" data-dashboard-menu>
                             <button
@@ -5120,6 +5120,11 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
+
+
+
+
 
 
 

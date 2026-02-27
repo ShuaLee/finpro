@@ -6,45 +6,45 @@
 
 @layer base {
   :root {
-    --background: 214 30% 98%;
-    --foreground: 222 24% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 24% 12%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 24% 12%;
-    --primary: 220 28% 16%;
+    --background: 220 6% 91%;
+    --foreground: 220 6% 24%;
+    --card: 220 8% 94%;
+    --card-foreground: 220 6% 24%;
+    --popover: 220 8% 94%;
+    --popover-foreground: 220 6% 24%;
+    --primary: 220 6% 24%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 218 22% 95%;
-    --secondary-foreground: 221 24% 22%;
-    --muted: 218 20% 93%;
-    --muted-foreground: 220 13% 42%;
-    --accent: 217 22% 92%;
-    --accent-foreground: 221 24% 22%;
+    --secondary: 220 7% 90%;
+    --secondary-foreground: 220 8% 24%;
+    --muted: 220 7% 88%;
+    --muted-foreground: 220 6% 24%;
+    --accent: 220 7% 86%;
+    --accent-foreground: 220 8% 24%;
     --destructive: 0 74% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 218 17% 85%;
-    --input: 218 17% 85%;
-    --ring: 220 28% 16%;
+    --border: 220 7% 82%;
+    --input: 220 7% 82%;
+    --ring: 220 6% 24%;
     --radius: 1rem;
   }
 
   .dark {
     --background: 225 22% 5%;
-    --foreground: 210 16% 94%;
+    --foreground: 210 12% 92%;
     --card: 220 10% 13%;
-    --card-foreground: 210 16% 94%;
+    --card-foreground: 210 12% 92%;
     --popover: 220 10% 13%;
-    --popover-foreground: 210 16% 94%;
-    --primary: 210 16% 94%;
+    --popover-foreground: 210 12% 92%;
+    --primary: 210 12% 92%;
     --primary-foreground: 225 22% 5%;
     --secondary: 220 9% 17%;
-    --secondary-foreground: 210 16% 94%;
+    --secondary-foreground: 210 12% 92%;
     --muted: 220 10% 10%;
-    --muted-foreground: 220 12% 70%;
+    --muted-foreground: 210 12% 92%;
     --accent: 220 9% 20%;
-    --accent-foreground: 210 16% 94%;
+    --accent-foreground: 210 12% 92%;
     --destructive: 0 63% 48%;
-    --destructive-foreground: 210 16% 94%;
+    --destructive-foreground: 210 12% 92%;
     --border: 220 9% 24%;
     --input: 220 9% 24%;
     --ring: 210 16% 94%;
@@ -57,10 +57,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    background-image:
-      radial-gradient(circle at 12% 12%, rgba(148, 163, 184, 0.16) 0%, transparent 34%),
-      radial-gradient(circle at 86% 8%, rgba(125, 146, 173, 0.12) 0%, transparent 30%),
-      linear-gradient(180deg, #f9fbff 0%, #eef3f8 100%);
+    background-image: linear-gradient(180deg, #ececef 0%, #e7e7ea 100%);
     min-width: 320px;
     min-height: 100vh;
   }
@@ -119,6 +116,20 @@
   h3,
   .font-display {
     font-family: "Fraunces", "Plus Jakarta Sans", serif;
+  }
+
+  /* Side-nav text should always be token-driven, not hardcoded slate shades. */
+  .app-home [data-nav-target-key] .text-slate-400,
+  .app-home [data-nav-target-key] .text-slate-500,
+  .app-home [data-nav-target-key] .text-slate-600 {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .app-home [data-nav-target-key] .text-slate-700,
+  .app-home [data-nav-target-key] .text-slate-800,
+  .app-home [data-nav-target-key] .text-slate-900,
+  .app-home [data-nav-target-key] .text-slate-950 {
+    color: hsl(var(--foreground));
   }
 }
 
