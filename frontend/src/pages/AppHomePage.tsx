@@ -2154,7 +2154,7 @@ export function AppHomePage() {
   const isSortNavAndButtons = dashboardTilesEditMode;
   const isNavRearranging = false;
   return (
-    <main className="app-home w-full pb-10 pt-4 dark:bg-[#07090d] dark:text-white">
+    <main className="app-home w-full pb-10 pt-4 dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-40 bg-slate-900/15 backdrop-blur-[3px] dark:bg-black/30" aria-hidden="true" /> : null}
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
@@ -2207,7 +2207,7 @@ export function AppHomePage() {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                     setIsAddAssetModalOpen(true);
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-slate-200 dark:hover:bg-[#25292f] dark:hover:text-white"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                   aria-label="Add assets"
                                 >
                                   <Plus className="h-4 w-4 text-current" />
@@ -2220,7 +2220,7 @@ export function AppHomePage() {
                                     setActiveSidebarCategory("holdings");
                                     setActiveSidebarLabel("Accounts / Holdings");
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-white/10 dark:bg-[#1b1d21] dark:text-slate-200 dark:hover:bg-[#25292f] dark:hover:text-white"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-medium text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                   aria-label="Modify holdings"
                                 >
                                   <ArrowLeftRight className="h-4 w-4 text-current" />
@@ -2260,7 +2260,7 @@ export function AppHomePage() {
                                     <GripVertical className="h-3.5 w-3.5" />
                                   </button>
                                 ) : null}
-                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-white/10 dark:bg-[#1b1d21]">
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card">
                                   <div className="space-y-2">
                                     <button
                                       type="button"
@@ -2271,13 +2271,13 @@ export function AppHomePage() {
                                       }}
                                       className={`sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
                                         activeSidebarCategory === "portfolio"
-                                          ? "sidebar-nav-item-active font-bold text-slate-900 dark:text-white"
-                                        : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                          ? "sidebar-nav-item-active font-bold text-slate-900 dark:text-foreground"
+                                        : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       }`}
                                     >
                                       <BriefcaseBusiness
                                         className={`h-4 w-4 shrink-0 ${
-                                          activeSidebarCategory === "portfolio" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-200"
+                                          activeSidebarCategory === "portfolio" ? "text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
                                         }`}
                                         strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
                                       />
@@ -2285,7 +2285,7 @@ export function AppHomePage() {
                                         Portfolio Dashboard
                                       </span>
                                       {activeSidebarCategory === "portfolio" ? (
-                                        <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                        <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
                                       ) : null}
                                     </button>
                                     <button
@@ -2294,7 +2294,7 @@ export function AppHomePage() {
                                         if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                         setIsAddAssetModalOpen(true);
                                       }}
-                                      className="sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left text-slate-600 transition-colors hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                      className="sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left text-slate-600 transition-colors hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       aria-label="Assets and liabilities"
                                     >
                                       <BadgeDollarSign className="h-4 w-4 text-current" />
@@ -2327,7 +2327,7 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
                             <CardContent className="p-0">
-                              <div className="flex flex-col gap-5 dark:text-white">
+                              <div className="flex flex-col gap-5 dark:text-foreground">
                                 {isManagingSections ? (
                                   <div className="flex items-center">
                                     <button
@@ -2345,14 +2345,14 @@ export function AppHomePage() {
                                   </div>
                                 ) : null}
                                 <div className="flex items-center justify-between px-1">
-                                  <p className="text-base font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-white">Dashboards</p>
+                                  <p className="text-base font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-foreground">Dashboards</p>
                                   <div className="relative" data-dashboard-tiles-menu>
                                     {dashboardTilesEditMode ? (
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
                                           onClick={saveDashboardTilesEdit}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048]"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
                                           aria-label="Save dashboard tiles order"
                                         >
                                           <Check className="h-4 w-4" />
@@ -2360,7 +2360,7 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={cancelDashboardTilesEdit}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048]"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
                                           aria-label="Cancel dashboard tiles edit"
                                         >
                                           <X className="h-4 w-4" />
@@ -2371,13 +2371,13 @@ export function AppHomePage() {
                                         <button
                                           type="button"
                                           onClick={() => setDashboardTilesMenuOpen((previous) => !previous)}
-                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048]"
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
                                           aria-label="Dashboard tile settings"
                                         >
                                           <Ellipsis className="h-3.5 w-3.5" />
                                         </button>
                                         {dashboardTilesMenuOpen ? (
-                                          <div className="absolute right-0 z-[75] mt-1 w-44 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                          <div className="absolute right-0 z-[75] mt-1 w-44 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-border dark:bg-popover">
                                             <button
                                               type="button"
                                               onClick={() => {
@@ -2387,7 +2387,7 @@ export function AppHomePage() {
                                                 setDashboardTilesEditMode(true);
                                                 setDashboardTilesMenuOpen(false);
                                               }}
-                                              className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-700 transition-colors hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                              className="w-full rounded px-2 py-1.5 text-left text-xs text-slate-700 transition-colors hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                             >
                                               Edit Dashboard Tiles
                                             </button>
@@ -2404,19 +2404,19 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "favorites")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("favorites") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "favorites" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                      navTileDropKey === "favorites" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "favorites" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Favorites</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Favorites</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
                                           <>
                                             <button
                                               type="button"
                                               onClick={() => setFavoritesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                               title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                             >
@@ -2427,7 +2427,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "favorites")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] cursor-grab active:cursor-grabbing"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
                                               aria-label="Reorder favorites tile"
                                               title="Reorder favorites tile"
                                             >
@@ -2439,7 +2439,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setFavoritesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                               title={favoritesCollapsed ? "Expand favorites" : "Collapse favorites"}
                                             >
@@ -2458,7 +2458,7 @@ export function AppHomePage() {
                                                 return next;
                                               })
                                             }
-                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground ${
                                               favoritesActionsMenuOpen
                                                 ? "border-slate-300 bg-slate-200 text-slate-800"
                                                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -2469,7 +2469,7 @@ export function AppHomePage() {
                                             <Ellipsis className="h-3.5 w-3.5" />
                                           </button>
                                           {favoritesActionsMenuOpen ? (
-                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d] dark:border-white/10 dark:bg-[#16181d]">
+                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-border dark:bg-popover dark:border-border dark:bg-popover">
                                               <div className="relative">
                                                 <button
                                                   type="button"
@@ -2479,14 +2479,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     favoritesActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {favoritesActionsSubmenu === "filter" ? (
-                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d] dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="favorites-filter-mode">
                                                       Type
                                                     </label>
@@ -2494,7 +2494,7 @@ export function AppHomePage() {
                                                       id="favorites-filter-mode"
                                                       value={favoritesFilterMode}
                                                       onChange={(event) => setFavoritesFilterMode(event.target.value as typeof favoritesFilterMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="all">All favorites</option>
                                                       <option value="asset_type">Asset favorites</option>
@@ -2512,14 +2512,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     favoritesActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {favoritesActionsSubmenu === "sort" ? (
-                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d] dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="favorites-sort-mode">
                                                       Sort
                                                     </label>
@@ -2527,7 +2527,7 @@ export function AppHomePage() {
                                                       id="favorites-sort-mode"
                                                       value={favoritesSortMode}
                                                       onChange={(event) => setFavoritesSortMode(event.target.value as typeof favoritesSortMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="name_asc">Name (A-Z)</option>
                                                       <option value="name_desc">Name (Z-A)</option>
@@ -2567,7 +2567,7 @@ export function AppHomePage() {
                                     {!favoritesCollapsed ? (
                                       <button
                                         type="button"
-                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       >
                                         + Add Favourite Dashboards
                                       </button>
@@ -2580,19 +2580,19 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "assets")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("assets") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "assets" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                      navTileDropKey === "assets" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "assets" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Assets</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Assets</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
                                           <>
                                             <button
                                               type="button"
                                               onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                               title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                             >
@@ -2603,7 +2603,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "assets")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] cursor-grab active:cursor-grabbing"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
                                               aria-label="Reorder assets tile"
                                               title="Reorder assets tile"
                                             >
@@ -2615,7 +2615,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAssetTypesCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                               title={assetTypesCollapsed ? "Expand assets" : "Collapse assets"}
                                             >
@@ -2634,7 +2634,7 @@ export function AppHomePage() {
                                                 return next;
                                               })
                                             }
-                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground ${
                                               assetsActionsMenuOpen
                                                 ? "border-slate-300 bg-slate-200 text-slate-800"
                                                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -2645,7 +2645,7 @@ export function AppHomePage() {
                                             <Ellipsis className="h-3.5 w-3.5" />
                                           </button>
                                           {assetsActionsMenuOpen ? (
-                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-border dark:bg-popover">
                                               <div className="relative">
                                                 <button
                                                   type="button"
@@ -2655,14 +2655,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     assetsActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {assetsActionsSubmenu === "filter" ? (
-                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="assets-filter-mode">
                                                       Asset type
                                                     </label>
@@ -2670,7 +2670,7 @@ export function AppHomePage() {
                                                       id="assets-filter-mode"
                                                       value={assetFilterMode}
                                                       onChange={(event) => setAssetFilterMode(event.target.value as typeof assetFilterMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="all">All assets</option>
                                                       <option value="system">System assets</option>
@@ -2688,14 +2688,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     assetsActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {assetsActionsSubmenu === "sort" ? (
-                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="assets-sort-mode">
                                                       Sort
                                                     </label>
@@ -2703,7 +2703,7 @@ export function AppHomePage() {
                                                       id="assets-sort-mode"
                                                       value={assetSortMode}
                                                       onChange={(event) => setAssetSortMode(event.target.value as typeof assetSortMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="name_asc">Name (A-Z)</option>
                                                       <option value="name_desc">Name (Z-A)</option>
@@ -2784,21 +2784,21 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-white"
-                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-foreground"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
                                                   <Boxes
                                                     className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
+                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
                                                 ) : null}
                                               </button>
                                             </div>
@@ -2851,28 +2851,28 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-white"
-                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-foreground"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 }`}
                                               >
                                                 <div className="flex items-center gap-2">
                                                   <Boxes
                                                     className={`h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
+                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-medium"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
                                                 ) : null}
                                               </button>
                                             </div>
                                           );
                                         })}
                                       {displayedAssetEntries.length === 0 ? (
-                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-white/30 dark:bg-[#1b1d21] dark:text-slate-200">
+                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-border dark:bg-card dark:text-slate-200">
                                           No asset types found.
                                         </div>
                                       ) : null}
@@ -2886,19 +2886,19 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "accounts")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("accounts") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "accounts" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                      navTileDropKey === "accounts" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "accounts" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Accounts</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Accounts</p>
                                       <div className="flex items-center gap-1">
                                         {isSortNavAndButtons ? (
                                           <>
                                             <button
                                               type="button"
                                               onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                               title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                             >
@@ -2909,7 +2909,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "accounts")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 cursor-grab active:cursor-grabbing dark:border-transparent dark:bg-[#2f343b] dark:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 cursor-grab active:cursor-grabbing dark:border-border dark:bg-secondary dark:text-foreground"
                                               aria-label="Reorder accounts tile"
                                               title="Reorder accounts tile"
                                             >
@@ -2921,7 +2921,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setAccountsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                               title={accountsCollapsed ? "Expand account dashboards" : "Collapse account dashboards"}
                                             >
@@ -2940,7 +2940,7 @@ export function AppHomePage() {
                                                     return next;
                                                   })
                                                 }
-                                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground ${
                                                   accountsActionsMenuOpen
                                                     ? "border-slate-300 bg-slate-200 text-slate-800"
                                                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -2951,7 +2951,7 @@ export function AppHomePage() {
                                                 <Ellipsis className="h-3.5 w-3.5" />
                                               </button>
                                           {accountsActionsMenuOpen ? (
-                                            <div className="pointer-events-auto absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                            <div className="pointer-events-auto absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-border dark:bg-popover">
                                               <div className="relative">
                                                 <button
                                                   type="button"
@@ -2961,14 +2961,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     accountsActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {accountsActionsSubmenu === "filter" ? (
-                                                  <div className="pointer-events-auto absolute left-full top-0 z-[80] ml-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="pointer-events-auto absolute left-full top-0 z-[80] ml-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover">
                                                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Account Type</p>
                                                     <div className="mt-1 flex flex-wrap gap-1">
                                                       <button
@@ -3016,14 +3016,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     accountsActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {accountsActionsSubmenu === "sort" ? (
-                                                  <div className="pointer-events-auto absolute left-full top-0 z-[80] ml-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="pointer-events-auto absolute left-full top-0 z-[80] ml-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="accounts-sort-mode">
                                                       Sort
                                                     </label>
@@ -3031,7 +3031,7 @@ export function AppHomePage() {
                                                       id="accounts-sort-mode"
                                                       value={accountSortMode}
                                                       onChange={(event) => setAccountSortMode(event.target.value as typeof accountSortMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="name_asc">Name (A-Z)</option>
                                                       <option value="name_desc">Name (Z-A)</option>
@@ -3123,14 +3123,14 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-white"
-                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                                    ? "sidebar-nav-item-active font-bold text-slate-950 dark:text-foreground"
+                                                    : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 }`}
                                               >
                                                 <div className="flex items-start gap-2">
                                                   <BadgeDollarSign
                                                     className={`mt-0.5 h-4 w-4 shrink-0 ${
-                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-white" : "text-slate-600 dark:text-slate-200"
+                                                      activeSidebarCategory === key ? "text-slate-950 dark:text-foreground" : "text-slate-600 dark:text-slate-200"
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
@@ -3140,14 +3140,14 @@ export function AppHomePage() {
                                                   </div>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
-                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-slate-700" />
+                                                  <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
                                                 ) : null}
                                               </button>
                                             </div>
                                           );
                                       })}
                                       {displayedAccountEntries.length === 0 ? (
-                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-white/30 dark:bg-[#1b1d21] dark:text-slate-200">
+                                        <div className="rounded-md border border-dashed border-blue-100 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-border dark:bg-card dark:text-slate-200">
                                           No accounts found.
                                         </div>
                                       ) : null}
@@ -3161,19 +3161,19 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "custom")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("custom") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-[0_4px_10px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#1b1d21] dark:shadow-[0_10px_24px_rgba(2,6,23,0.45)] ${
-                                      navTileDropKey === "custom" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-[#22262d]" : ""
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                      navTileDropKey === "custom" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "custom" ? "opacity-0" : ""}`}
                                   >
                                     <div className="flex items-center justify-between px-1 pb-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-white">Custom Dashboards</p>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Custom Dashboards</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
                                           <>
                                             <button
                                               type="button"
                                               onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                               title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                             >
@@ -3184,7 +3184,7 @@ export function AppHomePage() {
                                               draggable
                                               onDragStart={(event) => handleDashboardTileDragStart(event, "custom")}
                                               onDragEnd={handleDashboardTileDragEnd}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] cursor-grab active:cursor-grabbing"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
                                               aria-label="Reorder custom dashboards tile"
                                               title="Reorder custom dashboards tile"
                                             >
@@ -3196,7 +3196,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => setCustomDashboardsCollapsed((previous) => !previous)}
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                                               aria-label={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                               title={customDashboardsCollapsed ? "Expand custom dashboards" : "Collapse custom dashboards"}
                                             >
@@ -3215,7 +3215,7 @@ export function AppHomePage() {
                                                 return next;
                                               })
                                             }
-                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white ${
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground ${
                                               customActionsMenuOpen
                                                 ? "border-slate-300 bg-slate-200 text-slate-800"
                                                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900"
@@ -3226,7 +3226,7 @@ export function AppHomePage() {
                                             <Ellipsis className="h-3.5 w-3.5" />
                                           </button>
                                           {customActionsMenuOpen ? (
-                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                            <div className="absolute right-0 z-[70] mt-1 w-40 rounded-md border border-slate-200 bg-white p-1 shadow-md dark:border-border dark:bg-popover">
                                               <div className="relative">
                                                 <button
                                                   type="button"
@@ -3236,14 +3236,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     customActionsSubmenu === "filter"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Filter by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {customActionsSubmenu === "filter" ? (
-                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="custom-filter-mode">
                                                       Scope
                                                     </label>
@@ -3251,7 +3251,7 @@ export function AppHomePage() {
                                                       id="custom-filter-mode"
                                                       value={customFilterMode}
                                                       onChange={(event) => setCustomFilterMode(event.target.value as typeof customFilterMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="all">All custom dashboards</option>
                                                       <option value="portfolio">Portfolio dashboards</option>
@@ -3269,14 +3269,14 @@ export function AppHomePage() {
                                                   className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs transition-colors ${
                                                     customActionsSubmenu === "sort"
                                                       ? "bg-slate-100 text-slate-900"
-                                                      : "text-slate-700 hover:bg-slate-200 dark:text-white dark:hover:bg-[#252a31]"
+                                                      : "text-slate-700 hover:bg-slate-200 dark:text-foreground dark:hover:bg-accent"
                                                   }`}
                                                 >
                                                   <span>Sort by</span>
                                                   <ChevronDown className="-rotate-90 h-3.5 w-3.5" />
                                                 </button>
                                                 {customActionsSubmenu === "sort" ? (
-                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-white/10 dark:bg-[#16181d]">
+                                                  <div className="absolute left-full top-0 z-[80] ml-1 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md dark:border-border dark:bg-popover">
                                                     <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" htmlFor="custom-sort-mode">
                                                       Sort
                                                     </label>
@@ -3284,7 +3284,7 @@ export function AppHomePage() {
                                                       id="custom-sort-mode"
                                                       value={customSortMode}
                                                       onChange={(event) => setCustomSortMode(event.target.value as typeof customSortMode)}
-                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-white/10 dark:bg-[#191b1f] dark:text-white"
+                                                      className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-border dark:bg-muted dark:text-foreground"
                                                     >
                                                       <option value="recent">Recently updated</option>
                                                       <option value="name_asc">Name (A-Z)</option>
@@ -3325,7 +3325,7 @@ export function AppHomePage() {
                                     {!customDashboardsCollapsed ? (
                                       <button
                                         type="button"
-                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-white/30 dark:text-slate-200 dark:hover:bg-[#252a31] dark:hover:text-white"
+                                        className="sidebar-add-dashed w-full rounded-md border border-dashed border-slate-300 px-2.5 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                       >
                                         + Create Custom Dashboard
                                       </button>
@@ -3338,10 +3338,10 @@ export function AppHomePage() {
               </Card>
               <div className={`space-y-4 xl:order-1 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none opacity-45 blur-[2px]" : ""}`}>
               <div className="grid grid-cols-1 gap-3">
-                <Card className="border-0 bg-transparent shadow-none dark:text-white">
+                <Card className="border-0 bg-transparent shadow-none dark:text-foreground">
                     <CardContent className="h-[86px] p-5">
                       <div className="flex h-full items-end justify-between gap-3">
-                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900 dark:text-white">{activeSidebarLabel} Dashboard</h1>
+                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-slate-900 dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
                           <div className="relative" data-dashboard-menu>
                             <button
@@ -3349,12 +3349,12 @@ export function AppHomePage() {
                               onClick={() => {
                                 setSettingsMenuOpen((previous) => !previous);
                               }}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-transparent dark:bg-[#2f343b] dark:text-white dark:hover:bg-[#3a4048] dark:hover:text-white"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
                             >
                               <Settings className="h-5 w-5" />
                             </button>
                             {settingsMenuOpen ? (
-                              <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-white/10 dark:bg-[#16181d]">
+                              <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
                                 {!isEditing ? (
                                   <button
                                     type="button"
@@ -3383,7 +3383,7 @@ export function AppHomePage() {
                 <Card className="overflow-visible border-0 bg-transparent shadow-none">
                   <CardContent className="min-h-[74vh] p-5">
                     {activeSidebarCategory === "holdings" ? (
-                      <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-white/10 dark:bg-[#1b1d21]" />
+                      <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card" />
                     ) : (
                       <div className="flex items-start gap-2">
                         <div className="relative flex-1 overflow-hidden">
@@ -3412,7 +3412,7 @@ export function AppHomePage() {
                                     width: `${width}px`,
                                     height: `${height}px`,
                                   }}
-                                  className="absolute rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground shadow-sm"
+                                  className="absolute rounded-xl border border-primary/20 bg-primary p-3 text-primary-foreground"
                                 >
                                   <div className="flex h-full flex-col justify-between">
                                     <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
@@ -4353,7 +4353,7 @@ export function AppHomePage() {
                                   width: `${resizeLivePreview ? resizeLivePreview.width : snappedWidth}px`,
                                   height: `${resizeLivePreview ? resizeLivePreview.height : snappedHeight}px`,
                                 }}
-                                className={`absolute rounded-xl border p-3 text-primary-foreground shadow-sm ${
+                                className={`absolute rounded-xl border p-3 text-primary-foreground ${
                                   deleteHighlight ? "border-red-300 bg-red-400/85" : "border-primary/20 bg-primary"
                                 } ${
                                   isEditing ? "cursor-grab active:cursor-grabbing" : "cursor-default"
@@ -5120,6 +5120,11 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
+
+
+
+
 
 
 

@@ -4,6 +4,7 @@ import { ChartNoAxesCombined, CircleUserRound, LogOut, Menu, Moon, Settings, Sun
 
 import { ApiError } from "../api/http";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { Button } from "./ui/button";
 
 export function Header() {
@@ -12,28 +13,8 @@ export function Header() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const { theme, toggleTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const storedTheme = localStorage.getItem("finpro-theme");
-    const initialTheme: "light" | "dark" =
-      storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
-    setTheme(initialTheme);
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
-    if (storedTheme !== "dark" && storedTheme !== "light") {
-      localStorage.setItem("finpro-theme", initialTheme);
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    setTheme((previous) => {
-      const next: "light" | "dark" = previous === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", next === "dark");
-      localStorage.setItem("finpro-theme", next);
-      return next;
-    });
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

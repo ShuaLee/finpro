@@ -6,48 +6,48 @@
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 220 16% 10%;
+    --background: 214 30% 98%;
+    --foreground: 222 24% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 220 16% 10%;
+    --card-foreground: 222 24% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 16% 10%;
-    --primary: 220 13% 11%;
+    --popover-foreground: 222 24% 12%;
+    --primary: 220 28% 16%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 220 15% 94%;
-    --secondary-foreground: 220 13% 20%;
-    --muted: 220 14% 92%;
-    --muted-foreground: 220 9% 38%;
-    --accent: 220 15% 90%;
-    --accent-foreground: 220 13% 20%;
+    --secondary: 218 22% 95%;
+    --secondary-foreground: 221 24% 22%;
+    --muted: 218 20% 93%;
+    --muted-foreground: 220 13% 42%;
+    --accent: 217 22% 92%;
+    --accent-foreground: 221 24% 22%;
     --destructive: 0 74% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 84%;
-    --input: 220 13% 84%;
-    --ring: 220 13% 11%;
+    --border: 218 17% 85%;
+    --input: 218 17% 85%;
+    --ring: 220 28% 16%;
     --radius: 1rem;
   }
 
   .dark {
-    --background: 20 7% 8%;
-    --foreground: 30 14% 94%;
-    --card: 24 6% 18%;
-    --card-foreground: 30 14% 94%;
-    --popover: 24 6% 18%;
-    --popover-foreground: 30 14% 94%;
-    --primary: 30 14% 94%;
-    --primary-foreground: 20 7% 8%;
-    --secondary: 22 5% 28%;
-    --secondary-foreground: 30 14% 94%;
-    --muted: 22 6% 14%;
-    --muted-foreground: 28 10% 82%;
-    --accent: 22 5% 28%;
-    --accent-foreground: 30 14% 94%;
+    --background: 225 22% 5%;
+    --foreground: 210 16% 94%;
+    --card: 220 10% 13%;
+    --card-foreground: 210 16% 94%;
+    --popover: 220 10% 13%;
+    --popover-foreground: 210 16% 94%;
+    --primary: 210 16% 94%;
+    --primary-foreground: 225 22% 5%;
+    --secondary: 220 9% 17%;
+    --secondary-foreground: 210 16% 94%;
+    --muted: 220 10% 10%;
+    --muted-foreground: 220 12% 70%;
+    --accent: 220 9% 20%;
+    --accent-foreground: 210 16% 94%;
     --destructive: 0 63% 48%;
-    --destructive-foreground: 30 14% 94%;
-    --border: 24 7% 24%;
-    --input: 24 7% 24%;
-    --ring: 30 14% 94%;
+    --destructive-foreground: 210 16% 94%;
+    --border: 220 9% 24%;
+    --input: 220 9% 24%;
+    --ring: 210 16% 94%;
   }
 
   * {
@@ -58,108 +58,17 @@
     @apply bg-background text-foreground antialiased;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
     background-image:
-      radial-gradient(circle at 8% 10%, rgba(30, 41, 59, 0.07) 0%, transparent 36%),
-      radial-gradient(circle at 90% 14%, rgba(15, 23, 42, 0.06) 0%, transparent 30%),
-      linear-gradient(180deg, #f7f8fb 0%, #f1f3f7 100%);
+      radial-gradient(circle at 12% 12%, rgba(148, 163, 184, 0.16) 0%, transparent 34%),
+      radial-gradient(circle at 86% 8%, rgba(125, 146, 173, 0.12) 0%, transparent 30%),
+      linear-gradient(180deg, #f9fbff 0%, #eef3f8 100%);
     min-width: 320px;
     min-height: 100vh;
   }
 
   .dark body {
-    background-image: none;
-  }
-
-  .dark .app-home .bg-white {
-    background-color: hsl(var(--card));
-  }
-
-  .dark .app-home .bg-slate-50,
-  .dark .app-home .bg-slate-100,
-  .dark .app-home .bg-\[\#f4f6fa\],
-  .dark .app-home .bg-\[\#f8fafc\],
-  .dark .app-home .dark\:bg-\[\#16181d\],
-  .dark .app-home .dark\:bg-\[\#191b1f\],
-  .dark .app-home .dark\:bg-\[\#1b1d21\] {
-    background-color: hsl(var(--card));
-  }
-
-  .dark .app-home .border-blue-100,
-  .dark .app-home .border-blue-200,
-  .dark .app-home .border-blue-500,
-  .dark .app-home .border-blue-600,
-  .dark .app-home .border-slate-200,
-  .dark .app-home .border-slate-300 {
-    border-color: hsl(var(--border));
-  }
-
-  .dark .app-home .text-slate-900,
-  .dark .app-home .text-slate-950,
-  .dark .app-home .text-slate-800,
-  .dark .app-home .text-slate-700 {
-    color: hsl(var(--foreground));
-  }
-
-  .dark .app-home .text-slate-600,
-  .dark .app-home .text-slate-500 {
-    color: hsl(var(--muted-foreground));
-  }
-
-  .dark .app-home .text-blue-700,
-  .dark .app-home .text-blue-600,
-  .dark .app-home .text-blue-500 {
-    color: hsl(var(--foreground));
-  }
-
-  .dark .app-home .bg-blue-50,
-  .dark .app-home .bg-blue-100,
-  .dark .app-home .bg-blue-600,
-  .dark .app-home .bg-blue-700 {
-    background-color: hsl(var(--secondary));
-  }
-
-  .dark .app-home .hover\:bg-blue-50:hover,
-  .dark .app-home .hover\:bg-blue-100:hover,
-  .dark .app-home .hover\:bg-blue-700:hover {
-    background-color: hsl(var(--secondary));
-  }
-
-  .dark .app-home .hover\:bg-slate-200:hover,
-  .dark .app-home .hover\:bg-zinc-200:hover,
-  .dark .app-home .hover\:bg-zinc-300\/70:hover {
-    background-color: #222222;
-  }
-
-  .dark .app-home .sidebar-active-indicator {
-    background-color: currentColor !important;
-  }
-
-  .dark .app-home .sidebar-nav-item:not(.sidebar-nav-item-active):hover {
-    background-color: #4B4644 !important;
-    color: #f3f4f6 !important;
-  }
-
-  .dark .app-home .sidebar-nav-item.sidebar-nav-item-active:hover {
-    background-color: transparent !important;
-    color: hsl(var(--foreground)) !important;
-  }
-
-  .dark .app-home .sidebar-add-dashed:hover {
-    background-color: #4B4644 !important;
-  }
-
-  .app-home .sidebar-add-dashed {
-    color: rgb(148, 163, 184) !important;
-    border-color: currentColor !important;
-  }
-
-  .dark .app-home .sidebar-add-dashed {
-    color: rgba(255, 255, 255, 0.56) !important;
-    border-color: currentColor !important;
-  }
-
-  .dark .app-home .bg-blue-600.text-white,
-  .dark .app-home .bg-blue-700.text-white {
-    color: hsl(var(--foreground));
+    background-image:
+      radial-gradient(circle at 14% 12%, rgba(24, 36, 60, 0.28) 0%, transparent 36%),
+      linear-gradient(180deg, #06080c 0%, #090d14 100%);
   }
 
   #root {
