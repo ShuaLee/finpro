@@ -56,7 +56,7 @@ type HolderTile = {
 };
 type ViewportHolders = Record<EditViewport, HolderTile[]>;
 type NavSectionKey = "addAssets" | "assetTypes" | "accounts";
-type NavDashboardTileKey = "favorites" | "assets" | "accounts" | "custom";
+type NavDashboardTileKey = "portfolioOverview" | "favorites" | "assets" | "accounts" | "custom";
 type NavDragKind = "section" | "asset" | "account";
 type NavDragItem = {
   kind: NavDragKind;
@@ -133,7 +133,7 @@ const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
   desktop: 5,
 };
 const DEFAULT_NAV_SECTION_ORDER: NavSectionKey[] = ["addAssets", "assetTypes", "accounts"];
-const DEFAULT_NAV_DASHBOARD_TILE_ORDER: NavDashboardTileKey[] = ["favorites", "assets", "accounts", "custom"];
+const DEFAULT_NAV_DASHBOARD_TILE_ORDER: NavDashboardTileKey[] = ["portfolioOverview", "favorites", "assets", "accounts", "custom"];
 const TILE_PRESETS: TilePreset[] = [
   {
     id: "compact",
@@ -2144,7 +2144,7 @@ export function AppHomePage() {
     setDashboardTilesEditMode(false);
   };
   const cancelDashboardTilesEdit = () => {
-    setDraftNavDashboardTileOrder([...navDashboardTileOrder]);
+    setDraftNavDashboardTileOrder([...dashboardTileOrderForRender]);
     setDraftNavAssetItemOrder([...navAssetItemOrder]);
     setDraftNavAccountItemOrder([...navAccountItemOrder]);
     setDashboardTilesEditMode(false);
@@ -2266,32 +2266,6 @@ export function AppHomePage() {
                                       type="button"
                                       onClick={() => {
                                         if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                        setActiveSidebarCategory("portfolio");
-                                        setActiveSidebarLabel("Portfolio");
-                                      }}
-                                      className={`sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
-                                        activeSidebarCategory === "portfolio"
-                                          ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
-                                        : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
-                                      }`}
-                                    >
-                                      <BriefcaseBusiness
-                                        className={`h-4 w-4 shrink-0 ${
-                                          activeSidebarCategory === "portfolio" ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
-                                        }`}
-                                        strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
-                                      />
-                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
-                                        Portfolio Dashboard
-                                      </span>
-                                      {activeSidebarCategory === "portfolio" ? (
-                                        <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
-                                      ) : null}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                         setIsAddAssetModalOpen(true);
                                       }}
                                       className="sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left text-slate-600 transition-colors hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
@@ -2381,7 +2355,7 @@ export function AppHomePage() {
                                             <button
                                               type="button"
                                               onClick={() => {
-                                                setDraftNavDashboardTileOrder([...navDashboardTileOrder]);
+                                                setDraftNavDashboardTileOrder([...dashboardTileOrderForRender]);
                                                 setDraftNavAssetItemOrder([...navAssetItemOrder]);
                                                 setDraftNavAccountItemOrder([...navAccountItemOrder]);
                                                 setDashboardTilesEditMode(true);
@@ -2398,6 +2372,61 @@ export function AppHomePage() {
                                   </div>
                                 </div>
                                   <div
+                                    data-dashboard-tile="portfolioOverview"
+                                    draggable={dashboardTilesEditMode}
+                                    onDragStart={(event) => {
+                                      if (!dashboardTilesEditMode) return;
+                                      handleDashboardTileDragStart(event, "portfolioOverview");
+                                    }}
+                                    onDragOver={(event) => handleDashboardTileDragOver(event, "portfolioOverview")}
+                                    onDrop={(event) => handleDashboardTileDrop(event, "portfolioOverview")}
+                                    onDragEnd={handleDashboardTileDragEnd}
+                                    style={{ order: getDashboardTileOrder("portfolioOverview") }}
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                      navTileDropKey === "portfolioOverview" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
+                                    } ${navTileDragKey === "portfolioOverview" ? "opacity-0" : ""}`}
+                                  >
+                                    {dashboardTilesEditMode ? (
+                                      <div className="mb-1 flex items-center justify-end px-1">
+                                        <button
+                                          type="button"
+                                          draggable
+                                          onDragStart={(event) => handleDashboardTileDragStart(event, "portfolioOverview")}
+                                          onDragEnd={handleDashboardTileDragEnd}
+                                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
+                                          aria-label="Reorder portfolio overview tile"
+                                          title="Reorder portfolio overview tile"
+                                        >
+                                          <GripVertical className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
+                                        setActiveSidebarCategory("portfolio");
+                                        setActiveSidebarLabel("Portfolio");
+                                      }}
+                                      className={`sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
+                                        activeSidebarCategory === "portfolio"
+                                          ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
+                                          : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                      }`}
+                                    >
+                                      <BriefcaseBusiness
+                                        className={`h-4 w-4 shrink-0 ${
+                                          activeSidebarCategory === "portfolio" ? "text-foreground dark:text-foreground" : "text-slate-600 dark:text-slate-200"
+                                        }`}
+                                        strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
+                                      />
+                                      <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>Portfolio Overview</span>
+                                      {activeSidebarCategory === "portfolio" ? (
+                                        <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
+                                      ) : null}
+                                    </button>
+                                  </div>
+                                  <div
                                     data-dashboard-tile="favorites"
                                     draggable={false}
                                     onDragOver={(event) => handleDashboardTileDragOver(event, "favorites")}
@@ -2408,7 +2437,7 @@ export function AppHomePage() {
                                       navTileDropKey === "favorites" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "favorites" ? "opacity-0" : ""}`}
                                   >
-                                    <div className="flex items-center justify-between px-1 pb-1">
+                                    <div className="flex items-center justify-between px-1 py-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Favorites</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
@@ -2445,7 +2474,7 @@ export function AppHomePage() {
                                             >
                                               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${favoritesCollapsed ? "" : "rotate-180"}`} />
                                             </button>
-                                            <div className="relative" data-favorites-actions-menu>
+                                            <div className="hidden" data-favorites-actions-menu>
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -2584,7 +2613,7 @@ export function AppHomePage() {
                                       navTileDropKey === "assets" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "assets" ? "opacity-0" : ""}`}
                                   >
-                                    <div className="flex items-center justify-between px-1 pb-1">
+                                    <div className="flex items-center justify-between px-1 py-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Assets</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
@@ -2621,7 +2650,7 @@ export function AppHomePage() {
                                             >
                                               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${assetTypesCollapsed ? "" : "rotate-180"}`} />
                                             </button>
-                                            <div className="relative" data-assets-actions-menu>
+                                            <div className="hidden" data-assets-actions-menu>
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -2890,7 +2919,7 @@ export function AppHomePage() {
                                       navTileDropKey === "accounts" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "accounts" ? "opacity-0" : ""}`}
                                   >
-                                    <div className="flex items-center justify-between px-1 pb-1">
+                                    <div className="flex items-center justify-between px-1 py-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Accounts</p>
                                       <div className="flex items-center gap-1">
                                         {isSortNavAndButtons ? (
@@ -2927,7 +2956,7 @@ export function AppHomePage() {
                                             >
                                               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountsCollapsed ? "" : "rotate-180"}`} />
                                             </button>
-                                            <div className="relative" data-account-actions-menu>
+                                            <div className="hidden" data-account-actions-menu>
                                               <button
                                                 type="button"
                                                 onClick={() =>
@@ -3165,7 +3194,7 @@ export function AppHomePage() {
                                       navTileDropKey === "custom" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "custom" ? "opacity-0" : ""}`}
                                   >
-                                    <div className="flex items-center justify-between px-1 pb-1">
+                                    <div className="flex items-center justify-between px-1 py-1">
                                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Custom Dashboards</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
@@ -3202,7 +3231,7 @@ export function AppHomePage() {
                                             >
                                               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${customDashboardsCollapsed ? "" : "rotate-180"}`} />
                                             </button>
-                                            <div className="relative" data-custom-actions-menu>
+                                            <div className="hidden" data-custom-actions-menu>
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -5120,6 +5149,8 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
+
 
 
 
