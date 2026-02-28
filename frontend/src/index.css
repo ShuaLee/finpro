@@ -131,6 +131,35 @@
   .app-home [data-nav-target-key] .text-slate-950 {
     color: hsl(var(--foreground));
   }
+
+  .app-home button[draggable="true"] {
+    border-color: hsl(var(--border)) !important;
+    background: hsl(var(--card)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .app-home button[draggable="true"]:hover {
+    background: hsl(var(--accent)) !important;
+    color: hsl(var(--accent-foreground)) !important;
+  }
+
+  html[data-dashboard-tiles-edit-mode="true"] .app-top-nav {
+    pointer-events: none;
+    opacity: 1;
+    filter: blur(3px);
+  }
+
+  html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-nav-item-active {
+    font-weight: 400 !important;
+  }
+
+  html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-nav-item .font-bold {
+    font-weight: 400 !important;
+  }
+
+  html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-active-indicator {
+    display: none !important;
+  }
 }
 
 @layer utilities {

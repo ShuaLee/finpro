@@ -65,7 +65,7 @@ export function Header() {
     }`;
 
   return (
-    <header className="sticky top-0 z-40 relative border-b border-border bg-background">
+    <header className="app-top-nav sticky top-0 z-40 relative border-b border-border bg-background">
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <Link to="/" className="inline-flex items-center gap-2">
