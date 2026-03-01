@@ -132,6 +132,16 @@
     color: hsl(var(--foreground));
   }
 
+  .app-home .side-nav-panel .text-sm {
+    font-size: 0.94rem !important;
+    line-height: 1.3rem !important;
+  }
+
+  .app-home .side-nav-panel .text-xs {
+    font-size: 0.8rem !important;
+    line-height: 1.08rem !important;
+  }
+
   .app-home button[draggable="true"] {
     border-color: hsl(var(--border)) !important;
     background: hsl(var(--card)) !important;

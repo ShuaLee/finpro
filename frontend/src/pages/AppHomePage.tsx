@@ -2240,15 +2240,15 @@ export function AppHomePage() {
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_312px]">
+            <div className="grid grid-cols-1 gap-4 xl:gap-7 xl:grid-cols-[292px_minmax(0,1fr)]">
               <Card
-                className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${
+                className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-1 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
                 }`}
               >
                 <CardContent
                   ref={navEditPanelRef}
-                  className="relative flex h-full flex-col gap-5 overflow-visible p-0"
+                  className="side-nav-panel relative flex h-full flex-col gap-5 overflow-visible p-0"
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
@@ -2290,11 +2290,11 @@ export function AppHomePage() {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
                                     setIsAddAssetModalOpen(true);
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                   aria-label="Add assets"
                                 >
                                   <Plus className="h-4 w-4 text-current" />
-                                  <span className="text-sm font-normal leading-tight">Add Assets</span>
+                                  <span className="inline-flex min-h-[1.1rem] items-center text-sm font-normal leading-none">Add Assets</span>
                                 </button>
                                 <button
                                   type="button"
@@ -2303,11 +2303,11 @@ export function AppHomePage() {
                                     setActiveSidebarCategory("holdings");
                                     setActiveSidebarLabel("Accounts / Holdings");
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                   aria-label="Modify holdings"
                                 >
                                   <ArrowLeftRight className="h-4 w-4 text-current" />
-                                  <span className="text-sm font-normal leading-tight">Modify Holdings</span>
+                                  <span className="inline-flex min-h-[1.1rem] items-center text-sm font-normal leading-none">Modify Holdings</span>
                                 </button>
                               </div>
                             </div>
@@ -3568,12 +3568,12 @@ export function AppHomePage() {
                           </div>
                 </CardContent>
               </Card>
-              <div className={`space-y-4 xl:order-1 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
+              <div className={`space-y-2 xl:order-2 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
               <div className="grid grid-cols-1 gap-3">
                 <Card className="border-0 bg-transparent shadow-none dark:text-foreground">
-                    <CardContent className="h-[86px] p-5">
-                      <div className="flex h-full items-end justify-between gap-3">
-                        <h1 className="font-sans text-[1.75rem] font-semibold tracking-tight text-foreground dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
+                    <CardContent className="h-[72px] px-5 py-2">
+                      <div className="flex h-full items-center justify-between gap-3">
+                        <h1 className="font-sans text-[2rem] font-semibold tracking-tight text-foreground dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
                           <div className="relative" data-dashboard-menu>
                             <button
@@ -3613,7 +3613,7 @@ export function AppHomePage() {
                </div>
               {!isEditing ? (
                 <Card className="overflow-visible border-0 bg-transparent shadow-none">
-                  <CardContent className="min-h-[74vh] p-5">
+                  <CardContent className="min-h-[74vh] px-5 pb-5 pt-0">
                     {activeSidebarCategory === "holdings" ? (
                       <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card" />
                     ) : (
