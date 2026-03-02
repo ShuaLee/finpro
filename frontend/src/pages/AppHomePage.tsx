@@ -2236,7 +2236,7 @@ export function AppHomePage() {
   const hiddenInEditClass = (hidden: boolean) =>
     dashboardTilesEditMode && hidden ? "opacity-45 ring-1 ring-dashed ring-slate-300 dark:ring-border" : "";
   return (
-    <main className="app-home w-full pb-10 pt-4 dark:bg-background dark:text-foreground">
+    <main className="app-home w-full bg-background pb-10 pt-4 dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
@@ -2301,7 +2301,7 @@ export function AppHomePage() {
                                   aria-label="Portfolio"
                                 >
                                   <BriefcaseBusiness className="h-4 w-4 text-current" />
-                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "portfolio" ? "font-semibold" : "font-normal"}`}>
+                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
                                     Portfolio
                                     {activeSidebarCategory === "portfolio" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
                                   </span>
@@ -2321,7 +2321,7 @@ export function AppHomePage() {
                                   aria-label="Assets and liabilities"
                                 >
                                   <BadgeDollarSign className="h-4 w-4 text-current" />
-                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "assets-liabilities" ? "font-semibold" : "font-normal"}`}>
+                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "assets-liabilities" ? "font-bold" : "font-normal"}`}>
                                     Assets & Liabilities
                                     {activeSidebarCategory === "assets-liabilities" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
                                   </span>
@@ -2876,7 +2876,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className="truncate text-sm font-normal">{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-medium" : "font-normal"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
@@ -2957,7 +2957,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className="truncate text-sm font-normal">{assetType.name}</span>
+                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-medium" : "font-normal"}`}>{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
@@ -3248,7 +3248,7 @@ export function AppHomePage() {
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <div className="min-w-0">
-                                                    <p className="truncate text-sm font-normal">{account.name}</p>
+                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-medium" : "font-normal"}`}>{account.name}</p>
                                                     {typeName ? <p className="truncate text-[11px] text-muted-foreground dark:text-muted-foreground">{typeName}</p> : null}
                                                   </div>
                                                 </div>
@@ -3635,12 +3635,12 @@ export function AppHomePage() {
         </div>
       ) : null}
       {isEditing ? (
-        <div className="fixed inset-x-0 bottom-0 top-20 z-50 bg-slate-900/25 backdrop-blur-[4px]">
+        <div className="edit-dashboard-screen fixed inset-x-0 bottom-0 top-20 z-50 bg-slate-900/25 backdrop-blur-[4px]">
           <div className="mx-auto h-full w-full max-w-[1680px] overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
             <div className="space-y-3">
               <div className="flex justify-center">
                 <div className={`h-[calc(100vh-7rem)] w-full ${editPreviewWidthClass}`}>
-                <Card className="h-full overflow-hidden border-border bg-[#f4f6fa]">
+                <Card className="edit-dashboard-sheet-bg h-full overflow-hidden border-border">
                   <CardContent className="flex h-full flex-col gap-4 overflow-hidden p-5">
                     <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-auto pr-1">
                     {useCompactEditToolbar ? (
@@ -3719,10 +3719,10 @@ export function AppHomePage() {
                               title="Layout actions"
                               aria-label="Layout actions"
                             >
-                              <GripVertical className="h-4 w-4" />
+                              <Ellipsis className="h-4 w-4" />
                             </button>
                             {layoutActionsMenuOpen ? (
-                              <div className="absolute right-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                              <div className="absolute right-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -3842,10 +3842,10 @@ export function AppHomePage() {
                                 title="Layout actions"
                                 aria-label="Layout actions"
                               >
-                                <GripVertical className="h-4 w-4" />
+                                <Ellipsis className="h-4 w-4" />
                               </button>
                               {layoutActionsMenuOpen ? (
-                                <div className="absolute left-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                <div className="absolute left-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -3955,10 +3955,10 @@ export function AppHomePage() {
                               title="Layout actions"
                               aria-label="Layout actions"
                             >
-                              <GripVertical className="h-4 w-4" />
+                              <Ellipsis className="h-4 w-4" />
                             </button>
                             {layoutActionsMenuOpen ? (
-                              <div className="absolute left-0 z-50 mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                              <div className="absolute left-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -4074,8 +4074,8 @@ export function AppHomePage() {
                       </div>
                     </div>
                     )}
-                      <div className="sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 bg-[#f4f6fa] pb-2">
-                      <div className="min-h-24 rounded-2xl border border-blue-200 bg-white p-3">
+                      <div className="edit-dashboard-sheet-bg sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 pb-2 xl:relative">
+                      <div className="edit-drop-slot-surface-solid min-h-24 rounded-2xl border p-3 xl:mr-12">
                         <div className="mb-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Tile Storage</p>
                           <p className="mt-1 text-xs text-muted-foreground">
@@ -4084,13 +4084,13 @@ export function AppHomePage() {
                         </div>
                         <div
                           ref={holderDropRef}
-                          className={`mb-2 flex h-10 items-center justify-center rounded-xl border border-dashed transition-colors ${
+                          className={`mb-2 flex h-10 items-center justify-center rounded-xl border transition-colors ${
                             isOverHolderDrop && dragSession?.source === "grid"
                               ? "border-primary/60 bg-primary/10 text-primary"
-                              : "border-blue-200 bg-[#f8fafc] text-slate-500"
+                              : "edit-drop-slot-surface"
                           }`}
                         >
-                          <div className="inline-flex items-center gap-1 text-xs font-medium">
+                          <div className="edit-drop-slot-label inline-flex items-center gap-1 text-xs font-medium">
                             <Plus className="h-3.5 w-3.5" />
                             <span>Drop to store</span>
                           </div>
@@ -4223,7 +4223,7 @@ export function AppHomePage() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="flex items-center justify-center gap-3 pb-2 pt-3">
+                      <div className="ml-auto flex w-fit items-center gap-2 pb-2 pt-2 xl:absolute xl:right-0 xl:top-3 xl:ml-0 xl:flex-col xl:items-center xl:gap-2 xl:p-0">
                         <button
                           type="button"
                           onClick={() => setIsAddTileDialogOpen(true)}
@@ -4248,7 +4248,7 @@ export function AppHomePage() {
                             <Columns3 className="h-4 w-4" />
                           </button>
                           {gridActionsMenuOpen ? (
-                            <div className="absolute left-1/2 z-50 mt-2 w-44 -translate-x-1/2 rounded-xl border border-border bg-white p-1 shadow-lg">
+                            <div className="absolute right-0 z-[120] mt-2 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4381,17 +4381,17 @@ export function AppHomePage() {
                               key={`edit-slot-${slot}`}
                               className={
                                 isEditing
-                                  ? `rounded-xl border border-dashed ${
+                                  ? `rounded-xl border ${
                                       selectedForDelete
                                         ? "border-red-400 bg-red-100/40"
                                         : activeDropSlot === slot
                                           ? "border-primary/60 bg-primary/10"
-                                          : "border-border/60 bg-muted/15"
+                                          : "edit-drop-slot"
                                     }`
                                   : "pointer-events-none rounded-xl border border-transparent bg-transparent"
                               }
                             >
-                              <div className="flex h-full items-center justify-center rounded-lg text-xs text-muted-foreground">
+                              <div className="edit-drop-slot-label flex h-full items-center justify-center rounded-lg text-xs">
                                 {occupiedSlots.has(slot) ? "" : "Drop tile here"}
                               </div>
                             </div>
@@ -4401,7 +4401,7 @@ export function AppHomePage() {
 
                         <div
                           ref={overlayRef}
-                          className="absolute inset-0 z-10"
+                          className="absolute inset-x-0 bottom-0 top-2 z-10"
                         >
                         {tiles.map((tile) => {
                           const resizeSnapPreview = resizePreview?.tileId === tile.id ? resizePreview : null;
@@ -4738,7 +4738,7 @@ export function AppHomePage() {
         </div>
       ) : null}
       {isEditing && isSwitchLayoutDialogOpen ? (
-        <div className="fixed inset-0 z-[82] flex items-center justify-center bg-slate-900/30 px-4">
+        <div className="edit-dashboard-popup fixed inset-0 z-[82] flex items-center justify-center bg-slate-900/30 px-4">
           <Card className="w-full max-w-lg border-border bg-white">
             <CardContent className="space-y-3 p-4">
               <p className="text-sm font-semibold text-slate-900">
@@ -4774,7 +4774,7 @@ export function AppHomePage() {
         </div>
       ) : null}
       {isEditing && isExitEditDialogOpen ? (
-        <div className="fixed inset-0 z-[83] flex items-center justify-center bg-slate-900/30 px-4">
+        <div className="edit-dashboard-popup fixed inset-0 z-[83] flex items-center justify-center bg-slate-900/30 px-4">
           <Card className="w-full max-w-lg border-border bg-white">
             <CardContent className="space-y-3 p-4">
               <p className="text-sm font-semibold text-slate-900">
@@ -4808,7 +4808,7 @@ export function AppHomePage() {
         </div>
       ) : null}
       {isSetActiveDialogOpen ? (
-        <div className="fixed inset-0 z-[84] flex items-center justify-center bg-slate-900/30 px-4">
+        <div className="edit-dashboard-popup fixed inset-0 z-[84] flex items-center justify-center bg-slate-900/30 px-4">
           <Card className="w-full max-w-lg border-border bg-white">
             <CardContent className="space-y-3 p-4">
               <p className="text-sm font-semibold text-slate-900">

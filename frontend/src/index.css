@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --background: 220 6% 91%;
+    --background: 220 8% 86%;
     --foreground: 220 6% 24%;
     --card: 220 8% 94%;
     --card-foreground: 220 6% 24%;
@@ -25,6 +25,8 @@
     --border: 220 7% 82%;
     --input: 220 7% 82%;
     --ring: 220 6% 24%;
+    --edit-drop-slot-bg: 0 0% 100%;
+    --edit-drop-slot-border: 220 6% 26%;
     --radius: 1rem;
   }
 
@@ -48,6 +50,8 @@
     --border: 220 9% 24%;
     --input: 220 9% 24%;
     --ring: 210 16% 94%;
+    --edit-drop-slot-bg: 220 10% 10%;
+    --edit-drop-slot-border: 220 9% 24%;
   }
 
   * {
@@ -57,7 +61,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    background-image: linear-gradient(180deg, #ececef 0%, #e7e7ea 100%);
+    background-image: linear-gradient(180deg, #dfe2e8 0%, #d9dde4 100%);
     min-width: 320px;
     min-height: 100vh;
   }
@@ -111,11 +115,47 @@
     background: hsl(var(--background));
   }
 
+  ::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track,
+  body::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-corner,
+  body::-webkit-scrollbar-corner,
+  *::-webkit-scrollbar-corner {
+    background: hsl(var(--background));
+  }
+
   h1,
   h2,
   h3,
   .font-display {
     font-family: "Fraunces", "Plus Jakarta Sans", serif;
+  }
+
+  /* Global weight bump (~10%) to increase text legibility across the app. */
+  .font-normal {
+    font-weight: 480 !important;
+  }
+
+  .font-medium {
+    font-weight: 600 !important;
+  }
+
+  .font-semibold {
+    font-weight: 720 !important;
+  }
+
+  .font-bold {
+    font-weight: 840 !important;
   }
 
   /* Side-nav text should always be token-driven, not hardcoded slate shades. */
@@ -169,6 +209,94 @@
 
   html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-active-indicator {
     display: none !important;
+  }
+
+  .app-home .edit-drop-slot {
+    border-width: 1px;
+    border-style: dashed;
+    border-color: hsl(var(--edit-drop-slot-border) / 0.5);
+    background-color: hsl(var(--edit-drop-slot-bg));
+  }
+
+  .app-home .edit-drop-slot-surface {
+    border-style: dashed;
+    border-color: hsl(var(--edit-drop-slot-border) / 0.5);
+    background-color: hsl(var(--edit-drop-slot-bg));
+  }
+
+  .app-home .edit-drop-slot-surface-solid {
+    border-width: 1px;
+    border-style: solid;
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--edit-drop-slot-bg));
+  }
+
+  .app-home .edit-drop-slot-label {
+    color: hsl(var(--foreground));
+  }
+
+  .app-home .edit-dashboard-sheet-bg {
+    background-color: hsl(var(--background));
+  }
+
+  /* Theme-normalize colorful edit-screen controls to token-based colors. */
+  .app-home .edit-dashboard-screen .bg-blue-600 {
+    background-color: hsl(var(--primary)) !important;
+  }
+  .app-home .edit-dashboard-popup .bg-blue-600 {
+    background-color: hsl(var(--primary)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .border-blue-100,
+  .app-home .edit-dashboard-screen .border-blue-200,
+  .app-home .edit-dashboard-screen .border-amber-200,
+  .app-home .edit-dashboard-screen .border-red-300,
+  .app-home .edit-dashboard-popup .border-amber-200,
+  .app-home .edit-dashboard-popup .border-blue-600 {
+    border-color: hsl(var(--border)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .bg-blue-50,
+  .app-home .edit-dashboard-screen .bg-amber-100,
+  .app-home .edit-dashboard-screen .bg-red-50,
+  .app-home .edit-dashboard-screen .bg-red-100,
+  .app-home .edit-dashboard-popup .bg-amber-50,
+  .app-home .edit-dashboard-popup .bg-amber-100 {
+    background-color: hsl(var(--secondary)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .bg-amber-50 {
+    background-color: hsl(var(--card)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .border-amber-200.bg-amber-50 {
+    border-color: hsl(var(--foreground) / 0.65) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+  .app-home .edit-dashboard-popup .border-amber-200.bg-amber-50 {
+    border-color: hsl(var(--foreground) / 0.65) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .border-blue-200.bg-blue-50 {
+    border-color: hsl(var(--foreground) / 0.65) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+  .app-home .edit-dashboard-popup .border-blue-600.bg-blue-600 {
+    border-color: hsl(var(--foreground) / 0.65) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .text-blue-800,
+  .app-home .edit-dashboard-screen .text-amber-900,
+  .app-home .edit-dashboard-screen .text-red-700,
+  .app-home .edit-dashboard-popup .text-amber-900,
+  .app-home .edit-dashboard-popup .text-red-700 {
+    color: hsl(var(--foreground)) !important;
   }
 }
 
