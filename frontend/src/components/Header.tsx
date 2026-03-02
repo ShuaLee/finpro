@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChartNoAxesCombined, CircleUserRound, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react";
+import { ChartNoAxesCombined, CircleUserRound, LogOut, Menu, Moon, Plus, Settings, Sun, X } from "lucide-react";
 
 import { ApiError } from "../api/http";
 import { useAuth } from "../context/AuthContext";
@@ -110,6 +110,13 @@ export function Header() {
         <nav className="hidden items-center gap-2 lg:flex" aria-label="Account">
           {user ? (
             <div className="flex items-center gap-2">
+              <Link
+                to="/?action=add-modify"
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-[0.95rem] font-semibold text-foreground transition-colors hover:bg-secondary"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Assets</span>
+              </Link>
               <div className="relative" ref={menuRef}>
                 <button
                   type="button"
@@ -228,7 +235,7 @@ export function Header() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
-                  Add / Modify Assets
+                  Add Assets
                 </Link>
                 <Link
                   to="/settings#account"

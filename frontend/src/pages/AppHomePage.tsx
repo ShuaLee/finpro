@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useLocation } from "react-router-dom";
 import {
-  ArrowLeftRight,
   BadgeDollarSign,
   BriefcaseBusiness,
   Boxes,
@@ -1354,6 +1353,10 @@ export function AppHomePage() {
       setActiveSidebarLabel("Portfolio");
       return;
     }
+    if (activeSidebarCategory === "assets-liabilities") {
+      setActiveSidebarLabel("Assets & Liabilities");
+      return;
+    }
     if (activeSidebarCategory === "holdings") {
       setActiveSidebarLabel("Holdings");
       return;
@@ -2108,7 +2111,6 @@ export function AppHomePage() {
   const useCompactEditToolbar = windowWidth < 860 || editingViewport === "mobile";
   const useTabletEditToolbar = !useCompactEditToolbar && editingViewport === "tablet";
   const navSectionsBelowAddAssets = sectionOrderForView.filter((section) => section !== "addAssets");
-  const assetSectionIndex = navSectionsBelowAddAssets.indexOf("assetTypes");
   const accountsSectionIndex = navSectionsBelowAddAssets.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
     navDragItem?.kind === kind && navDragItem.key === key;
@@ -2240,15 +2242,15 @@ export function AppHomePage() {
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
         <div>
           <section>
-            <div className="grid grid-cols-1 gap-4 xl:gap-7 xl:grid-cols-[292px_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-4 xl:gap-7 xl:grid-cols-[minmax(0,1fr)_356px]">
               <Card
-                className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-1 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${
+                className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
                 }`}
               >
                 <CardContent
                   ref={navEditPanelRef}
-                  className="side-nav-panel relative flex h-full flex-col gap-5 overflow-visible p-0"
+                  className="side-nav-panel relative flex h-full flex-col gap-4 overflow-visible p-0"
                   onDragOver={handleNavContainerDragOver}
                   onDrop={handleNavContainerDrop}
                 >
@@ -2283,84 +2285,49 @@ export function AppHomePage() {
                                   <GripVertical className="h-3.5 w-3.5" />
                                 </button>
                               ) : null}
-                              <div className="grid grid-cols-2 gap-5">
+                              <div className="grid grid-cols-2 gap-3">
                                 <button
                                   type="button"
                                   onClick={() => {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                    setIsAddAssetModalOpen(true);
+                                    setActiveSidebarCategory("portfolio");
+                                    setActiveSidebarLabel("Portfolio");
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
-                                  aria-label="Add assets"
+                                  className={`flex h-[92px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal transition-colors dark:border-border dark:bg-card ${
+                                    activeSidebarCategory === "portfolio"
+                                      ? "sidebar-nav-item-active text-foreground dark:text-foreground"
+                                      : "text-slate-600 hover:bg-zinc-300/70 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                  }`}
+                                  aria-label="Portfolio"
                                 >
-                                  <Plus className="h-4 w-4 text-current" />
-                                  <span className="inline-flex min-h-[1.1rem] items-center text-sm font-normal leading-none">Add Assets</span>
+                                  <BriefcaseBusiness className="h-4 w-4 text-current" />
+                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "portfolio" ? "font-semibold" : "font-normal"}`}>
+                                    Portfolio
+                                    {activeSidebarCategory === "portfolio" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
+                                  </span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => {
                                     if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                    setActiveSidebarCategory("holdings");
-                                    setActiveSidebarLabel("Accounts / Holdings");
+                                    setActiveSidebarCategory("assets-liabilities");
+                                    setActiveSidebarLabel("Assets & Liabilities");
                                   }}
-                                  className="flex h-[86px] w-full flex-col items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal text-slate-600 transition-colors hover:bg-zinc-300/70 hover:text-slate-900 dark:border-border dark:bg-card dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
-                                  aria-label="Modify holdings"
+                                  className={`flex h-[92px] w-full flex-col items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-center text-sm font-normal transition-colors dark:border-border dark:bg-card ${
+                                    activeSidebarCategory === "assets-liabilities"
+                                      ? "sidebar-nav-item-active text-foreground dark:text-foreground"
+                                      : "text-slate-600 hover:bg-zinc-300/70 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                  }`}
+                                  aria-label="Assets and liabilities"
                                 >
-                                  <ArrowLeftRight className="h-4 w-4 text-current" />
-                                  <span className="inline-flex min-h-[1.1rem] items-center text-sm font-normal leading-none">Modify Holdings</span>
+                                  <BadgeDollarSign className="h-4 w-4 text-current" />
+                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "assets-liabilities" ? "font-semibold" : "font-normal"}`}>
+                                    Assets & Liabilities
+                                    {activeSidebarCategory === "assets-liabilities" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
+                                  </span>
                                 </button>
                               </div>
                             </div>
-                          </div>
-
-                          <div
-                            data-nav-draggable="true"
-                            data-nav-target-kind="section"
-                            data-nav-target-key="assetTypes"
-                            className={`relative transition-all duration-150 will-change-transform ${
-                              isNavDragging("section", "assetTypes")
-                                ? "rounded-xl border border-dashed border-slate-500 bg-slate-100/90 shadow-[0_14px_28px_rgba(15,23,42,0.20)]"
-                                : ""
-                            } ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}
-                            style={{ order: assetSectionIndex + 1 }}
-                            onDragOver={(event) => handleNavTargetDragOver(event, "section", "assetTypes")}
-                            onDrop={(event) => handleNavTargetDrop(event, "section", "assetTypes")}
-                          >
-                            <CardContent className="p-0">
-                              <div className="space-y-5">
-                                {isManagingSections ? (
-                                  <button
-                                    type="button"
-                                    draggable
-                                    onDragStart={(event) => handleNavDragStart(event, "section", "assetTypes")}
-                                    onDragEnd={handleNavDragEnd}
-                                    onClick={(event) => event.stopPropagation()}
-                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200 ${
-                                      isNavDragging("section", "assetTypes") ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
-                                    }`}
-                                    aria-label="Reorder Dashboards section"
-                                  >
-                                    <GripVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                ) : null}
-                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card">
-                                  <div className="space-y-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                        setIsAddAssetModalOpen(true);
-                                      }}
-                                      className="sidebar-nav-item relative flex w-full items-center gap-2.5 rounded-md px-3 py-3.5 text-left text-slate-600 transition-colors hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
-                                      aria-label="Assets and liabilities"
-                                    >
-                                      <BadgeDollarSign className="h-4 w-4 text-current" />
-                                      <span className="truncate text-sm font-normal">Assets & Liabilities</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
                           </div>
 
                           <div
@@ -2384,7 +2351,7 @@ export function AppHomePage() {
                             onDrop={(event) => handleNavTargetDrop(event, "section", "accounts")}
                           >
                             <CardContent className="p-0">
-                              <div className="flex flex-col gap-5 dark:text-foreground">
+                              <div className="flex flex-col gap-4 dark:text-foreground">
                                 {isManagingSections ? (
                                   <div className="flex items-center">
                                     <button
@@ -2401,8 +2368,8 @@ export function AppHomePage() {
                                     </button>
                                   </div>
                                 ) : null}
-                                <div className="flex items-center justify-between px-1">
-                                  <p className="text-base font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-foreground">Dashboards</p>
+                                <div className="mt-2 flex items-center justify-between px-1">
+                                  <p className="text-lg font-semibold text-slate-500 dark:text-foreground">Dashboards</p>
                                   <div className="relative" data-dashboard-tiles-menu>
                                     {dashboardTilesEditMode ? (
                                       <div className="flex items-center gap-2">
@@ -2490,87 +2457,6 @@ export function AppHomePage() {
                                     )}
                                   </div>
                                 </div>
-                                  {shouldRenderDashboardTile("portfolioOverview") ? (
-                                  <div
-                                    data-dashboard-tile="portfolioOverview"
-                                    draggable={dashboardTilesEditMode}
-                                    onDragStart={(event) => {
-                                      if (!dashboardTilesEditMode) return;
-                                      handleDashboardTileDragStart(event, "portfolioOverview");
-                                    }}
-                                    onDragOver={(event) => handleDashboardTileDragOver(event, "portfolioOverview")}
-                                    onDrop={(event) => handleDashboardTileDrop(event, "portfolioOverview")}
-                                    onDragEnd={handleDashboardTileDragEnd}
-                                    style={{ order: getDashboardTileOrder("portfolioOverview") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
-                                      navTileDropKey === "portfolioOverview" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
-                                    } ${navTileDragKey === "portfolioOverview" ? "opacity-0" : ""} ${hiddenInEditClass(
-                                      isDashboardTileHidden("portfolioOverview"),
-                                    )}`}
-                                  >
-                                    {dashboardTilesEditMode ? (
-                                      <div className="flex items-center justify-between px-1 py-0.5">
-                                        <div className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-slate-600 dark:text-slate-200">
-                                          <BriefcaseBusiness className="h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" strokeWidth={2} />
-                                          <span className="truncate text-sm font-normal">Portfolio Overview</span>
-                                        </div>
-                                        <div className="ml-2 flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={() => toggleDashboardTileVisibility("portfolioOverview")}
-                                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-transparent text-foreground transition-colors hover:text-foreground"
-                                            aria-label={isDashboardTileHidden("portfolioOverview") ? "Show portfolio overview tile" : "Hide portfolio overview tile"}
-                                            title={isDashboardTileHidden("portfolioOverview") ? "Show portfolio overview tile" : "Hide portfolio overview tile"}
-                                          >
-                                            {isDashboardTileHidden("portfolioOverview") ? (
-                                              <EyeOff className="h-3.5 w-3.5" />
-                                            ) : (
-                                              <Eye className="h-3.5 w-3.5" />
-                                            )}
-                                          </button>
-                                          <button
-                                            type="button"
-                                            draggable
-                                            onDragStart={(event) => handleDashboardTileDragStart(event, "portfolioOverview")}
-                                            onDragEnd={handleDashboardTileDragEnd}
-                                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing"
-                                            aria-label="Reorder portfolio overview tile"
-                                            title="Reorder portfolio overview tile"
-                                          >
-                                            <GripVertical className="h-3.5 w-3.5" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            if (canEditButtonsForKind("asset") || canEditButtonsForKind("account")) return;
-                                            setActiveSidebarCategory("portfolio");
-                                            setActiveSidebarLabel("Portfolio");
-                                          }}
-                                          className={`sidebar-nav-item relative flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-3 py-3.5 text-left transition-colors ${
-                                            activeSidebarCategory === "portfolio"
-                                              ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
-                                              : "text-slate-600 hover:bg-zinc-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
-                                          }`}
-                                        >
-                                          <BriefcaseBusiness
-                                            className={`h-4 w-4 shrink-0 ${
-                                              activeSidebarCategory === "portfolio" ? "text-foreground dark:text-foreground" : "text-slate-600 dark:text-slate-200"
-                                            }`}
-                                            strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
-                                          />
-                                          <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>Portfolio Overview</span>
-                                          {activeSidebarCategory === "portfolio" ? (
-                                            <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
-                                          ) : null}
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                  ) : null}
                                   {shouldRenderDashboardTile("favorites") ? (
                                   <div
                                     data-dashboard-tile="favorites"
@@ -2579,14 +2465,14 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "favorites")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("favorites") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card ${
                                       navTileDropKey === "favorites" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "favorites" ? "opacity-0" : ""} ${hiddenInEditClass(
                                       isDashboardTileHidden("favorites"),
                                     )}`}
                                   >
                                     <div className="flex items-center justify-between px-1 py-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Favorites</p>
+                                      <p className="text-sm font-normal text-slate-500 dark:text-foreground">Favorites</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
                                           <>
@@ -2761,12 +2647,12 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "assets")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("assets") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card ${
                                       navTileDropKey === "assets" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "assets" ? "opacity-0" : ""} ${hiddenInEditClass(isDashboardTileHidden("assets"))}`}
                                   >
                                     <div className="flex items-center justify-between px-1 py-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Assets</p>
+                                      <p className="text-sm font-normal text-slate-500 dark:text-foreground">Assets</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
                                           <>
@@ -2935,7 +2821,7 @@ export function AppHomePage() {
                                               data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
                                               data-nav-target-kind="asset"
                                               data-nav-target-key={key}
-                                              className={`flex items-center gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
+                                              className={`flex items-center gap-1.5 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("asset", key)
                                                   ? "opacity-0"
                                                   : navDropTarget?.kind === "asset" && navDropTarget.key === key
@@ -2977,9 +2863,9 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(assetType.name);
                                                 }}
-                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
+                                                    ? "sidebar-nav-item-active text-foreground dark:text-foreground"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 } ${hiddenInEditClass(hidden)}`}
                                               >
@@ -2990,7 +2876,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-normal"}`}>{assetType.name}</span>
+                                                  <span className="truncate text-sm font-normal">{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
@@ -3000,7 +2886,7 @@ export function AppHomePage() {
                                           );
                                         })}
                                       {customAssetTypes.length > 0 ? (
-                                        <p className="pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
+                                        <p className="pt-1 text-sm font-normal text-slate-500 dark:text-slate-300">
                                             Custom
                                         </p>
                                       ) : null}
@@ -3016,7 +2902,7 @@ export function AppHomePage() {
                                               data-nav-draggable={canEditButtonsForKind("asset") ? "true" : undefined}
                                               data-nav-target-kind="asset"
                                               data-nav-target-key={key}
-                                              className={`flex items-center gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
+                                              className={`flex items-center gap-1.5 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("asset", key)
                                                   ? "opacity-0"
                                                   : navDropTarget?.kind === "asset" && navDropTarget.key === key
@@ -3058,9 +2944,9 @@ export function AppHomePage() {
                                                   setActiveSidebarCategory(key);
                                                   setActiveSidebarLabel(assetType.name);
                                                 }}
-                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-3 text-left transition-colors ${
+                                                className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
+                                                    ? "sidebar-nav-item-active text-foreground dark:text-foreground"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 } ${hiddenInEditClass(hidden)}`}
                                               >
@@ -3071,7 +2957,7 @@ export function AppHomePage() {
                                                     }`}
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
-                                                  <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-normal"}`}>{assetType.name}</span>
+                                                  <span className="truncate text-sm font-normal">{assetType.name}</span>
                                                 </div>
                                                 {activeSidebarCategory === key ? (
                                                   <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
@@ -3097,14 +2983,14 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "accounts")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("accounts") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card ${
                                       navTileDropKey === "accounts" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "accounts" ? "opacity-0" : ""} ${hiddenInEditClass(
                                       isDashboardTileHidden("accounts"),
                                     )}`}
                                   >
                                     <div className="flex items-center justify-between px-1 py-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Accounts</p>
+                                      <p className="text-sm font-normal text-slate-500 dark:text-foreground">Accounts</p>
                                       <div className="flex items-center gap-1">
                                         {isSortNavAndButtons ? (
                                           <>
@@ -3306,7 +3192,7 @@ export function AppHomePage() {
                                               data-nav-draggable={canEditButtonsForKind("account") ? "true" : undefined}
                                               data-nav-target-kind="account"
                                               data-nav-target-key={key}
-                                              className={`flex items-center gap-1 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
+                                              className={`flex items-center gap-1.5 rounded-lg border border-transparent px-0 py-0 transition-colors duration-100 ${
                                                 isNavDragging("account", key)
                                                   ? "opacity-0"
                                                   : navDropTarget?.kind === "account" && navDropTarget.key === key
@@ -3350,7 +3236,7 @@ export function AppHomePage() {
                                                 }}
                                                 className={`sidebar-nav-item relative flex-1 rounded-md px-2.5 py-2.5 text-left transition-colors ${
                                                   activeSidebarCategory === key
-                                                    ? "sidebar-nav-item-active font-bold text-foreground dark:text-foreground"
+                                                    ? "sidebar-nav-item-active text-foreground dark:text-foreground"
                                                     : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
                                                 } ${hiddenInEditClass(hidden)}`}
                                               >
@@ -3362,7 +3248,7 @@ export function AppHomePage() {
                                                     strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
                                                   />
                                                   <div className="min-w-0">
-                                                    <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-bold" : "font-normal"}`}>{account.name}</p>
+                                                    <p className="truncate text-sm font-normal">{account.name}</p>
                                                     {typeName ? <p className="truncate text-[11px] text-muted-foreground dark:text-muted-foreground">{typeName}</p> : null}
                                                   </div>
                                                 </div>
@@ -3390,12 +3276,12 @@ export function AppHomePage() {
                                     onDrop={(event) => handleDashboardTileDrop(event, "custom")}
                                     onDragEnd={handleDashboardTileDragEnd}
                                     style={{ order: getDashboardTileOrder("custom") }}
-                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-border dark:bg-card ${
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card ${
                                       navTileDropKey === "custom" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
                                     } ${navTileDragKey === "custom" ? "opacity-0" : ""} ${hiddenInEditClass(isDashboardTileHidden("custom"))}`}
                                   >
                                     <div className="flex items-center justify-between px-1 py-1">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-foreground">Custom Dashboards</p>
+                                      <p className="text-sm font-normal text-slate-500 dark:text-foreground">Custom Dashboards</p>
                                       <div className="flex items-center gap-1">
                                         {dashboardTilesEditMode ? (
                                           <>
@@ -3568,10 +3454,10 @@ export function AppHomePage() {
                           </div>
                 </CardContent>
               </Card>
-              <div className={`space-y-2 xl:order-2 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
+              <div className={`space-y-4 xl:order-1 xl:mt-5 xl:pr-5 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
               <div className="grid grid-cols-1 gap-3">
-                <Card className="border-0 bg-transparent shadow-none dark:text-foreground">
-                    <CardContent className="h-[72px] px-5 py-2">
+                <Card className="rounded-lg border border-slate-200 bg-slate-50 shadow-none dark:border-border dark:bg-card dark:text-foreground">
+                    <CardContent className="h-[92px] px-4 py-2">
                       <div className="flex h-full items-center justify-between gap-3">
                         <h1 className="font-sans text-[2rem] font-semibold tracking-tight text-foreground dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
                         <div className="flex items-center gap-2">
@@ -3612,8 +3498,8 @@ export function AppHomePage() {
                   </Card>
                </div>
               {!isEditing ? (
-                <Card className="overflow-visible border-0 bg-transparent shadow-none">
-                  <CardContent className="min-h-[74vh] px-5 pb-5 pt-0">
+                <Card className="overflow-visible border border-slate-200/70 bg-slate-50/35 shadow-none dark:border-border/70 dark:bg-card/35">
+                  <CardContent className="min-h-[74vh] px-5 pb-5 pt-2">
                     {activeSidebarCategory === "holdings" ? (
                       <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card" />
                     ) : (
