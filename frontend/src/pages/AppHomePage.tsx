@@ -320,7 +320,6 @@ export function AppHomePage() {
   const [isDeleteStructureMode, setIsDeleteStructureMode] = useState(false);
   const [selectedDeleteRows, setSelectedDeleteRows] = useState<number[]>([]);
   const [selectedDeleteCols, setSelectedDeleteCols] = useState<number[]>([]);
-  const [gridActionsMenuOpen, setGridActionsMenuOpen] = useState(false);
   const [gridActionError, setGridActionError] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1196,7 +1195,6 @@ export function AppHomePage() {
 
       if (!inDashboardMenu) setSettingsMenuOpen(false);
       if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
-      if (!inDashboardMenu) setGridActionsMenuOpen(false);
       if (!inTileMenu) setTileMenuOpenId(null);
       if (!inHolderMenu) setHolderMenuOpenId(null);
 
@@ -1527,7 +1525,6 @@ export function AppHomePage() {
     setIsDeleteStructureMode(false);
     setSelectedDeleteRows([]);
     setSelectedDeleteCols([]);
-    setGridActionsMenuOpen(false);
     setGridActionError(null);
   }, [isEditing]);
 
@@ -4077,16 +4074,17 @@ export function AppHomePage() {
                     </div>
                     )}
                       <div className="edit-dashboard-sheet-bg sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 px-2 pb-2">
-                      <div className="space-y-2 lg:grid lg:grid-cols-6 lg:gap-2 lg:space-y-0">
-                      <div className="edit-drop-slot-surface-solid min-h-24 rounded-2xl border p-3 lg:order-2 lg:col-span-5">
-                        <div className="mb-2">
-                          <p className="text-xs text-muted-foreground">
-                            Drag tiles here to hide for this display size while keeping for others, or park while reorganizing.
-                          </p>
-                        </div>
+                      <div className={activeViewport === "mobile"
+                        ? "space-y-2"
+                        : `space-y-2 lg:grid lg:gap-2 lg:space-y-0 ${activeViewport === "tablet" ? "lg:grid-cols-8" : "lg:grid-cols-6"}`}>
+                      <div className={`edit-drop-slot-surface-solid min-h-24 rounded-2xl border p-3 ${activeViewport === "mobile" ? "" : "lg:order-2"} ${
+                        activeViewport === "tablet" ? "lg:col-span-6" : "lg:col-span-5"
+                      }`}>
                         <div
                           ref={holderDropRef}
-                          className={`mb-2 flex h-10 items-center justify-center rounded-xl border transition-colors ${
+                          className={`flex min-h-[4.5rem] items-center justify-center rounded-xl border px-2 transition-colors ${
+                            heldTileIds.length > 0 ? "mb-2" : "mb-0"
+                          } ${
                             isOverHolderDrop && dragSession?.source === "grid"
                               ? "border-primary/60 bg-primary/10 text-primary"
                               : "edit-drop-slot-surface"
@@ -4096,6 +4094,11 @@ export function AppHomePage() {
                             <Plus className="h-3.5 w-3.5" />
                             <span>Drop to store</span>
                           </div>
+                        </div>
+                        <div className={`${heldTileIds.length > 0 ? "mb-2" : "mb-0"} mt-3 px-1`}>
+                          <p className="text-xs text-muted-foreground">
+                            Drag tiles here to hide for this display size while keeping for others, or park while reorganizing.
+                          </p>
                         </div>
                         {heldTileIds.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
@@ -4225,12 +4228,55 @@ export function AppHomePage() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="edit-drop-slot-surface-solid hidden min-h-24 rounded-2xl border p-2 lg:order-1 lg:col-span-1 lg:block">
+                      {activeViewport === "mobile" ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddTileDialogOpen(true)}
+                          className="edit-add-tile-trigger inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-colors"
+                          title="Add Tile"
+                          aria-label="Add Tile"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add Tile</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManageGridMode((previous) => {
+                              const next = !previous;
+                              if (next) {
+                                setIsDeleteStructureMode(true);
+                                setSelectedDeleteRows([]);
+                                setSelectedDeleteCols([]);
+                              } else {
+                                setIsDeleteStructureMode(false);
+                                setSelectedDeleteRows([]);
+                                setSelectedDeleteCols([]);
+                              }
+                              return next;
+                            });
+                            setGridActionError(null);
+                          }}
+                          className={`edit-manage-grid-trigger inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-colors ${
+                            isManageGridMode ? "ring-1 ring-foreground/25" : ""
+                          }`}
+                          title={isManageGridMode ? "Close Grid Controls" : "Manage Grid"}
+                          aria-label={isManageGridMode ? "Close Grid Controls" : "Manage Grid"}
+                        >
+                          <Columns3 className="h-3.5 w-3.5" />
+                          <span>Manage Grid</span>
+                        </button>
+                      </div>
+                      ) : null}
+                      <div className={`edit-drop-slot-surface-solid edit-top-controls-tile hidden min-h-24 rounded-2xl border p-2 lg:order-1 lg:block ${
+                        activeViewport === "tablet" ? "lg:col-span-2" : "lg:col-span-1"
+                      } ${activeViewport === "mobile" ? "lg:!hidden" : ""}`}>
                         <div className="flex h-full flex-col justify-center gap-3">
                           <button
                             type="button"
                             onClick={() => setIsAddTileDialogOpen(true)}
-                            className="inline-flex items-center justify-center gap-1 rounded-xl border border-border bg-white px-2 py-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
+                            className="edit-add-tile-trigger inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-colors"
                             title="Add Tile"
                             aria-label="Add Tile"
                           >
@@ -4255,10 +4301,8 @@ export function AppHomePage() {
                               });
                               setGridActionError(null);
                             }}
-                            className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-colors ${
-                              isManageGridMode
-                                ? "border-blue-200 bg-blue-50 text-blue-800"
-                                : "border-border bg-white text-foreground hover:bg-secondary/80"
+                            className={`edit-manage-grid-trigger inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-colors ${
+                              isManageGridMode ? "ring-1 ring-foreground/25" : ""
                             }`}
                             title={isManageGridMode ? "Close Grid Controls" : "Manage Grid"}
                             aria-label={isManageGridMode ? "Close Grid Controls" : "Manage Grid"}
@@ -4269,116 +4313,12 @@ export function AppHomePage() {
                         </div>
                       </div>
                       </div>
-                      <div className="ml-auto flex w-fit items-center gap-2 pb-2 pt-2 lg:hidden">
-                        <button
-                          type="button"
-                          onClick={() => setIsAddTileDialogOpen(true)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
-                          title="Add Tile"
-                          aria-label="Add Tile"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                        <div className="relative" data-dashboard-menu>
-                          <button
-                            type="button"
-                            onClick={() => setGridActionsMenuOpen((previous) => !previous)}
-                            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${
-                              isDeleteStructureMode
-                                ? "border-red-300 bg-red-100 text-red-700"
-                                : "border-border bg-white text-foreground hover:bg-secondary/80"
-                            }`}
-                            title="Grid actions"
-                            aria-label="Grid actions"
-                          >
-                            <Columns3 className="h-4 w-4" />
-                          </button>
-                          {gridActionsMenuOpen ? (
-                            <div className="absolute right-0 z-[120] mt-2 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (columns >= VIEWPORT_MAX_COLUMNS[activeViewport]) {
-                                    setGridActionError("maximum columns reached for this display size.");
-                                  } else {
-                                    addColumn();
-                                    setGridActionError(null);
-                                  }
-                                  setGridActionsMenuOpen(false);
-                                }}
-                                className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                              >
-                                Add Column
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (canAddRow) {
-                                    setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
-                                  }
-                                  setGridActionError(null);
-                                  setGridActionsMenuOpen(false);
-                                }}
-                                disabled={!canAddRow}
-                                className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Add Row
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsDeleteStructureMode((previous) => {
-                                    const next = !previous;
-                                    if (!next) {
-                                      setSelectedDeleteRows([]);
-                                      setSelectedDeleteCols([]);
-                                    }
-                                    return next;
-                                  });
-                                  setGridActionError(null);
-                                  setGridActionsMenuOpen(false);
-                                }}
-                                className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50"
-                              >
-                                {isDeleteStructureMode ? "Exit Delete Mode" : "Delete Rows/Columns"}
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                        {isDeleteStructureMode ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsDeleteStructureMode(false);
-                                setSelectedDeleteRows([]);
-                                setSelectedDeleteCols([]);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
-                              title="Cancel"
-                              aria-label="Cancel"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={confirmDeleteStructure}
-                              disabled={selectedDeleteRows.length === 0 && selectedDeleteCols.length === 0}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
-                              title="Confirm delete"
-                              aria-label="Confirm delete"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
                       {gridActionError ? (
                         <p className="text-center text-xs text-red-700">{gridActionError}</p>
                       ) : null}
                       </div>
                       {isManageGridMode ? (
-                        <div className="hidden items-center justify-end gap-2 px-2 pb-2 lg:flex">
+                        <div className="flex flex-wrap items-center justify-start gap-2 px-2 pb-2 lg:justify-end">
                           <button
                             type="button"
                             onClick={() => {

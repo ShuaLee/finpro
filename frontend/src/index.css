@@ -239,6 +239,37 @@
     background-color: hsl(var(--background));
   }
 
+  .app-home .edit-dashboard-screen .edit-top-controls-tile {
+    background-color: hsl(var(--background));
+    border-color: hsl(var(--background));
+  }
+
+  .app-home .edit-dashboard-screen button.edit-add-tile-trigger {
+    border-color: hsl(var(--foreground) / 0.7) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+
+  .app-home .edit-dashboard-screen button.edit-add-tile-trigger:hover {
+    filter: brightness(0.95);
+  }
+
+  .app-home .edit-dashboard-screen .edit-manage-grid-trigger {
+    border-color: hsl(var(--foreground) / 0.7) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .edit-manage-grid-trigger:hover {
+    filter: brightness(0.95);
+  }
+
+  .dark .app-home .edit-dashboard-screen .edit-manage-grid-trigger {
+    border-color: hsl(var(--border)) !important;
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
   /* Theme-normalize colorful edit-screen controls to token-based colors. */
   .app-home .edit-dashboard-screen .bg-blue-600 {
     background-color: hsl(var(--primary)) !important;
