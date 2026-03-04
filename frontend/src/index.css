@@ -272,6 +272,12 @@
     filter: brightness(0.95);
   }
 
+  .app-home .edit-dashboard-screen .edit-save-check-btn:hover:not(:disabled) {
+    border-color: hsl(var(--foreground) / 0.7) !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+
   .dark .app-home .edit-dashboard-screen .edit-manage-grid-trigger {
     border-color: hsl(var(--border)) !important;
     background-color: hsl(var(--card)) !important;

@@ -17,6 +17,7 @@ import {
   Settings,
   Smartphone,
   Tablet,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -681,6 +682,7 @@ export function AppHomePage() {
     }
     setIsEditing(false);
   };
+
 
   const cancelExitEditDialog = () => {
     setIsExitEditDialogOpen(false);
@@ -3687,7 +3689,7 @@ export function AppHomePage() {
                             type="button"
                             onClick={requestExitEditing}
                             disabled={hasParkedTilesAcrossViewports}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            className="edit-save-check-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
                             title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                             aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                           >
@@ -3917,7 +3919,7 @@ export function AppHomePage() {
                             type="button"
                             onClick={requestExitEditing}
                             disabled={hasParkedTilesAcrossViewports}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
                             title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                             aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                           >
@@ -4060,7 +4062,7 @@ export function AppHomePage() {
                           type="button"
                           onClick={requestExitEditing}
                           disabled={hasParkedTilesAcrossViewports}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                          className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
                           title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                           aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                         >
@@ -4304,12 +4306,8 @@ export function AppHomePage() {
                         </div>
                       </div>
                       </div>
-                      {gridActionError ? (
-                        <p className="text-center text-xs text-red-700">{gridActionError}</p>
-                      ) : null}
-                      </div>
                       {isManageGridMode ? (
-                        <div className="flex flex-wrap items-center justify-start gap-2 px-2 pb-2 lg:justify-end">
+                        <div className="mt-1 flex flex-wrap items-center justify-center gap-2 px-2 pb-1">
                           <button
                             type="button"
                             onClick={() => {
@@ -4372,10 +4370,14 @@ export function AppHomePage() {
                           </button>
                         </div>
                       ) : null}
+                      {gridActionError ? (
+                        <p className="text-center text-xs text-red-700">{gridActionError}</p>
+                      ) : null}
+                      </div>
                       <div className={`flex items-start px-2 pb-2 pt-0 ${isDeleteStructureMode ? "gap-2" : "gap-0"}`}>
-                      <div className="relative flex-1 overflow-visible pt-2">
+                      <div className="flex-1">
                         {isDeleteStructureMode ? (
-                          <div className="absolute left-0 right-0 top-1 z-30 h-7">
+                          <div className="relative mb-2 h-7">
                             {Array.from({ length: columns }, (_, colIndex) => {
                               const colCenter =
                                 colIndex * ((gridMetrics?.cellWidth ?? 0) + (gridMetrics?.colGap ?? 0)) + (gridMetrics?.cellWidth ?? 0) / 2;
@@ -4401,12 +4403,13 @@ export function AppHomePage() {
                                   }}
                                   title={deletable ? "Select column to delete" : "Column currently occupied"}
                                 >
-                                  <X className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               );
                             })}
                           </div>
                         ) : null}
+                      <div className="relative overflow-visible pt-2">
                         <div
                           ref={gridRef}
                           className="grid auto-rows-[120px] gap-3 md:auto-rows-[132px]"
@@ -4573,6 +4576,7 @@ export function AppHomePage() {
                           })}
                         </div>
                       </div>
+                      </div>
 
                       <div className={`relative ${isDeleteStructureMode ? "w-8" : "w-0"}`}>
                         {Array.from({ length: totalRows }, (_, rowIndex) => {
@@ -4598,7 +4602,7 @@ export function AppHomePage() {
                               }}
                               title={deletable ? "Select row to delete" : "Only trailing empty rows can be deleted"}
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           );
                         })}
@@ -4746,9 +4750,7 @@ export function AppHomePage() {
           <Card className="w-full max-w-lg border-border bg-white">
             <CardContent className="space-y-3 p-4">
               <p className="text-sm font-semibold text-slate-900">
-                There are unsaved changes in "{activeLayout?.name ?? "layout"}". Would you like to save and proceed,
-                lose changes, or cancel
-                {pendingCreateLayout ? " before creating a new layout?" : "?"}
+                Unsaved changes in the current layout. What do you want to do?
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -4756,21 +4758,21 @@ export function AppHomePage() {
                   onClick={cancelLayoutSwitchDialog}
                   className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
                 >
-                  Cancel
+                  Keep Editing
                 </button>
                 <button
                   type="button"
                   onClick={confirmLayoutSwitchLose}
                   className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
                 >
-                  Lose Changes
+                  Discard & Continue
                 </button>
                 <button
                   type="button"
                   onClick={confirmLayoutSwitchSave}
                   className="rounded-md border border-border bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90"
                 >
-                  Save and Proceed
+                  Save & Continue
                 </button>
               </div>
             </CardContent>
@@ -4782,7 +4784,7 @@ export function AppHomePage() {
           <Card className="w-full max-w-lg border-border bg-white">
             <CardContent className="space-y-3 p-4">
               <p className="text-sm font-semibold text-slate-900">
-                You have unsaved changes. Save and Exit, Discard Changes, or Cancel?
+                Unsaved changes. What do you want to do?
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -4790,21 +4792,21 @@ export function AppHomePage() {
                   onClick={cancelExitEditDialog}
                   className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
                 >
-                  Cancel
+                  Keep Editing
                 </button>
                 <button
                   type="button"
                   onClick={confirmExitEditDiscard}
                   className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
                 >
-                  Discard Changes
+                  Discard & Exit
                 </button>
                 <button
                   type="button"
                   onClick={confirmExitEditSave}
                   className="rounded-md border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                 >
-                  Save and Exit
+                  Save & Exit
                 </button>
               </div>
             </CardContent>
