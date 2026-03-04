@@ -235,6 +235,14 @@
     color: hsl(var(--foreground));
   }
 
+  .app-home .edit-dashboard-screen .edit-layout-label,
+  .app-home .edit-dashboard-screen .edit-layout-select,
+  .app-home .edit-dashboard-screen .edit-layout-select option,
+  .app-home .edit-dashboard-screen .edit-drop-slot-label {
+    color: hsl(var(--foreground) / 0.78) !important;
+    font-weight: 450 !important;
+  }
+
   .app-home .edit-dashboard-sheet-bg {
     background-color: hsl(var(--background));
   }
@@ -312,9 +320,9 @@
   }
 
   .app-home .edit-dashboard-screen .border-blue-200.bg-blue-50 {
-    border-color: hsl(var(--foreground) / 0.65) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
+    border-color: hsl(var(--border)) !important;
+    background-color: hsl(0 0% 100%) !important;
+    color: hsl(var(--foreground)) !important;
   }
   .app-home .edit-dashboard-popup .border-blue-600.bg-blue-600 {
     border-color: hsl(var(--foreground) / 0.65) !important;
@@ -323,11 +331,14 @@
   }
 
   .app-home .edit-dashboard-screen .text-blue-800,
-  .app-home .edit-dashboard-screen .text-amber-900,
   .app-home .edit-dashboard-screen .text-red-700,
-  .app-home .edit-dashboard-popup .text-amber-900,
   .app-home .edit-dashboard-popup .text-red-700 {
     color: hsl(var(--foreground)) !important;
+  }
+
+  .app-home .edit-dashboard-screen .border-amber-200.bg-amber-50.text-amber-900,
+  .app-home .edit-dashboard-popup .border-amber-200.bg-amber-50.text-amber-900 {
+    color: hsl(var(--primary-foreground)) !important;
   }
 }
 

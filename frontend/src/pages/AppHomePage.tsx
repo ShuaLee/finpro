@@ -230,7 +230,6 @@ export function AppHomePage() {
   const [accountCreateOptions, setAccountCreateOptions] = useState<AccountCreateOptions | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
-  const [tileMenuOpenId, setTileMenuOpenId] = useState<number | null>(null);
   const [holderMenuOpenId, setHolderMenuOpenId] = useState<number | null>(null);
   const [isNewLayoutDialogOpen, setIsNewLayoutDialogOpen] = useState(false);
   const [isAddTileDialogOpen, setIsAddTileDialogOpen] = useState(false);
@@ -338,6 +337,9 @@ export function AppHomePage() {
   const tiles = viewportLayouts[activeViewport].tiles;
   const targetRows = viewportLayouts[activeViewport].targetRows;
   const heldTileIds = viewportHolders[activeViewport];
+  const hasParkedTilesAcrossViewports = (["mobile", "tablet", "desktop"] as EditViewport[]).some(
+    (viewport) => viewportHolders[viewport].length > 0,
+  );
   const setTargetRows = (
     updater: number | ((previous: number) => number),
     viewport: EditViewport = activeViewport,
@@ -1185,7 +1187,6 @@ export function AppHomePage() {
       const target = event.target as HTMLElement | null;
       if (!target) return;
       const inDashboardMenu = Boolean(target.closest("[data-dashboard-menu]"));
-      const inTileMenu = Boolean(target.closest("[data-tile-menu]"));
       const inHolderMenu = Boolean(target.closest("[data-holder-menu]"));
       const inAccountActionsMenu = Boolean(target.closest("[data-account-actions-menu]"));
       const inFavoritesActionsMenu = Boolean(target.closest("[data-favorites-actions-menu]"));
@@ -1195,7 +1196,6 @@ export function AppHomePage() {
 
       if (!inDashboardMenu) setSettingsMenuOpen(false);
       if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
-      if (!inTileMenu) setTileMenuOpenId(null);
       if (!inHolderMenu) setHolderMenuOpenId(null);
 
       if (!inAccountActionsMenu) {
@@ -1514,7 +1514,6 @@ export function AppHomePage() {
     setResizeSession(null);
     setResizePreview(null);
     setResizeVisual(null);
-    setTileMenuOpenId(null);
     setHolderMenuOpenId(null);
     setIsOverHolderDrop(false);
     setIsAddTileDialogOpen(false);
@@ -1809,7 +1808,6 @@ export function AppHomePage() {
         },
       };
     });
-    setTileMenuOpenId(null);
     if (draggingTileId === tileId) {
       setDraggingTileId(null);
       setActiveDropSlot(null);
@@ -3641,10 +3639,10 @@ export function AppHomePage() {
                 <div className={`h-[calc(100vh-7rem)] w-full ${editPreviewWidthClass}`}>
                 <Card className="edit-dashboard-sheet-bg h-full overflow-hidden border-border">
                   <CardContent className="flex h-full flex-col gap-4 overflow-hidden p-5">
-                    <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-auto pr-1">
+                    <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-auto px-1">
                     {useCompactEditToolbar ? (
                     <div className="space-y-3">
-                      <div className="flex justify-center">
+                      <div className={`flex justify-center ${editingViewport === "tablet" ? "mb-4" : ""}`}>
                         <div className="relative grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
                           <div
                             className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
@@ -3674,8 +3672,8 @@ export function AppHomePage() {
                           })}
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-end gap-2">
+                      <div className="space-y-4">
+                        <div className={`${editingViewport === "tablet" ? "mt-10" : "mt-6"} flex items-center justify-end gap-2`}>
                           <span
                             className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
                               hasUnsavedChanges
@@ -3688,21 +3686,19 @@ export function AppHomePage() {
                           <button
                             type="button"
                             onClick={requestExitEditing}
+                            disabled={hasParkedTilesAcrossViewports}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                            title="Save and close"
-                            aria-label="Save and close"
+                            title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                            aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                           >
                             <Check className="h-4 w-4" />
                           </button>
-                        </div>
-                        <div>
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <select
                             value={activeLayoutId}
                             onChange={(event) => requestLayoutSwitch(event.target.value)}
-                            className="min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
+                            className="edit-layout-select min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
                           >
                             {savedLayouts.map((layout) => (
                               <option key={`dashboard-layout-select-mobile-${layout.id}`} value={layout.id}>
@@ -3788,7 +3784,7 @@ export function AppHomePage() {
                     </div>
                     ) : useTabletEditToolbar ? (
                     <div className="space-y-3">
-                      <div className="flex justify-center">
+                      <div className="mb-5 flex justify-center">
                         <div className="relative grid w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
                           <div
                             className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
@@ -3818,14 +3814,13 @@ export function AppHomePage() {
                           })}
                         </div>
                       </div>
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="mt-12 flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
                             <select
                               value={activeLayoutId}
                               onChange={(event) => requestLayoutSwitch(event.target.value)}
-                              className="min-w-0 max-w-[360px] flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
+                              className="edit-layout-select min-w-0 max-w-[360px] flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
                             >
                               {savedLayouts.map((layout) => (
                                 <option key={`dashboard-layout-select-tablet-${layout.id}`} value={layout.id}>
@@ -3921,9 +3916,10 @@ export function AppHomePage() {
                           <button
                             type="button"
                             onClick={requestExitEditing}
+                            disabled={hasParkedTilesAcrossViewports}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                            title="Save and close"
-                            aria-label="Save and close"
+                            title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                            aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                           >
                             <Check className="h-4 w-4" />
                           </button>
@@ -3934,11 +3930,10 @@ export function AppHomePage() {
                     <div className="grid items-center gap-4 px-2 md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
                       <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</span>
                           <select
                             value={activeLayoutId}
                             onChange={(event) => requestLayoutSwitch(event.target.value)}
-                            className="w-full min-w-0 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground sm:w-auto sm:min-w-[220px]"
+                            className="edit-layout-select w-full min-w-0 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground sm:w-auto sm:min-w-[220px]"
                           >
                             {savedLayouts.map((layout) => (
                               <option key={`dashboard-layout-select-${layout.id}`} value={layout.id}>
@@ -4064,9 +4059,10 @@ export function AppHomePage() {
                         <button
                           type="button"
                           onClick={requestExitEditing}
+                          disabled={hasParkedTilesAcrossViewports}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                          title="Save and close"
-                          aria-label="Save and close"
+                          title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                          aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
                         >
                           <Check className="h-4 w-4" />
                         </button>
@@ -4075,161 +4071,156 @@ export function AppHomePage() {
                     )}
                       <div className="edit-dashboard-sheet-bg sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 px-2 pb-2">
                       <div className={activeViewport === "mobile"
-                        ? "space-y-2"
-                        : `space-y-2 lg:grid lg:gap-2 lg:space-y-0 ${activeViewport === "tablet" ? "lg:grid-cols-8" : "lg:grid-cols-6"}`}>
-                      <div className={`edit-drop-slot-surface-solid min-h-24 rounded-2xl border p-3 ${activeViewport === "mobile" ? "" : "lg:order-2"} ${
+                        ? "py-4 space-y-2"
+                        : `py-4 space-y-2 lg:grid lg:gap-4 lg:space-y-0 ${activeViewport === "tablet" ? "lg:grid-cols-8" : "lg:grid-cols-6"}`}>
+                      <div className={`${activeViewport === "mobile" ? "mb-5" : "lg:order-2 lg:ml-1"} ${
                         activeViewport === "tablet" ? "lg:col-span-6" : "lg:col-span-5"
                       }`}>
                         <div
                           ref={holderDropRef}
-                          className={`flex min-h-[4.5rem] items-center justify-center rounded-xl border px-2 transition-colors ${
-                            heldTileIds.length > 0 ? "mb-2" : "mb-0"
+                          className={`relative flex min-h-24 w-full rounded-2xl border px-2 py-2 transition-colors ${
+                            activeViewport === "mobile" ? "" : "lg:h-full"
                           } ${
                             isOverHolderDrop && dragSession?.source === "grid"
                               ? "border-primary/60 bg-primary/10 text-primary"
-                              : "edit-drop-slot-surface"
+                              : "edit-drop-slot-surface-solid"
                           }`}
                         >
-                          <div className="edit-drop-slot-label inline-flex items-center gap-1 text-xs font-medium">
-                            <Plus className="h-3.5 w-3.5" />
-                            <span>Drop to store</span>
-                          </div>
-                        </div>
-                        <div className={`${heldTileIds.length > 0 ? "mb-2" : "mb-0"} mt-3 px-1`}>
-                          <p className="text-xs text-muted-foreground">
-                            Drag tiles here to hide for this display size while keeping for others, or park while reorganizing.
-                          </p>
-                        </div>
-                        {heldTileIds.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {heldTileIds.map((holderTile) => (
-                              <div
-                                key={`holder-tile-${activeViewport}-${holderTile.id}`}
-                                className="relative z-30 rounded-xl border border-blue-100 bg-[#f4f6fa] px-2 py-1.5 text-xs text-slate-700 shadow-sm"
-                                data-holder-menu
-                              >
-                                <button
-                                  type="button"
-                                  onMouseDown={(event) => {
-                                    if (event.button !== 0) return;
-                                    event.preventDefault();
-                                    const viewportColumns = viewportLayouts[activeViewport].targetColumns;
-                                    const cellWidth = gridMetrics?.cellWidth ?? 120;
-                                    const cellHeight = gridMetrics?.cellHeight ?? 132;
-                                    const colGap = gridMetrics?.colGap ?? 12;
-                                    const rowGap = gridMetrics?.rowGap ?? 12;
-                                  const ghostColSpan = clamp(holderTile.returnColSpan ?? holderTile.colSpan, 1, viewportColumns);
-                                  const ghostRowSpan = clamp(holderTile.returnRowSpan ?? holderTile.rowSpan, 1, MAX_ROW_SPAN);
-                                    const ghostWidth = ghostColSpan * cellWidth + (ghostColSpan - 1) * colGap;
-                                    const ghostHeight = ghostRowSpan * cellHeight + (ghostRowSpan - 1) * rowGap;
+                          {heldTileIds.length > 0 ? (
+                            <div className="flex w-full flex-wrap content-start gap-2">
+                              {heldTileIds.map((holderTile) => (
+                                <div
+                                  key={`holder-tile-${activeViewport}-${holderTile.id}`}
+                                  className="relative z-30 rounded-xl border border-blue-100 bg-[#f4f6fa] px-2 py-1.5 text-xs text-slate-700 shadow-sm"
+                                  data-holder-menu
+                                >
+                                  <button
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                      if (event.button !== 0) return;
+                                      event.preventDefault();
+                                      const viewportColumns = viewportLayouts[activeViewport].targetColumns;
+                                      const cellWidth = gridMetrics?.cellWidth ?? 120;
+                                      const cellHeight = gridMetrics?.cellHeight ?? 132;
+                                      const colGap = gridMetrics?.colGap ?? 12;
+                                      const rowGap = gridMetrics?.rowGap ?? 12;
+                                    const ghostColSpan = clamp(holderTile.returnColSpan ?? holderTile.colSpan, 1, viewportColumns);
+                                    const ghostRowSpan = clamp(holderTile.returnRowSpan ?? holderTile.rowSpan, 1, MAX_ROW_SPAN);
+                                      const ghostWidth = ghostColSpan * cellWidth + (ghostColSpan - 1) * colGap;
+                                      const ghostHeight = ghostRowSpan * cellHeight + (ghostRowSpan - 1) * rowGap;
 
-                                    setDraggingTileId(holderTile.id);
-                                    setActiveDropSlot(null);
-                                    setDragSession({
-                                      source: "holder",
-                                      tileId: holderTile.id,
-                                      startX: event.clientX,
-                                      startY: event.clientY,
-                                      pointerOffsetX: Math.min(80, ghostWidth / 2),
-                                      pointerOffsetY: 18,
-                                      ghostWidth,
-                                      ghostHeight,
-                                      ghostColSpan,
-                                      ghostRowSpan,
-                                      anchorCol: 0,
-                                      anchorRow: 0,
-                                    });
-                                    setDragPreview({
-                                      tileId: holderTile.id,
-                                      x: event.clientX - Math.min(80, ghostWidth / 2),
-                                      y: event.clientY - 18,
-                                      width: ghostWidth,
-                                      height: ghostHeight,
-                                    });
-                                  }}
-                                  className="pr-7 text-left"
-                                  title="Drag back into the grid"
-                                >
-                                  <span className="font-medium">Tile {holderTile.id}</span>
-                                  <span className="ml-1 text-[11px] text-muted-foreground">{holderTile.colSpan}x{holderTile.rowSpan}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setHolderMenuOpenId((previous) => (previous === holderTile.id ? null : holderTile.id))}
-                                  className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-blue-50"
-                                  title="Storage options"
-                                  aria-label="Storage options"
-                                >
-                                  <GripVertical className="h-3 w-3" />
-                                </button>
-                                {holderMenuOpenId === holderTile.id ? (
-                                  <div className="absolute left-0 top-full z-[80] mt-1 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
-                                    <div className="px-2 py-1 text-[11px] font-medium text-slate-500">
-                                      Current: {holderTile.returnColSpan ?? holderTile.colSpan}x{holderTile.returnRowSpan ?? holderTile.rowSpan}
+                                      setDraggingTileId(holderTile.id);
+                                      setActiveDropSlot(null);
+                                      setDragSession({
+                                        source: "holder",
+                                        tileId: holderTile.id,
+                                        startX: event.clientX,
+                                        startY: event.clientY,
+                                        pointerOffsetX: Math.min(80, ghostWidth / 2),
+                                        pointerOffsetY: 18,
+                                        ghostWidth,
+                                        ghostHeight,
+                                        ghostColSpan,
+                                        ghostRowSpan,
+                                        anchorCol: 0,
+                                        anchorRow: 0,
+                                      });
+                                      setDragPreview({
+                                        tileId: holderTile.id,
+                                        x: event.clientX - Math.min(80, ghostWidth / 2),
+                                        y: event.clientY - 18,
+                                        width: ghostWidth,
+                                        height: ghostHeight,
+                                      });
+                                    }}
+                                    className="pr-7 text-left"
+                                    title="Drag back into the grid"
+                                  >
+                                    <span className="font-medium">Tile {holderTile.id}</span>
+                                    <span className="ml-1 text-[11px] text-muted-foreground">{holderTile.colSpan}x{holderTile.rowSpan}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setHolderMenuOpenId((previous) => (previous === holderTile.id ? null : holderTile.id))}
+                                    className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-blue-50"
+                                    title="Storage options"
+                                    aria-label="Storage options"
+                                  >
+                                    <Ellipsis className="h-3 w-3" />
+                                  </button>
+                                  {holderMenuOpenId === holderTile.id ? (
+                                    <div className="absolute left-0 top-full z-[80] mt-1 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                      <div className="px-2 py-1 text-[11px] font-medium text-slate-500">
+                                        Current: {holderTile.returnColSpan ?? holderTile.colSpan}x{holderTile.returnRowSpan ?? holderTile.rowSpan}
+                                      </div>
+                                      <div className="my-1 border-t border-border/80" />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setViewportHolders((previous) => ({
+                                            ...previous,
+                                            [activeViewport]: previous[activeViewport].map((item) =>
+                                              item.id === holderTile.id
+                                                ? {
+                                                    ...item,
+                                                    returnColSpan: holderTile.colSpan,
+                                                    returnRowSpan: holderTile.rowSpan,
+                                                  }
+                                                : item,
+                                            ),
+                                          }));
+                                          setHolderMenuOpenId(null);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        Return as original ({holderTile.colSpan}x{holderTile.rowSpan})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setViewportHolders((previous) => ({
+                                            ...previous,
+                                            [activeViewport]: previous[activeViewport].map((item) =>
+                                              item.id === holderTile.id
+                                                ? {
+                                                    ...item,
+                                                    returnColSpan: 1,
+                                                    returnRowSpan: 1,
+                                                  }
+                                                : item,
+                                            ),
+                                          }));
+                                          setHolderMenuOpenId(null);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        Return as 1x1
+                                      </button>
+                                      <div className="my-1 border-t border-border/80" />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          deleteTile(holderTile.id);
+                                          setHolderMenuOpenId(null);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
+                                      >
+                                        Delete tile
+                                      </button>
                                     </div>
-                                    <div className="my-1 border-t border-border/80" />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setViewportHolders((previous) => ({
-                                          ...previous,
-                                          [activeViewport]: previous[activeViewport].map((item) =>
-                                            item.id === holderTile.id
-                                              ? {
-                                                  ...item,
-                                                  returnColSpan: holderTile.colSpan,
-                                                  returnRowSpan: holderTile.rowSpan,
-                                                }
-                                              : item,
-                                          ),
-                                        }));
-                                        setHolderMenuOpenId(null);
-                                      }}
-                                      className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      Return as original ({holderTile.colSpan}x{holderTile.rowSpan})
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setViewportHolders((previous) => ({
-                                          ...previous,
-                                          [activeViewport]: previous[activeViewport].map((item) =>
-                                            item.id === holderTile.id
-                                              ? {
-                                                  ...item,
-                                                  returnColSpan: 1,
-                                                  returnRowSpan: 1,
-                                                }
-                                              : item,
-                                          ),
-                                        }));
-                                        setHolderMenuOpenId(null);
-                                      }}
-                                      className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      Return as 1x1
-                                    </button>
-                                    <div className="my-1 border-t border-border/80" />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        deleteTile(holderTile.id);
-                                        setHolderMenuOpenId(null);
-                                      }}
-                                      className="w-full rounded px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
-                                    >
-                                      Delete tile
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="edit-drop-slot-label m-auto px-2 text-center text-xs italic font-medium">
+                              Drag tiles here to park while reorganizing in this view.
+                            </div>
+                          )}
+                        </div>
                       </div>
                       {activeViewport === "mobile" ? (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="mt-5 grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setIsAddTileDialogOpen(true)}
@@ -4269,7 +4260,7 @@ export function AppHomePage() {
                         </button>
                       </div>
                       ) : null}
-                      <div className={`edit-drop-slot-surface-solid edit-top-controls-tile hidden min-h-24 rounded-2xl border p-2 lg:order-1 lg:block ${
+                      <div className={`edit-drop-slot-surface-solid edit-top-controls-tile hidden min-h-24 rounded-2xl border p-0 lg:order-1 lg:block ${
                         activeViewport === "tablet" ? "lg:col-span-2" : "lg:col-span-1"
                       } ${activeViewport === "mobile" ? "lg:!hidden" : ""}`}>
                         <div className="flex h-full flex-col justify-center gap-3">
@@ -4529,43 +4520,6 @@ export function AppHomePage() {
                                   draggingTileId === tile.id ? "z-40 opacity-30" : "z-10"
                                 }`}
                               >
-                                <div className="absolute left-1/2 top-2 z-30 -translate-x-1/2" data-tile-menu>
-                                  <button
-                                    type="button"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                    }}
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      setTileMenuOpenId((previous) => (previous === tile.id ? null : tile.id));
-                                    }}
-                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/70 bg-white/90 text-slate-700 transition-colors hover:bg-white"
-                                    aria-label={`Open tile ${tile.id} menu`}
-                                  >
-                                    <GripVertical className="h-3.5 w-3.5" />
-                                  </button>
-                                  {tileMenuOpenId === tile.id ? (
-                                    <div className="absolute left-1/2 top-7 z-40 w-28 -translate-x-1/2 rounded-xl border border-border bg-white p-1 shadow-lg">
-                                      <button
-                                        type="button"
-                                        onMouseDown={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                        }}
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          deleteTile(tile.id);
-                                        }}
-                                        className="w-full rounded px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
-                                      >
-                                        Delete tile
-                                      </button>
-                                    </div>
-                                  ) : null}
-                                </div>
                                 <div className="flex h-full flex-col justify-between">
                                   <div className="text-xs font-medium uppercase tracking-wide opacity-80">Tile {tile.id}</div>
                                   <div className="text-[11px] opacity-85">
