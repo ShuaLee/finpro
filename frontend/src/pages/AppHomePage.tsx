@@ -17,7 +17,6 @@ import {
   Settings,
   Smartphone,
   Tablet,
-  Trash2,
   X,
 } from "lucide-react";
 
@@ -320,6 +319,8 @@ export function AppHomePage() {
   const [isDeleteStructureMode, setIsDeleteStructureMode] = useState(false);
   const [selectedDeleteRows, setSelectedDeleteRows] = useState<number[]>([]);
   const [selectedDeleteCols, setSelectedDeleteCols] = useState<number[]>([]);
+  const [hoveredDeleteRow, setHoveredDeleteRow] = useState<number | null>(null);
+  const [hoveredDeleteCol, setHoveredDeleteCol] = useState<number | null>(null);
   const [gridActionError, setGridActionError] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1526,6 +1527,8 @@ export function AppHomePage() {
     setIsDeleteStructureMode(false);
     setSelectedDeleteRows([]);
     setSelectedDeleteCols([]);
+    setHoveredDeleteRow(null);
+    setHoveredDeleteCol(null);
     setGridActionError(null);
   }, [isEditing]);
 
@@ -1556,9 +1559,17 @@ export function AppHomePage() {
   useEffect(() => {
     setSelectedDeleteRows([]);
     setSelectedDeleteCols([]);
+    setHoveredDeleteRow(null);
+    setHoveredDeleteCol(null);
     setGridActionError(null);
     setHolderMenuOpenId(null);
   }, [activeViewport]);
+
+  useEffect(() => {
+    if (isDeleteStructureMode) return;
+    setHoveredDeleteRow(null);
+    setHoveredDeleteCol(null);
+  }, [isDeleteStructureMode]);
 
   useEffect(() => {
     const updateMetrics = () => {
@@ -3644,63 +3655,70 @@ export function AppHomePage() {
                     <div ref={gridScrollRef} className="min-h-0 flex-1 overflow-auto px-1">
                     {useCompactEditToolbar ? (
                     <div className="space-y-3">
-                      <div className={`flex justify-center ${editingViewport === "tablet" ? "mb-4" : ""}`}>
-                        <div className="relative grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
-                          <div
-                            className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
-                            style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
-                          />
-                          {[
-                            { key: "mobile", label: "Mobile", icon: Smartphone },
-                            { key: "tablet", label: "Tablet", icon: Tablet },
-                            { key: "desktop", label: "Desktop", icon: Monitor },
-                          ].map((option) => {
-                            const active = editingViewport === option.key;
-                            const Icon = option.icon;
-                            return (
-                              <button
-                                key={`edit-viewport-mobile-${option.key}`}
-                                type="button"
-                                onClick={() => setEditingViewport(option.key as EditViewport)}
-                                title={option.label}
-                                aria-label={option.label}
-                                className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
-                                  active ? "text-white" : "text-slate-400 hover:text-slate-600"
-                                }`}
-                              >
-                                <Icon className="h-4 w-4" />
-                              </button>
-                            );
-                          })}
+                      {!isManageGridMode ? (
+                        <div className={`flex justify-center ${editingViewport === "tablet" ? "mb-4" : ""}`}>
+                          <div className="relative grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
+                            <div
+                              className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
+                              style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
+                            />
+                            {[
+                              { key: "mobile", label: "Mobile", icon: Smartphone },
+                              { key: "tablet", label: "Tablet", icon: Tablet },
+                              { key: "desktop", label: "Desktop", icon: Monitor },
+                            ].map((option) => {
+                              const active = editingViewport === option.key;
+                              const Icon = option.icon;
+                              return (
+                                <button
+                                  key={`edit-viewport-mobile-${option.key}`}
+                                  type="button"
+                                  onClick={() => setEditingViewport(option.key as EditViewport)}
+                                  title={option.label}
+                                  aria-label={option.label}
+                                  className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
+                                    active ? "text-white" : "text-slate-400 hover:text-slate-600"
+                                  }`}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                       <div className="space-y-4">
-                        <div className={`${editingViewport === "tablet" ? "mt-10" : "mt-6"} flex items-center justify-end gap-2`}>
-                          <span
-                            className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
-                              hasUnsavedChanges
-                                ? "border-amber-200 bg-amber-50 text-amber-900"
-                                : "border-blue-200 bg-blue-50 text-blue-800"
-                            }`}
-                          >
-                            {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={requestExitEditing}
-                            disabled={hasParkedTilesAcrossViewports}
-                            className="edit-save-check-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                            title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                            aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                        </div>
+                        {!isManageGridMode ? (
+                          <div className={`${editingViewport === "tablet" ? "mt-10" : "mt-6"} flex items-center justify-end gap-2`}>
+                            <span
+                              className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                                hasUnsavedChanges
+                                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                                  : "border-blue-200 bg-blue-50 text-blue-800"
+                              }`}
+                            >
+                              {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={requestExitEditing}
+                              disabled={hasParkedTilesAcrossViewports}
+                              className="edit-save-check-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                              title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                              aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : null}
                         <div className="flex items-center gap-2">
                           <select
                             value={activeLayoutId}
                             onChange={(event) => requestLayoutSwitch(event.target.value)}
-                            className="edit-layout-select min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
+                            disabled={isManageGridMode}
+                            className={`edit-layout-select min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground ${
+                              isManageGridMode ? "opacity-55" : ""
+                            }`}
                           >
                             {savedLayouts.map((layout) => (
                               <option key={`dashboard-layout-select-mobile-${layout.id}`} value={layout.id}>
@@ -3708,128 +3726,7 @@ export function AppHomePage() {
                               </option>
                             ))}
                           </select>
-                          <div className="relative" data-dashboard-menu>
-                            <button
-                              type="button"
-                              onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
-                              title="Layout actions"
-                              aria-label="Layout actions"
-                            >
-                              <Ellipsis className="h-4 w-4" />
-                            </button>
-                            {layoutActionsMenuOpen ? (
-                              <div className="absolute right-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setLayoutNameDialogMode("rename");
-                                      setPendingLayoutName(activeLayout?.name ?? defaultLayoutName);
-                                      setLayoutNameError(null);
-                                      setIsNewLayoutDialogOpen(true);
-                                      setLayoutActionsMenuOpen(false);
-                                    }}
-                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                  >
-                                    Rename Current Layout
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (hasUnsavedChanges) {
-                                        setPendingSwitchLayoutId(null);
-                                        setPendingCreateLayout(true);
-                                        setIsSwitchLayoutDialogOpen(true);
-                                      } else {
-                                        setLayoutNameDialogMode("create");
-                                        setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
-                                        setLayoutNameError(null);
-                                        setIsNewLayoutDialogOpen(true);
-                                      }
-                                      setLayoutActionsMenuOpen(false);
-                                    }}
-                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                  >
-                                    Add Layout
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (!activeLayout || activeLayout.isPrimary) return;
-                                      setPrimaryLayout(activeLayout.id);
-                                      setLayoutActionsMenuOpen(false);
-                                    }}
-                                    disabled={!activeLayout || activeLayout.isPrimary}
-                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    Make Active
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (activeLayout?.isPrimary || savedLayouts.length <= 1) return;
-                                      const shouldDelete = window.confirm(`Are you sure you want to delete "${activeLayout?.name ?? "this layout"}"?`);
-                                      if (!shouldDelete) return;
-                                      deleteActiveLayout();
-                                      setLayoutActionsMenuOpen(false);
-                                    }}
-                                    disabled={Boolean(activeLayout?.isPrimary) || savedLayouts.length <= 1}
-                                    className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    Delete
-                                  </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    ) : useTabletEditToolbar ? (
-                    <div className="space-y-3">
-                      <div className="mb-5 flex justify-center">
-                        <div className="relative grid w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
-                          <div
-                            className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
-                            style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
-                          />
-                          {[
-                            { key: "mobile", label: "Mobile", icon: Smartphone },
-                            { key: "tablet", label: "Tablet", icon: Tablet },
-                            { key: "desktop", label: "Desktop", icon: Monitor },
-                          ].map((option) => {
-                            const active = editingViewport === option.key;
-                            const Icon = option.icon;
-                            return (
-                              <button
-                                key={`edit-viewport-tablet-${option.key}`}
-                                type="button"
-                                onClick={() => setEditingViewport(option.key as EditViewport)}
-                                title={option.label}
-                                aria-label={option.label}
-                                className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
-                                  active ? "text-white" : "text-slate-400 hover:text-slate-600"
-                                }`}
-                              >
-                                <Icon className="h-4 w-4" />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="mt-12 flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={activeLayoutId}
-                              onChange={(event) => requestLayoutSwitch(event.target.value)}
-                              className="edit-layout-select min-w-0 max-w-[360px] flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground"
-                            >
-                              {savedLayouts.map((layout) => (
-                                <option key={`dashboard-layout-select-tablet-${layout.id}`} value={layout.id}>
-                                  {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Active)" : ""}
-                                </option>
-                              ))}
-                            </select>
+                          {!isManageGridMode ? (
                             <div className="relative" data-dashboard-menu>
                               <button
                                 type="button"
@@ -3841,7 +3738,7 @@ export function AppHomePage() {
                                 <Ellipsis className="h-4 w-4" />
                               </button>
                               {layoutActionsMenuOpen ? (
-                                <div className="absolute left-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                <div className="absolute right-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -3903,29 +3800,161 @@ export function AppHomePage() {
                                 </div>
                               ) : null}
                             </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    ) : useTabletEditToolbar ? (
+                    <div className="space-y-3">
+                      {!isManageGridMode ? (
+                        <div className="mb-5 flex justify-center">
+                          <div className="relative grid w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1">
+                            <div
+                              className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
+                              style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
+                            />
+                            {[
+                              { key: "mobile", label: "Mobile", icon: Smartphone },
+                              { key: "tablet", label: "Tablet", icon: Tablet },
+                              { key: "desktop", label: "Desktop", icon: Monitor },
+                            ].map((option) => {
+                              const active = editingViewport === option.key;
+                              const Icon = option.icon;
+                              return (
+                                <button
+                                  key={`edit-viewport-tablet-${option.key}`}
+                                  type="button"
+                                  onClick={() => setEditingViewport(option.key as EditViewport)}
+                                  title={option.label}
+                                  aria-label={option.label}
+                                  className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
+                                    active ? "text-white" : "text-slate-400 hover:text-slate-600"
+                                  }`}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
-                              hasUnsavedChanges
-                                ? "border-amber-200 bg-amber-50 text-amber-900"
-                                : "border-blue-200 bg-blue-50 text-blue-800"
-                            }`}
-                          >
-                            {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={requestExitEditing}
-                            disabled={hasParkedTilesAcrossViewports}
-                            className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                            title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                            aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
+                      ) : null}
+                      <div className="mt-12 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={activeLayoutId}
+                              onChange={(event) => requestLayoutSwitch(event.target.value)}
+                              disabled={isManageGridMode}
+                              className={`edit-layout-select min-w-0 max-w-[360px] flex-1 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground ${
+                                isManageGridMode ? "opacity-55" : ""
+                              }`}
+                            >
+                              {savedLayouts.map((layout) => (
+                                <option key={`dashboard-layout-select-tablet-${layout.id}`} value={layout.id}>
+                                  {getDisplayLayoutName(layout.name)}{layout.isPrimary ? " (Active)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                            {!isManageGridMode ? (
+                              <div className="relative" data-dashboard-menu>
+                                <button
+                                  type="button"
+                                  onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                                  title="Layout actions"
+                                  aria-label="Layout actions"
+                                >
+                                  <Ellipsis className="h-4 w-4" />
+                                </button>
+                                {layoutActionsMenuOpen ? (
+                                  <div className="absolute left-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLayoutNameDialogMode("rename");
+                                      setPendingLayoutName(activeLayout?.name ?? defaultLayoutName);
+                                      setLayoutNameError(null);
+                                      setIsNewLayoutDialogOpen(true);
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Rename Current Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (hasUnsavedChanges) {
+                                        setPendingSwitchLayoutId(null);
+                                        setPendingCreateLayout(true);
+                                        setIsSwitchLayoutDialogOpen(true);
+                                      } else {
+                                        setLayoutNameDialogMode("create");
+                                        setPendingLayoutName(`${sectionLabel} Layout ${savedLayouts.length + 1}`);
+                                        setLayoutNameError(null);
+                                        setIsNewLayoutDialogOpen(true);
+                                      }
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Add Layout
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!activeLayout || activeLayout.isPrimary) return;
+                                      setPrimaryLayout(activeLayout.id);
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    disabled={!activeLayout || activeLayout.isPrimary}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Make Active
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (activeLayout?.isPrimary || savedLayouts.length <= 1) return;
+                                      const shouldDelete = window.confirm(`Are you sure you want to delete "${activeLayout?.name ?? "this layout"}"?`);
+                                      if (!shouldDelete) return;
+                                      deleteActiveLayout();
+                                      setLayoutActionsMenuOpen(false);
+                                    }}
+                                    disabled={Boolean(activeLayout?.isPrimary) || savedLayouts.length <= 1}
+                                    className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Delete
+                                  </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
+                        {!isManageGridMode ? (
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                                hasUnsavedChanges
+                                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                                  : "border-blue-200 bg-blue-50 text-blue-800"
+                              }`}
+                            >
+                              {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={requestExitEditing}
+                              disabled={hasParkedTilesAcrossViewports}
+                              className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                              title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                              aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     ) : (
@@ -3935,7 +3964,10 @@ export function AppHomePage() {
                           <select
                             value={activeLayoutId}
                             onChange={(event) => requestLayoutSwitch(event.target.value)}
-                            className="edit-layout-select w-full min-w-0 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground sm:w-auto sm:min-w-[220px]"
+                            disabled={isManageGridMode}
+                            className={`edit-layout-select w-full min-w-0 rounded-xl border border-blue-100 bg-white px-2 py-1.5 text-sm text-foreground sm:w-auto sm:min-w-[220px] ${
+                              isManageGridMode ? "opacity-55" : ""
+                            }`}
                           >
                             {savedLayouts.map((layout) => (
                               <option key={`dashboard-layout-select-${layout.id}`} value={layout.id}>
@@ -3943,18 +3975,19 @@ export function AppHomePage() {
                               </option>
                             ))}
                           </select>
-                          <div className="relative" data-dashboard-menu>
-                            <button
-                              type="button"
-                              onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
-                              title="Layout actions"
-                              aria-label="Layout actions"
-                            >
-                              <Ellipsis className="h-4 w-4" />
-                            </button>
-                            {layoutActionsMenuOpen ? (
-                              <div className="absolute left-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
+                          {!isManageGridMode ? (
+                            <div className="relative" data-dashboard-menu>
+                              <button
+                                type="button"
+                                onClick={() => setLayoutActionsMenuOpen((previous) => !previous)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                                title="Layout actions"
+                                aria-label="Layout actions"
+                              >
+                                <Ellipsis className="h-4 w-4" />
+                              </button>
+                              {layoutActionsMenuOpen ? (
+                                <div className="absolute left-0 z-[140] mt-2 w-52 rounded-xl border border-border bg-white p-1 shadow-lg">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -4013,65 +4046,71 @@ export function AppHomePage() {
                                 >
                                   Delete
                                 </button>
-                              </div>
-                            ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      {!isManageGridMode ? (
+                        <div className="justify-self-center w-full md:w-auto">
+                          <div className="relative mx-auto grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1 md:w-[220px] md:max-w-none">
+                            <div
+                              className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
+                              style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
+                            />
+                            {[
+                              { key: "mobile", label: "Mobile", icon: Smartphone },
+                              { key: "tablet", label: "Tablet", icon: Tablet },
+                              { key: "desktop", label: "Desktop", icon: Monitor },
+                            ].map((option) => {
+                              const active = editingViewport === option.key;
+                              const Icon = option.icon;
+                              return (
+                                <button
+                                  key={`edit-viewport-${option.key}`}
+                                  type="button"
+                                  onClick={() => setEditingViewport(option.key as EditViewport)}
+                                  title={option.label}
+                                  aria-label={option.label}
+                                  className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
+                                    active ? "text-white" : "text-slate-400 hover:text-slate-600"
+                                  }`}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                      </div>
-                      <div className="justify-self-center w-full md:w-auto">
-                        <div className="relative mx-auto grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1 md:w-[220px] md:max-w-none">
-                          <div
-                            className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
-                            style={{ transform: `translateX(${editViewportIndex * 100}%)` }}
-                          />
-                          {[
-                            { key: "mobile", label: "Mobile", icon: Smartphone },
-                            { key: "tablet", label: "Tablet", icon: Tablet },
-                            { key: "desktop", label: "Desktop", icon: Monitor },
-                          ].map((option) => {
-                            const active = editingViewport === option.key;
-                            const Icon = option.icon;
-                            return (
-                              <button
-                                key={`edit-viewport-${option.key}`}
-                                type="button"
-                                onClick={() => setEditingViewport(option.key as EditViewport)}
-                                title={option.label}
-                                aria-label={option.label}
-                                className={`relative z-10 inline-flex h-9 items-center justify-center rounded-md transition-colors ${
-                                  active ? "text-white" : "text-slate-400 hover:text-slate-600"
-                                }`}
-                              >
-                                <Icon className="h-4 w-4" />
-                              </button>
-                            );
-                          })}
+                      ) : null}
+                      {!isManageGridMode ? (
+                        <div className="flex items-center justify-end gap-3 md:col-span-2 lg:col-span-1">
+                          <span
+                            className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                              hasUnsavedChanges
+                                ? "border-amber-200 bg-amber-50 text-amber-900"
+                                : "border-blue-200 bg-blue-50 text-blue-800"
+                            }`}
+                          >
+                            {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={requestExitEditing}
+                            disabled={hasParkedTilesAcrossViewports}
+                            className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
+                            title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                            aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-end gap-3 md:col-span-2 lg:col-span-1">
-                        <span
-                          className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
-                            hasUnsavedChanges
-                              ? "border-amber-200 bg-amber-50 text-amber-900"
-                              : "border-blue-200 bg-blue-50 text-blue-800"
-                          }`}
-                        >
-                          {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={requestExitEditing}
-                          disabled={hasParkedTilesAcrossViewports}
-                          className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                          title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                          aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                      </div>
+                      ) : null}
                     </div>
                     )}
                       <div className="edit-dashboard-sheet-bg sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 px-2 pb-2">
+                      {!isManageGridMode ? (
                       <div className={activeViewport === "mobile"
                         ? "py-4 space-y-2"
                         : `py-4 space-y-2 lg:grid lg:gap-4 lg:space-y-0 ${activeViewport === "tablet" ? "lg:grid-cols-8" : "lg:grid-cols-6"}`}>
@@ -4306,8 +4345,9 @@ export function AppHomePage() {
                         </div>
                       </div>
                       </div>
+                      ) : null}
                       {isManageGridMode ? (
-                        <div className="mt-1 flex flex-wrap items-center justify-center gap-2 px-2 pb-1">
+                        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 px-2 pb-1">
                           <button
                             type="button"
                             onClick={() => {
@@ -4387,23 +4427,31 @@ export function AppHomePage() {
                                 <button
                                   key={`edit-col-del-${colIndex}`}
                                   type="button"
+                                  disabled={!deletable}
+                                  onMouseEnter={() => {
+                                    if (!deletable) return;
+                                    setHoveredDeleteCol(colIndex);
+                                  }}
+                                  onMouseLeave={() => setHoveredDeleteCol((previous) => (previous === colIndex ? null : previous))}
                                   onClick={() => {
+                                    if (!deletable) return;
                                     setSelectedDeleteCols((previous) =>
                                       previous.includes(colIndex)
                                         ? previous.filter((item) => item !== colIndex)
                                         : [...previous, colIndex],
                                     );
                                   }}
-                                  className="absolute inline-flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-md border-2 text-[10px] font-bold"
-                                  style={{
-                                    left: `${colCenter}px`,
-                                    borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
-                                    backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
-                                    color: deletable ? "#b91c1c" : "#475569",
-                                  }}
+                                  className={`absolute inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center rounded-md border text-[10px] font-semibold transition-colors ${
+                                    selected
+                                      ? "border-red-400 bg-red-100 text-red-700"
+                                      : deletable
+                                        ? "border-border bg-white text-foreground hover:border-red-300 hover:text-red-700"
+                                        : "border-transparent bg-transparent text-muted-foreground/40"
+                                  } ${!deletable ? "cursor-not-allowed" : ""}`}
+                                  style={{ left: `${colCenter}px` }}
                                   title={deletable ? "Select column to delete" : "Column currently occupied"}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Del
                                 </button>
                               );
                             })}
@@ -4419,7 +4467,12 @@ export function AppHomePage() {
                             const slotPos = getGridPosition(slot, columns);
                             const selectedForDelete =
                               isDeleteStructureMode
-                              && (selectedDeleteRows.includes(slotPos.row) || selectedDeleteCols.includes(slotPos.col));
+                              && (
+                                selectedDeleteRows.includes(slotPos.row)
+                                || selectedDeleteCols.includes(slotPos.col)
+                                || hoveredDeleteRow === slotPos.row
+                                || hoveredDeleteCol === slotPos.col
+                              );
                             return (
                             <div
                               key={`edit-slot-${slot}`}
@@ -4455,8 +4508,12 @@ export function AppHomePage() {
                           const pos = getGridPosition(liveSlot, columns);
                           const deleteHighlight =
                             isDeleteStructureMode
-                            && (selectedDeleteRows.some((row) => row >= pos.row && row < pos.row + liveRowSpan)
-                              || selectedDeleteCols.some((col) => col >= pos.col && col < pos.col + liveColSpan));
+                            && (
+                              selectedDeleteRows.some((row) => row >= pos.row && row < pos.row + liveRowSpan)
+                              || selectedDeleteCols.some((col) => col >= pos.col && col < pos.col + liveColSpan)
+                              || (hoveredDeleteRow !== null && hoveredDeleteRow >= pos.row && hoveredDeleteRow < pos.row + liveRowSpan)
+                              || (hoveredDeleteCol !== null && hoveredDeleteCol >= pos.col && hoveredDeleteCol < pos.col + liveColSpan)
+                            );
                             const left = pos.col * (gridMetrics?.cellWidth ?? 0) + pos.col * (gridMetrics?.colGap ?? 0);
                             const top = pos.row * (gridMetrics?.cellHeight ?? 0) + pos.row * (gridMetrics?.rowGap ?? 0);
                             const snappedWidth =
@@ -4588,21 +4645,29 @@ export function AppHomePage() {
                             <button
                               key={`edit-del-row-${rowIndex}`}
                               type="button"
+                              disabled={!deletable}
+                              onMouseEnter={() => {
+                                if (!deletable) return;
+                                setHoveredDeleteRow(rowIndex);
+                              }}
+                              onMouseLeave={() => setHoveredDeleteRow((previous) => (previous === rowIndex ? null : previous))}
                               onClick={() => {
+                                if (!deletable) return;
                                 setSelectedDeleteRows((previous) =>
                                   previous.includes(rowIndex) ? previous.filter((item) => item !== rowIndex) : [...previous, rowIndex],
                                 );
                               }}
-                              className="absolute left-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-2 text-[10px] font-bold hover:opacity-90"
-                              style={{
-                                top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px`,
-                                borderColor: selected ? "#b91c1c" : deletable ? "#ef4444" : "#94a3b8",
-                                backgroundColor: selected ? "#fecaca" : deletable ? "#fee2e2" : "#e2e8f0",
-                                color: deletable ? "#b91c1c" : "#475569",
-                              }}
+                              className={`absolute left-0 inline-flex h-6 w-8 items-center justify-center rounded-md border text-[10px] font-semibold transition-colors ${
+                                selected
+                                  ? "border-red-400 bg-red-100 text-red-700"
+                                  : deletable
+                                    ? "border-border bg-white text-foreground hover:border-red-300 hover:text-red-700"
+                                    : "border-transparent bg-transparent text-muted-foreground/40"
+                              } ${!deletable ? "cursor-not-allowed" : ""}`}
+                              style={{ top: `${top + ((gridMetrics?.cellHeight ?? 132) / 2) - 12}px` }}
                               title={deletable ? "Select row to delete" : "Only trailing empty rows can be deleted"}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              Del
                             </button>
                           );
                         })}
