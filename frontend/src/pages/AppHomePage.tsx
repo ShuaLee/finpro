@@ -9,6 +9,7 @@ import {
   Ellipsis,
   Eye,
   EyeOff,
+  Grid2x2,
   GripVertical,
   Monitor,
   MoveDiagonal2,
@@ -235,6 +236,7 @@ export function AppHomePage() {
   const [isAddTileDialogOpen, setIsAddTileDialogOpen] = useState(false);
   const [layoutNameDialogMode, setLayoutNameDialogMode] = useState<"create" | "rename">("create");
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
+  const [isGridOptionsMenuOpen, setIsGridOptionsMenuOpen] = useState(false);
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
   const [favoritesCollapsed, setFavoritesCollapsed] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
@@ -294,7 +296,8 @@ export function AppHomePage() {
   const [isSwitchLayoutDialogOpen, setIsSwitchLayoutDialogOpen] = useState(false);
   const [pendingSwitchLayoutId, setPendingSwitchLayoutId] = useState<string | null>(null);
   const [pendingCreateLayout, setPendingCreateLayout] = useState(false);
-  const [isExitEditDialogOpen, setIsExitEditDialogOpen] = useState(false);
+  const [isExitActionsMenuOpen, setIsExitActionsMenuOpen] = useState(false);
+  const [isExitBlockedDialogOpen, setIsExitBlockedDialogOpen] = useState(false);
   const [isSetActiveDialogOpen, setIsSetActiveDialogOpen] = useState(false);
   const [pendingSetActiveLayoutId, setPendingSetActiveLayoutId] = useState<string | null>(null);
   const [viewportLayouts, setViewportLayouts] = useState<ViewportLayouts>(() => createDefaultViewportLayouts());
@@ -321,7 +324,6 @@ export function AppHomePage() {
   const [selectedDeleteCols, setSelectedDeleteCols] = useState<number[]>([]);
   const [hoveredDeleteRow, setHoveredDeleteRow] = useState<number | null>(null);
   const [hoveredDeleteCol, setHoveredDeleteCol] = useState<number | null>(null);
-  const [gridActionError, setGridActionError] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -672,28 +674,33 @@ export function AppHomePage() {
   };
 
   const requestExitEditing = () => {
-    if (hasUnsavedChanges) {
-      setIsExitEditDialogOpen(true);
+    if (hasParkedTilesAcrossViewports) {
+      setIsExitBlockedDialogOpen(true);
+      setIsExitActionsMenuOpen(false);
       return;
     }
-    if (activeLayout && !activeLayout.isPrimary) {
-      setPendingSetActiveLayoutId(activeLayout.id);
-      setIsSetActiveDialogOpen(true);
+    if (!hasUnsavedChanges) {
+      if (activeLayout && !activeLayout.isPrimary) {
+        setPendingSetActiveLayoutId(activeLayout.id);
+        setIsSetActiveDialogOpen(true);
+        return;
+      }
+      setIsEditing(false);
       return;
     }
-    setIsEditing(false);
-  };
-
-
-  const cancelExitEditDialog = () => {
-    setIsExitEditDialogOpen(false);
+    setIsExitActionsMenuOpen((previous) => !previous);
   };
 
   const confirmExitEditSave = () => {
+    if (hasParkedTilesAcrossViewports) {
+      setIsExitBlockedDialogOpen(true);
+      setIsExitActionsMenuOpen(false);
+      return;
+    }
     const layout = savedLayouts.find((item) => item.id === activeLayoutId);
     const wasActive = Boolean(layout?.isPrimary);
     saveCurrentLayout(activeLayoutId, layout?.name ?? defaultLayoutName, false);
-    setIsExitEditDialogOpen(false);
+    setIsExitActionsMenuOpen(false);
     if (!wasActive) {
       setPendingSetActiveLayoutId(activeLayoutId);
       setIsSetActiveDialogOpen(true);
@@ -706,17 +713,22 @@ export function AppHomePage() {
   };
 
   const confirmExitEditDiscard = () => {
+    if (hasParkedTilesAcrossViewports) {
+      setIsExitBlockedDialogOpen(true);
+      setIsExitActionsMenuOpen(false);
+      return;
+    }
     if (activeLayout) {
       applyLayout(activeLayout);
     }
     if (activeLayout && !activeLayout.isPrimary) {
       setPendingSetActiveLayoutId(activeLayout.id);
       setIsSetActiveDialogOpen(true);
-      setIsExitEditDialogOpen(false);
+      setIsExitActionsMenuOpen(false);
       return;
     }
     setIsEditing(false);
-    setIsExitEditDialogOpen(false);
+    setIsExitActionsMenuOpen(false);
   };
 
   const confirmMakeLayoutActive = () => {
@@ -1196,6 +1208,8 @@ export function AppHomePage() {
       const inAssetsActionsMenu = Boolean(target.closest("[data-assets-actions-menu]"));
       const inCustomActionsMenu = Boolean(target.closest("[data-custom-actions-menu]"));
       const inDashboardTilesMenu = Boolean(target.closest("[data-dashboard-tiles-menu]"));
+      const inGridAddMenu = Boolean(target.closest("[data-grid-add-menu]"));
+      const inExitActionsMenu = Boolean(target.closest("[data-exit-actions-menu]"));
 
       if (!inDashboardMenu) setSettingsMenuOpen(false);
       if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
@@ -1222,6 +1236,8 @@ export function AppHomePage() {
         setDashboardTilesConfirmOpen(false);
         setDashboardTilesCancelOpen(false);
       }
+      if (!inGridAddMenu) setIsGridOptionsMenuOpen(false);
+      if (!inExitActionsMenu) setIsExitActionsMenuOpen(false);
     };
 
     window.addEventListener("mousedown", onDocClick);
@@ -1522,6 +1538,9 @@ export function AppHomePage() {
     setIsAddTileDialogOpen(false);
     setIsNewLayoutDialogOpen(false);
     setIsSwitchLayoutDialogOpen(false);
+    setIsExitActionsMenuOpen(false);
+    setIsExitBlockedDialogOpen(false);
+    setIsGridOptionsMenuOpen(false);
     setPendingSwitchLayoutId(null);
     setIsManageGridMode(false);
     setIsDeleteStructureMode(false);
@@ -1529,7 +1548,7 @@ export function AppHomePage() {
     setSelectedDeleteCols([]);
     setHoveredDeleteRow(null);
     setHoveredDeleteCol(null);
-    setGridActionError(null);
+    
   }, [isEditing]);
 
   useEffect(() => {
@@ -1561,8 +1580,9 @@ export function AppHomePage() {
     setSelectedDeleteCols([]);
     setHoveredDeleteRow(null);
     setHoveredDeleteCol(null);
-    setGridActionError(null);
+    
     setHolderMenuOpenId(null);
+    setIsGridOptionsMenuOpen(false);
   }, [activeViewport]);
 
   useEffect(() => {
@@ -1644,6 +1664,10 @@ export function AppHomePage() {
   };
 
   const addColumn = () => {
+    addColumnAtSide("right");
+  };
+
+  const addColumnAtSide = (side: "left" | "right") => {
     setViewportLayouts((previous) => {
       const current = previous[activeViewport];
       const currentColumns = current.targetColumns;
@@ -1652,9 +1676,10 @@ export function AppHomePage() {
       const nextColumns = currentColumns + 1;
       const nextTiles = current.tiles.map((tile) => {
         const pos = getGridPosition(tile.slot, currentColumns);
+        const nextCol = side === "left" ? pos.col + 1 : pos.col;
         return {
           ...tile,
-          slot: pos.row * nextColumns + pos.col,
+          slot: pos.row * nextColumns + nextCol,
           colSpan: clamp(tile.colSpan, 1, nextColumns),
         };
       });
@@ -1665,6 +1690,37 @@ export function AppHomePage() {
           targetColumns: nextColumns,
           tiles: nextTiles,
           targetRows: Math.max(current.targetRows, getRequiredRows(nextTiles, nextColumns), VIEWPORT_BASE_ROWS[activeViewport]),
+        },
+      };
+    });
+  };
+
+  const addRowAtSide = (side: "top" | "bottom") => {
+    setViewportLayouts((previous) => {
+      const current = previous[activeViewport];
+      if (current.targetRows >= MAX_ROWS) return previous;
+      const columnsForViewport = current.targetColumns;
+      const nextRows = Math.min(MAX_ROWS, current.targetRows + 1);
+      const nextTiles =
+        side === "top"
+          ? current.tiles.map((tile) => {
+              const pos = getGridPosition(tile.slot, columnsForViewport);
+              return {
+                ...tile,
+                slot: (pos.row + 1) * columnsForViewport + pos.col,
+              };
+            })
+          : current.tiles.map((tile) => ({ ...tile }));
+      return {
+        ...previous,
+        [activeViewport]: {
+          ...current,
+          tiles: nextTiles,
+          targetRows: Math.max(
+            nextRows,
+            getRequiredRows(nextTiles, columnsForViewport),
+            VIEWPORT_BASE_ROWS[activeViewport],
+          ),
         },
       };
     });
@@ -1711,7 +1767,7 @@ export function AppHomePage() {
     });
     setSelectedDeleteRows([]);
     setSelectedDeleteCols([]);
-    setIsDeleteStructureMode(isManageGridMode);
+    setIsDeleteStructureMode(true);
   };
 
   const moveTileToHolder = (tileId: number) => {
@@ -2103,6 +2159,7 @@ export function AppHomePage() {
   );
 
   const canAddRow = totalRows < MAX_ROWS;
+  const canAddColumn = columns < VIEWPORT_MAX_COLUMNS[activeViewport];
   const deletableRows = Array.from({ length: totalRows }, (_, rowIndex) => rowIndex).filter(
     (rowIndex) => !isRowOccupied(tiles, columns, rowIndex),
   );
@@ -2123,13 +2180,23 @@ export function AppHomePage() {
   }, [deletableColumns, deletableRows]);
   const editViewportIndex = editingViewport === "mobile" ? 0 : editingViewport === "tablet" ? 1 : 2;
   const editPreviewWidthClass =
-    editingViewport === "mobile"
+    windowWidth < 860
       ? "max-w-[420px]"
-      : editingViewport === "tablet"
+      : windowWidth < 1200
         ? "max-w-[900px]"
         : "max-w-[1320px]";
-  const useCompactEditToolbar = windowWidth < 860 || editingViewport === "mobile";
-  const useTabletEditToolbar = !useCompactEditToolbar && editingViewport === "tablet";
+  const editGridViewportWidthClass =
+    activeViewport === "mobile"
+      ? "max-w-[420px]"
+      : activeViewport === "tablet"
+        ? "max-w-[900px]"
+        : "max-w-none";
+  const useCompactEditToolbar = windowWidth < 860;
+  const useTabletEditToolbar = !useCompactEditToolbar && windowWidth < 1200;
+  const gridControlRailWidthClass =
+    activeViewport === "desktop" ? "w-16" : activeViewport === "tablet" ? "w-14" : "w-12";
+  const gridControlLeftSpacerDesktopClass =
+    activeViewport === "desktop" ? "lg:w-16" : activeViewport === "tablet" ? "lg:w-14" : "lg:w-12";
   const navSectionsBelowAddAssets = sectionOrderForView.filter((section) => section !== "addAssets");
   const accountsSectionIndex = navSectionsBelowAddAssets.indexOf("accounts");
   const isNavDragging = (kind: NavDragKind, key: string) =>
@@ -3710,16 +3777,35 @@ export function AppHomePage() {
                             >
                               {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
                             </span>
-                            <button
-                              type="button"
-                              onClick={requestExitEditing}
-                              disabled={hasParkedTilesAcrossViewports}
-                              className="edit-save-check-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                              title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                              aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
+                            <div className="relative flex items-center gap-1" data-exit-actions-menu>
+                              <button
+                                type="button"
+                                onClick={requestExitEditing}
+                                className="edit-save-check-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                                title="Save and close"
+                                aria-label="Save and close"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              {isExitActionsMenuOpen ? (
+                                <div className="absolute right-0 top-full z-[140] mt-2 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={confirmExitEditSave}
+                                    className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Save & Exit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={confirmExitEditDiscard}
+                                    className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Discard & Exit
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         ) : null}
                         <div className="flex flex-wrap items-center gap-2">
@@ -3818,10 +3904,10 @@ export function AppHomePage() {
                                 type="button"
                                 onClick={() => {
                                   if (columns >= VIEWPORT_MAX_COLUMNS[activeViewport]) {
-                                    setGridActionError("maximum columns reached for this display size.");
+                                    
                                   } else {
                                     addColumn();
-                                    setGridActionError(null);
+                                    
                                   }
                                 }}
                                 className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80"
@@ -3837,7 +3923,7 @@ export function AppHomePage() {
                                   if (canAddRow) {
                                     setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
                                   }
-                                  setGridActionError(null);
+                                  
                                 }}
                                 disabled={!canAddRow}
                                 className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50"
@@ -3872,7 +3958,7 @@ export function AppHomePage() {
                                   setSelectedDeleteCols([]);
                                   setHoveredDeleteRow(null);
                                   setHoveredDeleteCol(null);
-                                  setGridActionError(null);
+                                  
                                 }}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-foreground hover:text-background"
                                 title="Exit grid manage mode"
@@ -4017,10 +4103,10 @@ export function AppHomePage() {
                                   type="button"
                                   onClick={() => {
                                     if (columns >= VIEWPORT_MAX_COLUMNS[activeViewport]) {
-                                      setGridActionError("maximum columns reached for this display size.");
+                                      
                                     } else {
                                       addColumn();
-                                      setGridActionError(null);
+                                      
                                     }
                                   }}
                                   className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80"
@@ -4036,7 +4122,7 @@ export function AppHomePage() {
                                     if (canAddRow) {
                                       setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
                                     }
-                                    setGridActionError(null);
+                                    
                                   }}
                                   disabled={!canAddRow}
                                   className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50"
@@ -4071,7 +4157,7 @@ export function AppHomePage() {
                                     setSelectedDeleteCols([]);
                                     setHoveredDeleteRow(null);
                                     setHoveredDeleteCol(null);
-                                    setGridActionError(null);
+                                    
                                   }}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-foreground hover:text-background"
                                   title="Exit grid manage mode"
@@ -4094,27 +4180,42 @@ export function AppHomePage() {
                             >
                               {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
                             </span>
-                            <button
-                              type="button"
-                              onClick={requestExitEditing}
-                              disabled={hasParkedTilesAcrossViewports}
-                              className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                              title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                              aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
+                            <div className="relative flex items-center gap-1" data-exit-actions-menu>
+                              <button
+                                type="button"
+                                onClick={requestExitEditing}
+                                className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                                title="Save and close"
+                                aria-label="Save and close"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              {isExitActionsMenuOpen ? (
+                                <div className="absolute right-0 top-full z-[140] mt-2 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={confirmExitEditSave}
+                                    className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Save & Exit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={confirmExitEditDiscard}
+                                    className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                  >
+                                    Discard & Exit
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         ) : null}
                       </div>
                     </div>
                     ) : (
-                    <div className={`grid items-center gap-4 px-2 ${
-                      isManageGridMode
-                        ? "grid-cols-[minmax(0,1fr)_auto]"
-                        : "md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
-                    }`}>
-                      <div className="flex flex-col gap-1">
+                    <div className="grid items-center gap-4 px-2 lg:grid-cols-6">
+                      <div className="flex flex-col gap-1 lg:col-span-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <select
                             value={activeLayoutId}
@@ -4211,10 +4312,10 @@ export function AppHomePage() {
                                 type="button"
                                 onClick={() => {
                                   if (columns >= VIEWPORT_MAX_COLUMNS[activeViewport]) {
-                                    setGridActionError("maximum columns reached for this display size.");
+                                    
                                   } else {
                                     addColumn();
-                                    setGridActionError(null);
+                                    
                                   }
                                 }}
                                 className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80"
@@ -4230,7 +4331,7 @@ export function AppHomePage() {
                                   if (canAddRow) {
                                     setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
                                   }
-                                  setGridActionError(null);
+                                  
                                 }}
                                 disabled={!canAddRow}
                                 className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50"
@@ -4265,7 +4366,7 @@ export function AppHomePage() {
                                   setSelectedDeleteCols([]);
                                   setHoveredDeleteRow(null);
                                   setHoveredDeleteCol(null);
-                                  setGridActionError(null);
+                                  
                                 }}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-foreground hover:text-background"
                                 title="Exit grid manage mode"
@@ -4278,7 +4379,7 @@ export function AppHomePage() {
                         </div>
                       </div>
                       {!isManageGridMode ? (
-                        <div className="justify-self-center w-full md:w-auto">
+                        <div className="justify-self-center w-full md:w-auto lg:col-span-3">
                           <div className="relative mx-auto grid w-full max-w-[260px] grid-cols-3 rounded-lg border border-blue-100 bg-white p-1 md:w-[220px] md:max-w-none">
                             <div
                               className="absolute bottom-1 left-1 top-1 z-0 w-[calc((100%-0.5rem)/3)] rounded-md bg-blue-600 transition-transform duration-200"
@@ -4310,7 +4411,7 @@ export function AppHomePage() {
                         </div>
                       ) : null}
                       {!isManageGridMode ? (
-                        <div className="flex items-center justify-end gap-3 md:col-span-2 lg:col-span-1">
+                        <div className="flex items-center justify-end gap-3 lg:col-span-1">
                           <span
                             className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
                               hasUnsavedChanges
@@ -4320,16 +4421,35 @@ export function AppHomePage() {
                           >
                             {hasUnsavedChanges ? "Unsaved Changes" : "No Changes"}
                           </span>
-                          <button
-                            type="button"
-                            onClick={requestExitEditing}
-                            disabled={hasParkedTilesAcrossViewports}
-                            className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-55"
-                            title={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                            aria-label={hasParkedTilesAcrossViewports ? "Remove all parked tiles from storage before saving" : "Save and close"}
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
+                          <div className="relative flex items-center gap-1" data-exit-actions-menu>
+                            <button
+                              type="button"
+                              onClick={requestExitEditing}
+                              className="edit-save-check-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-foreground transition-colors hover:bg-secondary/80"
+                              title="Save and close"
+                              aria-label="Save and close"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            {isExitActionsMenuOpen ? (
+                              <div className="absolute right-0 top-full z-[140] mt-2 w-44 rounded-xl border border-border bg-white p-1 shadow-lg">
+                                <button
+                                  type="button"
+                                  onClick={confirmExitEditSave}
+                                  className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                >
+                                  Save & Exit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={confirmExitEditDiscard}
+                                  className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                >
+                                  Discard & Exit
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -4337,17 +4457,11 @@ export function AppHomePage() {
                     </div>
                       <div className="edit-dashboard-sheet-bg sticky top-0 z-[90] isolate mb-2 mt-3 space-y-2 px-2 pb-2">
                       {!isManageGridMode ? (
-                      <div className={activeViewport === "mobile"
-                        ? "py-4 space-y-2"
-                        : `py-4 space-y-2 lg:grid lg:gap-4 lg:space-y-0 ${activeViewport === "tablet" ? "lg:grid-cols-8" : "lg:grid-cols-6"}`}>
-                      <div className={`${activeViewport === "mobile" ? "mb-5" : "lg:order-1"} ${
-                        activeViewport === "tablet" ? "lg:col-span-6" : "lg:col-span-5"
-                      }`}>
+                      <div className="py-4 space-y-2 lg:flex lg:items-stretch lg:gap-3 lg:space-y-0">
+                      <div className="mb-5 lg:mb-0 lg:flex-1">
                         <div
                           ref={holderDropRef}
-                          className={`relative flex min-h-24 w-full rounded-2xl border px-2 py-2 transition-colors ${
-                            activeViewport === "mobile" ? "" : "lg:h-full"
-                          } ${
+                          className={`relative flex min-h-24 w-full rounded-2xl border px-2 py-2 transition-colors lg:h-24 ${
                             isOverHolderDrop && dragSession?.source === "grid"
                               ? "border-primary/60 bg-primary/10 text-primary"
                               : "edit-drop-slot-surface-solid"
@@ -4486,64 +4600,88 @@ export function AppHomePage() {
                           )}
                         </div>
                       </div>
-                      <div className={`mt-3 flex flex-wrap items-center justify-center gap-2 ${
-                        activeViewport === "mobile"
-                          ? ""
-                          : `lg:order-2 lg:mt-0 lg:flex-col lg:items-stretch lg:justify-start ${
-                              activeViewport === "tablet" ? "lg:col-span-2" : "lg:col-span-1"
-                            }`
-                      }`}>
+                      <div className="mt-3 flex flex-wrap items-center justify-center gap-2 lg:mt-0 lg:grid lg:w-[280px] lg:grid-cols-2 lg:gap-3 lg:items-stretch">
                         <button
                           type="button"
                           onClick={() => setIsAddTileDialogOpen(true)}
-                          className="edit-add-tile-trigger inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-semibold transition-colors lg:w-full"
+                          className="edit-add-tile-trigger inline-flex h-16 items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-semibold transition-colors lg:h-24 lg:w-full"
                           title="Add Tile"
                           aria-label="Add Tile"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           <span>Add Tile</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (columns >= VIEWPORT_MAX_COLUMNS[activeViewport]) {
-                              setGridActionError("maximum columns reached for this display size.");
-                            } else {
-                              addColumn();
-                              setGridActionError(null);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80 lg:w-full lg:justify-center"
-                          title="Add Column"
-                          aria-label="Add Column"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>Add Column</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (canAddRow) {
-                              setTargetRows((previous) => Math.min(MAX_ROWS, previous + 1));
-                            }
-                            setGridActionError(null);
-                          }}
-                          disabled={!canAddRow}
-                          className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:cursor-not-allowed disabled:opacity-50 lg:w-full lg:justify-center"
-                          title="Add Row"
-                          aria-label="Add Row"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>Add Row</span>
-                        </button>
+                        <div className="relative lg:h-full lg:w-full" data-grid-add-menu>
+                          <button
+                            type="button"
+                            onClick={() => setIsGridOptionsMenuOpen((previous) => !previous)}
+                            className="inline-flex h-16 w-full items-center justify-center gap-1 rounded-xl border border-border bg-white px-2 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80 lg:h-24"
+                            title="Grid options"
+                            aria-label="Grid options"
+                          >
+                            <Grid2x2 className="h-3.5 w-3.5" />
+                            <span>Grid Options</span>
+                          </button>
+                          {isGridOptionsMenuOpen ? (
+                            <div className="absolute right-0 z-30 mt-1 w-44 rounded-xl border border-border bg-white p-1 shadow-lg dark:bg-popover">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!canAddColumn) return;
+                                  addColumnAtSide("left");
+                                  setIsGridOptionsMenuOpen(false);
+                                }}
+                                disabled={!canAddColumn}
+                                className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Add Column (Left)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!canAddColumn) return;
+                                  addColumnAtSide("right");
+                                  setIsGridOptionsMenuOpen(false);
+                                }}
+                                disabled={!canAddColumn}
+                                className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Add Column (Right)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!canAddRow) return;
+                                  addRowAtSide("top");
+                                  setIsGridOptionsMenuOpen(false);
+                                }}
+                                disabled={!canAddRow}
+                                className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Add Row (Top)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!canAddRow) return;
+                                  addRowAtSide("bottom");
+                                  setIsGridOptionsMenuOpen(false);
+                                }}
+                                disabled={!canAddRow}
+                                className="w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Add Row (Bottom)
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                       </div>
                       ) : null}
-                      {gridActionError ? (
-                        <p className="text-center text-xs text-red-700">{gridActionError}</p>
-                      ) : null}
                       </div>
+                      <div className={`mx-auto w-full ${editGridViewportWidthClass}`}>
                       <div className={`flex items-start px-2 pb-2 pt-0 ${isDeleteStructureMode ? "gap-2" : "gap-0"}`}>
+                      <div className={`relative ${isDeleteStructureMode ? `hidden lg:block ${gridControlLeftSpacerDesktopClass}` : "w-0"}`} aria-hidden />
                       <div className="flex-1">
                         {isDeleteStructureMode ? (
                           <div className="relative mb-2 h-7">
@@ -4575,20 +4713,20 @@ export function AppHomePage() {
                                         }
                                         setSelectedDeleteCols([colIndex]);
                                       }}
-                                      className={`inline-flex items-center justify-center border font-semibold transition-colors ${
+                                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full border font-semibold transition-colors ${
                                         selected
-                                          ? "h-7 w-7 rounded-full border-border bg-white px-0 text-foreground hover:border-foreground/50"
-                                          : "h-7 min-w-14 rounded-full px-2 text-[10px]"
+                                          ? "border-border bg-white text-foreground hover:border-foreground/50"
+                                          : ""
                                       } ${
                                         !selected && deletable
                                           ? "border-border bg-white text-foreground hover:border-foreground/50 hover:text-foreground"
                                           : !selected
                                             ? "border-transparent bg-transparent text-muted-foreground/40"
                                             : ""
-                                      } ${!deletable ? "cursor-not-allowed" : ""}`}
+                                      }`}
                                       title={deletable ? (selected ? "Cancel column delete selection" : "Mark column for delete") : "Column currently occupied"}
                                     >
-                                      {selected ? <X className="h-3.5 w-3.5" /> : "Delete"}
+                                      {selected ? <X className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                                     </button>
                                     {selected ? (
                                       <button
@@ -4800,7 +4938,7 @@ export function AppHomePage() {
                       </div>
                       </div>
 
-                      <div className={`relative ${isDeleteStructureMode ? "w-16" : "w-0"}`}>
+                      <div className={`relative ${isDeleteStructureMode ? gridControlRailWidthClass : "w-0"}`}>
                         {Array.from({ length: totalRows }, (_, rowIndex) => {
                           if (!isDeleteStructureMode) return null;
                           const deletable = deletableRows.includes(rowIndex);
@@ -4830,20 +4968,20 @@ export function AppHomePage() {
                                     }
                                     setSelectedDeleteRows([rowIndex]);
                                   }}
-                                  className={`inline-flex items-center justify-center border font-semibold transition-colors ${
+                                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border font-semibold transition-colors ${
                                     selected
-                                      ? "h-7 w-7 rounded-full border-border bg-white px-0 text-foreground hover:border-foreground/50"
-                                      : "h-7 min-w-14 rounded-full px-2 text-[10px]"
+                                      ? "border-border bg-white text-foreground hover:border-foreground/50"
+                                      : ""
                                   } ${
                                     !selected && deletable
                                       ? "border-border bg-white text-foreground hover:border-foreground/50 hover:text-foreground"
                                       : !selected
                                         ? "border-transparent bg-transparent text-muted-foreground/40"
                                         : ""
-                                  } ${!deletable ? "cursor-not-allowed" : ""}`}
+                                  }`}
                                   title={deletable ? (selected ? "Cancel row delete selection" : "Mark row for delete") : "Row currently occupied"}
                                 >
-                                  {selected ? <X className="h-3.5 w-3.5" /> : "Delete"}
+                                  {selected ? <X className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                                 </button>
                                 {selected ? (
                                   <button
@@ -4860,6 +4998,7 @@ export function AppHomePage() {
                             </div>
                           );
                         })}
+                      </div>
                       </div>
                       </div>
                     </div>
@@ -5033,40 +5172,6 @@ export function AppHomePage() {
           </Card>
         </div>
       ) : null}
-      {isEditing && isExitEditDialogOpen ? (
-        <div className="edit-dashboard-popup fixed inset-0 z-[83] flex items-center justify-center bg-slate-900/30 px-4">
-          <Card className="w-full max-w-lg border-border bg-white">
-            <CardContent className="space-y-3 p-4">
-              <p className="text-sm font-semibold text-slate-900">
-                Unsaved changes. What do you want to do?
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={cancelExitEditDialog}
-                  className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
-                >
-                  Keep Editing
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmExitEditDiscard}
-                  className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
-                >
-                  Discard & Exit
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmExitEditSave}
-                  className="rounded-md border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
-                >
-                  Save & Exit
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
       {isSetActiveDialogOpen ? (
         <div className="edit-dashboard-popup fixed inset-0 z-[84] flex items-center justify-center bg-slate-900/30 px-4">
           <Card className="w-full max-w-lg border-border bg-white">
@@ -5088,6 +5193,26 @@ export function AppHomePage() {
                   className="rounded-md border border-border bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:opacity-90"
                 >
                   Make Layout Active
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+      {isEditing && isExitBlockedDialogOpen ? (
+        <div className="edit-dashboard-popup fixed inset-0 z-[84] flex items-center justify-center bg-slate-900/30 px-4">
+          <Card className="w-full max-w-md border-border bg-white">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                You cannot exit until the drag here area is empty.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExitBlockedDialogOpen(false)}
+                  className="rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/80"
+                >
+                  OK
                 </button>
               </div>
             </CardContent>
@@ -5517,6 +5642,7 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
 
 
 
