@@ -238,6 +238,7 @@ export function AppHomePage() {
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
   const [isGridOptionsMenuOpen, setIsGridOptionsMenuOpen] = useState(false);
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
+  const [overviewCollapsed, setOverviewCollapsed] = useState(false);
   const [favoritesCollapsed, setFavoritesCollapsed] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
   const [accountsCollapsed, setAccountsCollapsed] = useState(false);
@@ -258,6 +259,7 @@ export function AppHomePage() {
   const [hiddenNavButtonKeys, setHiddenNavButtonKeys] = useState<string[]>([]);
   const [assetFilterMode, setAssetFilterMode] = useState<"all" | "system" | "custom">("all");
   const [assetSortMode, setAssetSortMode] = useState<"name_asc" | "name_desc">("name_asc");
+  const [assetsLiabilitiesTypeSelection, setAssetsLiabilitiesTypeSelection] = useState("investments");
   const [favoritesFilterMode, setFavoritesFilterMode] = useState<"all" | "asset_type" | "account">("all");
   const [favoritesSortMode, setFavoritesSortMode] = useState<"name_asc" | "name_desc">("name_asc");
   const [customFilterMode, setCustomFilterMode] = useState<"all" | "portfolio" | "accounts">("all");
@@ -479,6 +481,19 @@ export function AppHomePage() {
       })),
     [assetTypesForNav],
   );
+  const addAssetModalAssetTypes = useMemo(() => {
+    const withLabel = assetTypesForNav.map((assetType) => ({
+      ...assetType,
+      normalizedName: assetType.name.trim().toLowerCase(),
+    }));
+    return withLabel.sort((a, b) => {
+      const aIsEquity = a.normalizedName === "equity" || a.normalizedName === "equities";
+      const bIsEquity = b.normalizedName === "equity" || b.normalizedName === "equities";
+      if (aIsEquity && !bIsEquity) return -1;
+      if (!aIsEquity && bIsEquity) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [assetTypesForNav]);
   const accountEntries = useMemo(
     () =>
       accountRows.map((account) => ({
@@ -1405,6 +1420,17 @@ export function AppHomePage() {
   }, [isEditing, location.search]);
 
   useEffect(() => {
+    const handleOpenAddAssetsModal = () => {
+      if (isEditing) return;
+      setIsAddAssetModalOpen(true);
+    };
+    window.addEventListener("finpro:open-add-assets-modal", handleOpenAddAssetsModal);
+    return () => {
+      window.removeEventListener("finpro:open-add-assets-modal", handleOpenAddAssetsModal);
+    };
+  }, [isEditing]);
+
+  useEffect(() => {
     let isCancelled = false;
 
     const createFallbackLayout = (): SavedLayout => ({
@@ -1559,6 +1585,15 @@ export function AppHomePage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [isEditing]);
+
+  useEffect(() => {
+    if (!isAddAssetModalOpen || isEditing) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isAddAssetModalOpen, isEditing]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -2297,7 +2332,9 @@ export function AppHomePage() {
     setNavTileDropKey(null);
   };
   const isSortNavAndButtons = dashboardTilesEditMode;
+  const isAssetsLiabilitiesDashboard = activeSidebarCategory === "assets-liabilities";
   const isNavRearranging = false;
+  const overviewCollapsedInView = dashboardTilesEditMode ? false : overviewCollapsed;
   const favoritesCollapsedInView = dashboardTilesEditMode ? false : favoritesCollapsed;
   const assetTypesCollapsedInView = dashboardTilesEditMode ? false : assetTypesCollapsed;
   const accountsCollapsedInView = dashboardTilesEditMode ? false : accountsCollapsed;
@@ -2322,6 +2359,45 @@ export function AppHomePage() {
   }, []);
   const hiddenInEditClass = (hidden: boolean) =>
     dashboardTilesEditMode && hidden ? "opacity-45 ring-1 ring-dashed ring-slate-300 dark:ring-border" : "";
+
+  const assetsLiabilitiesTypeOptions = useMemo(() => {
+    const options: Array<{ key: string; label: string }> = [{ key: "investments", label: "Investments" }];
+    const accountTypesById = new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type] as const));
+    const slugToName = new Map(
+      assetTypes
+        .filter((assetType): assetType is AssetTypeOption & { slug: string } => Boolean(assetType.slug))
+        .map((assetType) => [assetType.slug, assetType.name] as const),
+    );
+    const heldAssetTypeSlugs = new Set<string>();
+    accountRows.forEach((account) => {
+      if (account.holdings_count <= 0) return;
+      const accountType = accountTypesById.get(account.account_type);
+      for (const slug of accountType?.allowed_asset_type_slugs ?? []) {
+        if (slug) heldAssetTypeSlugs.add(slug);
+      }
+    });
+    Array.from(heldAssetTypeSlugs)
+      .sort((a, b) => {
+        const nameA = slugToName.get(a) ?? formatSlugLabel(a);
+        const nameB = slugToName.get(b) ?? formatSlugLabel(b);
+        return nameA.localeCompare(nameB);
+      })
+      .forEach((slug) => {
+        const label = slugToName.get(slug) ?? formatSlugLabel(slug);
+        if (label.toLowerCase() === "investments") return;
+        options.push({ key: `asset-type:${slug}`, label });
+      });
+    return options;
+  }, [accountCreateOptions?.account_types, accountRows, assetTypes]);
+  const totalAccountHoldings = useMemo(
+    () => accountRows.reduce((sum, account) => sum + Math.max(0, account.holdings_count ?? 0), 0),
+    [accountRows],
+  );
+
+  useEffect(() => {
+    if (!isAssetsLiabilitiesDashboard || !isEditing) return;
+    setIsEditing(false);
+  }, [isAssetsLiabilitiesDashboard, isEditing]);
   return (
     <main className="app-home w-full bg-background pb-10 pt-4 dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
@@ -2544,6 +2620,90 @@ export function AppHomePage() {
                                     )}
                                   </div>
                                 </div>
+                                  {shouldRenderDashboardTile("portfolioOverview") ? (
+                                  <div
+                                    data-dashboard-tile="portfolioOverview"
+                                    draggable={false}
+                                    onDragOver={(event) => handleDashboardTileDragOver(event, "portfolioOverview")}
+                                    onDrop={(event) => handleDashboardTileDrop(event, "portfolioOverview")}
+                                    onDragEnd={handleDashboardTileDragEnd}
+                                    style={{ order: getDashboardTileOrder("portfolioOverview") }}
+                                    className={`rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-border dark:bg-card ${
+                                      navTileDropKey === "portfolioOverview" ? "ring-2 ring-slate-400 bg-slate-100/60 dark:bg-muted" : ""
+                                    } ${navTileDragKey === "portfolioOverview" ? "opacity-0" : ""} ${hiddenInEditClass(
+                                      isDashboardTileHidden("portfolioOverview"),
+                                    )}`}
+                                  >
+                                    <div className="flex items-center justify-between px-1 py-1">
+                                      <p className="text-sm font-normal text-slate-500 dark:text-foreground">Overview</p>
+                                      <div className="flex items-center gap-1">
+                                        {dashboardTilesEditMode ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleDashboardTileVisibility("portfolioOverview")}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-transparent text-foreground transition-colors hover:text-foreground"
+                                              aria-label={isDashboardTileHidden("portfolioOverview") ? "Show overview tile" : "Hide overview tile"}
+                                              title={isDashboardTileHidden("portfolioOverview") ? "Show overview tile" : "Hide overview tile"}
+                                            >
+                                              {isDashboardTileHidden("portfolioOverview") ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              draggable
+                                              onDragStart={(event) => handleDashboardTileDragStart(event, "portfolioOverview")}
+                                              onDragEnd={handleDashboardTileDragEnd}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent cursor-grab active:cursor-grabbing"
+                                              aria-label="Reorder overview tile"
+                                              title="Reorder overview tile"
+                                            >
+                                              <GripVertical className="h-3.5 w-3.5" />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => setOverviewCollapsed((previous) => !previous)}
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent"
+                                            aria-label={overviewCollapsedInView ? "Expand overview" : "Collapse overview"}
+                                            title={overviewCollapsedInView ? "Expand overview" : "Collapse overview"}
+                                          >
+                                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${overviewCollapsedInView ? "" : "rotate-180"}`} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {!overviewCollapsedInView ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveSidebarCategory("portfolio");
+                                          setActiveSidebarLabel("Portfolio");
+                                        }}
+                                        className={`sidebar-nav-item relative w-full rounded-md px-2.5 py-2.5 text-left transition-colors ${
+                                          activeSidebarCategory === "portfolio"
+                                            ? "sidebar-nav-item-active text-foreground dark:text-foreground"
+                                            : "text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-accent dark:hover:text-foreground"
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <BriefcaseBusiness
+                                            className={`h-4 w-4 shrink-0 ${
+                                              activeSidebarCategory === "portfolio" ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
+                                            }`}
+                                            strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
+                                          />
+                                          <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-medium" : "font-normal"}`}>
+                                            Portfolio
+                                          </span>
+                                        </div>
+                                        {activeSidebarCategory === "portfolio" ? (
+                                          <span className="sidebar-active-indicator absolute bottom-1 right-0 top-1 w-1 rounded-full bg-current" />
+                                        ) : null}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  ) : null}
                                   {shouldRenderDashboardTile("favorites") ? (
                                   <div
                                     data-dashboard-tile="favorites"
@@ -3543,51 +3703,87 @@ export function AppHomePage() {
               </Card>
               <div className={`space-y-4 xl:order-1 xl:mt-5 xl:pr-5 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
               <div className="grid grid-cols-1 gap-3">
-                <Card className="rounded-lg border border-slate-200 bg-slate-50 shadow-none dark:border-border dark:bg-card dark:text-foreground">
+                <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
                     <CardContent className="h-[92px] px-4 py-2">
                       <div className="flex h-full items-center justify-between gap-3">
                         <h1 className="font-sans text-[2rem] font-semibold tracking-tight text-foreground dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
-                        <div className="flex items-center gap-2">
-                          <div className="relative" data-dashboard-menu>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSettingsMenuOpen((previous) => !previous);
-                              }}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
-                            >
-                              <Settings className="h-5 w-5" />
-                            </button>
-                            {settingsMenuOpen ? (
-                              <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
-                                {!isEditing ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setIsEditing(true);
-                                      setSettingsMenuOpen(false);
-                                    }}
-                                    className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                  >
-                                    Edit Dashboard
-                                  </button>
-                                ) : (
-                                  <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
-                                    Use the edit toolbar above the dashboard.
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
+                        {!isAssetsLiabilitiesDashboard ? (
+                          <div className="flex items-center gap-2">
+                            <div className="relative" data-dashboard-menu>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSettingsMenuOpen((previous) => !previous);
+                                }}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                              >
+                                <Settings className="h-5 w-5" />
+                              </button>
+                              {settingsMenuOpen ? (
+                                <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
+                                  {!isEditing ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsEditing(true);
+                                        setSettingsMenuOpen(false);
+                                      }}
+                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                    >
+                                      Edit Dashboard
+                                    </button>
+                                  ) : (
+                                    <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                                      Use the edit toolbar above the dashboard.
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
+                        ) : null}
                       </div>
                     </CardContent>
                   </Card>
                </div>
               {!isEditing ? (
-                <Card className="overflow-visible border border-slate-200/70 bg-slate-50/35 shadow-none dark:border-border/70 dark:bg-card/35">
+                <Card className="overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background">
                   <CardContent className="min-h-[74vh] px-5 pb-5 pt-2">
-                    {activeSidebarCategory === "holdings" ? (
+                    {isAssetsLiabilitiesDashboard ? (
+                      <div className="space-y-3">
+                        <Card className="rounded-xl border border-slate-200 bg-white shadow-none dark:border-border dark:bg-card">
+                          <CardContent className="px-4 py-4">
+                            <div className="overflow-x-auto md:overflow-visible">
+                              <div className="flex min-w-max flex-nowrap items-center gap-x-4 gap-y-2 md:min-w-0 md:flex-wrap">
+                              {assetsLiabilitiesTypeOptions.map((option) => {
+                                const selected = assetsLiabilitiesTypeSelection === option.key;
+                                return (
+                                  <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => setAssetsLiabilitiesTypeSelection(option.key)}
+                                    className={`relative inline-flex items-center text-sm leading-none transition-colors ${
+                                      selected
+                                        ? "font-semibold text-foreground dark:text-foreground"
+                                        : "font-normal text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground"
+                                    }`}
+                                  >
+                                    {option.label}
+                                    {selected ? <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-current" /> : null}
+                                  </button>
+                                );
+                              })}
+                              </div>
+                            </div>
+                            {totalAccountHoldings === 0 ? (
+                              <div className="mt-4 rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-muted-foreground dark:border-border dark:text-muted-foreground">
+                                No assets in portfolio yet. Click Add Assets to get started.
+                              </div>
+                            ) : null}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : activeSidebarCategory === "holdings" ? (
                       <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card" />
                     ) : (
                       <div className="flex items-start gap-2">
@@ -3657,66 +3853,46 @@ export function AppHomePage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSidebarCategory("accounts");
-                  setActiveSidebarLabel("Accounts");
-                  setIsAddAssetModalOpen(false);
-                }}
-                className="w-full rounded-xl border border-blue-100 bg-slate-50 px-4 py-3 text-left transition-colors hover:bg-blue-50"
-              >
-                <p className="text-sm font-semibold text-slate-900">Add holding to an existing account</p>
-                <p className="text-xs text-slate-600">Pick an account first, then add an asset/holding entry.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSidebarCategory("accounts");
-                  setActiveSidebarLabel("Accounts");
-                  setIsAddAssetModalOpen(false);
-                }}
-                className="w-full rounded-xl border border-blue-100 bg-slate-50 px-4 py-3 text-left transition-colors hover:bg-blue-50"
-              >
-                <p className="text-sm font-semibold text-slate-900">Create a new account</p>
-                <p className="text-xs text-slate-600">Set account details and allowed asset types.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSidebarCategory("portfolio");
-                  setActiveSidebarLabel("Portfolio");
-                  setIsAddAssetModalOpen(false);
-                }}
-                className="w-full rounded-xl border border-blue-100 bg-slate-50 px-4 py-3 text-left transition-colors hover:bg-blue-50"
-              >
-                <p className="text-sm font-semibold text-slate-900">Create a new asset type</p>
-                <p className="text-xs text-slate-600">Add a custom type if your holdings do not match existing ones.</p>
-              </button>
-            </div>
-            <div className="mt-4 flex items-center gap-2 text-xs text-slate-600">
-              <span className="font-semibold text-slate-700">Quick links:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSidebarCategory("accounts");
-                  setActiveSidebarLabel("Accounts");
-                  setIsAddAssetModalOpen(false);
-                }}
-                className="rounded-md border border-blue-100 px-2 py-1 transition-colors hover:bg-blue-50"
-              >
-                Manage accounts
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddAssetModalOpen(false);
-                }}
-                className="rounded-md border border-blue-100 px-2 py-1 transition-colors hover:bg-blue-50"
-              >
-                Browse asset types
-              </button>
+            <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
+              {addAssetModalAssetTypes.map((assetType) => {
+                const assetTypeKey = `asset-type:${assetType.slug ?? assetType.id}`;
+                return (
+                  <div key={`add-asset-row-${assetTypeKey}`} className="rounded-xl border border-blue-100 bg-slate-50 p-3">
+                    <p className="text-sm font-semibold text-slate-900">{assetType.name}</p>
+                    <div className="mt-2 overflow-x-auto">
+                      <div className="flex min-w-max items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSidebarCategory("accounts");
+                            setActiveSidebarLabel("Accounts");
+                            setIsAddAssetModalOpen(false);
+                          }}
+                          className="rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-slate-900"
+                        >
+                          Add Account
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSidebarCategory(assetTypeKey);
+                            setActiveSidebarLabel(assetType.name);
+                            setIsAddAssetModalOpen(false);
+                          }}
+                          className="rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-slate-900"
+                        >
+                          Add {assetType.name}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {addAssetModalAssetTypes.length === 0 ? (
+                <div className="rounded-xl border border-blue-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  No asset types found.
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

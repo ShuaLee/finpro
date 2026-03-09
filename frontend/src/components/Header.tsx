@@ -63,6 +63,9 @@ export function Header() {
         ? "text-foreground after:bg-primary"
         : "text-muted-foreground hover:text-foreground after:bg-transparent hover:after:bg-primary/35"
     }`;
+  const emitOpenAddAssets = () => {
+    window.dispatchEvent(new Event("finpro:open-add-assets-modal"));
+  };
 
   return (
     <header className="app-top-nav sticky top-0 z-40 relative border-b border-border bg-background">
@@ -112,6 +115,7 @@ export function Header() {
             <div className="flex items-center gap-2">
               <Link
                 to="/?action=add-modify"
+                onClick={emitOpenAddAssets}
                 className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card px-4 text-[0.95rem] font-semibold text-foreground transition-colors hover:bg-secondary"
               >
                 <Plus className="h-4 w-4" />
@@ -232,7 +236,10 @@ export function Header() {
                 </Link>
                 <Link
                   to="/?action=add-modify"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => {
+                    emitOpenAddAssets();
+                    setMobileMenuOpen(false);
+                  }}
                   className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Add Assets
