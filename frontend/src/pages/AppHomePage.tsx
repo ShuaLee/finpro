@@ -2228,6 +2228,9 @@ export function AppHomePage() {
         : "max-w-none";
   const useCompactEditToolbar = windowWidth < 860;
   const useTabletEditToolbar = !useCompactEditToolbar && windowWidth < 1200;
+  const portfolioLeftRailLeft = 16;
+  const portfolioLeftRailTop = 96;
+  const portfolioLeftRailBottom = 16;
   const gridControlRailWidthClass =
     activeViewport === "desktop" ? "w-16" : activeViewport === "tablet" ? "w-14" : "w-12";
   const gridControlLeftSpacerDesktopClass =
@@ -2399,7 +2402,7 @@ export function AppHomePage() {
     setIsEditing(false);
   }, [isAssetsLiabilitiesDashboard, isEditing]);
   return (
-    <main className="app-home w-full bg-background pb-10 pt-4 dark:bg-background dark:text-foreground">
+    <main className="app-home w-full bg-background pb-10 pt-2 dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
@@ -2407,7 +2410,7 @@ export function AppHomePage() {
           <section>
             <div className="grid grid-cols-1 gap-4 xl:gap-7 xl:grid-cols-[minmax(0,1fr)_356px]">
               <Card
-                className={`relative mt-3 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-5 xl:sticky xl:bottom-6 xl:self-start ${
+                className={`relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
                 }`}
               >
@@ -3701,7 +3704,24 @@ export function AppHomePage() {
                           </div>
                 </CardContent>
               </Card>
-              <div className={`space-y-4 xl:order-1 xl:mt-5 xl:pr-5 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""}`}>
+              <div
+                className={`xl:order-1 xl:mt-0 xl:pr-5 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""} ${
+                  activeSidebarCategory === "portfolio" && !isEditing ? "grid grid-cols-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-4" : "space-y-4"
+                }`}
+              >
+              {activeSidebarCategory === "portfolio" && !isEditing ? (
+                <div className="hidden self-start xl:block xl:w-[280px]">
+                  <div
+                    className="fixed z-20 w-[280px] rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card"
+                    style={{
+                      left: `${portfolioLeftRailLeft}px`,
+                      top: `${portfolioLeftRailTop}px`,
+                      bottom: `${portfolioLeftRailBottom}px`,
+                    }}
+                  />
+                </div>
+              ) : null}
+              <div className="space-y-4">
               <div className="grid grid-cols-1 gap-3">
                 <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
                     <CardContent className="h-[92px] px-4 py-2">
@@ -3831,6 +3851,7 @@ export function AppHomePage() {
                   </CardContent>
                 </Card>
               ) : null}
+              </div>
             </div>
             </div>
           </section>
