@@ -41,7 +41,7 @@ function App() {
   const location = useLocation();
   const { user } = useAuth();
   const authStandalonePaths = new Set(["/signup", "/login", "/login-verify", "/forgot-password", "/reset-password"]);
-  const hideHeader = authStandalonePaths.has(location.pathname);
+  const hideHeader = authStandalonePaths.has(location.pathname) || (Boolean(user) && location.pathname === "/");
   const hideFooter = authStandalonePaths.has(location.pathname) || Boolean(user);
 
   return (

@@ -6,6 +6,7 @@ import {
   Boxes,
   Check,
   ChevronDown,
+  CircleUserRound,
   Ellipsis,
   Eye,
   EyeOff,
@@ -64,6 +65,7 @@ type NavDragItem = {
   kind: NavDragKind;
   key: string;
 };
+type AppShellSection = "portfolio" | "dashboards" | "accounts" | "assetTypes";
 
 type SavedLayout = {
   id: string;
@@ -196,6 +198,13 @@ const formatSlugLabel = (value: string) =>
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (match) => match.toUpperCase());
+const getFirstNameFromEmail = (email: string | null | undefined) => {
+  if (!email) return "Profile";
+  const prefix = email.split("@")[0]?.trim();
+  if (!prefix) return "Profile";
+  const normalized = prefix.replace(/[._-]+/g, " ").trim();
+  return normalized ? normalized.replace(/\b\w/g, (match) => match.toUpperCase()).split(" ")[0] : "Profile";
+};
 const normalizeOrder = (order: string[], available: string[]) => {
   const availableSet = new Set(available);
   const seen = new Set<string>();
@@ -224,6 +233,7 @@ const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) =
 export function AppHomePage() {
   const { user } = useAuth();
   const location = useLocation();
+  const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>("dashboards");
   const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
@@ -334,6 +344,7 @@ export function AppHomePage() {
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const displayViewport: EditViewport = windowWidth < 768 ? "mobile" : windowWidth < 1280 ? "tablet" : "desktop";
+  const profileFirstName = getFirstNameFromEmail(user?.email);
   const activeViewport: EditViewport = isEditing ? editingViewport : displayViewport;
   const columns = clamp(
     viewportLayouts[activeViewport]?.targetColumns ?? VIEWPORT_DEFAULT_COLUMNS[activeViewport],
@@ -2228,9 +2239,6 @@ export function AppHomePage() {
         : "max-w-none";
   const useCompactEditToolbar = windowWidth < 860;
   const useTabletEditToolbar = !useCompactEditToolbar && windowWidth < 1200;
-  const portfolioLeftRailLeft = 16;
-  const portfolioLeftRailTop = 96;
-  const portfolioLeftRailBottom = 16;
   const gridControlRailWidthClass =
     activeViewport === "desktop" ? "w-16" : activeViewport === "tablet" ? "w-14" : "w-12";
   const gridControlLeftSpacerDesktopClass =
@@ -2401,16 +2409,149 @@ export function AppHomePage() {
     if (!isAssetsLiabilitiesDashboard || !isEditing) return;
     setIsEditing(false);
   }, [isAssetsLiabilitiesDashboard, isEditing]);
+
+  useEffect(() => {
+    if (activeAppShellSection === "portfolio" && activeSidebarCategory === "portfolio") return;
+    if (activeSidebarCategory === "accounts" || activeSidebarCategory.startsWith("account:")) {
+      setActiveAppShellSection("accounts");
+      return;
+    }
+    if (activeSidebarCategory.startsWith("asset-type:")) {
+      setActiveAppShellSection("assetTypes");
+      return;
+    }
+    setActiveAppShellSection("dashboards");
+  }, [activeAppShellSection, activeSidebarCategory]);
+
   return (
-    <main className="app-home w-full bg-background pb-10 pt-2 dark:bg-background dark:text-foreground">
+    <main className="app-home min-h-screen w-full bg-background dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8">
-        <div>
-          <section>
-            <div className="grid grid-cols-1 gap-4 xl:gap-7 xl:grid-cols-[minmax(0,1fr)_356px]">
+      <div className="flex min-h-screen w-full">
+        <aside className="hidden lg:flex h-screen w-[240px] shrink-0 flex-col border-r border-background bg-background px-5 py-6">
+          <div className="flex items-center gap-3 px-2">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <BriefcaseBusiness className="h-5 w-5" />
+            </div>
+            <p className="text-lg font-semibold tracking-tight text-foreground">FinPro</p>
+          </div>
+          <div className="mt-8 flex flex-1 flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAppShellSection("portfolio");
+                setActiveSidebarCategory("portfolio");
+                setActiveSidebarLabel("Portfolio");
+              }}
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+                activeAppShellSection === "portfolio"
+                  ? "bg-primary/10 font-semibold text-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+              <span>Portfolio</span>
+              {activeAppShellSection === "portfolio" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAppShellSection("dashboards");
+                setActiveSidebarCategory("portfolio");
+                setActiveSidebarLabel("Portfolio");
+              }}
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+                activeAppShellSection === "dashboards"
+                  ? "bg-primary/10 font-semibold text-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <Grid2x2 className="h-4 w-4 shrink-0" />
+              <span>Dashboards</span>
+              {activeAppShellSection === "dashboards" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAppShellSection("accounts");
+                setActiveSidebarCategory("accounts");
+                setActiveSidebarLabel("Accounts");
+              }}
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+                activeAppShellSection === "accounts"
+                  ? "bg-primary/10 font-semibold text-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+              <span>Accounts</span>
+              {activeAppShellSection === "accounts" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAppShellSection("assetTypes");
+                const firstAssetType = assetTypeEntries[0];
+                if (firstAssetType) {
+                  setActiveSidebarCategory(firstAssetType.key);
+                  setActiveSidebarLabel(firstAssetType.assetType.name);
+                  return;
+                }
+                setActiveSidebarCategory("portfolio");
+                setActiveSidebarLabel("Portfolio");
+              }}
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+                activeAppShellSection === "assetTypes"
+                  ? "bg-primary/10 font-semibold text-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <Boxes className="h-4 w-4 shrink-0" />
+              <span>Asset Types</span>
+              {activeAppShellSection === "assetTypes" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="mt-6 flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+          >
+            <CircleUserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{profileFirstName}</span>
+          </button>
+        </aside>
+        <div className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[1680px]">
+            <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-none">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Workspace</p>
+                <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                  {activeAppShellSection === "portfolio" ? "Portfolio" : activeAppShellSection === "dashboards" ? "Dashboards" : activeAppShellSection === "accounts" ? "Accounts" : "Asset Types"}
+                </h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAssetModalOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-slate-200"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Assets</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsMenuOpen((previous) => !previous)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground"
+                  aria-label="Open workspace settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div>
+              <section>
+                <div className="flex flex-col gap-4">
               <Card
-                className={`relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
+                className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
                 }`}
               >
@@ -3705,71 +3846,65 @@ export function AppHomePage() {
                 </CardContent>
               </Card>
               <div
-                className={`xl:order-1 xl:mt-0 xl:pr-5 ${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""} ${
-                  activeSidebarCategory === "portfolio" && !isEditing ? "grid grid-cols-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)] xl:gap-4" : "space-y-4"
-                }`}
+                className={`${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""} space-y-4`}
               >
-              {activeSidebarCategory === "portfolio" && !isEditing ? (
-                <div className="hidden self-start xl:block xl:w-[280px]">
-                  <div
-                    className="fixed z-20 w-[280px] rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card"
-                    style={{
-                      left: `${portfolioLeftRailLeft}px`,
-                      top: `${portfolioLeftRailTop}px`,
-                      bottom: `${portfolioLeftRailBottom}px`,
-                    }}
-                  />
-                </div>
-              ) : null}
               <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3">
-                <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
-                    <CardContent className="h-[92px] px-4 py-2">
-                      <div className="flex h-full items-center justify-between gap-3">
-                        <h1 className="font-sans text-[2rem] font-semibold tracking-tight text-foreground dark:text-foreground">{activeSidebarLabel} Dashboard</h1>
-                        {!isAssetsLiabilitiesDashboard ? (
-                          <div className="flex items-center gap-2">
-                            <div className="relative" data-dashboard-menu>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSettingsMenuOpen((previous) => !previous);
-                                }}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
-                              >
-                                <Settings className="h-5 w-5" />
-                              </button>
-                              {settingsMenuOpen ? (
-                                <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
-                                  {!isEditing ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setIsEditing(true);
-                                        setSettingsMenuOpen(false);
-                                      }}
-                                      className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                    >
-                                      Edit Dashboard
-                                    </button>
-                                  ) : (
-                                    <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
-                                      Use the edit toolbar above the dashboard.
-                                    </div>
-                                  )}
-                                </div>
-                              ) : null}
+              {activeAppShellSection !== "portfolio" ? (
+                <div className="grid grid-cols-1 gap-3">
+                  <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
+                      <CardContent className="h-[92px] px-4 py-2">
+                        <div className="flex h-full items-center justify-between gap-3">
+                          <h1 className="font-sans text-[2rem] font-semibold tracking-tight text-foreground dark:text-foreground">
+                            {`${activeSidebarLabel} Dashboard`}
+                          </h1>
+                          {!isAssetsLiabilitiesDashboard ? (
+                            <div className="flex items-center gap-2">
+                              <div className="relative" data-dashboard-menu>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSettingsMenuOpen((previous) => !previous);
+                                  }}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                                >
+                                  <Settings className="h-5 w-5" />
+                                </button>
+                                {settingsMenuOpen ? (
+                                  <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
+                                    {!isEditing ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsEditing(true);
+                                          setSettingsMenuOpen(false);
+                                        }}
+                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                                      >
+                                        Edit Dashboard
+                                      </button>
+                                    ) : (
+                                      <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                                        Use the edit toolbar above the dashboard.
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    </CardContent>
-                  </Card>
-               </div>
+                          ) : null}
+                        </div>
+                      </CardContent>
+                    </Card>
+                 </div>
+              ) : null}
               {!isEditing ? (
                 <Card className="overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background">
-                  <CardContent className="min-h-[74vh] px-5 pb-5 pt-2">
-                    {isAssetsLiabilitiesDashboard ? (
+                  <CardContent className={activeAppShellSection === "portfolio" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
+                    {activeAppShellSection === "portfolio" ? (
+                      <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/70 text-sm text-muted-foreground dark:border-border dark:bg-card/40 dark:text-muted-foreground">
+                        Portfolio workspace coming next.
+                      </div>
+                    ) : isAssetsLiabilitiesDashboard ? (
                       <div className="space-y-3">
                         <Card className="rounded-xl border border-slate-200 bg-white shadow-none dark:border-border dark:bg-card">
                           <CardContent className="px-4 py-4">
@@ -3856,6 +3991,8 @@ export function AppHomePage() {
             </div>
           </section>
         </div>
+      </div>
+      </div>
       </div>
       {isAddAssetModalOpen && !isEditing ? (
         <div className="fixed inset-0 z-[78] flex items-center justify-center bg-slate-900/35 px-4">

@@ -25,27 +25,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [source, setSource] = useState<ThemeSource>("default");
 
   useEffect(() => {
-    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    const hasStoredTheme = storedTheme === "light" || storedTheme === "dark";
-    const initialTheme: Theme = hasStoredTheme ? storedTheme : DEFAULT_THEME;
-
-    setThemeState(initialTheme);
-    setSource(hasStoredTheme ? "localStorage" : "default");
-    applyTheme(initialTheme);
-
-    if (!hasStoredTheme) {
-      localStorage.setItem(THEME_STORAGE_KEY, initialTheme);
-    }
+    setThemeState(DEFAULT_THEME);
+    setSource("default");
+    applyTheme(DEFAULT_THEME);
+    localStorage.setItem(THEME_STORAGE_KEY, DEFAULT_THEME);
   }, []);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key !== THEME_STORAGE_KEY) return;
-      const nextValue = event.newValue;
-      if (nextValue !== "light" && nextValue !== "dark") return;
-      setThemeState(nextValue);
-      setSource("localStorage");
-      applyTheme(nextValue);
+      setThemeState(DEFAULT_THEME);
+      setSource("default");
+      applyTheme(DEFAULT_THEME);
+      if (event.newValue !== DEFAULT_THEME) {
+        localStorage.setItem(THEME_STORAGE_KEY, DEFAULT_THEME);
+      }
     };
 
     window.addEventListener("storage", onStorage);
@@ -53,14 +47,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setTheme = (nextTheme: Theme) => {
-    setThemeState(nextTheme);
-    setSource("localStorage");
-    applyTheme(nextTheme);
-    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    const forcedTheme = nextTheme === "light" ? "light" : DEFAULT_THEME;
+    setThemeState(forcedTheme);
+    setSource("default");
+    applyTheme(forcedTheme);
+    localStorage.setItem(THEME_STORAGE_KEY, forcedTheme);
   };
 
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    setTheme(DEFAULT_THEME);
   };
 
   const value = useMemo<ThemeContextValue>(
@@ -83,4 +78,3 @@ export function useTheme(): ThemeContextValue {
   }
   return context;
 }
-
