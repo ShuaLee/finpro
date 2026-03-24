@@ -7,6 +7,7 @@ from assets.views import (
     CustomAssetListCreateView,
     CustomAssetTypeCreateView,
     CustomAssetTypeDetailView,
+    EquityLookupView,
     RealEstateAssetDetailView,
     RealEstateAssetListCreateView,
     RealEstateTypeCreateView,
@@ -17,6 +18,7 @@ from assets.views import (
 urlpatterns = [
     path("health/", AssetsHealthView.as_view(), name="assets-health"),
     path("asset-types/", AssetTypeListView.as_view(), name="asset-type-list"),
+    path("equities/lookup/", EquityLookupView.as_view(), name="equity-lookup"),
     path("asset-types/custom/", CustomAssetTypeCreateView.as_view(), name="asset-type-custom-create"),
     path("asset-types/custom/<int:type_id>/", CustomAssetTypeDetailView.as_view(), name="asset-type-custom-detail"),
     path("custom-assets/", CustomAssetListCreateView.as_view(), name="custom-asset-list-create"),

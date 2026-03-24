@@ -52,6 +52,12 @@ export type CreateAccountPayload = {
   allow_manual_overrides?: boolean;
 };
 
+export type CreateCustomAccountTypePayload = {
+  name: string;
+  description?: string;
+  allowed_asset_type_slugs: string[];
+};
+
 export type AccountListItem = {
   id: number;
   portfolio: number;
@@ -62,6 +68,28 @@ export type AccountListItem = {
   holdings_count: number;
 };
 
+export type AccountHolding = {
+  id: number;
+  account: number;
+  asset: string;
+  asset_type: string;
+  asset_display_name: string;
+  original_ticker: string | null;
+  quantity: string;
+  average_purchase_price: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateHoldingPayload = {
+  asset_id?: string;
+  quantity: string;
+  average_purchase_price?: string;
+  asset_type_slug?: string;
+  custom_name?: string;
+  currency_code?: string;
+};
+
 export async function getAccountsSidebar(): Promise<SidebarGroup[]> {
   return apiRequest<SidebarGroup[]>(API_ENDPOINTS.accounts.sidebar, "GET");
 }
@@ -70,10 +98,22 @@ export async function getAccountsList(): Promise<AccountListItem[]> {
   return apiRequest<AccountListItem[]>(API_ENDPOINTS.accounts.list, "GET");
 }
 
+export async function getAccountHoldings(accountId: number): Promise<AccountHolding[]> {
+  return apiRequest<AccountHolding[]>(API_ENDPOINTS.accounts.holdings(accountId), "GET");
+}
+
 export async function getAccountCreateOptions(): Promise<AccountCreateOptions> {
   return apiRequest<AccountCreateOptions>(API_ENDPOINTS.accounts.createOptions, "GET");
 }
 
 export async function createAccount(payload: CreateAccountPayload): Promise<{ id: number }> {
   return apiRequest<{ id: number }>(API_ENDPOINTS.accounts.create, "POST", payload as unknown as Record<string, unknown>);
+}
+
+export async function createCustomAccountType(payload: CreateCustomAccountTypePayload): Promise<AccountTypeOption> {
+  return apiRequest<AccountTypeOption>(API_ENDPOINTS.accounts.createCustomType, "POST", payload as unknown as Record<string, unknown>);
+}
+
+export async function createAccountHolding(accountId: number, payload: CreateHoldingPayload): Promise<AccountHolding> {
+  return apiRequest<AccountHolding>(API_ENDPOINTS.accounts.holdings(accountId), "POST", payload as unknown as Record<string, unknown>);
 }

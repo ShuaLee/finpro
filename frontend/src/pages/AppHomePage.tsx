@@ -22,9 +22,19 @@ import {
   X,
 } from "lucide-react";
 
-import { getAccountCreateOptions, getAccountsList, type AccountCreateOptions, type AccountListItem } from "../api/accounts";
-import { getAssetTypes, type AssetTypeOption } from "../api/assets";
+import {
+  getAccountCreateOptions,
+  getAccountHoldings,
+  getAccountsList,
+  createAccount,
+  createAccountHolding,
+  type AccountCreateOptions,
+  type AccountHolding,
+  type AccountListItem,
+} from "../api/accounts";
+import { createCustomAssetType, getAssetTypes, lookupEquities, type AssetTypeOption, type EquityLookupOption } from "../api/assets";
 import { getDashboardLayoutState, upsertDashboardLayoutState } from "../api/dashboardLayouts";
+import { ApiError } from "../api/http";
 import { getNavigationState, upsertNavigationState } from "../api/navigationState";
 import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
@@ -66,6 +76,16 @@ type NavDragItem = {
   key: string;
 };
 type AppShellSection = "portfolio" | "dashboards" | "accounts" | "assetTypes";
+type PortfolioHoldingRow = AccountHolding & {
+  account_name: string;
+};
+type PortfolioGroupedSection = {
+  key: string;
+  label: string;
+  subtitle: string;
+  rows: PortfolioHoldingRow[];
+};
+type AddAssetStep = "type" | "account" | "asset";
 
 type SavedLayout = {
   id: string;
@@ -205,6 +225,50 @@ const getFirstNameFromEmail = (email: string | null | undefined) => {
   const normalized = prefix.replace(/[._-]+/g, " ").trim();
   return normalized ? normalized.replace(/\b\w/g, (match) => match.toUpperCase()).split(" ")[0] : "Profile";
 };
+const formatNumber = (value: string | number | null | undefined, options?: Intl.NumberFormatOptions) => {
+  if (value === null || value === undefined || value === "") return "—";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(parsed)) return "—";
+  return new Intl.NumberFormat("en-US", options).format(parsed);
+};
+const formatCurrency = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined || value === "") return "—";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(parsed)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: parsed >= 1000 ? 0 : 2,
+  }).format(parsed);
+};
+const formatDateLabel = (value: string | null | undefined) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+const getAddAssetTileIcon = (slug: string | null | undefined) => {
+  switch ((slug ?? "").trim().toLowerCase()) {
+    case "equity":
+      return BadgeDollarSign;
+    case "crypto":
+      return Boxes;
+    case "real_estate":
+      return BriefcaseBusiness;
+    case "commodity":
+    case "precious_metal":
+      return Grid2x2;
+    default:
+      return Boxes;
+  }
+};
+const getAddAssetTileTone = (_slug: string | null | undefined) => {
+  return "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50";
+};
 const normalizeOrder = (order: string[], available: string[]) => {
   const availableSet = new Set(available);
   const seen = new Set<string>();
@@ -238,6 +302,11 @@ export function AppHomePage() {
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
+  const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHoldingRow[]>([]);
+  const [isPortfolioHoldingsLoading, setIsPortfolioHoldingsLoading] = useState(false);
+  const [portfolioHoldingsNotice, setPortfolioHoldingsNotice] = useState<string | null>(null);
+  const [portfolioGroupingMode, setPortfolioGroupingMode] = useState<"asset" | "account">("asset");
+  const [portfolioDetailMode, setPortfolioDetailMode] = useState<"basic" | "detailed">("detailed");
   const [accountCreateOptions, setAccountCreateOptions] = useState<AccountCreateOptions | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
@@ -248,6 +317,28 @@ export function AppHomePage() {
   const [layoutActionsMenuOpen, setLayoutActionsMenuOpen] = useState(false);
   const [isGridOptionsMenuOpen, setIsGridOptionsMenuOpen] = useState(false);
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
+  const [addAssetStep, setAddAssetStep] = useState<AddAssetStep>("type");
+  const [selectedAddAssetType, setSelectedAddAssetType] = useState<AssetTypeOption | null>(null);
+  const [selectedAddAssetAccountId, setSelectedAddAssetAccountId] = useState<number | null>(null);
+  const [isAddAccountInlineOpen, setIsAddAccountInlineOpen] = useState(false);
+  const [equitySearchQuery, setEquitySearchQuery] = useState("");
+  const [equitySearchResults, setEquitySearchResults] = useState<EquityLookupOption[]>([]);
+  const [isEquitySearchLoading, setIsEquitySearchLoading] = useState(false);
+  const [selectedEquityResult, setSelectedEquityResult] = useState<EquityLookupOption | null>(null);
+  const [newHoldingQuantity, setNewHoldingQuantity] = useState("");
+  const [newHoldingAverageCost, setNewHoldingAverageCost] = useState("");
+  const [addAssetFlowError, setAddAssetFlowError] = useState<string | null>(null);
+  const [isSubmittingHolding, setIsSubmittingHolding] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountBroker, setNewAccountBroker] = useState("");
+  const [newAccountPortfolioId, setNewAccountPortfolioId] = useState<number | null>(null);
+  const [newAccountTypeId, setNewAccountTypeId] = useState<number | null>(null);
+  const [newAccountClassificationId, setNewAccountClassificationId] = useState<number | null>(null);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [isAddAssetTypeViewOpen, setIsAddAssetTypeViewOpen] = useState(false);
+  const [newAssetTypeName, setNewAssetTypeName] = useState("");
+  const [newAssetTypeError, setNewAssetTypeError] = useState<string | null>(null);
+  const [isCreatingAssetType, setIsCreatingAssetType] = useState(false);
   const [overviewCollapsed, setOverviewCollapsed] = useState(false);
   const [favoritesCollapsed, setFavoritesCollapsed] = useState(false);
   const [assetTypesCollapsed, setAssetTypesCollapsed] = useState(false);
@@ -484,6 +575,24 @@ export function AppHomePage() {
     return next;
   }, [accountCreateOptions]);
   const assetTypesForNav = assetTypes.length > 0 ? assetTypes : fallbackAssetTypesFromAccountTypes;
+  const assetTypeNameBySlug = useMemo(
+    () =>
+      new Map(
+        assetTypesForNav
+          .filter((assetType): assetType is AssetTypeOption & { slug: string } => typeof assetType.slug === "string" && assetType.slug.trim().length > 0)
+          .map((assetType) => [assetType.slug, assetType.name] as const),
+      ),
+    [assetTypesForNav],
+  );
+  const assetTypeSortOrder = useMemo(
+    () =>
+      new Map(
+        assetTypesForNav
+          .filter((assetType): assetType is AssetTypeOption & { slug: string } => typeof assetType.slug === "string" && assetType.slug.trim().length > 0)
+          .map((assetType, index) => [assetType.slug, index] as const),
+      ),
+    [assetTypesForNav],
+  );
   const assetTypeEntries = useMemo(
     () =>
       assetTypesForNav.map((assetType) => ({
@@ -505,6 +614,7 @@ export function AppHomePage() {
       return a.name.localeCompare(b.name);
     });
   }, [assetTypesForNav]);
+  const selectedAddAssetSlug = selectedAddAssetType?.slug ?? null;
   const accountEntries = useMemo(
     () =>
       accountRows.map((account) => ({
@@ -613,6 +723,90 @@ export function AppHomePage() {
     () => new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type.name] as const)),
     [accountCreateOptions],
   );
+  const eligibleAccountTypesForSelectedAsset = useMemo(() => {
+    if (!selectedAddAssetSlug) return [];
+    return (accountCreateOptions?.account_types ?? []).filter((accountType) =>
+      (accountType.allowed_asset_type_slugs ?? []).includes(selectedAddAssetSlug),
+    );
+  }, [accountCreateOptions?.account_types, selectedAddAssetSlug]);
+  const eligibleAccountTypeIds = useMemo(
+    () => new Set(eligibleAccountTypesForSelectedAsset.map((accountType) => accountType.id)),
+    [eligibleAccountTypesForSelectedAsset],
+  );
+  const eligibleAccountsForSelectedAsset = useMemo(
+    () => accountRows.filter((account) => eligibleAccountTypeIds.has(account.account_type)),
+    [accountRows, eligibleAccountTypeIds],
+  );
+  const brokerageAccountType = useMemo(
+    () => eligibleAccountTypesForSelectedAsset.find((accountType) => accountType.slug === "brokerage") ?? null,
+    [eligibleAccountTypesForSelectedAsset],
+  );
+  const accountTypeIdByAccountId = useMemo(
+    () => new Map(accountRows.map((account) => [account.id, account.account_type] as const)),
+    [accountRows],
+  );
+  const portfolioHoldingsByType = useMemo<PortfolioGroupedSection[]>(() => {
+    const grouped = new Map<string, { slug: string; label: string; rows: PortfolioHoldingRow[] }>();
+    for (const holding of portfolioHoldings) {
+      const slug = holding.asset_type;
+      const existing = grouped.get(slug);
+      if (existing) {
+        existing.rows.push(holding);
+        continue;
+      }
+      grouped.set(slug, {
+        slug,
+        label: assetTypeNameBySlug.get(slug) ?? formatSlugLabel(slug),
+        rows: [holding],
+      });
+    }
+    return Array.from(grouped.values())
+      .map((group) => ({
+        key: group.slug,
+        ...group,
+        subtitle: `${group.rows.length} ${group.rows.length === 1 ? "holding" : "holdings"}`,
+        rows: [...group.rows].sort((a, b) => {
+          const nameCompare = a.asset_display_name.localeCompare(b.asset_display_name);
+          if (nameCompare !== 0) return nameCompare;
+          return a.account_name.localeCompare(b.account_name);
+        }),
+      }))
+      .sort((a, b) => {
+        const aOrder = assetTypeSortOrder.get(a.slug) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = assetTypeSortOrder.get(b.slug) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.label.localeCompare(b.label);
+      });
+  }, [assetTypeNameBySlug, assetTypeSortOrder, portfolioHoldings]);
+  const portfolioHoldingsByAccount = useMemo<PortfolioGroupedSection[]>(() => {
+    const grouped = new Map<number, { key: string; label: string; subtitle: string; rows: PortfolioHoldingRow[] }>();
+    for (const holding of portfolioHoldings) {
+      const existing = grouped.get(holding.account);
+      if (existing) {
+        existing.rows.push(holding);
+        continue;
+      }
+      grouped.set(holding.account, {
+        key: `account-${holding.account}`,
+        label: holding.account_name,
+        subtitle: accountTypeNameById.get(accountTypeIdByAccountId.get(holding.account) ?? -1) ?? "Account",
+        rows: [holding],
+      });
+    }
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        rows: [...group.rows].sort((a, b) => {
+          const typeCompare = (assetTypeNameBySlug.get(a.asset_type) ?? formatSlugLabel(a.asset_type)).localeCompare(
+            assetTypeNameBySlug.get(b.asset_type) ?? formatSlugLabel(b.asset_type),
+          );
+          if (typeCompare !== 0) return typeCompare;
+          return a.asset_display_name.localeCompare(b.asset_display_name);
+        }),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [accountTypeIdByAccountId, accountTypeNameById, assetTypeNameBySlug, portfolioHoldings]);
+  const portfolioGroupedSections = portfolioGroupingMode === "asset" ? portfolioHoldingsByType : portfolioHoldingsByAccount;
   const displayedAccountEntries = useMemo(() => {
     return selectedAccountTypeIds.length > 0
       ? orderedAccountEntries.filter((entry) => selectedAccountTypeIds.includes(entry.account.account_type))
@@ -1223,6 +1417,138 @@ export function AppHomePage() {
     }
   }, []);
 
+  const closeAddAssetsModal = useCallback(() => {
+    setIsAddAssetModalOpen(false);
+    setAddAssetStep("type");
+    setSelectedAddAssetType(null);
+    setSelectedAddAssetAccountId(null);
+    setIsAddAccountInlineOpen(false);
+    setEquitySearchQuery("");
+    setEquitySearchResults([]);
+    setIsEquitySearchLoading(false);
+    setSelectedEquityResult(null);
+    setNewHoldingQuantity("");
+    setNewHoldingAverageCost("");
+    setAddAssetFlowError(null);
+    setIsSubmittingHolding(false);
+    setNewAccountName("");
+    setNewAccountBroker("");
+    setNewAccountPortfolioId(accountCreateOptions?.portfolios[0]?.id ?? null);
+    setNewAccountTypeId(null);
+    setNewAccountClassificationId(accountCreateOptions?.classification_definitions[0]?.id ?? null);
+    setIsCreatingAccount(false);
+    setIsAddAssetTypeViewOpen(false);
+    setNewAssetTypeName("");
+    setNewAssetTypeError(null);
+    setIsCreatingAssetType(false);
+  }, [accountCreateOptions?.classification_definitions, accountCreateOptions?.portfolios]);
+
+  const beginAddAssetFlow = useCallback((assetType: AssetTypeOption) => {
+    setSelectedAddAssetType(assetType);
+    setAddAssetFlowError(null);
+    setSelectedAddAssetAccountId(null);
+    setIsAddAccountInlineOpen(false);
+    setSelectedEquityResult(null);
+    setEquitySearchQuery("");
+    setEquitySearchResults([]);
+    setNewHoldingQuantity("");
+    setNewHoldingAverageCost("");
+    setAddAssetStep(assetType.slug === "equity" ? "account" : "type");
+  }, []);
+
+  const handleCreateAssetType = useCallback(async () => {
+    const trimmedName = newAssetTypeName.trim();
+    if (!trimmedName) {
+      setNewAssetTypeError("Enter an asset type name.");
+      return;
+    }
+
+    try {
+      setIsCreatingAssetType(true);
+      setNewAssetTypeError(null);
+      await createCustomAssetType({ name: trimmedName });
+      await loadSidebarData();
+      setNewAssetTypeName("");
+      setIsAddAssetTypeViewOpen(false);
+    } catch (error) {
+      setNewAssetTypeError(error instanceof Error ? error.message : "Unable to create asset type.");
+    } finally {
+      setIsCreatingAssetType(false);
+    }
+  }, [loadSidebarData, newAssetTypeName]);
+
+  const handleCreateEligibleAccount = useCallback(async () => {
+    if (
+      !newAccountName.trim()
+      || newAccountPortfolioId === null
+      || newAccountTypeId === null
+      || newAccountClassificationId === null
+    ) {
+      setAddAssetFlowError("Complete the account details first.");
+      return;
+    }
+
+    try {
+      setIsCreatingAccount(true);
+      setAddAssetFlowError(null);
+      const created = await createAccount({
+        portfolio_id: newAccountPortfolioId,
+        name: newAccountName.trim(),
+        account_type_id: newAccountTypeId,
+        broker: newAccountBroker.trim() || undefined,
+        classification_definition_id: newAccountClassificationId,
+      });
+      await loadSidebarData();
+      setSelectedAddAssetAccountId(created.id);
+      setAddAssetStep("asset");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setAddAssetFlowError(error.message);
+      } else {
+        setAddAssetFlowError("Unable to create account.");
+      }
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  }, [loadSidebarData, newAccountBroker, newAccountClassificationId, newAccountName, newAccountPortfolioId, newAccountTypeId]);
+
+  const handleSubmitEquityHolding = useCallback(async () => {
+    if (!selectedAddAssetAccountId || !selectedEquityResult || !newHoldingQuantity.trim()) {
+      setAddAssetFlowError("Select an equity and enter a quantity.");
+      return;
+    }
+
+    try {
+      setIsSubmittingHolding(true);
+      setAddAssetFlowError(null);
+      await createAccountHolding(selectedAddAssetAccountId, {
+        asset_id: selectedEquityResult.asset_id,
+        quantity: newHoldingQuantity.trim(),
+        average_purchase_price: newHoldingAverageCost.trim() || undefined,
+      });
+      await loadSidebarData();
+      closeAddAssetsModal();
+      setActiveAppShellSection("portfolio");
+      setActiveSidebarCategory("portfolio");
+      setActiveSidebarLabel("Portfolio");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setAddAssetFlowError(error.message);
+      } else {
+        setAddAssetFlowError("Unable to add holding.");
+      }
+    } finally {
+      setIsSubmittingHolding(false);
+    }
+  }, [
+    closeAddAssetsModal,
+    loadSidebarData,
+    newHoldingAverageCost,
+    newHoldingQuantity,
+    selectedAddAssetAccountId,
+    selectedEquityResult,
+  ]);
+
   useEffect(() => {
     const onDocClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
@@ -1280,6 +1606,59 @@ export function AppHomePage() {
   useEffect(() => {
     void loadSidebarData();
   }, [loadSidebarData, user?.email]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadPortfolioHoldings = async () => {
+      if (accountRows.length === 0) {
+        setPortfolioHoldings([]);
+        setPortfolioHoldingsNotice(null);
+        setIsPortfolioHoldingsLoading(false);
+        return;
+      }
+
+      setIsPortfolioHoldingsLoading(true);
+      setPortfolioHoldingsNotice(null);
+
+      const results = await Promise.allSettled(
+        accountRows.map(async (account) => ({
+          account,
+          holdings: await getAccountHoldings(account.id),
+        })),
+      );
+
+      if (isCancelled) return;
+
+      const nextRows: PortfolioHoldingRow[] = [];
+      let failedCount = 0;
+
+      for (const result of results) {
+        if (result.status !== "fulfilled") {
+          failedCount += 1;
+          continue;
+        }
+        for (const holding of result.value.holdings) {
+          nextRows.push({
+            ...holding,
+            account_name: result.value.account.name,
+          });
+        }
+      }
+
+      setPortfolioHoldings(nextRows);
+      setPortfolioHoldingsNotice(
+        failedCount > 0 ? "Some account holdings could not be loaded yet." : null,
+      );
+      setIsPortfolioHoldingsLoading(false);
+    };
+
+    void loadPortfolioHoldings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [accountRows]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1605,6 +1984,58 @@ export function AppHomePage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [isAddAssetModalOpen, isEditing]);
+
+  useEffect(() => {
+    if (!isAddAssetModalOpen) return;
+    if (newAccountPortfolioId === null) {
+      setNewAccountPortfolioId(accountCreateOptions?.portfolios[0]?.id ?? null);
+    }
+    if (newAccountClassificationId === null) {
+      setNewAccountClassificationId(accountCreateOptions?.classification_definitions[0]?.id ?? null);
+    }
+  }, [accountCreateOptions?.classification_definitions, accountCreateOptions?.portfolios, isAddAssetModalOpen, newAccountClassificationId, newAccountPortfolioId]);
+
+  useEffect(() => {
+    if (!isAddAssetModalOpen || addAssetStep !== "account") return;
+    if (eligibleAccountTypesForSelectedAsset.length === 0) {
+      setNewAccountTypeId(null);
+      return;
+    }
+    const fallbackAccountTypeId = brokerageAccountType?.id ?? eligibleAccountTypesForSelectedAsset[0]?.id ?? null;
+    if (newAccountTypeId === null || !eligibleAccountTypeIds.has(newAccountTypeId)) {
+      setNewAccountTypeId(fallbackAccountTypeId);
+    }
+  }, [addAssetStep, brokerageAccountType?.id, eligibleAccountTypeIds, eligibleAccountTypesForSelectedAsset, isAddAssetModalOpen, newAccountTypeId]);
+
+  useEffect(() => {
+    if (!isAddAssetModalOpen || addAssetStep !== "asset" || selectedAddAssetSlug !== "equity") return;
+    const query = equitySearchQuery.trim();
+    if (query.length < 1) {
+      setEquitySearchResults([]);
+      setIsEquitySearchLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsEquitySearchLoading(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const results = await lookupEquities(query);
+        if (isCancelled) return;
+        setEquitySearchResults(results);
+      } catch {
+        if (isCancelled) return;
+        setEquitySearchResults([]);
+      } finally {
+        if (!isCancelled) setIsEquitySearchLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [addAssetStep, equitySearchQuery, isAddAssetModalOpen, selectedAddAssetSlug]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -2429,7 +2860,7 @@ export function AppHomePage() {
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <div className="flex min-h-screen w-full">
         <aside className="hidden lg:flex h-screen w-[240px] shrink-0 flex-col border-r border-background bg-background px-5 py-6">
-          <div className="flex items-center gap-3 px-2">
+          <div className="flex h-[72px] items-center gap-3 px-2">
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <BriefcaseBusiness className="h-5 w-5" />
             </div>
@@ -2521,9 +2952,8 @@ export function AppHomePage() {
         </aside>
         <div className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8">
           <div className="mx-auto w-full max-w-[1680px]">
-            <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-none">
+            <div className="mb-2 flex h-[72px] items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 shadow-none">
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Workspace</p>
                 <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
                   {activeAppShellSection === "portfolio" ? "Portfolio" : activeAppShellSection === "dashboards" ? "Dashboards" : activeAppShellSection === "accounts" ? "Accounts" : "Asset Types"}
                 </h1>
@@ -3901,8 +4331,139 @@ export function AppHomePage() {
                 <Card className="overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background">
                   <CardContent className={activeAppShellSection === "portfolio" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
                     {activeAppShellSection === "portfolio" ? (
-                      <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/70 text-sm text-muted-foreground dark:border-border dark:bg-card/40 dark:text-muted-foreground">
-                        Portfolio workspace coming next.
+                      <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-1">
+                            <h2 className="text-lg font-semibold text-foreground">All assets and liabilities</h2>
+                            <p className="text-sm text-muted-foreground">
+                              Each asset type you currently hold is grouped below in table format.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white p-1">
+                              <button
+                                type="button"
+                                onClick={() => setPortfolioGroupingMode("asset")}
+                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                                  portfolioGroupingMode === "asset" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                                }`}
+                              >
+                                By Asset
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPortfolioGroupingMode("account")}
+                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                                  portfolioGroupingMode === "account" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                                }`}
+                              >
+                                By Account
+                              </button>
+                            </div>
+                            <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white p-1">
+                              <button
+                                type="button"
+                                onClick={() => setPortfolioDetailMode("basic")}
+                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                                  portfolioDetailMode === "basic" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                                }`}
+                              >
+                                Basic
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPortfolioDetailMode("detailed")}
+                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                                  portfolioDetailMode === "detailed" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                                }`}
+                              >
+                                Detailed
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {portfolioHoldingsNotice ? (
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-muted-foreground">
+                            {portfolioHoldingsNotice}
+                          </div>
+                        ) : null}
+
+                        {isPortfolioHoldingsLoading ? (
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            {Array.from({ length: 2 }, (_, index) => (
+                              <div key={`portfolio-loading-${index}`} className="rounded-xl border border-slate-200 bg-white p-4">
+                                <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
+                                <div className="mt-4 space-y-2">
+                                  {Array.from({ length: 5 }, (_, row) => (
+                                    <div key={`portfolio-loading-row-${index}-${row}`} className="h-10 animate-pulse rounded-lg bg-slate-100" />
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : portfolioGroupedSections.length === 0 ? (
+                          <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-sm text-muted-foreground">
+                            No assets or liabilities have been added yet. Use Add Assets to start building your portfolio.
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {portfolioGroupedSections.map((group) => (
+                              <div key={`portfolio-group-${group.key}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                                  <div>
+                                    <h3 className="text-base font-semibold text-foreground">{group.label}</h3>
+                                    <p className="text-sm text-muted-foreground">{group.subtitle}</p>
+                                  </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full border-collapse">
+                                    <thead>
+                                      <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
+                                        <th className="px-4 py-3 font-medium">Asset</th>
+                                        <th className="px-4 py-3 font-medium">Ticker</th>
+                                        <th className="px-4 py-3 font-medium">{portfolioGroupingMode === "asset" ? "Account" : "Asset Type"}</th>
+                                        <th className="px-4 py-3 font-medium">Quantity</th>
+                                        <th className="px-4 py-3 font-medium">Avg. Cost</th>
+                                        {portfolioDetailMode === "detailed" ? (
+                                          <>
+                                            <th className="px-4 py-3 font-medium">Sector</th>
+                                            <th className="px-4 py-3 font-medium">Dividends</th>
+                                            <th className="px-4 py-3 font-medium">Cash Flow</th>
+                                          </>
+                                        ) : null}
+                                        <th className="px-4 py-3 font-medium">Updated</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {group.rows.map((holding) => (
+                                        <tr key={`portfolio-holding-${holding.id}`} className="border-b border-slate-100 text-sm last:border-b-0">
+                                          <td className="px-4 py-3 font-medium text-foreground">{holding.asset_display_name}</td>
+                                          <td className="px-4 py-3 text-muted-foreground">{holding.original_ticker || "—"}</td>
+                                          <td className="px-4 py-3 text-muted-foreground">
+                                            {portfolioGroupingMode === "asset"
+                                              ? holding.account_name
+                                              : assetTypeNameBySlug.get(holding.asset_type) ?? formatSlugLabel(holding.asset_type)}
+                                          </td>
+                                          <td className="px-4 py-3 text-muted-foreground">{formatNumber(holding.quantity, { maximumFractionDigits: 4 })}</td>
+                                          <td className="px-4 py-3 text-muted-foreground">{formatCurrency(holding.average_purchase_price)}</td>
+                                          {portfolioDetailMode === "detailed" ? (
+                                            <>
+                                              <td className="px-4 py-3 text-muted-foreground">—</td>
+                                              <td className="px-4 py-3 text-muted-foreground">—</td>
+                                              <td className="px-4 py-3 text-muted-foreground">—</td>
+                                            </>
+                                          ) : null}
+                                          <td className="px-4 py-3 text-muted-foreground">{formatDateLabel(holding.updated_at)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : isAssetsLiabilitiesDashboard ? (
                       <div className="space-y-3">
@@ -3996,61 +4557,352 @@ export function AppHomePage() {
       </div>
       {isAddAssetModalOpen && !isEditing ? (
         <div className="fixed inset-0 z-[78] flex items-center justify-center bg-slate-900/35 px-4">
-          <div className="w-full max-w-xl rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)]">
+          <div className="w-full max-w-3xl rounded-[1.75rem] border border-slate-200 bg-[#f8f8fb] p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)]">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">What do you want to add?</h2>
-                <p className="text-sm text-slate-600">Use one flow to add holdings, accounts, or a new asset type.</p>
+              <div className="flex-1">
+                <h2 className="text-xl font-semibold text-slate-900">
+                  {isAddAssetTypeViewOpen ? "New Asset Type" : "Add Asset"}
+                </h2>
+                {!isAddAssetTypeViewOpen ? (
+                  <div className="mt-3 flex w-full flex-wrap items-center justify-center gap-3 text-center text-xs">
+                    <span className={addAssetStep === "type" ? "font-medium text-slate-900" : "text-slate-500"}>1. Select Asset Type</span>
+                    <span className="h-px w-8 bg-slate-300" aria-hidden="true" />
+                    <span className={addAssetStep === "account" ? "font-medium text-slate-900" : "text-slate-500"}>2. Choose or Create Account</span>
+                    <span className="h-px w-8 bg-slate-300" aria-hidden="true" />
+                    <span className={addAssetStep === "asset" ? "font-medium text-slate-900" : "text-slate-500"}>3. Add or Sync Asset</span>
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddAssetModalOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 transition-colors hover:bg-slate-200"
+                onClick={closeAddAssetsModal}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-200"
                 aria-label="Close add flow"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
-              {addAssetModalAssetTypes.map((assetType) => {
-                const assetTypeKey = `asset-type:${assetType.slug ?? assetType.id}`;
-                return (
-                  <div key={`add-asset-row-${assetTypeKey}`} className="rounded-xl border border-blue-100 bg-slate-50 p-3">
-                    <p className="text-sm font-semibold text-slate-900">{assetType.name}</p>
-                    <div className="mt-2 overflow-x-auto">
-                      <div className="flex min-w-max items-center gap-2">
+            <div className="max-h-[62vh] overflow-y-auto pr-1">
+              {isAddAssetTypeViewOpen ? (
+                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="space-y-2">
+                    <label htmlFor="new-asset-type-name" className="text-sm font-medium text-slate-900">
+                      Asset type name
+                    </label>
+                    <input
+                      id="new-asset-type-name"
+                      type="text"
+                      value={newAssetTypeName}
+                      onChange={(event) => {
+                        setNewAssetTypeName(event.target.value);
+                        if (newAssetTypeError) setNewAssetTypeError(null);
+                      }}
+                      placeholder="Example: Private Credit"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400"
+                    />
+                    {newAssetTypeError ? <p className="text-sm text-rose-600">{newAssetTypeError}</p> : null}
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddAssetTypeViewOpen(false);
+                        setNewAssetTypeName("");
+                        setNewAssetTypeError(null);
+                      }}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateAssetType()}
+                      disabled={isCreatingAssetType}
+                      className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCreatingAssetType ? "Creating..." : "Create Asset Type"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {addAssetFlowError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                      {addAssetFlowError}
+                    </div>
+                  ) : null}
+                  {addAssetStep === "type" ? (
+                    <>
+                      <div className="grid auto-rows-[124px] grid-cols-2 gap-3 md:grid-cols-3">
+                        {addAssetModalAssetTypes.map((assetType) => {
+                          const assetTypeKey = `add-asset-type-${assetType.slug ?? assetType.id}`;
+                          const Icon = getAddAssetTileIcon(assetType.slug);
+                          const toneClass = getAddAssetTileTone(assetType.slug);
+                          return (
+                            <button
+                              key={assetTypeKey}
+                              type="button"
+                              onClick={() => {
+                                if (assetType.slug === "equity") {
+                                  beginAddAssetFlow(assetType);
+                                  return;
+                                }
+                                setActiveSidebarCategory(`asset-type:${assetType.slug ?? assetType.id}`);
+                                setActiveSidebarLabel(assetType.name);
+                                closeAddAssetsModal();
+                              }}
+                              className={`group rounded-[1.25rem] border p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all duration-150 hover:-translate-y-0.5 ${toneClass}`}
+                            >
+                              <div className="flex h-full flex-col justify-between gap-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 ring-1 ring-slate-200 transition-colors group-hover:bg-white">
+                                    <Icon className="h-5 w-5 text-slate-700" />
+                                  </span>
+                                </div>
+                                <div className="pr-2">
+                                  <p className="text-base font-semibold text-slate-900">{assetType.name}</p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
                         <button
                           type="button"
                           onClick={() => {
-                            setActiveSidebarCategory("accounts");
-                            setActiveSidebarLabel("Accounts");
-                            setIsAddAssetModalOpen(false);
+                            setIsAddAssetTypeViewOpen(true);
+                            setNewAssetTypeError(null);
                           }}
-                          className="rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-slate-900"
+                          className="group rounded-[1.25rem] border border-slate-900 bg-slate-900 p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.12)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-slate-800"
                         >
-                          Add Account
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveSidebarCategory(assetTypeKey);
-                            setActiveSidebarLabel(assetType.name);
-                            setIsAddAssetModalOpen(false);
-                          }}
-                          className="rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-blue-50 hover:text-slate-900"
-                        >
-                          Add {assetType.name}
+                          <div className="flex h-full flex-col justify-between gap-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
+                                <Plus className="h-5 w-5 text-white" />
+                              </span>
+                            </div>
+                            <div className="pr-2">
+                              <p className="text-base font-semibold text-white">Add Custom Asset Type</p>
+                            </div>
+                          </div>
                         </button>
                       </div>
+                      {addAssetModalAssetTypes.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                          No asset types yet.
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {addAssetStep === "account" && selectedAddAssetType ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-base font-semibold text-slate-900">{selectedAddAssetType.name}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAddAssetStep("type")}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                        >
+                          Back
+                        </button>
+                      </div>
+                      <div className={`grid gap-4 ${isAddAccountInlineOpen ? "lg:grid-cols-[1.1fr_0.9fr]" : "lg:grid-cols-[1fr_auto]"}`}>
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="space-y-3">
+                            {eligibleAccountsForSelectedAsset.length > 0 ? (
+                              eligibleAccountsForSelectedAsset.map((account) => (
+                                <button
+                                  key={`eligible-account-${account.id}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedAddAssetAccountId(account.id);
+                                    setAddAssetStep("asset");
+                                  }}
+                                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:border-slate-300 hover:bg-white"
+                                >
+                                  <p className="text-base font-semibold text-slate-900">{account.name}</p>
+                                  <p className="mt-1 text-sm text-slate-500">{accountTypeNameById.get(account.account_type) ?? "Account"}</p>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                No existing accounts.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {!isAddAccountInlineOpen ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsAddAccountInlineOpen(true)}
+                            className="h-fit rounded-2xl border border-slate-900 bg-slate-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+                          >
+                            Add New Account
+                          </button>
+                        ) : (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="grid gap-3">
+                              <select
+                                value={newAccountTypeId ?? ""}
+                                onChange={(event) => setNewAccountTypeId(Number(event.target.value))}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                              >
+                                {eligibleAccountTypesForSelectedAsset.map((accountType) => (
+                                  <option key={`account-type-option-${accountType.id}`} value={accountType.id}>
+                                    {accountType.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="text"
+                                value={newAccountName}
+                                onChange={(event) => setNewAccountName(event.target.value)}
+                                placeholder={brokerageAccountType ? "Brokerage Account" : "Account Name"}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                              />
+                              <input
+                                type="text"
+                                value={newAccountBroker}
+                                onChange={(event) => setNewAccountBroker(event.target.value)}
+                                placeholder="Broker"
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                              />
+                              <select
+                                value={newAccountPortfolioId ?? ""}
+                                onChange={(event) => setNewAccountPortfolioId(Number(event.target.value))}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                              >
+                                {(accountCreateOptions?.portfolios ?? []).map((portfolio) => (
+                                  <option key={`portfolio-option-${portfolio.id}`} value={portfolio.id}>
+                                    {portfolio.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={newAccountClassificationId ?? ""}
+                                onChange={(event) => setNewAccountClassificationId(Number(event.target.value))}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                              >
+                                {(accountCreateOptions?.classification_definitions ?? []).map((classification) => (
+                                  <option key={`classification-option-${classification.id}`} value={classification.id}>
+                                    {classification.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="mt-4 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleCreateEligibleAccount()}
+                                disabled={isCreatingAccount}
+                                className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isCreatingAccount ? "Creating..." : "Add Account"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsAddAccountInlineOpen(false)}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-              {addAssetModalAssetTypes.length === 0 ? (
-                <div className="rounded-xl border border-blue-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  No asset types found.
+                  ) : null}
+                  {addAssetStep === "asset" && selectedAddAssetType?.slug === "equity" ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-slate-500">Account selected</p>
+                          <p className="text-base font-semibold text-slate-900">
+                            {eligibleAccountsForSelectedAsset.find((account) => account.id === selectedAddAssetAccountId)?.name ?? "Account"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAddAssetStep("account")}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                        >
+                          Back
+                        </button>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="text-sm font-medium text-slate-900">Find equity</p>
+                        <input
+                          type="text"
+                          value={equitySearchQuery}
+                          onChange={(event) => {
+                            setEquitySearchQuery(event.target.value);
+                            setSelectedEquityResult(null);
+                          }}
+                          placeholder="Type company name or ticker"
+                          className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                        />
+                        <div className="mt-3 max-h-[240px] overflow-y-auto space-y-2">
+                          {isEquitySearchLoading ? (
+                            <div className="text-sm text-slate-500">Searching…</div>
+                          ) : null}
+                          {!isEquitySearchLoading && equitySearchQuery.trim().length > 0 && equitySearchResults.length === 0 ? (
+                            <div className="text-sm text-slate-500">No matches found.</div>
+                          ) : null}
+                          {equitySearchResults.map((result) => (
+                            <button
+                              key={`equity-result-${result.asset_id}`}
+                              type="button"
+                              onClick={() => setSelectedEquityResult(result)}
+                              className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
+                                selectedEquityResult?.asset_id === result.asset_id
+                                  ? "border-slate-900 bg-slate-900 text-white"
+                                  : "border-slate-200 bg-slate-50 text-slate-900 hover:bg-white"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold">{result.ticker}</p>
+                                  <p className={`text-sm ${selectedEquityResult?.asset_id === result.asset_id ? "text-white/80" : "text-slate-500"}`}>{result.name}</p>
+                                </div>
+                                <div className={`text-xs ${selectedEquityResult?.asset_id === result.asset_id ? "text-white/70" : "text-slate-400"}`}>
+                                  {result.sector ?? "Equity"}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={newHoldingQuantity}
+                          onChange={(event) => setNewHoldingQuantity(event.target.value)}
+                          placeholder="Quantity"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                        />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={newHoldingAverageCost}
+                          onChange={(event) => setNewHoldingAverageCost(event.target.value)}
+                          placeholder="Average cost (optional)"
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleSubmitEquityHolding()}
+                        disabled={isSubmittingHolding}
+                        className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSubmittingHolding ? "Adding..." : "Add Equity"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
         </div>

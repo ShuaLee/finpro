@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from assets.models import AssetType, CustomAsset, RealEstateAsset, RealEstateType
+from assets.models import AssetType, CustomAsset, EquityAsset, RealEstateAsset, RealEstateType
 
 
 class AssetTypeSerializer(serializers.ModelSerializer):
@@ -59,6 +59,25 @@ class CustomAssetUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False)
     currency_code = serializers.CharField(max_length=3, required=False)
     requires_review = serializers.BooleanField(required=False)
+
+
+class EquityLookupSerializer(serializers.ModelSerializer):
+    asset_id = serializers.UUIDField(source="asset_id", read_only=True)
+    currency_code = serializers.CharField(source="currency.code", read_only=True)
+
+    class Meta:
+        model = EquityAsset
+        fields = (
+            "asset_id",
+            "ticker",
+            "name",
+            "sector",
+            "industry",
+            "exchange_id",
+            "currency_code",
+            "is_etf",
+            "is_fund",
+        )
 
 
 class RealEstateTypeSerializer(serializers.ModelSerializer):

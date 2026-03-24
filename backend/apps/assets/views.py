@@ -1,11 +1,12 @@
 from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from assets.models import AssetType, CustomAsset, RealEstateAsset, RealEstateType
+from assets.models import AssetType, CustomAsset, EquityAsset, RealEstateAsset, RealEstateType
 from assets.serializers import (
     AssetTypeCreateSerializer,
     AssetTypeSerializer,
@@ -13,6 +14,7 @@ from assets.serializers import (
     CustomAssetCreateSerializer,
     CustomAssetSerializer,
     CustomAssetUpdateSerializer,
+    EquityLookupSerializer,
     RealEstateAssetCreateSerializer,
     RealEstateAssetSerializer,
     RealEstateAssetUpdateSerializer,
@@ -50,6 +52,25 @@ class AssetTypeListView(APIView):
         queryset = AssetType.objects.filter(created_by__isnull=True) | AssetType.objects.filter(created_by=profile)
         queryset = queryset.order_by("name")
         return Response(AssetTypeSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
+
+
+class EquityLookupView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = (request.query_params.get("q") or "").strip()
+        if len(query) < 1:
+            return Response([], status=status.HTTP_200_OK)
+
+        queryset = (
+            EquityAsset.objects.select_related("asset", "currency")
+            .filter(
+                Q(ticker__istartswith=query)
+                | Q(name__icontains=query)
+            )
+            .order_by("ticker")[:12]
+        )
+        return Response(EquityLookupSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
 
 
 class CustomAssetTypeCreateView(APIView):

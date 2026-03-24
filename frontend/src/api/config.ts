@@ -29,9 +29,13 @@ export const API_ENDPOINTS = {
     list: `${API_BASE_URL}/accounts/`,
     createOptions: `${API_BASE_URL}/accounts/create-options/`,
     sidebar: `${API_BASE_URL}/accounts/sidebar/`,
+    holdings: (accountId: number) => `${API_BASE_URL}/accounts/${accountId}/holdings/`,
+    createCustomType: `${API_BASE_URL}/accounts/account-types/custom/`,
   },
   assets: {
     assetTypes: `${API_BASE_URL}/assets/asset-types/`,
+    createCustomAssetType: `${API_BASE_URL}/assets/asset-types/custom/`,
+    equityLookup: `${API_BASE_URL}/assets/equities/lookup/`,
   },
   portfolios: {
     dashboardLayouts: `${API_BASE_URL}/portfolios/dashboard-layouts/`,
