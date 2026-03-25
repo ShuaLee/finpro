@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import {
   CubeIcon as CubeOutlineIcon,
   HomeIcon as HomeOutlineIcon,
+  ListBulletIcon as ListBulletOutlineIcon,
   Squares2X2Icon as Squares2X2OutlineIcon,
   UserCircleIcon as UserCircleOutlineIcon,
   WalletIcon as WalletOutlineIcon,
@@ -11,6 +12,7 @@ import {
   BriefcaseIcon as BriefcaseSolidIcon,
   CubeIcon as CubeSolidIcon,
   HomeIcon as HomeSolidIcon,
+  ListBulletIcon as ListBulletSolidIcon,
   Squares2X2Icon as Squares2X2SolidIcon,
   WalletIcon as WalletSolidIcon,
 } from "@heroicons/react/24/solid";
@@ -93,7 +95,7 @@ type NavDragItem = {
   kind: NavDragKind;
   key: string;
 };
-type AppShellSection = "portfolio" | "dashboards" | "accounts" | "assetTypes";
+type AppShellSection = "portfolio" | "holdings" | "dashboards" | "accounts" | "assetTypes" | "addAccount";
 type PortfolioHoldingRow = AccountHolding & {
   account_name: string;
 };
@@ -103,6 +105,7 @@ type PortfolioGroupedSection = {
   subtitle: string;
   rows: PortfolioHoldingRow[];
 };
+type ShellSortMode = "name_asc" | "name_desc" | "value_desc" | "value_asc";
 type AddAssetStep = "type" | "account" | "asset";
 
 type SavedLayout = {
@@ -269,6 +272,12 @@ const formatDateLabel = (value: string | null | undefined) => {
     year: "numeric",
   });
 };
+const getHoldingValue = (holding: Pick<AccountHolding, "quantity" | "average_purchase_price">) => {
+  const quantity = Number(holding.quantity ?? 0);
+  const averagePurchasePrice = Number(holding.average_purchase_price ?? 0);
+  if (!Number.isFinite(quantity) || !Number.isFinite(averagePurchasePrice)) return 0;
+  return Math.max(0, quantity * averagePurchasePrice);
+};
 const getAddAssetTileIcon = (slug: string | null | undefined) => {
   switch ((slug ?? "").trim().toLowerCase()) {
     case "equity":
@@ -324,8 +333,12 @@ export function AppHomePage() {
   const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHoldingRow[]>([]);
   const [isPortfolioHoldingsLoading, setIsPortfolioHoldingsLoading] = useState(false);
   const [portfolioHoldingsNotice, setPortfolioHoldingsNotice] = useState<string | null>(null);
-  const [portfolioGroupingMode, setPortfolioGroupingMode] = useState<"asset" | "account">("asset");
-  const [portfolioDetailMode, setPortfolioDetailMode] = useState<"basic" | "detailed">("detailed");
+  const [portfolioGroupingMode, setPortfolioGroupingMode] = useState<"asset" | "account">("account");
+  const [accountsShellSortMode, setAccountsShellSortMode] = useState<ShellSortMode>("value_desc");
+  const [assetTypesShellSortMode, setAssetTypesShellSortMode] = useState<ShellSortMode>("value_desc");
+  const [collapsedAccountTypeGroups, setCollapsedAccountTypeGroups] = useState<string[]>([]);
+  const [collapsedAssetTypeGroups, setCollapsedAssetTypeGroups] = useState<string[]>([]);
+  const portfolioDetailMode: "basic" | "detailed" = "detailed";
   const [accountCreateOptions, setAccountCreateOptions] = useState<AccountCreateOptions | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
@@ -830,11 +843,140 @@ export function AppHomePage() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [accountTypeIdByAccountId, accountTypeNameById, assetTypeNameBySlug, portfolioHoldings]);
   const portfolioGroupedSections = portfolioGroupingMode === "asset" ? portfolioHoldingsByType : portfolioHoldingsByAccount;
+  const holdingValueByAccountId = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const holding of portfolioHoldings) {
+      totals.set(holding.account, (totals.get(holding.account) ?? 0) + getHoldingValue(holding));
+    }
+    return totals;
+  }, [portfolioHoldings]);
+  const sortShellRows = useCallback(<T extends { label: string; value: number }>(items: T[], mode: ShellSortMode) => {
+    const next = [...items];
+    next.sort((a, b) => {
+      if (mode === "value_desc") return b.value - a.value || a.label.localeCompare(b.label);
+      if (mode === "value_asc") return a.value - b.value || a.label.localeCompare(b.label);
+      if (mode === "name_desc") return b.label.localeCompare(a.label);
+      return a.label.localeCompare(b.label);
+    });
+    return next;
+  }, []);
+  const accountsShellGroups = useMemo(() => {
+    const accountTypeMetaById = new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type] as const));
+    const grouped = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        totalValue: number;
+        items: Array<{ key: string; label: string; subtitle: string | null; value: number }>;
+      }
+    >();
+    for (const account of accountRows) {
+      const typeMeta = accountTypeMetaById.get(account.account_type);
+      const groupKey = typeMeta?.slug ?? `account-type-${account.account_type}`;
+      const groupLabel = typeMeta?.name ?? "Account Type";
+      const accountValue = holdingValueByAccountId.get(account.id) ?? 0;
+      const existing = grouped.get(groupKey);
+      if (existing) {
+        existing.totalValue += accountValue;
+        existing.items.push({
+          key: `account-${account.id}`,
+          label: account.name,
+          subtitle: account.broker || null,
+          value: accountValue,
+        });
+      } else {
+        grouped.set(groupKey, {
+          key: groupKey,
+          label: groupLabel,
+          totalValue: accountValue,
+          items: [
+            {
+              key: `account-${account.id}`,
+              label: account.name,
+              subtitle: account.broker || null,
+              value: accountValue,
+            },
+          ],
+        });
+      }
+    }
+    const groups = Array.from(grouped.values()).map((group) => ({
+      ...group,
+      items: sortShellRows(group.items, accountsShellSortMode),
+    }));
+    return sortShellRows(
+      groups.map((group) => ({ label: group.label, value: group.totalValue })),
+      accountsShellSortMode,
+    ).map((sorted) => groups.find((group) => group.label === sorted.label)!).filter(Boolean);
+  }, [accountCreateOptions?.account_types, accountRows, accountsShellSortMode, holdingValueByAccountId, sortShellRows]);
+  const assetTypesShellGroups = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        totalValue: number;
+        items: Array<{ key: string; label: string; subtitle: string | null; value: number }>;
+      }
+    >();
+    for (const holding of portfolioHoldings) {
+      const assetTypeSlug = holding.asset_type;
+      const groupLabel = assetTypeNameBySlug.get(assetTypeSlug) ?? formatSlugLabel(assetTypeSlug);
+      const holdingValue = getHoldingValue(holding);
+      const itemKey = `${assetTypeSlug}:${holding.asset_display_name}`;
+      const existing = grouped.get(assetTypeSlug);
+      if (existing) {
+        existing.totalValue += holdingValue;
+        const item = existing.items.find((entry) => entry.key === itemKey);
+        if (item) {
+          item.value += holdingValue;
+        } else {
+          existing.items.push({
+            key: itemKey,
+            label: holding.asset_display_name,
+            subtitle: holding.original_ticker || null,
+            value: holdingValue,
+          });
+        }
+      } else {
+        grouped.set(assetTypeSlug, {
+          key: assetTypeSlug,
+          label: groupLabel,
+          totalValue: holdingValue,
+          items: [
+            {
+              key: itemKey,
+              label: holding.asset_display_name,
+              subtitle: holding.original_ticker || null,
+              value: holdingValue,
+            },
+          ],
+        });
+      }
+    }
+    const groups = Array.from(grouped.values()).map((group) => ({
+      ...group,
+      items: sortShellRows(group.items, assetTypesShellSortMode),
+    }));
+    return sortShellRows(
+      groups.map((group) => ({ label: group.label, value: group.totalValue })),
+      assetTypesShellSortMode,
+    ).map((sorted) => groups.find((group) => group.label === sorted.label)!).filter(Boolean);
+  }, [assetTypeNameBySlug, assetTypesShellSortMode, portfolioHoldings, sortShellRows]);
   const displayedAccountEntries = useMemo(() => {
     return selectedAccountTypeIds.length > 0
       ? orderedAccountEntries.filter((entry) => selectedAccountTypeIds.includes(entry.account.account_type))
       : orderedAccountEntries;
   }, [orderedAccountEntries, selectedAccountTypeIds]);
+  const addAccountTypeTiles = useMemo(() => {
+    const accountTypes = [...(accountCreateOptions?.account_types ?? [])];
+    accountTypes.sort((a, b) => {
+      if (a.is_system !== b.is_system) return a.is_system ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return accountTypes;
+  }, [accountCreateOptions?.account_types]);
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
     const currentSignature = JSON.stringify({
@@ -2865,6 +3007,7 @@ export function AppHomePage() {
   }, [isAssetsLiabilitiesDashboard, isEditing]);
 
   useEffect(() => {
+    if (activeAppShellSection === "addAccount") return;
     if (activeAppShellSection === "portfolio" && activeSidebarCategory === "portfolio") return;
     if (activeSidebarCategory === "accounts" || activeSidebarCategory.startsWith("account:")) {
       setActiveAppShellSection("accounts");
@@ -2920,6 +3063,33 @@ export function AppHomePage() {
                 )}
               </span>
               {!isSideNavCollapsed ? <span>Portfolio</span> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAppShellSection("holdings");
+                setActiveSidebarCategory("portfolio");
+                setActiveSidebarLabel("Portfolio");
+              }}
+              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
+                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
+              } ${
+                isSideNavCollapsed ? "justify-center" : "gap-3"
+              } ${
+                activeAppShellSection === "holdings"
+                  ? "bg-foreground/[0.07] font-bold text-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+              aria-label="Holdings"
+            >
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
+                {activeAppShellSection === "holdings" ? (
+                  <ListBulletSolidIcon className="h-[18px] w-[18px] text-foreground" />
+                ) : (
+                  <ListBulletOutlineIcon className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              {!isSideNavCollapsed ? <span>Holdings</span> : null}
             </button>
             <button
               type="button"
@@ -3038,7 +3208,17 @@ export function AppHomePage() {
                 <div className="flex h-[72px] items-center justify-between gap-4 border border-background bg-background px-5 shadow-none">
                   <div className="min-w-0">
                     <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
-                      {activeAppShellSection === "portfolio" ? "Portfolio" : activeAppShellSection === "dashboards" ? "Dashboards" : activeAppShellSection === "accounts" ? "Accounts" : "Asset Types"}
+                      {activeAppShellSection === "portfolio"
+                        ? "Portfolio"
+                        : activeAppShellSection === "holdings"
+                          ? "Holdings"
+                          : activeAppShellSection === "dashboards"
+                            ? "Dashboards"
+                            : activeAppShellSection === "accounts"
+                              ? "Accounts"
+                              : activeAppShellSection === "addAccount"
+                                ? "Add Account"
+                              : "Asset Types"}
                     </h1>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3053,7 +3233,7 @@ export function AppHomePage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveAppShellSection("accounts");
+                        setActiveAppShellSection("addAccount");
                         setActiveSidebarCategory("accounts");
                         setActiveSidebarLabel("Accounts");
                       }}
@@ -4374,7 +4554,7 @@ export function AppHomePage() {
                 className={`${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""} space-y-4`}
               >
               <div className="space-y-4">
-              {activeAppShellSection !== "portfolio" ? (
+              {activeAppShellSection !== "portfolio" && activeAppShellSection !== "addAccount" ? (
                 <div className="grid grid-cols-1 gap-3">
                   <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
                       <CardContent className="h-[92px] px-4 py-2">
@@ -4424,56 +4604,73 @@ export function AppHomePage() {
               ) : null}
               {!isEditing ? (
                 <Card className="overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background">
-                  <CardContent className={activeAppShellSection === "portfolio" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
+                  <CardContent className={activeAppShellSection === "portfolio" || activeAppShellSection === "addAccount" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
                     {activeAppShellSection === "portfolio" ? (
                       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                      <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="space-y-4 rounded-xl border border-background bg-background p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="space-y-1">
-                            <h2 className="text-lg font-semibold text-foreground">All assets and liabilities</h2>
-                            <p className="text-sm text-muted-foreground">
-                              Each asset type you currently hold is grouped below in table format.
-                            </p>
+                          <div>
+                            <p className="text-3xl font-bold tracking-tight text-foreground">$98,056</p>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white p-1">
-                              <button
-                                type="button"
-                                onClick={() => setPortfolioGroupingMode("asset")}
-                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
-                                  portfolioGroupingMode === "asset" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
-                                }`}
-                              >
-                                By Asset
-                              </button>
+                        </div>
+
+                        <div className="px-1 pb-1 pt-2">
+                          <div className="h-[240px] w-full">
+                            <svg viewBox="0 0 1200 240" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+                              <defs>
+                                <linearGradient id="portfolio-placeholder-fill" x1="0" x2="0" y1="0" y2="1">
+                                  <stop offset="0%" stopColor="rgb(34 197 94 / 0.16)" />
+                                  <stop offset="100%" stopColor="rgb(34 197 94 / 0)" />
+                                </linearGradient>
+                              </defs>
+                              <path
+                                d="M0 210 L0 178 L55 178 L82 176 L108 168 L138 145 L162 142 L190 126 L214 129 L242 112 L270 118 L300 108 L334 110 L364 101 L398 105 L432 92 L470 95 L504 89 L538 73 L570 58 L605 54 L636 60 L670 50 L690 157 L728 155 L760 151 L796 141 L832 149 L866 144 L902 140 L934 132 L970 149 L1003 142 L1038 136 L1074 129 L1106 137 L1140 128 L1180 120 L1200 118 L1200 210 Z"
+                                fill="url(#portfolio-placeholder-fill)"
+                              />
+                              <path
+                                d="M0 178 L55 178 L82 176 L108 168 L138 145 L162 142 L190 126 L214 129 L242 112 L270 118 L300 108 L334 110 L364 101 L398 105 L432 92 L470 95 L504 89 L538 73 L570 58 L605 54 L636 60 L670 50 L690 157 L728 155 L760 151 L796 141 L832 149 L866 144 L902 140 L934 132 L970 149 L1003 142 L1038 136 L1074 129 L1106 137 L1140 128 L1180 120 L1200 118"
+                                fill="none"
+                                stroke="#16a34a"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <line x1="0" y1="210" x2="1200" y2="210" stroke="rgb(148 163 184 / 0.35)" strokeWidth="1" />
+                            </svg>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-4 border-t border-slate-200/80 pt-3">
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+                              <span>1M</span>
+                              <span>3M</span>
+                              <span>6M</span>
+                              <span>YTD</span>
+                              <span>1Y</span>
+                              <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">ALL</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+                              <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">Value</span>
+                              <span>Returns</span>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex justify-start">
+                            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1 shadow-[0_4px_10px_rgba(15,23,42,0.04)]">
                               <button
                                 type="button"
                                 onClick={() => setPortfolioGroupingMode("account")}
-                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
-                                  portfolioGroupingMode === "account" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                                  portfolioGroupingMode === "account" ? "bg-foreground text-background" : "text-slate-600 hover:text-slate-900"
                                 }`}
                               >
-                                By Account
-                              </button>
-                            </div>
-                            <div className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white p-1">
-                              <button
-                                type="button"
-                                onClick={() => setPortfolioDetailMode("basic")}
-                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
-                                  portfolioDetailMode === "basic" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
-                                }`}
-                              >
-                                Basic
+                                Accounts
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setPortfolioDetailMode("detailed")}
-                                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
-                                  portfolioDetailMode === "detailed" ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                                onClick={() => setPortfolioGroupingMode("asset")}
+                                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                                  portfolioGroupingMode === "asset" ? "bg-foreground text-background" : "text-slate-600 hover:text-slate-900"
                                 }`}
                               >
-                                Detailed
+                                Asset Types
                               </button>
                             </div>
                           </div>
@@ -4566,6 +4763,222 @@ export function AppHomePage() {
                           <p className="text-sm font-medium text-slate-900">New Tile</p>
                         </div>
                       </div>
+                      </div>
+                    ) : activeAppShellSection === "holdings" ? (
+                      <div className="flex min-h-[74vh] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-muted-foreground">
+                        Holdings view coming next.
+                      </div>
+                    ) : activeAppShellSection === "accounts" ? (
+                      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-lg font-semibold text-foreground">Accounts</p>
+                          <div className="flex items-center gap-2">
+                            <label htmlFor="accounts-shell-sort" className="text-sm font-medium text-slate-500">
+                              Sort
+                            </label>
+                            <select
+                              id="accounts-shell-sort"
+                              value={accountsShellSortMode}
+                              onChange={(event) => setAccountsShellSortMode(event.target.value as ShellSortMode)}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-foreground"
+                            >
+                              <option value="value_desc">Value (High-Low)</option>
+                              <option value="value_asc">Value (Low-High)</option>
+                              <option value="name_asc">Alphabetical (A-Z)</option>
+                              <option value="name_desc">Alphabetical (Z-A)</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {accountsShellGroups.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-muted-foreground">
+                              No accounts yet.
+                            </div>
+                          ) : (
+                            accountsShellGroups.map((group) => {
+                              const collapsed = collapsedAccountTypeGroups.includes(group.key);
+                              return (
+                                <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCollapsedAccountTypeGroups((previous) =>
+                                        previous.includes(group.key) ? previous.filter((key) => key !== group.key) : [...previous, group.key],
+                                      )
+                                    }
+                                    className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+                                  >
+                                    <div>
+                                      <p className="text-base font-semibold text-foreground">{group.label}</p>
+                                      <p className="text-sm text-muted-foreground">{group.items.length} accounts</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <p className="text-base font-semibold text-foreground">{formatCurrency(group.totalValue)}</p>
+                                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`} />
+                                    </div>
+                                  </button>
+                                  {!collapsed ? (
+                                    <div className="border-t border-slate-200 bg-white">
+                                      {group.items.map((item) => (
+                                        <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                                          <div className="min-w-0">
+                                            <p className="truncate font-medium text-foreground">{item.label}</p>
+                                            {item.subtitle ? <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p> : null}
+                                          </div>
+                                          <p className="shrink-0 font-medium text-foreground">{formatCurrency(item.value)}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ) : activeAppShellSection === "addAccount" ? (
+                      <div className="space-y-6 rounded-xl border border-slate-200 bg-white p-6">
+                        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-3">
+                            <button
+                              type="button"
+                              onClick={() => setActiveAppShellSection("accounts")}
+                              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-foreground"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              <span>Back to Accounts</span>
+                            </button>
+                            <div className="space-y-2">
+                              <h2 className="text-3xl font-semibold tracking-tight text-foreground">Which Account would you like to add?</h2>
+                              <p className="max-w-2xl text-sm text-muted-foreground">
+                                Choose a built-in account type to get started, or create a custom account type for something more specific.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-5">
+                            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-800 shadow-sm">
+                              <WalletSolidIcon className="h-7 w-7" />
+                            </div>
+                          </div>
+                        </div>
+                        {addAccountTypeTiles.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-muted-foreground">
+                            No account types available yet.
+                          </div>
+                        ) : (
+                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {addAccountTypeTiles.map((accountType) => (
+                              <button
+                                key={`add-account-type-${accountType.id}`}
+                                type="button"
+                                className="group rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_6px_18px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_10px_22px_rgba(15,23,42,0.08)]"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 transition-colors group-hover:bg-slate-900 group-hover:text-white">
+                                    <WalletOutlineIcon className="h-5 w-5" />
+                                  </div>
+                                  {!accountType.is_system ? (
+                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                      Custom
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="mt-5">
+                                  <p className="text-base font-semibold text-foreground">{accountType.name}</p>
+                                  {accountType.description ? (
+                                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{accountType.description}</p>
+                                  ) : (
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      {accountType.allowed_asset_type_slugs.length > 0
+                                        ? accountType.allowed_asset_type_slugs.map(formatSlugLabel).join(", ")
+                                        : "General account type"}
+                                    </p>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              className="group rounded-2xl border border-slate-300 bg-slate-100/70 p-5 text-left shadow-[0_6px_18px_rgba(15,23,42,0.03)] transition-all hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-200/70"
+                            >
+                              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
+                                <Plus className="h-5 w-5" />
+                              </div>
+                              <div className="mt-5">
+                                <p className="text-base font-semibold text-foreground">Create New Account Type</p>
+                                <p className="mt-1 text-sm text-muted-foreground">Add a custom account type for a workflow that does not fit the built-in options.</p>
+                              </div>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : activeAppShellSection === "assetTypes" ? (
+                      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-lg font-semibold text-foreground">Asset Types</p>
+                          <div className="flex items-center gap-2">
+                            <label htmlFor="asset-types-shell-sort" className="text-sm font-medium text-slate-500">
+                              Sort
+                            </label>
+                            <select
+                              id="asset-types-shell-sort"
+                              value={assetTypesShellSortMode}
+                              onChange={(event) => setAssetTypesShellSortMode(event.target.value as ShellSortMode)}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-foreground"
+                            >
+                              <option value="value_desc">Value (High-Low)</option>
+                              <option value="value_asc">Value (Low-High)</option>
+                              <option value="name_asc">Alphabetical (A-Z)</option>
+                              <option value="name_desc">Alphabetical (Z-A)</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {assetTypesShellGroups.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-muted-foreground">
+                              No asset types yet.
+                            </div>
+                          ) : (
+                            assetTypesShellGroups.map((group) => {
+                              const collapsed = collapsedAssetTypeGroups.includes(group.key);
+                              return (
+                                <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCollapsedAssetTypeGroups((previous) =>
+                                        previous.includes(group.key) ? previous.filter((key) => key !== group.key) : [...previous, group.key],
+                                      )
+                                    }
+                                    className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+                                  >
+                                    <div>
+                                      <p className="text-base font-semibold text-foreground">{group.label}</p>
+                                      <p className="text-sm text-muted-foreground">{group.items.length} assets</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <p className="text-base font-semibold text-foreground">{formatCurrency(group.totalValue)}</p>
+                                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`} />
+                                    </div>
+                                  </button>
+                                  {!collapsed ? (
+                                    <div className="border-t border-slate-200 bg-white">
+                                      {group.items.map((item) => (
+                                        <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                                          <div className="min-w-0">
+                                            <p className="truncate font-medium text-foreground">{item.label}</p>
+                                            {item.subtitle ? <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p> : null}
+                                          </div>
+                                          <p className="shrink-0 font-medium text-foreground">{formatCurrency(item.value)}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
                       </div>
                     ) : isAssetsLiabilitiesDashboard ? (
                       <div className="space-y-3">
