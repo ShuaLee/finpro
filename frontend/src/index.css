@@ -6,27 +6,27 @@
 
 @layer base {
   :root {
-    --background: 220 8% 86%;
-    --foreground: 220 6% 24%;
-    --card: 220 8% 94%;
-    --card-foreground: 220 6% 24%;
-    --popover: 220 8% 94%;
-    --popover-foreground: 220 6% 24%;
-    --primary: 220 6% 24%;
+    --background: 36 16% 93%;
+    --foreground: 28 12% 21%;
+    --card: 36 22% 96%;
+    --card-foreground: 28 12% 21%;
+    --popover: 36 22% 96%;
+    --popover-foreground: 28 12% 21%;
+    --primary: 28 12% 21%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 220 7% 90%;
-    --secondary-foreground: 220 8% 24%;
-    --muted: 220 7% 88%;
-    --muted-foreground: 220 6% 24%;
-    --accent: 220 7% 86%;
-    --accent-foreground: 220 8% 24%;
+    --secondary: 34 20% 91%;
+    --secondary-foreground: 28 12% 21%;
+    --muted: 34 16% 89%;
+    --muted-foreground: 28 10% 33%;
+    --accent: 34 18% 87%;
+    --accent-foreground: 28 12% 21%;
     --destructive: 0 74% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 7% 82%;
-    --input: 220 7% 82%;
-    --ring: 220 6% 24%;
+    --border: 34 13% 84%;
+    --input: 34 13% 84%;
+    --ring: 28 12% 21%;
     --edit-drop-slot-bg: 0 0% 100%;
-    --edit-drop-slot-border: 220 6% 26%;
+    --edit-drop-slot-border: 28 12% 24%;
     --radius: 1rem;
   }
 
@@ -61,7 +61,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    background-image: linear-gradient(180deg, #dfe2e8 0%, #d9dde4 100%);
+    background-image: linear-gradient(180deg, #f3f0ea 0%, #ece8e1 100%);
     min-width: 320px;
     min-height: 100vh;
   }

@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useLocation } from "react-router-dom";
 import {
-  BadgeDollarSign,
-  BriefcaseBusiness,
-  Boxes,
+  CubeIcon as CubeOutlineIcon,
+  HomeIcon as HomeOutlineIcon,
+  Squares2X2Icon as Squares2X2OutlineIcon,
+  UserCircleIcon as UserCircleOutlineIcon,
+  WalletIcon as WalletOutlineIcon,
+} from "@heroicons/react/24/outline";
+import {
+  BriefcaseIcon as BriefcaseSolidIcon,
+  CubeIcon as CubeSolidIcon,
+  HomeIcon as HomeSolidIcon,
+  Squares2X2Icon as Squares2X2SolidIcon,
+  WalletIcon as WalletSolidIcon,
+} from "@heroicons/react/24/solid";
+import {
+  Coins as CoinsIcon,
+  CurrencyDollarSimple as CurrencyDollarSimpleIcon,
+  HouseSimple as HouseSimpleIcon,
+  Shapes as ShapesIcon,
+} from "@phosphor-icons/react";
+import {
   Check,
   ChevronDown,
-  CircleUserRound,
+  ChevronLeft,
+  ChevronRight,
   Ellipsis,
   Eye,
   EyeOff,
@@ -254,16 +272,16 @@ const formatDateLabel = (value: string | null | undefined) => {
 const getAddAssetTileIcon = (slug: string | null | undefined) => {
   switch ((slug ?? "").trim().toLowerCase()) {
     case "equity":
-      return BadgeDollarSign;
+      return CurrencyDollarSimpleIcon;
     case "crypto":
-      return Boxes;
+      return CoinsIcon;
     case "real_estate":
-      return BriefcaseBusiness;
+      return HouseSimpleIcon;
     case "commodity":
     case "precious_metal":
-      return Grid2x2;
+      return ShapesIcon;
     default:
-      return Boxes;
+      return ShapesIcon;
   }
 };
 const getAddAssetTileTone = (_slug: string | null | undefined) => {
@@ -298,6 +316,7 @@ export function AppHomePage() {
   const { user } = useAuth();
   const location = useLocation();
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>("dashboards");
+  const [isSideNavCollapsed, setIsSideNavCollapsed] = useState(false);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
@@ -575,6 +594,10 @@ export function AppHomePage() {
     return next;
   }, [accountCreateOptions]);
   const assetTypesForNav = assetTypes.length > 0 ? assetTypes : fallbackAssetTypesFromAccountTypes;
+  const sideNavWidthClass = isSideNavCollapsed ? "w-[84px]" : "w-[228px]";
+  const sideNavLeftOffsetClass = isSideNavCollapsed ? "lg:left-[84px]" : "lg:left-[228px]";
+  const sideNavContentInsetClass = isSideNavCollapsed ? "lg:pl-[92px] lg:pr-[48px]" : "lg:pl-[252px] lg:pr-[48px]";
+  const topNavInsetClass = isSideNavCollapsed ? "lg:pl-4 lg:pr-[48px]" : "lg:pl-6 lg:pr-[48px]";
   const assetTypeNameBySlug = useMemo(
     () =>
       new Map(
@@ -2859,14 +2882,18 @@ export function AppHomePage() {
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <div className="flex min-h-screen w-full">
-        <aside className="hidden lg:flex h-screen w-[240px] shrink-0 flex-col border-r border-background bg-background px-5 py-6">
-          <div className="flex h-[72px] items-center gap-3 px-2">
+        <aside
+          className={`fixed left-0 top-0 hidden h-screen shrink-0 flex-col border-r border-background bg-background py-6 transition-[width,padding] duration-200 lg:flex ${
+            isSideNavCollapsed ? "px-[10px]" : "pl-6 pr-2"
+          } ${sideNavWidthClass}`}
+        >
+          <div className={`flex h-[72px] items-center px-2 ${isSideNavCollapsed ? "justify-center" : "gap-3"}`}>
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <BriefcaseBusiness className="h-5 w-5" />
+              <BriefcaseSolidIcon className="h-5 w-5" />
             </div>
-            <p className="text-lg font-semibold tracking-tight text-foreground">FinPro</p>
+            {!isSideNavCollapsed ? <p className="text-lg font-semibold tracking-tight text-foreground">FinPro</p> : null}
           </div>
-          <div className="mt-8 flex flex-1 flex-col gap-1">
+          <div className={`mt-8 flex flex-1 flex-col gap-1 ${isSideNavCollapsed ? "" : "px-0"}`}>
             <button
               type="button"
               onClick={() => {
@@ -2874,15 +2901,25 @@ export function AppHomePage() {
                 setActiveSidebarCategory("portfolio");
                 setActiveSidebarLabel("Portfolio");
               }}
-              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
+                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
+              } ${
+                isSideNavCollapsed ? "justify-center" : "gap-3"
+              } ${
                 activeAppShellSection === "portfolio"
-                  ? "bg-primary/10 font-semibold text-foreground"
+                  ? "bg-foreground/[0.07] font-bold text-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}
+              aria-label="Portfolio"
             >
-              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
-              <span>Portfolio</span>
-              {activeAppShellSection === "portfolio" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
+                {activeAppShellSection === "portfolio" ? (
+                  <HomeSolidIcon className="h-[18px] w-[18px] text-foreground" />
+                ) : (
+                  <HomeOutlineIcon className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              {!isSideNavCollapsed ? <span>Portfolio</span> : null}
             </button>
             <button
               type="button"
@@ -2891,15 +2928,25 @@ export function AppHomePage() {
                 setActiveSidebarCategory("portfolio");
                 setActiveSidebarLabel("Portfolio");
               }}
-              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
+                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
+              } ${
+                isSideNavCollapsed ? "justify-center" : "gap-3"
+              } ${
                 activeAppShellSection === "dashboards"
-                  ? "bg-primary/10 font-semibold text-foreground"
+                  ? "bg-foreground/[0.07] font-bold text-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}
+              aria-label="Dashboards"
             >
-              <Grid2x2 className="h-4 w-4 shrink-0" />
-              <span>Dashboards</span>
-              {activeAppShellSection === "dashboards" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
+                {activeAppShellSection === "dashboards" ? (
+                  <Squares2X2SolidIcon className="h-[18px] w-[18px] text-foreground" />
+                ) : (
+                  <Squares2X2OutlineIcon className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              {!isSideNavCollapsed ? <span>Dashboards</span> : null}
             </button>
             <button
               type="button"
@@ -2908,15 +2955,25 @@ export function AppHomePage() {
                 setActiveSidebarCategory("accounts");
                 setActiveSidebarLabel("Accounts");
               }}
-              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
+                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
+              } ${
+                isSideNavCollapsed ? "justify-center" : "gap-3"
+              } ${
                 activeAppShellSection === "accounts"
-                  ? "bg-primary/10 font-semibold text-foreground"
+                  ? "bg-foreground/[0.07] font-bold text-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}
+              aria-label="Accounts"
             >
-              <BriefcaseBusiness className="h-4 w-4 shrink-0" />
-              <span>Accounts</span>
-              {activeAppShellSection === "accounts" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
+                {activeAppShellSection === "accounts" ? (
+                  <WalletSolidIcon className="h-[18px] w-[18px] text-foreground" />
+                ) : (
+                  <WalletOutlineIcon className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              {!isSideNavCollapsed ? <span>Accounts</span> : null}
             </button>
             <button
               type="button"
@@ -2931,52 +2988,87 @@ export function AppHomePage() {
                 setActiveSidebarCategory("portfolio");
                 setActiveSidebarLabel("Portfolio");
               }}
-              className={`relative flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors ${
+              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
+                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
+              } ${
+                isSideNavCollapsed ? "justify-center" : "gap-3"
+              } ${
                 activeAppShellSection === "assetTypes"
-                  ? "bg-primary/10 font-semibold text-foreground"
+                  ? "bg-foreground/[0.07] font-bold text-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}
+              aria-label="Asset Types"
             >
-              <Boxes className="h-4 w-4 shrink-0" />
-              <span>Asset Types</span>
-              {activeAppShellSection === "assetTypes" ? <span className="absolute bottom-2 left-10 right-3 h-0.5 rounded-full bg-current" /> : null}
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
+                {activeAppShellSection === "assetTypes" ? (
+                  <CubeSolidIcon className="h-[18px] w-[18px] text-foreground" />
+                ) : (
+                  <CubeOutlineIcon className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              {!isSideNavCollapsed ? <span>Asset Types</span> : null}
             </button>
           </div>
           <button
             type="button"
-            className="mt-6 flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+            className={`mt-6 flex items-center rounded-xl px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary ${
+              isSideNavCollapsed ? "justify-center" : "gap-3"
+            }`}
+            aria-label="Profile"
           >
-            <CircleUserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{profileFirstName}</span>
+            <UserCircleOutlineIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
+            {!isSideNavCollapsed ? <span className="truncate">{profileFirstName}</span> : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsSideNavCollapsed((previous) => !previous)}
+            className={`mt-2 flex items-center rounded-xl px-3 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground ${
+              isSideNavCollapsed ? "justify-center" : "gap-3"
+            }`}
+            aria-label={isSideNavCollapsed ? "Expand side navigation" : "Collapse side navigation"}
+          >
+            {isSideNavCollapsed ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
+            {!isSideNavCollapsed ? <span>Collapse</span> : null}
           </button>
         </aside>
-        <div className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-[1680px]">
-            <div className="mb-2 flex h-[72px] items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 shadow-none">
-              <div className="min-w-0">
-                <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
-                  {activeAppShellSection === "portfolio" ? "Portfolio" : activeAppShellSection === "dashboards" ? "Dashboards" : activeAppShellSection === "accounts" ? "Accounts" : "Asset Types"}
-                </h1>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddAssetModalOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-slate-200"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Add Assets</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSettingsMenuOpen((previous) => !previous)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-muted-foreground transition-colors hover:bg-slate-200 hover:text-foreground"
-                  aria-label="Open workspace settings"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
+        <div className={`min-w-0 flex-1 px-4 pb-2 pt-[88px] sm:px-6 sm:pt-[92px] ${sideNavContentInsetClass}`}>
+          <div className={`fixed left-0 right-0 top-2 z-40 ${sideNavLeftOffsetClass}`}>
+            <div className={`px-4 sm:px-6 ${topNavInsetClass}`}>
+              <div className="w-full max-w-none lg:ml-auto lg:mr-0">
+                <div className="flex h-[72px] items-center justify-between gap-4 border border-background bg-background px-5 shadow-none">
+                  <div className="min-w-0">
+                    <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                      {activeAppShellSection === "portfolio" ? "Portfolio" : activeAppShellSection === "dashboards" ? "Dashboards" : activeAppShellSection === "accounts" ? "Accounts" : "Asset Types"}
+                    </h1>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddAssetModalOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-[0.92rem] font-bold text-foreground shadow-[0_6px_14px_rgba(28,24,20,0.08)] transition-colors hover:bg-white"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Assets</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveAppShellSection("accounts");
+                        setActiveSidebarCategory("accounts");
+                        setActiveSidebarLabel("Accounts");
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-[0.92rem] font-bold text-foreground shadow-[0_6px_14px_rgba(28,24,20,0.08)] transition-colors hover:bg-white"
+                      aria-label="Add account"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Account</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
+          </div>
+          <div className="w-full max-w-none lg:ml-auto lg:mr-0">
             <div>
               <section>
                 <div className="flex flex-col gap-4">
@@ -3037,7 +3129,11 @@ export function AppHomePage() {
                                   }`}
                                   aria-label="Portfolio"
                                 >
-                                  <BriefcaseBusiness className="h-4 w-4 text-current" />
+                                  {activeSidebarCategory === "portfolio" ? (
+                                    <HomeSolidIcon className="h-4 w-4 text-current" />
+                                  ) : (
+                                    <HomeOutlineIcon className="h-4 w-4 text-current" />
+                                  )}
                                   <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
                                     Portfolio
                                     {activeSidebarCategory === "portfolio" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
@@ -3057,7 +3153,7 @@ export function AppHomePage() {
                                   }`}
                                   aria-label="Assets and liabilities"
                                 >
-                                  <BadgeDollarSign className="h-4 w-4 text-current" />
+                                  <CurrencyDollarSimpleIcon className="h-4 w-4 text-current" weight="regular" />
                                   <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "assets-liabilities" ? "font-bold" : "font-normal"}`}>
                                     Assets & Liabilities
                                     {activeSidebarCategory === "assets-liabilities" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
@@ -3261,12 +3357,11 @@ export function AppHomePage() {
                                         }`}
                                       >
                                         <div className="flex items-center gap-2">
-                                          <BriefcaseBusiness
-                                            className={`h-4 w-4 shrink-0 ${
-                                              activeSidebarCategory === "portfolio" ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
-                                            }`}
-                                            strokeWidth={activeSidebarCategory === "portfolio" ? 2.2 : 2}
-                                          />
+                                          {activeSidebarCategory === "portfolio" ? (
+                                            <HomeSolidIcon className="h-4 w-4 shrink-0 text-foreground dark:text-foreground" />
+                                          ) : (
+                                            <HomeOutlineIcon className="h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" />
+                                          )}
                                           <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-medium" : "font-normal"}`}>
                                             Portfolio
                                           </span>
@@ -3691,11 +3786,11 @@ export function AppHomePage() {
                                                 } ${hiddenInEditClass(hidden)}`}
                                               >
                                                 <div className="flex items-center gap-2">
-                                                  <Boxes
+                                                  <ShapesIcon
                                                     className={`h-4 w-4 shrink-0 ${
                                                       activeSidebarCategory === key ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                                     }`}
-                                                    strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
+                                                    weight={activeSidebarCategory === key ? "fill" : "regular"}
                                                   />
                                                   <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-medium" : "font-normal"}`}>{assetType.name}</span>
                                                 </div>
@@ -3772,11 +3867,11 @@ export function AppHomePage() {
                                                 } ${hiddenInEditClass(hidden)}`}
                                               >
                                                 <div className="flex items-center gap-2">
-                                                  <Boxes
+                                                  <ShapesIcon
                                                     className={`h-4 w-4 shrink-0 ${
                                                       activeSidebarCategory === key ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                                     }`}
-                                                    strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
+                                                    weight={activeSidebarCategory === key ? "fill" : "regular"}
                                                   />
                                                   <span className={`truncate text-sm ${activeSidebarCategory === key ? "font-medium" : "font-normal"}`}>{assetType.name}</span>
                                                 </div>
@@ -4062,11 +4157,11 @@ export function AppHomePage() {
                                                 } ${hiddenInEditClass(hidden)}`}
                                               >
                                                 <div className="flex items-start gap-2">
-                                                  <BadgeDollarSign
+                                                  <CurrencyDollarSimpleIcon
                                                     className={`mt-0.5 h-4 w-4 shrink-0 ${
                                                       activeSidebarCategory === key ? "text-foreground dark:text-foreground" : "text-muted-foreground dark:text-muted-foreground"
                                                     }`}
-                                                    strokeWidth={activeSidebarCategory === key ? 2.2 : 2}
+                                                    weight={activeSidebarCategory === key ? "fill" : "regular"}
                                                   />
                                                   <div className="min-w-0">
                                                     <p className={`truncate text-sm ${activeSidebarCategory === key ? "font-medium" : "font-normal"}`}>{account.name}</p>
@@ -4331,6 +4426,7 @@ export function AppHomePage() {
                 <Card className="overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background">
                   <CardContent className={activeAppShellSection === "portfolio" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
                     {activeAppShellSection === "portfolio" ? (
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                       <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div className="space-y-1">
@@ -4464,6 +4560,12 @@ export function AppHomePage() {
                             ))}
                           </div>
                         )}
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex min-h-[240px] flex-col">
+                          <p className="text-sm font-medium text-slate-900">New Tile</p>
+                        </div>
+                      </div>
                       </div>
                     ) : isAssetsLiabilitiesDashboard ? (
                       <div className="space-y-3">
