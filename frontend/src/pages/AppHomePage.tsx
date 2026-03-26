@@ -107,6 +107,7 @@ type PortfolioGroupedSection = {
 };
 type ShellSortMode = "name_asc" | "name_desc" | "value_desc" | "value_asc";
 type AddAssetStep = "type" | "account" | "asset";
+type AddAccountStep = "assetType" | "accountType";
 
 type SavedLayout = {
   id: string;
@@ -325,6 +326,7 @@ export function AppHomePage() {
   const { user } = useAuth();
   const location = useLocation();
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>("dashboards");
+  const [previousAppShellSection, setPreviousAppShellSection] = useState<AppShellSection>("dashboards");
   const [isSideNavCollapsed, setIsSideNavCollapsed] = useState(false);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
@@ -351,6 +353,8 @@ export function AppHomePage() {
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
   const [addAssetStep, setAddAssetStep] = useState<AddAssetStep>("type");
   const [selectedAddAssetType, setSelectedAddAssetType] = useState<AssetTypeOption | null>(null);
+  const [addAccountStep, setAddAccountStep] = useState<AddAccountStep>("assetType");
+  const [selectedAddAccountAssetType, setSelectedAddAccountAssetType] = useState<AssetTypeOption | null>(null);
   const [selectedAddAssetAccountId, setSelectedAddAssetAccountId] = useState<number | null>(null);
   const [isAddAccountInlineOpen, setIsAddAccountInlineOpen] = useState(false);
   const [equitySearchQuery, setEquitySearchQuery] = useState("");
@@ -650,6 +654,14 @@ export function AppHomePage() {
       return a.name.localeCompare(b.name);
     });
   }, [assetTypesForNav]);
+  const addAccountBuiltInAssetTypes = useMemo(
+    () => addAssetModalAssetTypes.filter((assetType) => assetType.is_system),
+    [addAssetModalAssetTypes],
+  );
+  const addAccountCustomAssetTypes = useMemo(
+    () => addAssetModalAssetTypes.filter((assetType) => !assetType.is_system),
+    [addAssetModalAssetTypes],
+  );
   const selectedAddAssetSlug = selectedAddAssetType?.slug ?? null;
   const accountEntries = useMemo(
     () =>
@@ -977,6 +989,81 @@ export function AppHomePage() {
     });
     return accountTypes;
   }, [accountCreateOptions?.account_types]);
+  const addAccountSections = useMemo(() => {
+    const builtInAccountTypes = addAccountTypeTiles.filter((accountType) => accountType.is_system);
+    const customAccountTypes = addAccountTypeTiles.filter((accountType) => !accountType.is_system);
+    const assetTypeLabelBySlug = new Map(
+      assetTypesForNav
+        .filter((assetType): assetType is AssetTypeOption & { slug: string } => typeof assetType.slug === "string" && assetType.slug.trim().length > 0)
+        .map((assetType) => [assetType.slug, assetType.name] as const),
+    );
+    const builtInSections = assetTypesForNav
+      .filter((assetType): assetType is AssetTypeOption & { slug: string } => typeof assetType.slug === "string" && assetType.slug.trim().length > 0)
+      .map((assetType) => ({
+        key: `asset-type-${assetType.slug}`,
+        label: assetType.name,
+        items: builtInAccountTypes.filter((accountType) => (accountType.allowed_asset_type_slugs ?? []).includes(assetType.slug)),
+      }))
+      .filter((section) => section.items.length > 0);
+    const uncategorizedBuiltIns = builtInAccountTypes.filter((accountType) => (accountType.allowed_asset_type_slugs ?? []).length === 0);
+    if (uncategorizedBuiltIns.length > 0) {
+      builtInSections.push({
+        key: "asset-type-general",
+        label: "General",
+        items: uncategorizedBuiltIns,
+      });
+    }
+    return {
+      builtInSections,
+      customSection:
+        customAccountTypes.length > 0
+          ? {
+              key: "custom-account-types",
+              label: "Custom",
+              items: customAccountTypes.map((accountType) => ({
+                ...accountType,
+                assetTypeSummary:
+                  accountType.allowed_asset_type_slugs.length > 0
+                    ? accountType.allowed_asset_type_slugs
+                        .map((slug) => assetTypeLabelBySlug.get(slug) ?? formatSlugLabel(slug))
+                        .join(", ")
+                    : "General account type",
+              })),
+            }
+          : null,
+    };
+  }, [addAccountTypeTiles, assetTypesForNav]);
+  const selectedAddAccountAssetSlug = selectedAddAccountAssetType?.slug ?? null;
+  const addAccountEligibleSections = useMemo(() => {
+    if (!selectedAddAccountAssetSlug) {
+      return {
+        builtInItems: [] as typeof addAccountTypeTiles,
+        customItems: [] as NonNullable<typeof addAccountSections.customSection>["items"],
+      };
+    }
+    const builtInItems = addAccountTypeTiles.filter((accountType) => {
+      if (!accountType.is_system) return false;
+      const allowedAssetTypeSlugs = accountType.allowed_asset_type_slugs ?? [];
+      return allowedAssetTypeSlugs.length === 0 || allowedAssetTypeSlugs.includes(selectedAddAccountAssetSlug);
+    });
+    const customItems = addAccountSections.customSection?.items ?? [];
+    return { builtInItems, customItems };
+  }, [addAccountSections.customSection?.items, addAccountTypeTiles, selectedAddAccountAssetSlug]);
+  const accountTypeMetaById = useMemo(
+    () => new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type] as const)),
+    [accountCreateOptions?.account_types],
+  );
+  const addAccountCompatibleExistingAccounts = useMemo(() => {
+    if (!selectedAddAccountAssetSlug) return [];
+    return accountRows
+      .filter((account) => {
+        const accountType = accountTypeMetaById.get(account.account_type);
+        if (!accountType) return false;
+        const allowedAssetTypeSlugs = accountType.allowed_asset_type_slugs ?? [];
+        return allowedAssetTypeSlugs.length === 0 || allowedAssetTypeSlugs.includes(selectedAddAccountAssetSlug);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [accountRows, accountTypeMetaById, selectedAddAccountAssetSlug]);
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
     const currentSignature = JSON.stringify({
@@ -3007,6 +3094,21 @@ export function AppHomePage() {
   }, [isAssetsLiabilitiesDashboard, isEditing]);
 
   useEffect(() => {
+    if (activeAppShellSection !== "addAccount") {
+      setPreviousAppShellSection(activeAppShellSection);
+    }
+  }, [activeAppShellSection]);
+
+  useEffect(() => {
+    if (activeAppShellSection !== "addAccount") return;
+    if (selectedAddAccountAssetType) return;
+    const firstAssetType = addAssetModalAssetTypes[0] ?? null;
+    if (firstAssetType) {
+      setSelectedAddAccountAssetType(firstAssetType);
+    }
+  }, [activeAppShellSection, addAssetModalAssetTypes, selectedAddAccountAssetType]);
+
+  useEffect(() => {
     if (activeAppShellSection === "addAccount") return;
     if (activeAppShellSection === "portfolio" && activeSidebarCategory === "portfolio") return;
     if (activeSidebarCategory === "accounts" || activeSidebarCategory.startsWith("account:")) {
@@ -3207,19 +3309,28 @@ export function AppHomePage() {
               <div className="w-full max-w-none lg:ml-auto lg:mr-0">
                 <div className="flex h-[72px] items-center justify-between gap-4 border border-background bg-background px-5 shadow-none">
                   <div className="min-w-0">
-                    <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
-                      {activeAppShellSection === "portfolio"
-                        ? "Portfolio"
-                        : activeAppShellSection === "holdings"
-                          ? "Holdings"
-                          : activeAppShellSection === "dashboards"
-                            ? "Dashboards"
-                            : activeAppShellSection === "accounts"
-                              ? "Accounts"
-                              : activeAppShellSection === "addAccount"
-                                ? "Add Account"
-                              : "Asset Types"}
-                    </h1>
+                    {activeAppShellSection === "addAccount" ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveAppShellSection(previousAppShellSection)}
+                        className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[0.92rem] font-bold text-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        <span>Back</span>
+                      </button>
+                    ) : (
+                      <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                        {activeAppShellSection === "portfolio"
+                          ? "Portfolio"
+                          : activeAppShellSection === "holdings"
+                            ? "Holdings"
+                            : activeAppShellSection === "dashboards"
+                              ? "Dashboards"
+                              : activeAppShellSection === "accounts"
+                                ? "Accounts"
+                                : "Asset Types"}
+                      </h1>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -3233,6 +3344,8 @@ export function AppHomePage() {
                     <button
                       type="button"
                       onClick={() => {
+                        setAddAccountStep("accountType");
+                        setSelectedAddAccountAssetType(addAssetModalAssetTypes[0] ?? null);
                         setActiveAppShellSection("addAccount");
                         setActiveSidebarCategory("accounts");
                         setActiveSidebarLabel("Accounts");
@@ -4837,80 +4950,110 @@ export function AppHomePage() {
                         </div>
                       </div>
                     ) : activeAppShellSection === "addAccount" ? (
-                      <div className="space-y-6 rounded-xl border border-slate-200 bg-white p-6">
-                        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="space-y-3">
-                            <button
-                              type="button"
-                              onClick={() => setActiveAppShellSection("accounts")}
-                              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-foreground"
-                            >
-                              <ChevronLeft className="h-4 w-4" />
-                              <span>Back to Accounts</span>
-                            </button>
-                            <div className="space-y-2">
-                              <h2 className="text-3xl font-semibold tracking-tight text-foreground">Which Account would you like to add?</h2>
-                              <p className="max-w-2xl text-sm text-muted-foreground">
-                                Choose a built-in account type to get started, or create a custom account type for something more specific.
-                              </p>
+                      <div className="space-y-5 rounded-xl border border-background bg-background px-1 py-2">
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Which account would you like to add?</h2>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <div className="flex min-w-max items-center gap-6 border-b border-slate-200 pb-2">
+                              {addAssetModalAssetTypes.map((assetType) => {
+                                const isSelected = selectedAddAccountAssetType?.id === assetType.id;
+                                return (
+                                  <button
+                                    key={`add-account-tab-${assetType.id}`}
+                                    type="button"
+                                    onClick={() => setSelectedAddAccountAssetType(assetType)}
+                                    className={`relative pb-2 text-left text-[0.95rem] transition-colors ${
+                                      isSelected ? "font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    {assetType.name}
+                                    {isSelected ? <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" /> : null}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
-                          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-5">
-                            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-800 shadow-sm">
-                              <WalletSolidIcon className="h-7 w-7" />
-                            </div>
-                          </div>
-                        </div>
-                        {addAccountTypeTiles.length === 0 ? (
-                          <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-muted-foreground">
-                            No account types available yet.
-                          </div>
-                        ) : (
-                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            {addAccountTypeTiles.map((accountType) => (
-                              <button
-                                key={`add-account-type-${accountType.id}`}
-                                type="button"
-                                className="group rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_6px_18px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_10px_22px_rgba(15,23,42,0.08)]"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 transition-colors group-hover:bg-slate-900 group-hover:text-white">
-                                    <WalletOutlineIcon className="h-5 w-5" />
+                          {selectedAddAccountAssetType ? (
+                            <div className="space-y-6 pt-2">
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Existing Accounts</h3>
+                                  <span className="text-xs font-medium text-slate-400">{addAccountCompatibleExistingAccounts.length}</span>
+                                </div>
+                                {addAccountCompatibleExistingAccounts.length > 0 ? (
+                                  <div className="grid gap-3 lg:grid-cols-2">
+                                    {addAccountCompatibleExistingAccounts.map((account) => (
+                                      <button
+                                        key={`existing-account-${account.id}`}
+                                        type="button"
+                                        className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)]"
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <p className="truncate text-[0.98rem] font-semibold text-foreground">{account.name}</p>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                              {accountTypeNameById.get(account.account_type) ?? "Account"}
+                                              {account.broker ? ` • ${account.broker}` : ""}
+                                            </p>
+                                          </div>
+                                          <p className="shrink-0 text-sm font-semibold text-foreground">
+                                            {formatCurrency(holdingValueByAccountId.get(account.id) ?? 0)}
+                                          </p>
+                                        </div>
+                                      </button>
+                                    ))}
                                   </div>
-                                  {!accountType.is_system ? (
-                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                                      Custom
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <div className="mt-5">
-                                  <p className="text-base font-semibold text-foreground">{accountType.name}</p>
-                                  {accountType.description ? (
-                                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{accountType.description}</p>
-                                  ) : (
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                      {accountType.allowed_asset_type_slugs.length > 0
-                                        ? accountType.allowed_asset_type_slugs.map(formatSlugLabel).join(", ")
-                                        : "General account type"}
-                                    </p>
-                                  )}
-                                </div>
-                              </button>
-                            ))}
-                            <button
-                              type="button"
-                              className="group rounded-2xl border border-slate-300 bg-slate-100/70 p-5 text-left shadow-[0_6px_18px_rgba(15,23,42,0.03)] transition-all hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-200/70"
-                            >
-                              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
-                                <Plus className="h-5 w-5" />
+                                ) : (
+                                  <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted-foreground">
+                                    No existing {selectedAddAccountAssetType.name.toLowerCase()} accounts yet.
+                                  </div>
+                                )}
                               </div>
-                              <div className="mt-5">
-                                <p className="text-base font-semibold text-foreground">Create New Account Type</p>
-                                <p className="mt-1 text-sm text-muted-foreground">Add a custom account type for a workflow that does not fit the built-in options.</p>
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Create New</h3>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                  {addAccountEligibleSections.builtInItems.map((accountType) => (
+                                    <button
+                                      key={`create-account-type-${accountType.id}`}
+                                      type="button"
+                                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)]"
+                                    >
+                                      <p className="text-[0.98rem] font-semibold text-foreground">{accountType.name}</p>
+                                      <p className="mt-1 text-sm text-muted-foreground">
+                                        {accountType.description
+                                          ? accountType.description
+                                          : (accountType.allowed_asset_type_slugs ?? []).length > 0
+                                            ? accountType.allowed_asset_type_slugs.map(formatSlugLabel).join(", ")
+                                            : "General account type"}
+                                      </p>
+                                    </button>
+                                  ))}
+                                  {addAccountEligibleSections.customItems.map((accountType) => (
+                                    <button
+                                      key={`existing-custom-account-type-${accountType.id}`}
+                                      type="button"
+                                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)]"
+                                    >
+                                      <p className="text-[0.98rem] font-semibold text-foreground">{accountType.name}</p>
+                                      <p className="mt-1 text-sm text-muted-foreground">{accountType.assetTypeSummary}</p>
+                                    </button>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.025)]"
+                                  >
+                                    <p className="text-[0.98rem] font-semibold text-foreground">Create Custom Account Type</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">Add your own account type for this asset.</p>
+                                  </button>
+                                </div>
                               </div>
-                            </button>
-                          </div>
-                        )}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     ) : activeAppShellSection === "assetTypes" ? (
                       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">

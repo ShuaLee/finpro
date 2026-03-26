@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -138,7 +138,7 @@
   h2,
   h3,
   .font-display {
-    font-family: "Fraunces", "Plus Jakarta Sans", serif;
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
   }
 
   /* Global weight bump (~10%) to increase text legibility across the app. */
