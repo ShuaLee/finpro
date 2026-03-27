@@ -4,10 +4,6 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 from accounts.models.account import Account
-from accounts.models.account_classification import (
-    AccountClassification,
-    ClassificationDefinition,
-)
 from accounts.models.account_type import AccountType
 from accounts.models.audit import AccountAuditEvent
 from accounts.models.brokerage import BrokerageConnection
@@ -17,7 +13,6 @@ from accounts.models.transaction import AccountTransaction
 from accounts.models.job import AccountJob
 from accounts.services.account_deletion_service import AccountDeletionService
 from accounts.services.account_service import AccountService
-from fx.models.country import Country
 
 
 def _reset_column_visibility_for_account(account):
@@ -27,29 +22,6 @@ def _reset_column_visibility_for_account(account):
         return False
     SchemaMutationService.reset_account_to_defaults(account=account)
     return True
-
-
-class ClassificationDefinitionForm(forms.ModelForm):
-    countries = forms.ModelMultipleChoiceField(
-        queryset=Country.objects.none(),
-        required=False,
-        widget=forms.SelectMultiple(attrs={"size": 12}),
-        help_text="Countries where this classification applies.",
-    )
-
-    class Meta:
-        model = ClassificationDefinition
-        fields = "__all__"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["countries"].queryset = Country.objects.all()
-
-    def clean(self):
-        cleaned = super().clean()
-        if cleaned.get("all_countries"):
-            cleaned["countries"] = Country.objects.none()
-        return cleaned
 
 
 class AccountTypeForm(forms.ModelForm):
@@ -100,50 +72,6 @@ class AccountTypeAdmin(admin.ModelAdmin):
         return ()
 
 
-@admin.register(ClassificationDefinition)
-class ClassificationDefinitionAdmin(admin.ModelAdmin):
-    form = ClassificationDefinitionForm
-    list_display = (
-        "id",
-        "name",
-        "tax_status",
-        "display_scope",
-        "is_system",
-        "created_at",
-    )
-    list_filter = ("tax_status", "is_system")
-    search_fields = ("name",)
-    readonly_fields = ("created_at",)
-    ordering = ("name",)
-
-    def display_scope(self, obj):
-        if obj.all_countries:
-            return "All Countries"
-        codes = list(obj.countries.values_list("code", flat=True))
-        return ", ".join(codes) if codes else "N/A"
-
-    display_scope.short_description = "Jurisdictions"
-
-
-@admin.register(AccountClassification)
-class AccountClassificationAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "profile",
-        "definition",
-        "contribution_limit",
-        "carry_forward_room",
-        "created_at",
-    )
-    list_filter = ("definition__tax_status",)
-    search_fields = (
-        "definition__name",
-        "profile__user__email",
-    )
-    ordering = ("profile", "definition__name")
-    readonly_fields = ("created_at",)
-
-
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
     list_display = (
@@ -151,17 +79,18 @@ class AccountAdmin(admin.ModelAdmin):
         "portfolio",
         "name",
         "account_type",
+        "enforce_restrictions",
         "position_mode",
         "allow_manual_overrides",
-        "classification",
         "created_at",
         "last_synced",
     )
-    list_filter = ("account_type", "created_at")
+    list_filter = ("account_type", "enforce_restrictions", "position_mode", "created_at")
     search_fields = ("name", "portfolio__name", "portfolio__profile__user__email")
     ordering = ("portfolio", "name")
-    readonly_fields = ("created_at", "classification", "last_synced")
+    readonly_fields = ("created_at", "last_synced")
     actions = ["reset_column_visibility"]
+    filter_horizontal = ("allowed_asset_types",)
 
     @admin.action(description="Reset column visibility to defaults")
     def reset_column_visibility(self, request, queryset):
@@ -186,48 +115,60 @@ class AccountAdmin(admin.ModelAdmin):
                 level=messages.WARNING,
             )
 
-    def get_form(self, request, obj=None, **kwargs):
-        class AccountForm(forms.ModelForm):
-            definition = forms.ModelChoiceField(
-                queryset=ClassificationDefinition.objects.all(),
-                required=obj is None,
-                label="Account Definition",
-                help_text="Select a classification definition (e.g. TFSA, RRSP).",
-            )
-
-            class Meta:
-                model = Account
-                fields = (
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
                     "portfolio",
                     "name",
                     "account_type",
-                    "broker",
+                )
+            },
+        ),
+        (
+            "Default Holding Behavior",
+            {
+                "fields": (
                     "position_mode",
                     "allow_manual_overrides",
-                    "definition",
-                )
-
-        kwargs["form"] = AccountForm
-        return super().get_form(request, obj, **kwargs)
+                ),
+                "description": "These act as account defaults. Individual holdings can now override how they are tracked and priced.",
+            },
+        ),
+        (
+            "Supported Asset Types",
+            {
+                "fields": (
+                    "allowed_asset_types",
+                    "enforce_restrictions",
+                ),
+                "description": "Leave supported asset types empty to allow anything. Turn on strict enforcement only when the account should block incompatible assets.",
+            },
+        ),
+        (
+            "Schema",
+            {
+                "fields": ("schema",),
+                "description": "Optional account-level schema override. Otherwise the account falls back to the selected asset type schema.",
+            },
+        ),
+        (
+            "Sync",
+            {
+                "fields": ("last_synced", "created_at"),
+            },
+        ),
+    )
 
     def save_model(self, request, obj, form, change):
-        definition = form.cleaned_data.get("definition")
-
-        if not change and not definition:
-            self.message_user(
-                request,
-                "A classification definition is required on creation.",
-                level=messages.ERROR,
-            )
-            return
-
         try:
             super().save_model(request, obj, form, change)
             if not change:
-                AccountService.initialize_account(account=obj, definition=definition)
+                AccountService.initialize_account(account=obj)
                 self.message_user(
                     request,
-                    f"Account '{obj.name}' initialized with '{definition.name}'.",
+                    f"Account '{obj.name}' created.",
                     level=messages.SUCCESS,
                 )
         except Exception as exc:

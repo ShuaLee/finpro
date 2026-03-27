@@ -85,3 +85,22 @@ class HoldingPrivacyTest(TestCase):
                 quantity="1",
             )
 
+    def test_manual_holding_defaults_to_manual_tracking_and_manual_price_for_custom_assets(self):
+        custom_asset = CustomAssetService.create(
+            profile=self.profile1,
+            name="Owner1 Manual Asset",
+            asset_type_slug="equity",
+            currency_code="USD",
+        ).asset
+
+        holding = HoldingService.create(
+            account=self.account,
+            asset=custom_asset,
+            quantity="2",
+        )
+
+        self.assertEqual(holding.tracking_mode, Holding.TrackingMode.MANUAL)
+        self.assertEqual(holding.effective_tracking_mode, Holding.TrackingMode.MANUAL)
+        self.assertEqual(holding.price_source_mode, Holding.PriceSourceMode.MANUAL)
+        self.assertEqual(holding.effective_price_source_mode, Holding.PriceSourceMode.MANUAL)
+

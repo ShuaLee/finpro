@@ -5,9 +5,7 @@ from django.test import TestCase
 
 from accounts.models import (
     Account,
-    AccountClassification,
     AccountType,
-    ClassificationDefinition,
 )
 from accounts.services.account_service import AccountService
 from assets.models.core import AssetType
@@ -60,26 +58,6 @@ class AccountWorkflowTest(TestCase):
         )
         self.account_type.allowed_asset_types.add(self.asset_type)
 
-        self.definition = ClassificationDefinition.objects.create(
-            name=f"Taxable {token}",
-            tax_status="taxable",
-            all_countries=True,
-            is_system=True,
-        )
-
-    def test_initialize_account_assigns_classification(self):
-        account = Account.objects.create(
-            portfolio=self.portfolio,
-            name="Main Brokerage",
-            account_type=self.account_type,
-        )
-
-        AccountService.initialize_account(account=account, definition=self.definition)
-
-        account.refresh_from_db()
-        self.assertIsNotNone(account.classification)
-        self.assertEqual(account.classification.definition, self.definition)
-
     def test_initialize_account_is_idempotent(self):
         account = Account.objects.create(
             portfolio=self.portfolio,
@@ -87,20 +65,13 @@ class AccountWorkflowTest(TestCase):
             account_type=self.account_type,
         )
 
-        AccountService.initialize_account(account=account, definition=self.definition)
-        first_classification_id = account.classification_id
+        AccountService.initialize_account(account=account)
+        first_schema_id = getattr(account.active_schema, "id", None)
 
-        AccountService.initialize_account(account=account, definition=self.definition)
+        AccountService.initialize_account(account=account)
         account.refresh_from_db()
 
-        self.assertEqual(account.classification_id, first_classification_id)
-        self.assertEqual(
-            AccountClassification.objects.filter(
-                profile=self.profile,
-                definition=self.definition,
-            ).count(),
-            1,
-        )
+        self.assertEqual(getattr(account.active_schema, "id", None), first_schema_id)
 
     def test_unique_account_name_per_portfolio_type(self):
         Account.objects.create(
@@ -128,3 +99,12 @@ class AccountWorkflowTest(TestCase):
         custom_type = AccountType(name="My Type", is_system=False, owner=None)
         with self.assertRaises(ValidationError):
             custom_type.full_clean()
+
+    def test_create_account_defaults_name(self):
+        account = AccountService.create_account(
+            profile=self.profile,
+            account_type_id=self.account_type.id,
+        )
+
+        account.refresh_from_db()
+        self.assertEqual(account.name, self.account_type.name)

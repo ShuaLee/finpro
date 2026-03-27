@@ -91,6 +91,7 @@ class ReconciliationService:
             if issue.issue_code == ReconciliationIssue.IssueCode.MISSING_EXTERNAL_HOLDING:
                 if issue.holding_id:
                     issue.holding.delete()
+                    issue.holding = None
             elif issue.issue_code == ReconciliationIssue.IssueCode.QUANTITY_MISMATCH:
                 external_quantity = issue.metadata.get("external_quantity")
                 if issue.holding_id and external_quantity is not None:
@@ -116,6 +117,7 @@ class ReconciliationService:
             update_fields=[
                 "resolution_action",
                 "resolution_note",
+                "holding",
                 "status",
                 "resolved_at",
                 "updated_at",

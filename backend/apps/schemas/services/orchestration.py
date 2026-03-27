@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from accounts.models import Holding
 from schemas.services.engine import SchemaEngine
 
 
@@ -13,12 +14,11 @@ class SchemaOrchestrationService:
     @staticmethod
     def _recompute_holdings(holdings: Iterable):
         for holding in holdings:
-            account = holding.account
-            schema = getattr(account, "active_schema", None)
+            schema = getattr(holding, "active_schema", None)
             if not schema:
                 continue
 
-            engine = SchemaEngine.for_account(account)
+            engine = SchemaEngine(schema)
             engine.sync_scvs_for_holding(holding)
 
     @staticmethod
@@ -40,12 +40,18 @@ class SchemaOrchestrationService:
 
     @staticmethod
     def schema_changed(schema):
-        accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type
-        ).prefetch_related("holdings")
+        holdings = Holding.objects.filter(account__portfolio=schema.portfolio).select_related(
+            "account",
+            "asset",
+            "asset__asset_type",
+        )
+        if schema.asset_type_id:
+            holdings = holdings.filter(asset__asset_type=schema.asset_type)
 
-        all_holdings = []
-        for account in accounts:
-            all_holdings.extend(account.holdings.all())
+        all_holdings = [
+            holding
+            for holding in holdings
+            if holding.active_schema and holding.active_schema.id == schema.id
+        ]
 
         SchemaOrchestrationService._recompute_holdings(all_holdings)

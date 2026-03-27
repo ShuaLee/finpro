@@ -38,6 +38,13 @@ class SchemaEngine:
             raise ValueError(f"No active schema for account '{account}'.")
         return cls(schema)
 
+    @classmethod
+    def for_holding(cls, holding) -> "SchemaEngine":
+        schema = getattr(holding, "active_schema", None)
+        if not schema:
+            raise ValueError(f"No active schema for holding '{holding}'.")
+        return cls(schema)
+
     @property
     def columns(self):
         if self._columns_cache is None:

@@ -26,4 +26,5 @@ class AccountDeletionService:
             Schema.objects.filter(
                 portfolio=portfolio,
                 account_type=account_type,
+                asset_type__isnull=True,
             ).delete()

@@ -267,9 +267,14 @@ class SchemaMutationService:
 
     @staticmethod
     def initialize_visibility_for_schema_column(*, column):
-        accounts = column.schema.portfolio.accounts.filter(
-            account_type=column.schema.account_type
-        )
+        accounts = []
+        for account in column.schema.portfolio.accounts.all():
+            if column.schema.asset_type_id:
+                schema = account.resolve_schema_for_asset_type(column.schema.asset_type)
+            else:
+                schema = getattr(account, "active_schema", None)
+            if schema and schema.id == column.schema_id:
+                accounts.append(account)
 
         AccountColumnVisibility.objects.bulk_create(
             [
@@ -284,12 +289,20 @@ class SchemaMutationService:
     def initialize_visibility_for_account(*, account):
         from schemas.services.bootstrap import SchemaBootstrapService
 
-        schema = SchemaBootstrapService.ensure_for_account(account)
+        schemas = []
+        primary_schema = SchemaBootstrapService.ensure_for_account(account)
+        if primary_schema:
+            schemas.append(primary_schema)
+        for asset_type in account.allowed_asset_types.all():
+            schema = account.resolve_schema_for_asset_type(asset_type)
+            if schema and all(existing.id != schema.id for existing in schemas):
+                schemas.append(schema)
 
         AccountColumnVisibility.objects.bulk_create(
             [
                 AccountColumnVisibility(
                     account=account, column=column, is_visible=True)
+                for schema in schemas
                 for column in schema.columns.all()
             ],
             ignore_conflicts=True,

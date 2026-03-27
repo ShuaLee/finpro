@@ -5,6 +5,16 @@ from accounts.models.account import Account
 
 
 class Holding(models.Model):
+    class TrackingMode(models.TextChoices):
+        ACCOUNT_DEFAULT = "account_default", "Account Default"
+        TRACKED = "tracked", "Tracked"
+        MANUAL = "manual", "Manual"
+
+    class PriceSourceMode(models.TextChoices):
+        ACCOUNT_DEFAULT = "account_default", "Account Default"
+        MARKET = "market", "Market"
+        MANUAL = "manual", "Manual"
+        UNAVAILABLE = "unavailable", "Unavailable"
 
     account = models.ForeignKey(
         Account,
@@ -42,6 +52,18 @@ class Holding(models.Model):
         blank=True,
         help_text="Weighted average purchase price per unit.",
     )
+    tracking_mode = models.CharField(
+        max_length=20,
+        choices=TrackingMode.choices,
+        default=TrackingMode.ACCOUNT_DEFAULT,
+        help_text="Whether this holding follows the account default, is tracked automatically, or is managed manually.",
+    )
+    price_source_mode = models.CharField(
+        max_length=20,
+        choices=PriceSourceMode.choices,
+        default=PriceSourceMode.ACCOUNT_DEFAULT,
+        help_text="How this holding should be valued when price data is resolved.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -60,6 +82,27 @@ class Holding(models.Model):
             return f"{self.quantity} [MISSING ASSET] in {self.account.name}"
         return f"{self.quantity} {self.asset.display_name} in {self.account.name}"
 
+    @property
+    def active_schema(self):
+        asset_type = self.asset.asset_type if self.asset_id and self.asset else None
+        return self.account.resolve_schema_for_asset_type(asset_type)
+
+    @property
+    def effective_tracking_mode(self):
+        if self.tracking_mode != self.TrackingMode.ACCOUNT_DEFAULT:
+            return self.tracking_mode
+        if self.account.position_mode == self.account.PositionMode.MANUAL:
+            return self.TrackingMode.MANUAL
+        return self.TrackingMode.TRACKED
+
+    @property
+    def effective_price_source_mode(self):
+        if self.price_source_mode != self.PriceSourceMode.ACCOUNT_DEFAULT:
+            return self.price_source_mode
+        custom_extension = getattr(self.asset, "custom", None)
+        if custom_extension is not None:
+            return self.PriceSourceMode.MANUAL
+        return self.PriceSourceMode.MARKET
 
     # ------------------------
     # Validation
@@ -105,22 +148,27 @@ class Holding(models.Model):
         # -----------------------------
         # AssetType compatibility
         # -----------------------------
-        allowed = self.account.account_type.allowed_asset_types.all()
-        if allowed.exists() and self.asset.asset_type not in allowed:
+        if self.account.enforce_restrictions and not self.account.is_asset_type_allowed(self.asset.asset_type):
             raise ValidationError(
-                f"Accounts of type '{self.account.account_type.name}' "
-                f"cannot hold assets of type '{self.asset.asset_type.name}'."
+                f"Asset type '{self.asset.asset_type.name}' is not allowed in account '{self.account.name}'."
             )
 
         # -----------------------------
         # Private asset ownership
         # -----------------------------
-        extension = self.asset.extension
-        if extension is not None and hasattr(extension, "owner_id"):
-            if extension.owner_id != self.account.profile.id:
-                raise ValidationError(
-                    "You cannot attach another user's private asset to this holding."
-                )
+        private_owner_id = None
+        custom_extension = getattr(self.asset, "custom", None)
+        if custom_extension is not None:
+            private_owner_id = custom_extension.owner_id
+        else:
+            extension = self.asset.extension
+            if extension is not None and hasattr(extension, "owner_id"):
+                private_owner_id = extension.owner_id
+
+        if private_owner_id is not None and private_owner_id != self.account.profile.id:
+            raise ValidationError(
+                "You cannot attach another user's private asset to this holding."
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()

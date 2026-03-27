@@ -27,17 +27,17 @@ class HoldingService:
         custom_name=None,
         currency=None,
         average_purchase_price=None,
+        tracking_mode=None,
+        price_source_mode=None,
     ):
         if account.position_mode == account.PositionMode.SYNCED and not account.allow_manual_overrides:
             raise ValidationError("Manual holding changes are disabled for this synced account.")
 
-        allowed_types = account.allowed_asset_types
-
-        if not allowed_types.exists():
-            raise ValidationError("Account does not allow any asset types.")
+        allowed_types = account.allowed_asset_types.all()
+        has_restrictions = allowed_types.exists()
 
         if asset:
-            if asset.asset_type not in allowed_types:
+            if account.enforce_restrictions and has_restrictions and asset.asset_type not in allowed_types:
                 raise ValidationError(
                     f"Asset type '{asset.asset_type}' not allowed for this account."
                 )
@@ -47,14 +47,14 @@ class HoldingService:
 
             resolved_asset = asset
         else:
-            if allowed_types.count() == 1:
+            if has_restrictions and allowed_types.count() == 1 and asset_type is None:
                 resolved_type = allowed_types.first()
             else:
                 if not asset_type:
                     raise ValidationError(
                         "Asset type must be specified for custom holdings."
                     )
-                if not allowed_types.filter(pk=asset_type.pk).exists():
+                if account.enforce_restrictions and has_restrictions and not allowed_types.filter(pk=asset_type.pk).exists():
                     raise ValidationError(
                         f"Asset type '{asset_type}' not allowed for this account."
                     )
@@ -79,6 +79,12 @@ class HoldingService:
             asset=resolved_asset,
             quantity=quantity,
             average_purchase_price=average_purchase_price,
+            tracking_mode=tracking_mode or Holding.TrackingMode.MANUAL,
+            price_source_mode=price_source_mode or (
+                Holding.PriceSourceMode.MANUAL
+                if getattr(resolved_asset, "custom", None) is not None
+                else Holding.PriceSourceMode.MARKET
+            ),
         )
         _notify_holding_changed(holding)
         AccountAuditService.log(
@@ -89,7 +95,14 @@ class HoldingService:
         return holding
 
     @staticmethod
-    def update(*, holding, quantity=None, average_purchase_price=None):
+    def update(
+        *,
+        holding,
+        quantity=None,
+        average_purchase_price=None,
+        tracking_mode=None,
+        price_source_mode=None,
+    ):
         account = holding.account
         if account.position_mode == account.PositionMode.SYNCED and not account.allow_manual_overrides:
             raise ValidationError("Manual holding changes are disabled for this synced account.")
@@ -98,6 +111,10 @@ class HoldingService:
             holding.quantity = quantity
         if average_purchase_price is not None:
             holding.average_purchase_price = average_purchase_price
+        if tracking_mode is not None:
+            holding.tracking_mode = tracking_mode
+        if price_source_mode is not None:
+            holding.price_source_mode = price_source_mode
 
         holding.save()
         _notify_holding_changed(holding)

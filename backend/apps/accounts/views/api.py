@@ -16,7 +16,6 @@ from accounts.models import (
     ReconciliationIssue,
     AccountJob,
 )
-from accounts.models.account_classification import ClassificationDefinition
 from accounts.serializers import (
     AccountCreateSerializer,
     AccountSerializer,
@@ -104,7 +103,7 @@ class AccountListCreateView(APIView):
     def get(self, request):
         queryset = (
             Account.objects.filter(portfolio__profile__user=request.user)
-            .select_related("portfolio", "account_type", "classification")
+            .select_related("portfolio", "account_type")
             .order_by("name")
         )
         return Response(AccountSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
@@ -116,13 +115,13 @@ class AccountListCreateView(APIView):
         try:
             account = AccountService.create_account(
                 profile=request.user.profile,
-                portfolio_id=serializer.validated_data["portfolio_id"],
-                name=serializer.validated_data["name"],
+                portfolio_id=serializer.validated_data.get("portfolio_id"),
+                name=serializer.validated_data.get("name"),
                 account_type_id=serializer.validated_data["account_type_id"],
-                broker=serializer.validated_data.get("broker"),
-                classification_definition_id=serializer.validated_data["classification_definition_id"],
                 position_mode=serializer.validated_data.get("position_mode"),
                 allow_manual_overrides=serializer.validated_data.get("allow_manual_overrides"),
+                enforce_restrictions=serializer.validated_data.get("enforce_restrictions"),
+                allowed_asset_type_slugs=serializer.validated_data.get("allowed_asset_type_slugs"),
             )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -146,20 +145,10 @@ class AccountCreateOptionsView(APIView):
             }
             for portfolio in profile.portfolios.order_by("name")
         ]
-        classifications = [
-            {
-                "id": definition.id,
-                "name": definition.name,
-                "tax_status": definition.tax_status,
-            }
-            for definition in ClassificationDefinition.objects.filter(is_system=True).order_by("name")
-        ]
-
         return Response(
             {
                 "portfolios": portfolios,
                 "account_types": AccountTypeSerializer(account_types, many=True).data,
-                "classification_definitions": classifications,
             },
             status=status.HTTP_200_OK,
         )
@@ -174,11 +163,24 @@ class AccountDetailView(APIView):
 
     def patch(self, request, account_id: int):
         account = _owned_account_or_404(account_id=account_id, user=request.user)
-        allowed_fields = {"name", "broker", "position_mode", "allow_manual_overrides"}
+        if "strict_asset_type_enforcement" in request.data and "enforce_restrictions" not in request.data:
+            request.data["enforce_restrictions"] = request.data.get("strict_asset_type_enforcement")
+        allowed_fields = {"name", "position_mode", "allow_manual_overrides", "enforce_restrictions"}
         payload = {k: v for k, v in request.data.items() if k in allowed_fields}
         serializer = AccountSerializer(account, data=payload, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        raw_slugs = None
+        if "supported_asset_type_slugs" in request.data:
+            raw_slugs = request.data.get("supported_asset_type_slugs", [])
+        elif "allowed_asset_type_slugs" in request.data:
+            raw_slugs = request.data.get("allowed_asset_type_slugs", [])
+        if raw_slugs is not None:
+            slugs = [str(slug).strip().lower() for slug in raw_slugs]
+            asset_types = list(AssetType.objects.filter(slug__in=slugs))
+            if len(asset_types) != len(set(slugs)):
+                return Response({"detail": "One or more allowed asset types are invalid."}, status=status.HTTP_400_BAD_REQUEST)
+            account.allowed_asset_types.set(asset_types)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, account_id: int):
@@ -221,6 +223,8 @@ class HoldingListCreateView(APIView):
                 asset_type=asset_type,
                 custom_name=serializer.validated_data.get("custom_name"),
                 currency=currency,
+                tracking_mode=serializer.validated_data.get("tracking_mode"),
+                price_source_mode=serializer.validated_data.get("price_source_mode"),
             )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -238,11 +242,15 @@ class HoldingDetailView(APIView):
             "average_purchase_price",
             holding.average_purchase_price,
         )
+        tracking_mode = request.data.get("tracking_mode")
+        price_source_mode = request.data.get("price_source_mode")
         try:
             holding = HoldingService.update(
                 holding=holding,
                 quantity=quantity,
                 average_purchase_price=average_purchase_price,
+                tracking_mode=tracking_mode,
+                price_source_mode=price_source_mode,
             )
         except DjangoValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

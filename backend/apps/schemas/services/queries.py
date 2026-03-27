@@ -104,8 +104,14 @@ class SchemaQueryService:
     @staticmethod
     def list_available_templates_grouped(*, schema) -> dict[str, list]:
         existing = set(schema.columns.values_list("identifier", flat=True))
-        allowed_asset_types = AssetType.objects.filter(
-            account_types=schema.account_type)
+        if schema.asset_type_id:
+            allowed_asset_types = AssetType.objects.filter(pk=schema.asset_type_id)
+        elif schema.account_type_id:
+            allowed_asset_types = AssetType.objects.filter(
+                account_types=schema.account_type
+            )
+        else:
+            allowed_asset_types = AssetType.objects.none()
 
         templates = (
             SchemaColumnTemplate.objects.filter(

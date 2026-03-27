@@ -19,8 +19,12 @@ class SchemaMaintenanceService:
         from schemas.services.bootstrap import SchemaBootstrapService
         from schemas.services.orchestration import SchemaOrchestrationService
 
-        identifiers = DefaultSchemaPolicy.default_identifiers_for_account_type(
-            schema.account_type
+        identifiers = (
+            DefaultSchemaPolicy.default_identifiers_for_asset_type(schema.asset_type)
+            if schema.asset_type_id
+            else DefaultSchemaPolicy.default_identifiers_for_account_type(
+                schema.account_type
+            )
         )
 
         SchemaColumn.objects.filter(schema=schema).delete()
@@ -55,6 +59,9 @@ class SchemaMaintenanceService:
     def account_deleted(account):
         from schemas.models import Schema
 
+        if account.schema_id:
+            return
+
         portfolio = account.portfolio
         account_type = account.account_type
 
@@ -64,6 +71,7 @@ class SchemaMaintenanceService:
             Schema.objects.filter(
                 portfolio=portfolio,
                 account_type=account_type,
+                asset_type__isnull=True,
             ).delete()
 
     @staticmethod

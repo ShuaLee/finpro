@@ -47,14 +47,14 @@ User → Profile → Portfolio (Main) → Accounts → Holdings
 2. Fill in required fields:
    - **Portfolio**: Select user's portfolio (usually "Main Portfolio")
    - **Account Type**: Choose type (Brokerage, Crypto Wallet, etc.)
-   - **Account Name**: Give it a descriptive name
+   - **Account Name**: Optional. If blank, the account type name will be used
    - **Broker**: (Optional) Broker name if applicable
-   - **Classification Definition**: Select tax classification (TFSA, RRSP, 401k, etc.)
+   - **Classification Definition**: Optional. Can be added later in account settings
 3. Click Save
 
 **What Happens Automatically:**
 - `AccountAdmin.save_model()` calls `AccountService.initialize_account()`
-- **AccountClassification** is created/linked (profile + definition)
+- **AccountClassification** is created/linked only if a definition is provided
 - **Schema** is created or reused for (portfolio, account_type) pair
 - **SchemaColumns** are generated from SchemaTemplate
 - Account is ready to receive holdings
@@ -63,6 +63,7 @@ User → Profile → Portfolio (Main) → Accounts → Holdings
 - One Schema is shared by all accounts of the same type within a portfolio
 - Schema defines what columns (quantity, price, value, etc.) are tracked
 - Classification is user-specific (each user has their own TFSA classification instance)
+- Supported asset types can be suggested on create and enforced later if needed
 
 ---
 

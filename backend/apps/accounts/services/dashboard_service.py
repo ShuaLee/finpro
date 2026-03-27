@@ -26,7 +26,6 @@ class AccountDashboardService:
                 {
                     "id": account.id,
                     "name": account.name,
-                    "broker": account.broker,
                     "holdings_count": account.holdings.count(),
                     "last_synced": account.last_synced,
                 }

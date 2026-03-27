@@ -43,12 +43,17 @@ import {
 } from "lucide-react";
 
 import {
+  createCustomAccountType,
+  getBrokerageConnections,
+  getAccount,
   getAccountCreateOptions,
   getAccountHoldings,
   getAccountsList,
   createAccount,
   createAccountHolding,
+  updateAccount,
   type AccountCreateOptions,
+  type BrokerageConnectionListItem,
   type AccountHolding,
   type AccountListItem,
 } from "../api/accounts";
@@ -107,7 +112,6 @@ type PortfolioGroupedSection = {
 };
 type ShellSortMode = "name_asc" | "name_desc" | "value_desc" | "value_asc";
 type AddAssetStep = "type" | "account" | "asset";
-type AddAccountStep = "assetType" | "accountType";
 
 type SavedLayout = {
   id: string;
@@ -332,6 +336,17 @@ export function AppHomePage() {
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [selectedAccountHoldings, setSelectedAccountHoldings] = useState<AccountHolding[]>([]);
+  const [accountConnections, setAccountConnections] = useState<BrokerageConnectionListItem[]>([]);
+  const [isAccountDetailLoading, setIsAccountDetailLoading] = useState(false);
+  const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
+  const [accountSettingsError, setAccountSettingsError] = useState<string | null>(null);
+  const [accountSettingsNotice, setAccountSettingsNotice] = useState<string | null>(null);
+  const [accountDraftName, setAccountDraftName] = useState("");
+  const [accountDraftPositionMode, setAccountDraftPositionMode] = useState<"manual" | "synced" | "ledger" | "hybrid">("manual");
+  const [accountDraftSupportedAssetTypeSlugs, setAccountDraftSupportedAssetTypeSlugs] = useState<string[]>([]);
+  const [accountDraftStrictEnforcement, setAccountDraftStrictEnforcement] = useState(false);
   const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHoldingRow[]>([]);
   const [isPortfolioHoldingsLoading, setIsPortfolioHoldingsLoading] = useState(false);
   const [portfolioHoldingsNotice, setPortfolioHoldingsNotice] = useState<string | null>(null);
@@ -353,7 +368,6 @@ export function AppHomePage() {
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
   const [addAssetStep, setAddAssetStep] = useState<AddAssetStep>("type");
   const [selectedAddAssetType, setSelectedAddAssetType] = useState<AssetTypeOption | null>(null);
-  const [addAccountStep, setAddAccountStep] = useState<AddAccountStep>("assetType");
   const [selectedAddAccountAssetType, setSelectedAddAccountAssetType] = useState<AssetTypeOption | null>(null);
   const [selectedAddAssetAccountId, setSelectedAddAssetAccountId] = useState<number | null>(null);
   const [isAddAccountInlineOpen, setIsAddAccountInlineOpen] = useState(false);
@@ -366,10 +380,9 @@ export function AppHomePage() {
   const [addAssetFlowError, setAddAssetFlowError] = useState<string | null>(null);
   const [isSubmittingHolding, setIsSubmittingHolding] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
-  const [newAccountBroker, setNewAccountBroker] = useState("");
   const [newAccountPortfolioId, setNewAccountPortfolioId] = useState<number | null>(null);
   const [newAccountTypeId, setNewAccountTypeId] = useState<number | null>(null);
-  const [newAccountClassificationId, setNewAccountClassificationId] = useState<number | null>(null);
+  const [newCustomAccountTypeName, setNewCustomAccountTypeName] = useState("");
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isAddAssetTypeViewOpen, setIsAddAssetTypeViewOpen] = useState(false);
   const [newAssetTypeName, setNewAssetTypeName] = useState("");
@@ -654,14 +667,6 @@ export function AppHomePage() {
       return a.name.localeCompare(b.name);
     });
   }, [assetTypesForNav]);
-  const addAccountBuiltInAssetTypes = useMemo(
-    () => addAssetModalAssetTypes.filter((assetType) => assetType.is_system),
-    [addAssetModalAssetTypes],
-  );
-  const addAccountCustomAssetTypes = useMemo(
-    () => addAssetModalAssetTypes.filter((assetType) => !assetType.is_system),
-    [addAssetModalAssetTypes],
-  );
   const selectedAddAssetSlug = selectedAddAssetType?.slug ?? null;
   const accountEntries = useMemo(
     () =>
@@ -782,8 +787,12 @@ export function AppHomePage() {
     [eligibleAccountTypesForSelectedAsset],
   );
   const eligibleAccountsForSelectedAsset = useMemo(
-    () => accountRows.filter((account) => eligibleAccountTypeIds.has(account.account_type)),
-    [accountRows, eligibleAccountTypeIds],
+    () =>
+      accountRows.filter((account) => {
+        const supportedSlugs = account.supported_asset_type_slugs ?? account.allowed_asset_type_slugs ?? [];
+        return supportedSlugs.length === 0 || (selectedAddAssetSlug ? supportedSlugs.includes(selectedAddAssetSlug) : false);
+      }),
+    [accountRows, selectedAddAssetSlug],
   );
   const brokerageAccountType = useMemo(
     () => eligibleAccountTypesForSelectedAsset.find((accountType) => accountType.slug === "brokerage") ?? null,
@@ -894,7 +903,7 @@ export function AppHomePage() {
         existing.items.push({
           key: `account-${account.id}`,
           label: account.name,
-          subtitle: account.broker || null,
+          subtitle: null,
           value: accountValue,
         });
       } else {
@@ -906,7 +915,7 @@ export function AppHomePage() {
             {
               key: `account-${account.id}`,
               label: account.name,
-              subtitle: account.broker || null,
+              subtitle: null,
               value: accountValue,
             },
           ],
@@ -1049,21 +1058,52 @@ export function AppHomePage() {
     const customItems = addAccountSections.customSection?.items ?? [];
     return { builtInItems, customItems };
   }, [addAccountSections.customSection?.items, addAccountTypeTiles, selectedAddAccountAssetSlug]);
-  const accountTypeMetaById = useMemo(
-    () => new Map((accountCreateOptions?.account_types ?? []).map((type) => [type.id, type] as const)),
-    [accountCreateOptions?.account_types],
-  );
   const addAccountCompatibleExistingAccounts = useMemo(() => {
     if (!selectedAddAccountAssetSlug) return [];
     return accountRows
       .filter((account) => {
-        const accountType = accountTypeMetaById.get(account.account_type);
-        if (!accountType) return false;
-        const allowedAssetTypeSlugs = accountType.allowed_asset_type_slugs ?? [];
-        return allowedAssetTypeSlugs.length === 0 || allowedAssetTypeSlugs.includes(selectedAddAccountAssetSlug);
+        const supportedSlugs = account.supported_asset_type_slugs ?? account.allowed_asset_type_slugs ?? [];
+        return supportedSlugs.length === 0 || supportedSlugs.includes(selectedAddAccountAssetSlug);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [accountRows, accountTypeMetaById, selectedAddAccountAssetSlug]);
+  }, [accountRows, selectedAddAccountAssetSlug]);
+  const selectedAccount = useMemo(
+    () => accountRows.find((account) => account.id === selectedAccountId) ?? null,
+    [accountRows, selectedAccountId],
+  );
+  const selectedAccountConnections = useMemo(
+    () => accountConnections.filter((connection) => connection.account === selectedAccountId),
+    [accountConnections, selectedAccountId],
+  );
+  const selectedAccountValue = selectedAccount ? holdingValueByAccountId.get(selectedAccount.id) ?? 0 : 0;
+  const selectedAccountSupportedTypes = useMemo(() => {
+    if (!selectedAccount) return [];
+    const slugs = selectedAccount.supported_asset_type_slugs ?? selectedAccount.allowed_asset_type_slugs ?? [];
+    return slugs.map((slug) => assetTypeNameBySlug.get(slug) ?? formatSlugLabel(slug));
+  }, [assetTypeNameBySlug, selectedAccount]);
+  const selectedAccountHoldingsValue = useMemo(
+    () => selectedAccountHoldings.reduce((sum, holding) => sum + getHoldingValue(holding), 0),
+    [selectedAccountHoldings],
+  );
+  const isAccountSettingsDirty = useMemo(() => {
+    if (!selectedAccount) return false;
+    const selectedSlugs = [...(selectedAccount.supported_asset_type_slugs ?? selectedAccount.allowed_asset_type_slugs ?? [])].sort();
+    const draftSlugs = [...accountDraftSupportedAssetTypeSlugs].sort();
+    return (
+      accountDraftName.trim() !== selectedAccount.name
+      || accountDraftPositionMode !== (selectedAccount.position_mode ?? "manual")
+      || accountDraftStrictEnforcement !== Boolean(
+        selectedAccount.strict_asset_type_enforcement ?? selectedAccount.enforce_restrictions,
+      )
+      || selectedSlugs.join("|") !== draftSlugs.join("|")
+    );
+  }, [
+    accountDraftName,
+    accountDraftPositionMode,
+    accountDraftStrictEnforcement,
+    accountDraftSupportedAssetTypeSlugs,
+    selectedAccount,
+  ]);
   const hasUnsavedChanges = useMemo(() => {
     if (!activeLayout) return false;
     const currentSignature = JSON.stringify({
@@ -1643,17 +1683,18 @@ export function AppHomePage() {
 
   const loadSidebarData = useCallback(async () => {
     const fetchAll = async () =>
-      Promise.allSettled([getAssetTypes(), getAccountsList(), getAccountCreateOptions()]);
+      Promise.allSettled([getAssetTypes(), getAccountsList(), getAccountCreateOptions(), getBrokerageConnections()]);
 
-    let [assetTypeResult, accountListResult, createOptionsResult] = await fetchAll();
+    let [assetTypeResult, accountListResult, createOptionsResult, brokerageConnectionsResult] = await fetchAll();
     const shouldRetry =
       assetTypeResult.status === "rejected"
       || accountListResult.status === "rejected"
-      || createOptionsResult.status === "rejected";
+      || createOptionsResult.status === "rejected"
+      || brokerageConnectionsResult.status === "rejected";
 
     if (shouldRetry) {
       await new Promise((resolve) => window.setTimeout(resolve, 350));
-      [assetTypeResult, accountListResult, createOptionsResult] = await fetchAll();
+      [assetTypeResult, accountListResult, createOptionsResult, brokerageConnectionsResult] = await fetchAll();
     }
 
     if (assetTypeResult.status === "fulfilled") {
@@ -1667,7 +1708,80 @@ export function AppHomePage() {
     if (createOptionsResult.status === "fulfilled") {
       setAccountCreateOptions(createOptionsResult.value);
     }
+
+    if (brokerageConnectionsResult.status === "fulfilled") {
+      setAccountConnections(brokerageConnectionsResult.value);
+    }
   }, []);
+
+  const openAccountDetails = useCallback((accountId: number) => {
+    setSelectedAccountId(accountId);
+    setActiveAppShellSection("accounts");
+    setActiveSidebarCategory("accounts");
+    setActiveSidebarLabel("Accounts");
+    setAccountSettingsError(null);
+    setAccountSettingsNotice(null);
+  }, []);
+
+  const syncAccountInRows = useCallback((updatedAccount: AccountListItem) => {
+    setAccountRows((previous) => {
+      const next = previous.map((account) => (account.id === updatedAccount.id ? updatedAccount : account));
+      return next.some((account) => account.id === updatedAccount.id) ? next : [...previous, updatedAccount];
+    });
+  }, []);
+
+  useEffect(() => {
+    if (activeAppShellSection !== "accounts") return;
+    if (selectedAccountId && accountRows.some((account) => account.id === selectedAccountId)) return;
+    setSelectedAccountId(accountRows[0]?.id ?? null);
+  }, [accountRows, activeAppShellSection, selectedAccountId]);
+
+  useEffect(() => {
+    if (selectedAccountId === null) {
+      setSelectedAccountHoldings([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsAccountDetailLoading(true);
+    void Promise.allSettled([getAccount(selectedAccountId), getAccountHoldings(selectedAccountId)]).then((results) => {
+      if (cancelled) return;
+
+      const [accountResult, holdingsResult] = results;
+      if (accountResult.status === "fulfilled") {
+        syncAccountInRows(accountResult.value);
+      }
+      if (holdingsResult.status === "fulfilled") {
+        setSelectedAccountHoldings(holdingsResult.value);
+      } else {
+        setSelectedAccountHoldings([]);
+      }
+      setIsAccountDetailLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccountId, syncAccountInRows]);
+
+  useEffect(() => {
+    if (!selectedAccount) {
+      setAccountDraftName("");
+      setAccountDraftPositionMode("manual");
+      setAccountDraftSupportedAssetTypeSlugs([]);
+      setAccountDraftStrictEnforcement(false);
+      return;
+    }
+
+    setAccountDraftName(selectedAccount.name);
+    setAccountDraftPositionMode(selectedAccount.position_mode ?? "manual");
+    setAccountDraftSupportedAssetTypeSlugs(
+      selectedAccount.supported_asset_type_slugs ?? selectedAccount.allowed_asset_type_slugs ?? [],
+    );
+    setAccountDraftStrictEnforcement(
+      Boolean(selectedAccount.strict_asset_type_enforcement ?? selectedAccount.enforce_restrictions),
+    );
+  }, [selectedAccount]);
 
   const closeAddAssetsModal = useCallback(() => {
     setIsAddAssetModalOpen(false);
@@ -1684,16 +1798,14 @@ export function AppHomePage() {
     setAddAssetFlowError(null);
     setIsSubmittingHolding(false);
     setNewAccountName("");
-    setNewAccountBroker("");
     setNewAccountPortfolioId(accountCreateOptions?.portfolios[0]?.id ?? null);
     setNewAccountTypeId(null);
-    setNewAccountClassificationId(accountCreateOptions?.classification_definitions[0]?.id ?? null);
     setIsCreatingAccount(false);
     setIsAddAssetTypeViewOpen(false);
     setNewAssetTypeName("");
     setNewAssetTypeError(null);
     setIsCreatingAssetType(false);
-  }, [accountCreateOptions?.classification_definitions, accountCreateOptions?.portfolios]);
+  }, [accountCreateOptions?.portfolios]);
 
   const beginAddAssetFlow = useCallback((assetType: AssetTypeOption) => {
     setSelectedAddAssetType(assetType);
@@ -1730,13 +1842,8 @@ export function AppHomePage() {
   }, [loadSidebarData, newAssetTypeName]);
 
   const handleCreateEligibleAccount = useCallback(async () => {
-    if (
-      !newAccountName.trim()
-      || newAccountPortfolioId === null
-      || newAccountTypeId === null
-      || newAccountClassificationId === null
-    ) {
-      setAddAssetFlowError("Complete the account details first.");
+    if (newAccountTypeId === null) {
+      setAddAssetFlowError("Choose an account type first.");
       return;
     }
 
@@ -1744,15 +1851,18 @@ export function AppHomePage() {
       setIsCreatingAccount(true);
       setAddAssetFlowError(null);
       const created = await createAccount({
-        portfolio_id: newAccountPortfolioId,
-        name: newAccountName.trim(),
+        portfolio_id: newAccountPortfolioId ?? undefined,
+        name: newAccountName.trim() || undefined,
         account_type_id: newAccountTypeId,
-        broker: newAccountBroker.trim() || undefined,
-        classification_definition_id: newAccountClassificationId,
+        supported_asset_type_slugs: selectedAddAssetType?.slug ? [selectedAddAssetType.slug] : undefined,
+        strict_asset_type_enforcement: false,
       });
+      syncAccountInRows(created);
       await loadSidebarData();
       setSelectedAddAssetAccountId(created.id);
       setAddAssetStep("asset");
+      setIsAddAccountInlineOpen(false);
+      setNewAccountName("");
     } catch (error) {
       if (error instanceof ApiError) {
         setAddAssetFlowError(error.message);
@@ -1762,7 +1872,98 @@ export function AppHomePage() {
     } finally {
       setIsCreatingAccount(false);
     }
-  }, [loadSidebarData, newAccountBroker, newAccountClassificationId, newAccountName, newAccountPortfolioId, newAccountTypeId]);
+  }, [loadSidebarData, newAccountName, newAccountPortfolioId, newAccountTypeId, selectedAddAssetType?.slug, syncAccountInRows]);
+
+  const handleQuickCreateAccount = useCallback(async (accountTypeId: number, assetTypeSlug?: string) => {
+    try {
+      setIsCreatingAccount(true);
+      setAddAssetFlowError(null);
+      const created = await createAccount({
+        portfolio_id: newAccountPortfolioId ?? undefined,
+        account_type_id: accountTypeId,
+        supported_asset_type_slugs: assetTypeSlug ? [assetTypeSlug] : undefined,
+        strict_asset_type_enforcement: false,
+      });
+      syncAccountInRows(created);
+      await loadSidebarData();
+      openAccountDetails(created.id);
+    } catch (error) {
+      setAddAssetFlowError(error instanceof Error ? error.message : "Unable to create account.");
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  }, [loadSidebarData, newAccountPortfolioId, openAccountDetails, syncAccountInRows]);
+
+  const handleCreateCustomAccountTypeAndAccount = useCallback(async () => {
+    const trimmedName = newCustomAccountTypeName.trim();
+    if (!trimmedName || !selectedAddAccountAssetType?.slug) {
+      setAddAssetFlowError("Enter an account type name first.");
+      return;
+    }
+
+    try {
+      setIsCreatingAccount(true);
+      setAddAssetFlowError(null);
+      const createdType = await createCustomAccountType({
+        name: trimmedName,
+        allowed_asset_type_slugs: [selectedAddAccountAssetType.slug],
+      });
+      const createdAccount = await createAccount({
+        portfolio_id: newAccountPortfolioId ?? undefined,
+        account_type_id: createdType.id,
+        supported_asset_type_slugs: [selectedAddAccountAssetType.slug],
+        strict_asset_type_enforcement: false,
+      });
+      setNewCustomAccountTypeName("");
+      setIsAddAccountInlineOpen(false);
+      syncAccountInRows(createdAccount);
+      await loadSidebarData();
+      openAccountDetails(createdAccount.id);
+    } catch (error) {
+      setAddAssetFlowError(error instanceof Error ? error.message : "Unable to create account type.");
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  }, [loadSidebarData, newAccountPortfolioId, newCustomAccountTypeName, openAccountDetails, selectedAddAccountAssetType?.slug, syncAccountInRows]);
+
+  const handleSaveAccountSettings = useCallback(
+    async (
+      accountId: number,
+      payload: {
+        name?: string;
+        position_mode?: "manual" | "synced" | "ledger" | "hybrid";
+        strict_asset_type_enforcement?: boolean;
+        supported_asset_type_slugs?: string[];
+      },
+    ) => {
+      try {
+        setIsSavingAccountSettings(true);
+        setAccountSettingsError(null);
+        setAccountSettingsNotice(null);
+        const updated = await updateAccount(accountId, payload);
+        syncAccountInRows(updated);
+        await loadSidebarData();
+        setAccountSettingsNotice("Account settings saved.");
+      } catch (error) {
+        setAccountSettingsError(error instanceof Error ? error.message : "Unable to save account settings.");
+      } finally {
+        setIsSavingAccountSettings(false);
+      }
+    },
+    [loadSidebarData, syncAccountInRows],
+  );
+
+  const toggleAccountDraftSupportedAssetType = useCallback((slug: string) => {
+    setAccountDraftSupportedAssetTypeSlugs((previous) =>
+      previous.includes(slug) ? previous.filter((value) => value !== slug) : [...previous, slug],
+    );
+  }, []);
+
+  const beginAddAccountInlineCreate = useCallback((accountTypeId: number | null) => {
+    setIsAddAccountInlineOpen(true);
+    setNewAccountTypeId(accountTypeId);
+    setAddAssetFlowError(null);
+  }, []);
 
   const handleSubmitEquityHolding = useCallback(async () => {
     if (!selectedAddAssetAccountId || !selectedEquityResult || !newHoldingQuantity.trim()) {
@@ -2242,10 +2443,7 @@ export function AppHomePage() {
     if (newAccountPortfolioId === null) {
       setNewAccountPortfolioId(accountCreateOptions?.portfolios[0]?.id ?? null);
     }
-    if (newAccountClassificationId === null) {
-      setNewAccountClassificationId(accountCreateOptions?.classification_definitions[0]?.id ?? null);
-    }
-  }, [accountCreateOptions?.classification_definitions, accountCreateOptions?.portfolios, isAddAssetModalOpen, newAccountClassificationId, newAccountPortfolioId]);
+  }, [accountCreateOptions?.portfolios, isAddAssetModalOpen, newAccountPortfolioId]);
 
   useEffect(() => {
     if (!isAddAssetModalOpen || addAssetStep !== "account") return;
@@ -3344,7 +3542,6 @@ export function AppHomePage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setAddAccountStep("accountType");
                         setSelectedAddAccountAssetType(addAssetModalAssetTypes[0] ?? null);
                         setActiveAppShellSection("addAccount");
                         setActiveSidebarCategory("accounts");
@@ -4882,70 +5079,324 @@ export function AppHomePage() {
                         Holdings view coming next.
                       </div>
                     ) : activeAppShellSection === "accounts" ? (
-                      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="text-lg font-semibold text-foreground">Accounts</p>
-                          <div className="flex items-center gap-2">
-                            <label htmlFor="accounts-shell-sort" className="text-sm font-medium text-slate-500">
-                              Sort
-                            </label>
-                            <select
-                              id="accounts-shell-sort"
-                              value={accountsShellSortMode}
-                              onChange={(event) => setAccountsShellSortMode(event.target.value as ShellSortMode)}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-foreground"
-                            >
-                              <option value="value_desc">Value (High-Low)</option>
-                              <option value="value_asc">Value (Low-High)</option>
-                              <option value="name_asc">Alphabetical (A-Z)</option>
-                              <option value="name_desc">Alphabetical (Z-A)</option>
-                            </select>
+                      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.35fr]">
+                        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-lg font-semibold text-foreground">Accounts</p>
+                            <div className="flex items-center gap-2">
+                              <label htmlFor="accounts-shell-sort" className="text-sm font-medium text-slate-500">
+                                Sort
+                              </label>
+                              <select
+                                id="accounts-shell-sort"
+                                value={accountsShellSortMode}
+                                onChange={(event) => setAccountsShellSortMode(event.target.value as ShellSortMode)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-foreground"
+                              >
+                                <option value="value_desc">Value (High-Low)</option>
+                                <option value="value_asc">Value (Low-High)</option>
+                                <option value="name_asc">Alphabetical (A-Z)</option>
+                                <option value="name_desc">Alphabetical (Z-A)</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            {accountsShellGroups.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-muted-foreground">
+                                No accounts yet.
+                              </div>
+                            ) : (
+                              accountsShellGroups.map((group) => {
+                                const collapsed = collapsedAccountTypeGroups.includes(group.key);
+                                return (
+                                  <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setCollapsedAccountTypeGroups((previous) =>
+                                          previous.includes(group.key) ? previous.filter((key) => key !== group.key) : [...previous, group.key],
+                                        )
+                                      }
+                                      className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+                                    >
+                                      <div>
+                                        <p className="text-base font-semibold text-foreground">{group.label}</p>
+                                        <p className="text-sm text-muted-foreground">{group.items.length} accounts</p>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <p className="text-base font-semibold text-foreground">{formatCurrency(group.totalValue)}</p>
+                                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`} />
+                                      </div>
+                                    </button>
+                                    {!collapsed ? (
+                                      <div className="border-t border-slate-200 bg-white">
+                                        {group.items.map((item) => {
+                                          const accountId = Number(item.key.replace("account-", ""));
+                                          const isSelected = selectedAccountId === accountId;
+                                          return (
+                                            <button
+                                              key={item.key}
+                                              type="button"
+                                              onClick={() => openAccountDetails(accountId)}
+                                              className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm transition-colors ${
+                                                isSelected ? "bg-foreground/[0.05]" : "hover:bg-slate-50"
+                                              }`}
+                                            >
+                                              <div className="min-w-0">
+                                                <p className={`truncate ${isSelected ? "font-semibold text-foreground" : "font-medium text-foreground"}`}>{item.label}</p>
+                                                {item.subtitle ? <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p> : null}
+                                              </div>
+                                              <p className="shrink-0 font-medium text-foreground">{formatCurrency(item.value)}</p>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
-                        <div className="space-y-3">
-                          {accountsShellGroups.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-muted-foreground">
-                              No accounts yet.
-                            </div>
-                          ) : (
-                            accountsShellGroups.map((group) => {
-                              const collapsed = collapsedAccountTypeGroups.includes(group.key);
-                              return (
-                                <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setCollapsedAccountTypeGroups((previous) =>
-                                        previous.includes(group.key) ? previous.filter((key) => key !== group.key) : [...previous, group.key],
-                                      )
-                                    }
-                                    className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
-                                  >
-                                    <div>
-                                      <p className="text-base font-semibold text-foreground">{group.label}</p>
-                                      <p className="text-sm text-muted-foreground">{group.items.length} accounts</p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <p className="text-base font-semibold text-foreground">{formatCurrency(group.totalValue)}</p>
-                                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`} />
-                                    </div>
-                                  </button>
-                                  {!collapsed ? (
-                                    <div className="border-t border-slate-200 bg-white">
-                                      {group.items.map((item) => (
-                                        <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-                                          <div className="min-w-0">
-                                            <p className="truncate font-medium text-foreground">{item.label}</p>
-                                            {item.subtitle ? <p className="truncate text-xs text-muted-foreground">{item.subtitle}</p> : null}
-                                          </div>
-                                          <p className="shrink-0 font-medium text-foreground">{formatCurrency(item.value)}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
+                        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                          {selectedAccount ? (
+                            <>
+                              <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="space-y-1">
+                                  <p className="text-2xl font-semibold text-foreground">{selectedAccount.name}</p>
+                                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                    <span>{selectedAccount.account_type_name ?? accountTypeNameById.get(selectedAccount.account_type) ?? "Account"}</span>
+                                    <span>•</span>
+                                    <span>{selectedAccount.holdings_count} holding{selectedAccount.holdings_count === 1 ? "" : "s"}</span>
+                                    <span>•</span>
+                                    <span>{selectedAccountConnections.length} connection{selectedAccountConnections.length === 1 ? "" : "s"}</span>
+                                  </div>
                                 </div>
-                              );
-                            })
+                                <div className="grid grid-cols-2 gap-3 sm:min-w-[260px]">
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Value</p>
+                                    <p className="mt-2 text-lg font-semibold text-foreground">{formatCurrency(selectedAccountValue)}</p>
+                                  </div>
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Schema</p>
+                                    <p className="mt-2 text-lg font-semibold text-foreground">{selectedAccount.active_schema_id ? `#${selectedAccount.active_schema_id}` : "Default"}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                                <div className="space-y-4">
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div>
+                                        <p className="text-base font-semibold text-foreground">Settings</p>
+                                        <p className="text-sm text-muted-foreground">Create first, configure later. This is the account setup surface.</p>
+                                      </div>
+                                      {accountSettingsNotice ? <p className="text-sm font-medium text-emerald-700">{accountSettingsNotice}</p> : null}
+                                    </div>
+                                    {accountSettingsError ? <p className="mt-3 text-sm text-red-600">{accountSettingsError}</p> : null}
+                                    <div className="mt-4 space-y-4">
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <label className="space-y-2">
+                                          <span className="text-sm font-medium text-foreground">Account name</span>
+                                          <input
+                                            type="text"
+                                            value={accountDraftName}
+                                            onChange={(event) => setAccountDraftName(event.target.value)}
+                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-foreground outline-none focus:border-slate-400"
+                                          />
+                                        </label>
+                                        <label className="space-y-2">
+                                          <span className="text-sm font-medium text-foreground">Default holding behavior</span>
+                                          <select
+                                            value={accountDraftPositionMode}
+                                            onChange={(event) => setAccountDraftPositionMode(event.target.value as "manual" | "synced" | "ledger" | "hybrid")}
+                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-foreground outline-none focus:border-slate-400"
+                                          >
+                                            <option value="manual">Manual</option>
+                                            <option value="synced">Synced</option>
+                                            <option value="ledger">Ledger</option>
+                                            <option value="hybrid">Hybrid</option>
+                                          </select>
+                                        </label>
+                                      </div>
+
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div>
+                                            <p className="text-sm font-medium text-foreground">Supported asset types</p>
+                                            <p className="text-xs text-muted-foreground">Leave empty to allow anything in this account.</p>
+                                          </div>
+                                          <label className="flex items-center gap-2 text-sm text-foreground">
+                                            <input
+                                              type="checkbox"
+                                              checked={accountDraftStrictEnforcement}
+                                              onChange={(event) => setAccountDraftStrictEnforcement(event.target.checked)}
+                                              className="h-4 w-4 rounded border-slate-300"
+                                            />
+                                            Strict enforcement
+                                          </label>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {assetTypes.map((assetType) => {
+                                            const slug = assetType.slug;
+                                            if (!slug) return null;
+                                            const isSelected = accountDraftSupportedAssetTypeSlugs.includes(slug);
+                                            return (
+                                              <button
+                                                key={`account-supported-type-${assetType.id}`}
+                                                type="button"
+                                                onClick={() => toggleAccountDraftSupportedAssetType(slug)}
+                                                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                                                  isSelected
+                                                    ? "border-foreground bg-foreground text-background"
+                                                    : "border-slate-200 bg-white text-foreground hover:bg-slate-100"
+                                                }`}
+                                              >
+                                                {assetType.name}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-end gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setAccountDraftName(selectedAccount.name);
+                                            setAccountDraftPositionMode(selectedAccount.position_mode ?? "manual");
+                                            setAccountDraftSupportedAssetTypeSlugs(
+                                              selectedAccount.supported_asset_type_slugs ?? selectedAccount.allowed_asset_type_slugs ?? [],
+                                            );
+                                            setAccountDraftStrictEnforcement(
+                                              Boolean(selectedAccount.strict_asset_type_enforcement ?? selectedAccount.enforce_restrictions),
+                                            );
+                                            setAccountSettingsError(null);
+                                            setAccountSettingsNotice(null);
+                                          }}
+                                          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-slate-100"
+                                        >
+                                          Reset
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={!isAccountSettingsDirty || isSavingAccountSettings}
+                                          onClick={() =>
+                                            void handleSaveAccountSettings(selectedAccount.id, {
+                                              name: accountDraftName.trim() || selectedAccount.name,
+                                              position_mode: accountDraftPositionMode,
+                                              strict_asset_type_enforcement: accountDraftStrictEnforcement,
+                                              supported_asset_type_slugs: accountDraftSupportedAssetTypeSlugs,
+                                            })
+                                          }
+                                          className="rounded-full border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                          {isSavingAccountSettings ? "Saving..." : "Save Changes"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div>
+                                        <p className="text-base font-semibold text-foreground">Holdings</p>
+                                        <p className="text-sm text-muted-foreground">Holdings can now override tracking and pricing behavior individually.</p>
+                                      </div>
+                                      <p className="text-sm font-semibold text-foreground">{formatCurrency(selectedAccountHoldingsValue)}</p>
+                                    </div>
+                                    <div className="mt-4 space-y-3">
+                                      {isAccountDetailLoading ? (
+                                        <div className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted-foreground">
+                                          Loading account details...
+                                        </div>
+                                      ) : selectedAccountHoldings.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted-foreground">
+                                          No holdings in this account yet.
+                                        </div>
+                                      ) : (
+                                        selectedAccountHoldings.map((holding) => (
+                                          <div key={`account-holding-${holding.id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                              <div>
+                                                <p className="font-medium text-foreground">{holding.asset_display_name}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                  {formatSlugLabel(holding.asset_type)}
+                                                  {holding.original_ticker ? ` • ${holding.original_ticker}` : ""}
+                                                </p>
+                                              </div>
+                                              <p className="font-medium text-foreground">{formatCurrency(getHoldingValue(holding))}</p>
+                                            </div>
+                                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                              <span className="rounded-full border border-slate-200 px-2 py-1">Tracking: {formatSlugLabel(holding.effective_tracking_mode ?? holding.tracking_mode ?? "manual")}</span>
+                                              <span className="rounded-full border border-slate-200 px-2 py-1">Price: {formatSlugLabel(holding.effective_price_source_mode ?? holding.price_source_mode ?? "manual")}</span>
+                                              <span className="rounded-full border border-slate-200 px-2 py-1">Quantity: {formatNumber(holding.quantity)}</span>
+                                            </div>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <p className="text-base font-semibold text-foreground">Account Summary</p>
+                                    <div className="mt-4 space-y-3 text-sm">
+                                      <div className="flex items-center justify-between gap-4">
+                                        <span className="text-muted-foreground">Type</span>
+                                        <span className="font-medium text-foreground">{selectedAccount.account_type_name ?? accountTypeNameById.get(selectedAccount.account_type) ?? "Account"}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-4">
+                                        <span className="text-muted-foreground">Supported assets</span>
+                                        <span className="text-right font-medium text-foreground">
+                                          {selectedAccountSupportedTypes.length > 0 ? selectedAccountSupportedTypes.join(", ") : "All asset types"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-4">
+                                        <span className="text-muted-foreground">Restriction mode</span>
+                                        <span className="font-medium text-foreground">
+                                          {selectedAccount.strict_asset_type_enforcement ?? selectedAccount.enforce_restrictions ? "Strict" : "Flexible"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-4">
+                                        <span className="text-muted-foreground">Last synced</span>
+                                        <span className="font-medium text-foreground">{formatDateLabel(selectedAccount.last_synced)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                    <p className="text-base font-semibold text-foreground">Connections</p>
+                                    <div className="mt-4 space-y-3">
+                                      {selectedAccountConnections.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-muted-foreground">
+                                          No sync connections yet.
+                                        </div>
+                                      ) : (
+                                        selectedAccountConnections.map((connection) => (
+                                          <div key={`account-connection-${connection.id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                              <div>
+                                                <p className="font-medium text-foreground">{connection.connection_label || formatSlugLabel(connection.provider)}</p>
+                                                <p className="text-sm text-muted-foreground">{formatSlugLabel(connection.status)}</p>
+                                              </div>
+                                              <p className="text-xs text-muted-foreground">{formatDateLabel(connection.last_synced_at ?? null)}</p>
+                                            </div>
+                                            {connection.last_error ? <p className="mt-2 text-xs text-red-600">{connection.last_error}</p> : null}
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-muted-foreground">
+                              Select an account to view its settings.
+                            </div>
                           )}
                         </div>
                       </div>
@@ -4988,14 +5439,14 @@ export function AppHomePage() {
                                       <button
                                         key={`existing-account-${account.id}`}
                                         type="button"
-                                        className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)]"
+                                        onClick={() => openAccountDetails(account.id)}
+                                        className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)] transition-colors hover:bg-slate-50"
                                       >
                                         <div className="flex items-start justify-between gap-3">
                                           <div className="min-w-0">
                                             <p className="truncate text-[0.98rem] font-semibold text-foreground">{account.name}</p>
                                             <p className="mt-1 text-sm text-muted-foreground">
                                               {accountTypeNameById.get(account.account_type) ?? "Account"}
-                                              {account.broker ? ` • ${account.broker}` : ""}
                                             </p>
                                           </div>
                                           <p className="shrink-0 text-sm font-semibold text-foreground">
@@ -5020,7 +5471,9 @@ export function AppHomePage() {
                                     <button
                                       key={`create-account-type-${accountType.id}`}
                                       type="button"
-                                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)]"
+                                      onClick={() => void handleQuickCreateAccount(accountType.id, selectedAddAccountAssetType?.slug ?? undefined)}
+                                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)] transition-colors hover:bg-slate-50"
+                                      disabled={isCreatingAccount}
                                     >
                                       <p className="text-[0.98rem] font-semibold text-foreground">{accountType.name}</p>
                                       <p className="mt-1 text-sm text-muted-foreground">
@@ -5036,7 +5489,9 @@ export function AppHomePage() {
                                     <button
                                       key={`existing-custom-account-type-${accountType.id}`}
                                       type="button"
-                                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)]"
+                                      onClick={() => void handleQuickCreateAccount(accountType.id, selectedAddAccountAssetType?.slug ?? undefined)}
+                                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.03)] transition-colors hover:bg-slate-50"
+                                      disabled={isCreatingAccount}
                                     >
                                       <p className="text-[0.98rem] font-semibold text-foreground">{accountType.name}</p>
                                       <p className="mt-1 text-sm text-muted-foreground">{accountType.assetTypeSummary}</p>
@@ -5044,13 +5499,48 @@ export function AppHomePage() {
                                   ))}
                                   <button
                                     type="button"
-                                    className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.025)]"
+                                    onClick={() => beginAddAccountInlineCreate(null)}
+                                    className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-4 text-left shadow-[0_4px_14px_rgba(15,23,42,0.025)] transition-colors hover:bg-slate-200/80"
                                   >
                                     <p className="text-[0.98rem] font-semibold text-foreground">Create Custom Account Type</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">Add your own account type for this asset.</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">Create a custom type, then open the account right away.</p>
                                   </button>
                                 </div>
                               </div>
+                              {isAddAccountInlineOpen ? (
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                                    <input
+                                      type="text"
+                                      value={newCustomAccountTypeName}
+                                      onChange={(event) => setNewCustomAccountTypeName(event.target.value)}
+                                      placeholder="Custom account type name"
+                                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleCreateCustomAccountTypeAndAccount()}
+                                      disabled={isCreatingAccount}
+                                      className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {isCreatingAccount ? "Creating..." : "Create and Add"}
+                                    </button>
+                                  </div>
+                                  <div className="mt-3 flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsAddAccountInlineOpen(false);
+                                        setNewCustomAccountTypeName("");
+                                        setAddAssetFlowError(null);
+                                      }}
+                                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -5419,13 +5909,6 @@ export function AppHomePage() {
                                 placeholder={brokerageAccountType ? "Brokerage Account" : "Account Name"}
                                 className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
                               />
-                              <input
-                                type="text"
-                                value={newAccountBroker}
-                                onChange={(event) => setNewAccountBroker(event.target.value)}
-                                placeholder="Broker"
-                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
-                              />
                               <select
                                 value={newAccountPortfolioId ?? ""}
                                 onChange={(event) => setNewAccountPortfolioId(Number(event.target.value))}
@@ -5434,17 +5917,6 @@ export function AppHomePage() {
                                 {(accountCreateOptions?.portfolios ?? []).map((portfolio) => (
                                   <option key={`portfolio-option-${portfolio.id}`} value={portfolio.id}>
                                     {portfolio.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                value={newAccountClassificationId ?? ""}
-                                onChange={(event) => setNewAccountClassificationId(Number(event.target.value))}
-                                className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400"
-                              >
-                                {(accountCreateOptions?.classification_definitions ?? []).map((classification) => (
-                                  <option key={`classification-option-${classification.id}`} value={classification.id}>
-                                    {classification.name}
                                   </option>
                                 ))}
                               </select>

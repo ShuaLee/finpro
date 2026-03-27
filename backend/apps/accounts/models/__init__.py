@@ -1,6 +1,5 @@
 from .account import Account
 from .account_type import AccountType
-from .account_classification import AccountClassification, ClassificationDefinition
 from .audit import AccountAuditEvent
 from .brokerage import BrokerageConnection
 from .holding import Holding
@@ -13,8 +12,6 @@ from .transaction import AccountTransaction
 __all__ = [
     "Account",
     "AccountType",
-    "ClassificationDefinition",
-    "AccountClassification",
     "AccountAuditEvent",
     "BrokerageConnection",
     "Holding",

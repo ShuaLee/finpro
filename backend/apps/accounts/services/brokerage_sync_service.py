@@ -17,10 +17,10 @@ from .snapshot_service import HoldingSnapshotService
 class BrokerageSyncService:
     @staticmethod
     def _assert_sync_supported(account):
-        allowed = set(account.account_type.allowed_asset_types.values_list("slug", flat=True))
+        allowed = set(account.allowed_asset_types.values_list("slug", flat=True))
         supported = {"equity", "crypto"}
         if not allowed:
-            raise ValidationError("Account type has no allowed asset types.")
+            raise ValidationError("Account has no asset type restrictions configured for sync.")
         if not allowed.issubset(supported):
             raise ValidationError(
                 "Brokerage sync supports account types restricted to equity and/or crypto."
@@ -100,7 +100,7 @@ class BrokerageSyncService:
     def _apply_positions(*, connection: BrokerageConnection, positions: list[BrokeragePosition], prune_missing: bool):
         account = connection.account
         allowed_asset_type_slugs = set(
-            account.account_type.allowed_asset_types.values_list("slug", flat=True)
+            account.allowed_asset_types.values_list("slug", flat=True)
         )
 
         updated = 0
@@ -126,6 +126,8 @@ class BrokerageSyncService:
                     "quantity": pos.quantity,
                     "average_purchase_price": pos.average_cost,
                     "original_ticker": pos.symbol,
+                    "tracking_mode": Holding.TrackingMode.TRACKED,
+                    "price_source_mode": Holding.PriceSourceMode.MARKET,
                 },
             )
             if was_created:

@@ -13,10 +13,8 @@ export function AddBrokerageAccountPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [broker, setBroker] = useState("");
   const [portfolioId, setPortfolioId] = useState<number | null>(null);
   const [accountTypeId, setAccountTypeId] = useState<number | null>(null);
-  const [classificationDefinitionId, setClassificationDefinitionId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -27,7 +25,6 @@ export function AddBrokerageAccountPage() {
         setOptions(payload);
         setPortfolioId(payload.portfolios[0]?.id ?? null);
         setAccountTypeId(payload.account_types[0]?.id ?? null);
-        setClassificationDefinitionId(payload.classification_definitions[0]?.id ?? null);
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Unable to load account form options.";
         setError(message);
@@ -39,8 +36,8 @@ export function AddBrokerageAccountPage() {
   }, []);
 
   const canSubmit = useMemo(
-    () => name.trim().length > 0 && portfolioId !== null && accountTypeId !== null && classificationDefinitionId !== null,
-    [name, portfolioId, accountTypeId, classificationDefinitionId],
+    () => portfolioId !== null && accountTypeId !== null,
+    [portfolioId, accountTypeId],
   );
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -52,10 +49,8 @@ export function AddBrokerageAccountPage() {
     try {
       await createAccount({
         portfolio_id: portfolioId!,
-        name: name.trim(),
+        name: name.trim() || undefined,
         account_type_id: accountTypeId!,
-        broker: broker.trim() || undefined,
-        classification_definition_id: classificationDefinitionId!,
       });
       navigate("/", { replace: true });
     } catch (caught) {
@@ -82,7 +77,7 @@ export function AddBrokerageAccountPage() {
             {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
             {!loading && options ? (
               <form onSubmit={onSubmit} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-1">
                   <label className="space-y-1 text-sm">
                     <span className="text-muted-foreground">Account Name</span>
                     <input
@@ -94,19 +89,9 @@ export function AddBrokerageAccountPage() {
                       required
                     />
                   </label>
-                  <label className="space-y-1 text-sm">
-                    <span className="text-muted-foreground">Broker (optional)</span>
-                    <input
-                      type="text"
-                      value={broker}
-                      onChange={(event) => setBroker(event.target.value)}
-                      className="w-full rounded-md border border-border bg-white px-3 py-2"
-                      placeholder="Fidelity / Schwab / etc."
-                    />
-                  </label>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <label className="space-y-1 text-sm">
                     <span className="text-muted-foreground">Portfolio</span>
                     <select
@@ -137,20 +122,6 @@ export function AddBrokerageAccountPage() {
                     </select>
                   </label>
 
-                  <label className="space-y-1 text-sm">
-                    <span className="text-muted-foreground">Classification</span>
-                    <select
-                      value={classificationDefinitionId ?? ""}
-                      onChange={(event) => setClassificationDefinitionId(Number(event.target.value))}
-                      className="w-full rounded-md border border-border bg-white px-3 py-2"
-                    >
-                      {options.classification_definitions.map((classification) => (
-                        <option key={classification.id} value={classification.id}>
-                          {classification.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                 </div>
 
                 <div className="flex items-center gap-2">

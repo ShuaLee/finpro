@@ -1,14 +1,12 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from accounts.models.account_classification import ClassificationDefinition
 from accounts.models.account_type import AccountType
 from assets.models.core import AssetType
-from fx.models.country import Country
 
 
 class Command(BaseCommand):
-    help = "Seed system AccountTypes and ClassificationDefinitions"
+    help = "Seed system AccountTypes"
 
     @staticmethod
     def _get_asset_type(slug):
@@ -52,48 +50,6 @@ class Command(BaseCommand):
             prefix = "Created" if created else "Updated"
             self.stdout.write(f"  {prefix} AccountType: {obj.name}")
 
-        self.stdout.write("Seeding ClassificationDefinitions...")
-
-        canada = Country.objects.filter(code="CA").first()
-
-        classifications = [
-            {
-                "name": "General",
-                "tax_status": "taxable",
-                "all_countries": True,
-                "countries": [],
-            },
-            {
-                "name": "Tax-Free Savings Account (TFSA)",
-                "tax_status": "tax_exempt",
-                "all_countries": False,
-                "countries": [canada] if canada else [],
-            },
-        ]
-
-        for data in classifications:
-            obj, created = ClassificationDefinition.objects.get_or_create(
-                name=data["name"],
-                defaults={
-                    "tax_status": data["tax_status"],
-                    "all_countries": data["all_countries"],
-                    "is_system": True,
-                },
-            )
-
-            obj.tax_status = data["tax_status"]
-            obj.all_countries = data["all_countries"]
-            obj.is_system = True
-            obj.save()
-
-            if not obj.all_countries:
-                obj.countries.set([c for c in data["countries"] if c is not None])
-            else:
-                obj.countries.clear()
-
-            prefix = "Created" if created else "Updated"
-            self.stdout.write(f"  {prefix} Classification: {obj.name}")
-
         self.stdout.write(
-            self.style.SUCCESS("System AccountTypes and Classifications seeded")
+            self.style.SUCCESS("System AccountTypes seeded")
         )

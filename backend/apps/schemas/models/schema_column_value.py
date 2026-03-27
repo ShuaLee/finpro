@@ -44,13 +44,12 @@ class SchemaColumnValue(models.Model):
     def clean(self):
         super().clean()
         if self.column_id and self.holding_id:
-            account = self.holding.account
-            schema = getattr(account, "active_schema", None)
+            schema = getattr(self.holding, "active_schema", None)
             if not schema:
                 raise ValidationError("Holding account has no active schema.")
             if self.column.schema_id != schema.id:
                 raise ValidationError(
-                    "SchemaColumnValue column must belong to the holding account's active schema."
+                    "SchemaColumnValue column must belong to the schema resolved for this holding."
                 )
 
     def save(self, *args, **kwargs):

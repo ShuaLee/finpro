@@ -15,6 +15,7 @@ from assets.models.core import AssetType
 
 class AccountTypeSerializer(serializers.ModelSerializer):
     allowed_asset_type_slugs = serializers.SerializerMethodField()
+    supported_asset_type_slugs = serializers.SerializerMethodField()
 
     class Meta:
         model = AccountType
@@ -25,10 +26,14 @@ class AccountTypeSerializer(serializers.ModelSerializer):
             "is_system",
             "description",
             "allowed_asset_type_slugs",
+            "supported_asset_type_slugs",
         )
 
     def get_allowed_asset_type_slugs(self, obj):
         return list(obj.allowed_asset_types.values_list("slug", flat=True))
+
+    def get_supported_asset_type_slugs(self, obj):
+        return self.get_allowed_asset_type_slugs(obj)
 
 
 class CustomAccountTypeCreateSerializer(serializers.Serializer):
@@ -50,6 +55,8 @@ class CustomAccountTypeCreateSerializer(serializers.Serializer):
 class HoldingSerializer(serializers.ModelSerializer):
     asset_display_name = serializers.CharField(source="asset.display_name", read_only=True)
     asset_type = serializers.CharField(source="asset.asset_type.slug", read_only=True)
+    effective_tracking_mode = serializers.CharField(read_only=True)
+    effective_price_source_mode = serializers.CharField(read_only=True)
 
     class Meta:
         model = Holding
@@ -62,6 +69,10 @@ class HoldingSerializer(serializers.ModelSerializer):
             "original_ticker",
             "quantity",
             "average_purchase_price",
+            "tracking_mode",
+            "effective_tracking_mode",
+            "price_source_mode",
+            "effective_price_source_mode",
             "created_at",
             "updated_at",
         )
@@ -89,11 +100,18 @@ class HoldingCreateSerializer(serializers.Serializer):
     asset_type_slug = serializers.SlugField(required=False)
     custom_name = serializers.CharField(required=False, allow_blank=False)
     currency_code = serializers.CharField(required=False)
+    tracking_mode = serializers.ChoiceField(choices=Holding.TrackingMode.choices, required=False)
+    price_source_mode = serializers.ChoiceField(choices=Holding.PriceSourceMode.choices, required=False)
 
 
 class AccountSerializer(serializers.ModelSerializer):
     active_schema_id = serializers.SerializerMethodField()
     holdings_count = serializers.IntegerField(source="holdings.count", read_only=True)
+    allowed_asset_type_slugs = serializers.SerializerMethodField()
+    supported_asset_type_slugs = serializers.SerializerMethodField()
+    strict_asset_type_enforcement = serializers.BooleanField(source="enforce_restrictions", read_only=True)
+    account_type_name = serializers.CharField(source="account_type.name", read_only=True)
+    account_type_slug = serializers.CharField(source="account_type.slug", read_only=True)
 
     class Meta:
         model = Account
@@ -102,20 +120,23 @@ class AccountSerializer(serializers.ModelSerializer):
             "portfolio",
             "name",
             "account_type",
-            "broker",
-            "classification",
+            "account_type_name",
+            "account_type_slug",
             "last_synced",
             "created_at",
             "active_schema_id",
             "holdings_count",
             "position_mode",
             "allow_manual_overrides",
+            "enforce_restrictions",
+            "allowed_asset_type_slugs",
+            "strict_asset_type_enforcement",
+            "supported_asset_type_slugs",
         )
         read_only_fields = (
             "id",
             "portfolio",
             "account_type",
-            "classification",
             "last_synced",
             "created_at",
             "active_schema_id",
@@ -126,15 +147,64 @@ class AccountSerializer(serializers.ModelSerializer):
         schema = obj.active_schema
         return schema.id if schema else None
 
+    def get_allowed_asset_type_slugs(self, obj):
+        return list(obj.allowed_asset_types.values_list("slug", flat=True))
+
+    def get_supported_asset_type_slugs(self, obj):
+        return self.get_allowed_asset_type_slugs(obj)
+
 
 class AccountCreateSerializer(serializers.Serializer):
-    portfolio_id = serializers.IntegerField()
-    name = serializers.CharField(max_length=100)
+    portfolio_id = serializers.IntegerField(required=False)
+    name = serializers.CharField(max_length=100, required=False, allow_blank=True)
     account_type_id = serializers.IntegerField()
-    broker = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    classification_definition_id = serializers.IntegerField()
     position_mode = serializers.ChoiceField(choices=Account.PositionMode.choices, required=False)
     allow_manual_overrides = serializers.BooleanField(required=False)
+    enforce_restrictions = serializers.BooleanField(required=False)
+    strict_asset_type_enforcement = serializers.BooleanField(required=False)
+    allowed_asset_type_slugs = serializers.ListField(
+        child=serializers.SlugField(),
+        required=False,
+        allow_empty=True,
+    )
+    supported_asset_type_slugs = serializers.ListField(
+        child=serializers.SlugField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        supported_slugs = attrs.get("supported_asset_type_slugs")
+        allowed_slugs = attrs.get("allowed_asset_type_slugs")
+        if supported_slugs is not None:
+            if allowed_slugs is not None and allowed_slugs != supported_slugs:
+                raise serializers.ValidationError(
+                    "Provide either supported_asset_type_slugs or allowed_asset_type_slugs, not conflicting values."
+                )
+            attrs["allowed_asset_type_slugs"] = supported_slugs
+
+        strict_enforcement = attrs.get("strict_asset_type_enforcement")
+        enforce_restrictions = attrs.get("enforce_restrictions")
+        if strict_enforcement is not None:
+            if enforce_restrictions is not None and enforce_restrictions != strict_enforcement:
+                raise serializers.ValidationError(
+                    "Provide either strict_asset_type_enforcement or enforce_restrictions, not conflicting values."
+                )
+            attrs["enforce_restrictions"] = strict_enforcement
+
+        return attrs
+
+    def validate_allowed_asset_type_slugs(self, value):
+        slugs = [slug.strip().lower() for slug in value]
+        asset_types = list(AssetType.objects.filter(slug__in=slugs))
+        if len(asset_types) != len(set(slugs)):
+            raise serializers.ValidationError("One or more asset types are invalid.")
+        return slugs
+
+    def validate_supported_asset_type_slugs(self, value):
+        return self.validate_allowed_asset_type_slugs(value)
 
 
 class BrokerageConnectionSerializer(serializers.ModelSerializer):

@@ -4,7 +4,6 @@ import { apiRequest } from "./http";
 export type SidebarAccount = {
   id: number;
   name: string;
-  broker: string | null;
   holdings_count: number;
   last_synced: string | null;
 };
@@ -22,6 +21,7 @@ export type AccountTypeOption = {
   is_system: boolean;
   description: string | null;
   allowed_asset_type_slugs: string[];
+  supported_asset_type_slugs?: string[];
 };
 
 export type PortfolioOption = {
@@ -30,26 +30,21 @@ export type PortfolioOption = {
   kind: string;
 };
 
-export type ClassificationDefinitionOption = {
-  id: number;
-  name: string;
-  tax_status: string;
-};
-
 export type AccountCreateOptions = {
   portfolios: PortfolioOption[];
   account_types: AccountTypeOption[];
-  classification_definitions: ClassificationDefinitionOption[];
 };
 
 export type CreateAccountPayload = {
-  portfolio_id: number;
-  name: string;
+  portfolio_id?: number;
+  name?: string;
   account_type_id: number;
-  broker?: string;
-  classification_definition_id: number;
-  position_mode?: "manual" | "brokerage";
+  position_mode?: "manual" | "synced" | "ledger" | "hybrid";
   allow_manual_overrides?: boolean;
+  enforce_restrictions?: boolean;
+  strict_asset_type_enforcement?: boolean;
+  allowed_asset_type_slugs?: string[];
+  supported_asset_type_slugs?: string[];
 };
 
 export type CreateCustomAccountTypePayload = {
@@ -63,9 +58,39 @@ export type AccountListItem = {
   portfolio: number;
   name: string;
   account_type: number;
-  broker: string | null;
+  account_type_name?: string;
+  account_type_slug?: string | null;
   last_synced: string | null;
   holdings_count: number;
+  active_schema_id?: number | null;
+  position_mode?: "manual" | "synced" | "ledger" | "hybrid";
+  allow_manual_overrides?: boolean;
+  enforce_restrictions?: boolean;
+  strict_asset_type_enforcement?: boolean;
+  allowed_asset_type_slugs?: string[];
+  supported_asset_type_slugs?: string[];
+};
+
+export type UpdateAccountPayload = {
+  name?: string;
+  position_mode?: "manual" | "synced" | "ledger" | "hybrid";
+  allow_manual_overrides?: boolean;
+  strict_asset_type_enforcement?: boolean;
+  supported_asset_type_slugs?: string[];
+};
+
+export type BrokerageConnectionListItem = {
+  id: number;
+  account: number;
+  source_type: string;
+  provider: string;
+  external_account_id?: string | null;
+  connection_label?: string | null;
+  status: string;
+  last_synced_at?: string | null;
+  last_error?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type AccountHolding = {
@@ -77,6 +102,10 @@ export type AccountHolding = {
   original_ticker: string | null;
   quantity: string;
   average_purchase_price: string | null;
+  tracking_mode?: "account_default" | "tracked" | "manual";
+  effective_tracking_mode?: "tracked" | "manual";
+  price_source_mode?: "account_default" | "market" | "manual" | "unavailable";
+  effective_price_source_mode?: "market" | "manual" | "unavailable";
   created_at: string;
   updated_at: string;
 };
@@ -88,6 +117,8 @@ export type CreateHoldingPayload = {
   asset_type_slug?: string;
   custom_name?: string;
   currency_code?: string;
+  tracking_mode?: "account_default" | "tracked" | "manual";
+  price_source_mode?: "account_default" | "market" | "manual" | "unavailable";
 };
 
 export async function getAccountsSidebar(): Promise<SidebarGroup[]> {
@@ -106,8 +137,16 @@ export async function getAccountCreateOptions(): Promise<AccountCreateOptions> {
   return apiRequest<AccountCreateOptions>(API_ENDPOINTS.accounts.createOptions, "GET");
 }
 
-export async function createAccount(payload: CreateAccountPayload): Promise<{ id: number }> {
-  return apiRequest<{ id: number }>(API_ENDPOINTS.accounts.create, "POST", payload as unknown as Record<string, unknown>);
+export async function createAccount(payload: CreateAccountPayload): Promise<AccountListItem> {
+  return apiRequest<AccountListItem>(API_ENDPOINTS.accounts.create, "POST", payload as unknown as Record<string, unknown>);
+}
+
+export async function getAccount(accountId: number): Promise<AccountListItem> {
+  return apiRequest<AccountListItem>(API_ENDPOINTS.accounts.detail(accountId), "GET");
+}
+
+export async function updateAccount(accountId: number, payload: UpdateAccountPayload): Promise<AccountListItem> {
+  return apiRequest<AccountListItem>(API_ENDPOINTS.accounts.detail(accountId), "PATCH", payload as unknown as Record<string, unknown>);
 }
 
 export async function createCustomAccountType(payload: CreateCustomAccountTypePayload): Promise<AccountTypeOption> {
@@ -116,4 +155,8 @@ export async function createCustomAccountType(payload: CreateCustomAccountTypePa
 
 export async function createAccountHolding(accountId: number, payload: CreateHoldingPayload): Promise<AccountHolding> {
   return apiRequest<AccountHolding>(API_ENDPOINTS.accounts.holdings(accountId), "POST", payload as unknown as Record<string, unknown>);
+}
+
+export async function getBrokerageConnections(): Promise<BrokerageConnectionListItem[]> {
+  return apiRequest<BrokerageConnectionListItem[]>(API_ENDPOINTS.accounts.connections, "GET");
 }

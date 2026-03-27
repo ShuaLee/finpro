@@ -27,9 +27,11 @@ export const API_ENDPOINTS = {
   accounts: {
     create: `${API_BASE_URL}/accounts/`,
     list: `${API_BASE_URL}/accounts/`,
+    detail: (accountId: number) => `${API_BASE_URL}/accounts/${accountId}/`,
     createOptions: `${API_BASE_URL}/accounts/create-options/`,
     sidebar: `${API_BASE_URL}/accounts/sidebar/`,
     holdings: (accountId: number) => `${API_BASE_URL}/accounts/${accountId}/holdings/`,
+    connections: `${API_BASE_URL}/accounts/connections/`,
     createCustomType: `${API_BASE_URL}/accounts/account-types/custom/`,
   },
   assets: {

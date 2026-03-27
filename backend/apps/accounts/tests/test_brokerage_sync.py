@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from accounts.models import Account, AccountType, BrokerageConnection
+from accounts.models import Account, AccountType, BrokerageConnection, Holding
 from accounts.services import BrokerageSyncService
 from assets.models.core import AssetType
 from assets.models.equity import EquityAsset
@@ -42,7 +42,10 @@ class BrokerageSyncServiceTest(TestCase):
         self.profile = self.user.profile
         self.portfolio = Portfolio.objects.get(profile=self.profile, kind=Portfolio.Kind.PERSONAL)
 
-        self.equity_type = AssetType.objects.get(slug="equity")
+        self.equity_type, _ = AssetType.objects.get_or_create(
+            name="Equity",
+            created_by=None,
+        )
         self.usd = FXCurrency.objects.get(code="USD")
 
         self.account_type = AccountType.objects.create(
@@ -86,4 +89,7 @@ class BrokerageSyncServiceTest(TestCase):
 
         self.assertEqual(summary["created"], 2)
         self.assertEqual(self.account.holdings.count(), 2)
+        aapl_holding = Holding.objects.get(account=self.account, asset__equity__ticker="AAPL")
+        self.assertEqual(aapl_holding.tracking_mode, Holding.TrackingMode.TRACKED)
+        self.assertEqual(aapl_holding.price_source_mode, Holding.PriceSourceMode.MARKET)
 

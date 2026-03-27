@@ -13,6 +13,8 @@ class HoldingSerializer(serializers.ModelSerializer):
             "original_ticker",
             "quantity",
             "average_purchase_price",
+            "tracking_mode",
+            "price_source_mode",
             "created_at",
             "updated_at",
         )
@@ -30,8 +32,6 @@ class AccountSerializer(serializers.ModelSerializer):
             "portfolio",
             "name",
             "account_type",
-            "broker",
-            "classification",
             "last_synced",
             "created_at",
             "active_schema_id",
@@ -39,7 +39,6 @@ class AccountSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
-            "classification",
             "last_synced",
             "created_at",
             "active_schema_id",

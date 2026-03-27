@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.core.management import call_command
 
 from schemas.models import (
     MasterConstraint,
@@ -19,6 +20,7 @@ from schemas.services.formula_bridge import (
     formula_dependencies,
     is_implicit_identifier,
 )
+from assets.models.core import AssetType
 
 
 class SchemaBootstrapService:
@@ -29,11 +31,21 @@ class SchemaBootstrapService:
     @staticmethod
     @transaction.atomic
     def ensure_for_account(account):
+        if account.schema_id:
+            return account.schema
+
+        allowed_asset_types = list(account.allowed_asset_types.all()[:2])
+        if len(allowed_asset_types) == 1:
+            return SchemaBootstrapService.initialize(
+                portfolio=account.portfolio,
+                asset_type=allowed_asset_types[0],
+            )
+
         schema = Schema.objects.filter(
             portfolio=account.portfolio,
             account_type=account.account_type,
+            asset_type__isnull=True,
         ).first()
-
         if schema:
             return schema
 
@@ -44,23 +56,39 @@ class SchemaBootstrapService:
 
     @staticmethod
     @transaction.atomic
-    def initialize(*, portfolio, account_type):
+    def initialize(*, portfolio, account_type=None, asset_type=None):
         from schemas.services.orchestration import SchemaOrchestrationService
 
-        schema = Schema.objects.filter(
-            portfolio=portfolio,
-            account_type=account_type,
-        ).first()
+        if not account_type and not asset_type:
+            raise ValidationError("Either account_type or asset_type is required.")
+
+        lookup = {"portfolio": portfolio}
+        if asset_type is not None:
+            lookup["asset_type"] = asset_type
+        elif account_type is not None:
+            lookup["account_type"] = account_type
+        else:
+            lookup["account_type__isnull"] = True
+
+        schema = Schema.objects.filter(**lookup).first()
         if schema:
             return schema
 
         schema = Schema.objects.create(
-            portfolio=portfolio, account_type=account_type)
+            portfolio=portfolio,
+            account_type=None if asset_type is not None else account_type,
+            asset_type=asset_type,
+        )
 
-        identifiers = DefaultSchemaPolicy.default_identifiers_for_account_type(
-            account_type)
+        identifiers = (
+            DefaultSchemaPolicy.default_identifiers_for_asset_type(asset_type)
+            if asset_type is not None
+            else DefaultSchemaPolicy.default_identifiers_for_account_type(account_type)
+        )
         if not identifiers:
             return schema
+
+        SchemaBootstrapService.ensure_system_catalog_seeded()
 
         templates = SchemaColumnTemplate.objects.filter(
             identifier__in=identifiers,
@@ -84,6 +112,25 @@ class SchemaBootstrapService:
 
         SchemaOrchestrationService.schema_changed(schema)
         return schema
+
+    @staticmethod
+    def ensure_system_catalog_seeded():
+        if SchemaColumnTemplate.objects.filter(is_system=True).exists():
+            return
+
+        for asset_type_name in (
+            "Equity",
+            "Cryptocurrency",
+            "Commodity",
+            "Precious Metal",
+            "Real Estate",
+        ):
+            AssetType.objects.get_or_create(name=asset_type_name, created_by=None)
+
+        call_command("seed_master_constraints")
+        call_command("seed_schema_column_categories")
+        call_command("seed_formulas")
+        call_command("seed_system_column_catalog")
 
     @staticmethod
     @transaction.atomic
@@ -224,14 +271,22 @@ class SchemaBootstrapService:
 
     @staticmethod
     def ensure_scvs_for_column(column):
-        schema = column.schema
-        accounts = schema.portfolio.accounts.filter(
-            account_type=schema.account_type
-        ).prefetch_related("holdings")
+        from accounts.models import Holding
 
-        holding_ids = []
-        for account in accounts:
-            holding_ids.extend([h.id for h in account.holdings.all()])
+        schema = column.schema
+        holdings = list(
+            Holding.objects.filter(account__portfolio=schema.portfolio).select_related(
+                "account",
+                "asset",
+                "asset__asset_type",
+            )
+        )
+
+        holding_ids = [
+            holding.id
+            for holding in holdings
+            if holding.active_schema and holding.active_schema.id == schema.id
+        ]
 
         existing_holding_ids = set(
             SchemaColumnValue.objects.filter(
@@ -241,17 +296,19 @@ class SchemaBootstrapService:
         )
 
         to_create = []
-        for account in accounts:
-            for holding in account.holdings.all():
-                if holding.id not in existing_holding_ids:
-                    to_create.append(
-                        SchemaColumnValue(
-                            column=column,
-                            holding=holding,
-                            value=None,
-                            source=SchemaColumnValue.Source.SYSTEM,
-                        )
+        for holding in holdings:
+            active_schema = holding.active_schema
+            if not active_schema or active_schema.id != schema.id:
+                continue
+            if holding.id not in existing_holding_ids:
+                to_create.append(
+                    SchemaColumnValue(
+                        column=column,
+                        holding=holding,
+                        value=None,
+                        source=SchemaColumnValue.Source.SYSTEM,
                     )
+                )
 
         if to_create:
             SchemaColumnValue.objects.bulk_create(to_create)

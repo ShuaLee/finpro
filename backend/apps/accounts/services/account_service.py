@@ -5,8 +5,6 @@ from django.core.exceptions import ValidationError
 
 from accounts.models import Account, AccountType
 from accounts.exceptions import AccountInitializationError
-from accounts.models.account_classification import AccountClassification
-from accounts.models.account_classification import ClassificationDefinition
 from assets.models.core import AssetType
 from portfolios.models import Portfolio
 
@@ -15,36 +13,48 @@ logger = logging.getLogger(__name__)
 
 class AccountService:
     @staticmethod
+    def _default_portfolio_for_profile(*, profile):
+        portfolio = (
+            profile.portfolios.filter(kind=Portfolio.Kind.PERSONAL)
+            .order_by("id")
+            .first()
+        )
+        if portfolio:
+            return portfolio
+        return profile.portfolios.order_by("id").first()
+
+    @staticmethod
+    def _generate_account_name(*, portfolio, account_type, requested_name: str | None):
+        base_name = (requested_name or "").strip() or account_type.name
+        candidate = base_name
+        suffix = 2
+        while Account.objects.filter(
+            portfolio=portfolio,
+            account_type=account_type,
+            name__iexact=candidate,
+        ).exists():
+            candidate = f"{base_name} {suffix}"
+            suffix += 1
+        return candidate
+
+    @staticmethod
     @transaction.atomic
-    def initialize_account(*, account, definition, profile=None):
+    def initialize_account(*, account, definition=None, profile=None):
         """
         Initialize account foundations.
 
-        Always:
-        - attach/create AccountClassification
-
         Best-effort (if schemas app is enabled):
-        - ensure schema for (portfolio, account_type)
+        - ensure the default schema for this account's resolved asset context
         - initialize column visibility for account
         """
         logger.info(
-            "Initializing account %s (%s) with classification %s",
+            "Initializing account %s (%s)",
             account.id,
             account.name,
-            definition.name,
         )
 
         try:
             profile = profile or account.portfolio.profile
-
-            classification, _ = AccountClassification.objects.get_or_create(
-                profile=profile,
-                definition=definition,
-            )
-
-            if account.classification_id != classification.id:
-                account.classification = classification
-                account.save(update_fields=["classification"])
 
             # Optional schema integration.
             try:
@@ -69,7 +79,7 @@ class AccountService:
                 AccountAuditService.log(
                     account=account,
                     action="account.initialized",
-                    metadata={"classification_id": classification.id},
+                    metadata={},
                 )
             except Exception:
                 pass
@@ -106,15 +116,19 @@ class AccountService:
     def create_account(
         *,
         profile,
-        portfolio_id: int,
-        name: str,
+        portfolio_id: int | None = None,
+        name: str | None = None,
         account_type_id: int,
-        broker: str | None,
-        classification_definition_id: int,
         position_mode: str | None = None,
         allow_manual_overrides: bool | None = None,
+        enforce_restrictions: bool | None = None,
+        allowed_asset_type_slugs: list[str] | None = None,
     ):
-        portfolio = Portfolio.objects.filter(id=portfolio_id, profile=profile).first()
+        portfolio = None
+        if portfolio_id is not None:
+            portfolio = Portfolio.objects.filter(id=portfolio_id, profile=profile).first()
+        else:
+            portfolio = AccountService._default_portfolio_for_profile(profile=profile)
         if not portfolio:
             raise ValidationError("Portfolio not found.")
 
@@ -125,21 +139,32 @@ class AccountService:
         if not account_type.is_system and account_type.owner_id != profile.id:
             raise ValidationError("You cannot use another user's custom account type.")
 
-        definition = ClassificationDefinition.objects.filter(id=classification_definition_id).first()
-        if not definition:
-            raise ValidationError("Classification definition not found.")
+        selected_asset_types = None
+        if allowed_asset_type_slugs is not None:
+            selected_asset_types = list(AssetType.objects.filter(slug__in=allowed_asset_type_slugs))
+            if len(selected_asset_types) != len(set(allowed_asset_type_slugs)):
+                raise ValidationError("One or more allowed asset types are invalid.")
 
         account = Account.objects.create(
             portfolio=portfolio,
-            name=name,
+            name=AccountService._generate_account_name(
+                portfolio=portfolio,
+                account_type=account_type,
+                requested_name=name,
+            ),
             account_type=account_type,
-            broker=(broker or "").strip() or None,
             position_mode=position_mode or Account.PositionMode.MANUAL,
             allow_manual_overrides=True if allow_manual_overrides is None else allow_manual_overrides,
+            enforce_restrictions=False if enforce_restrictions is None else enforce_restrictions,
         )
+
+        if selected_asset_types is not None:
+            account.allowed_asset_types.set(selected_asset_types)
+            if enforce_restrictions is None:
+                account.enforce_restrictions = False
+                account.save(update_fields=["enforce_restrictions"])
 
         return AccountService.initialize_account(
             account=account,
-            definition=definition,
             profile=profile,
         )

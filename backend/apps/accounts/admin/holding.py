@@ -40,6 +40,8 @@ class HoldingAdmin(admin.ModelAdmin):
         "original_ticker",
         "quantity",
         "average_purchase_price",
+        "tracking_mode",
+        "price_source_mode",
         "created_at",
         "updated_at",
     )
@@ -51,7 +53,17 @@ class HoldingAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {"fields": ("account", "asset")}),
-        ("Position", {"fields": ("quantity", "average_purchase_price")}),
+        (
+            "Position",
+            {
+                "fields": (
+                    "quantity",
+                    "average_purchase_price",
+                    "tracking_mode",
+                    "price_source_mode",
+                )
+            },
+        ),
         ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
 

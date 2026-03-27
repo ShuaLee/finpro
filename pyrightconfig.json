@@ -1,0 +1,22 @@
+{
+  "venvPath": "C:\\Users\\Josh\\.virtualenvs",
+  "venv": "backend-kaGomi1G",
+  "include": [
+    "backend"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "frontend",
+    ".git"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": [
+        "backend",
+        "backend/apps"
+      ]
+    }
+  ]
+}

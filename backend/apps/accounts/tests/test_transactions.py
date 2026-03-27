@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -65,5 +67,7 @@ class TransactionServiceTest(TestCase):
         )
         self.assertEqual(tx.source, AccountTransaction.Source.MANUAL)
         holding = Holding.objects.get(account=self.account, asset=self.asset)
-        self.assertEqual(str(holding.quantity), "10")
+        self.assertEqual(holding.quantity, Decimal("10"))
+        self.assertEqual(holding.tracking_mode, Holding.TrackingMode.TRACKED)
+        self.assertEqual(holding.effective_tracking_mode, Holding.TrackingMode.TRACKED)
 

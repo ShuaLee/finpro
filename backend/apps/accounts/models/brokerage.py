@@ -76,8 +76,8 @@ class BrokerageConnection(models.Model):
         if not self.pk:
             return
 
-        original = BrokerageConnection.objects.only("account_id").filter(pk=self.pk).first()
-        if original and original.account_id != self.account_id:
+        original = BrokerageConnection.objects.select_related("account").only("account").filter(pk=self.pk).first()
+        if original and original.account.pk != self.account.pk:
             raise ValidationError("Connection account cannot be changed.")
 
     def save(self, *args, **kwargs):

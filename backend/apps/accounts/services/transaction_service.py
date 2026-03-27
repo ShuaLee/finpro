@@ -75,6 +75,12 @@ class TransactionService:
                 asset=transaction_obj.asset,
                 quantity=qty_delta,
                 average_purchase_price=transaction_obj.unit_price,
+                tracking_mode=Holding.TrackingMode.TRACKED,
+                price_source_mode=(
+                    Holding.PriceSourceMode.MANUAL
+                    if getattr(transaction_obj.asset, "custom", None) is not None
+                    else Holding.PriceSourceMode.MARKET
+                ),
             )
             return
 

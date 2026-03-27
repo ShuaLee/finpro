@@ -32,10 +32,12 @@ class AccountColumnVisibility(models.Model):
     def clean(self):
         super().clean()
         if self.account and self.column:
-            schema = getattr(self.account, "active_schema", None)
+            schema = self.account.resolve_schema_for_asset_type(
+                self.column.schema.asset_type
+            ) if self.column.schema.asset_type_id else getattr(self.account, "active_schema", None)
             if not schema or self.column.schema_id != schema.id:
                 raise ValidationError(
-                    "Visibility column must belong to the account's active schema."
+                    "Visibility column must belong to the schema resolved for this account."
                 )
 
     def save(self, *args, **kwargs):
