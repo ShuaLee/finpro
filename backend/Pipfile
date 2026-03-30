@@ -4,28 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-django = "*"
-mysqlclient = "*"
-djangorestframework = "*"
-drf-nested-routers = "*"
-yfinance = "*"
-djoser = "*"
-redis = "*"
-pycountry = "*"
-retrying = "*"
-requests = "*"
-numexpr = "*"
-djangorestframework-simplejwt = "*"
-django-cors-headers = "*"
-simpleeval = "*"
-asteval = "*"
-celery = {extras = ["redis"], version = "*"}
-django-nested-admin = "*"
-psycopg = {extras = ["binary"], version = "*"}
+django = "~=6.0.3"
 
 [dev-packages]
-pytest = "*"
-pytest-django = "*"
 
 [requires]
 python_version = "3.12"

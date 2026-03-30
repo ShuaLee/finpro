@@ -15,7 +15,7 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
         return user
-
+    
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
@@ -29,8 +29,12 @@ class UserManager(BaseUserManager):
 
         user = self.create_user(email=email, password=password, **extra_fields)
 
-        return user
+        # Ensure superusers created via `createsuperuser` get full foundations.
+        from profiles.services.bootstrap_service import ProfileBootstrapService
 
+        ProfileBootstrapService.bootstrap(user=user)
+        return user
+    
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
@@ -44,6 +48,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     locked_until = models.DateTimeField(null=True, blank=True)
 
     date_joined = models.DateTimeField(auto_now_add=True)
+    last_login = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
 
