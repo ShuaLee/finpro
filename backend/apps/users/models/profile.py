@@ -13,7 +13,6 @@ class Profile(models.Model):
     language = models.CharField(max_length=16, default="en")
     timezone = models.CharField(max_length=64, default="UTC")
     currency = models.CharField(max_length=10, default="USD")
-    country_code = models.CharField(max_length=2, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

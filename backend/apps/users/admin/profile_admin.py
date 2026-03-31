@@ -11,10 +11,9 @@ class ProfileAdmin(admin.ModelAdmin):
         "language",
         "timezone",
         "currency",
-        "country_code",
         "created_at",
     )
-    list_filter = ("language", "timezone", "currency", "country_code")
+    list_filter = ("language", "timezone", "currency")
     search_fields = ("user__email", "full_name")
     readonly_fields = ("created_at", "updated_at")
 

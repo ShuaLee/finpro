@@ -1,1 +1,2 @@
+from .profile_creation_service import ProfileCreationService
 from .user_creation_service import UserCreationService
