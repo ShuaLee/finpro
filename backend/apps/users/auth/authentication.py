@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.http import HttpResponse
 from django.middleware.csrf import CsrfViewMiddleware
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -15,11 +16,12 @@ class JWTFromCookieAuthentication(JWTAuthentication):
     SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
     def _enforce_csrf(self, request):
-        check = _CSRFCheck(lambda _request: None)
+        check = _CSRFCheck(lambda _request: HttpResponse())
         check.process_request(request)
         reason = check.process_view(request, None, (), {})
         if reason:
-            raise AuthenticationFailed("CSRF Failed: CSRF token missing or incorrect.")
+            raise AuthenticationFailed(
+                "CSRF Failed: CSRF token missing or incorrect.")
 
     def authenticate(self, request):
         cookie_key = settings.SIMPLE_JWT.get("AUTH_COOKIE", "access")

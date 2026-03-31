@@ -36,4 +36,5 @@ class UserCreationService:
             currency=currency,
         )
 
+        user.refresh_from_db()
         return user

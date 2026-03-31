@@ -56,10 +56,25 @@ class ProfileCreationService:
     ) -> Profile:
         profile = ProfileCreationService.ensure_profile(user=user)
 
-        profile.full_name = full_name
-        profile.language = language
-        profile.timezone = timezone
-        profile.currency = currency
-        profile.save()
+        updated = False
+
+        if profile.full_name != full_name:
+            profile.full_name = full_name
+            updated = True
+
+        if profile.language != language:
+            profile.language = language
+            updated = True
+
+        if profile.timezone != timezone:
+            profile.timezone = timezone
+            updated = True
+
+        if profile.currency != currency:
+            profile.currency = currency
+            updated = True
+
+        if updated:
+            profile.save()
 
         return profile

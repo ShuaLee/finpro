@@ -1,2 +1,7 @@
+from .auth_event_service import AuthEventService
+from .auth_service import AuthService
+from .email_verification_service import EmailVerificationService
+from .password_reset_service import PasswordResetService
 from .profile_creation_service import ProfileCreationService
+from .trusted_device_service import TrustedDeviceService
 from .user_creation_service import UserCreationService
