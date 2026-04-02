@@ -19,6 +19,26 @@ class Container(models.Model):
         blank=True,
         help_text="Optional short explanation for what this container represents.",
     )
+    is_tracked = models.BooleanField(default=False)
+    source = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Optional external source for this container, such as Plaid.",
+    )
+    external_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional external account identifier for tracked containers.",
+    )
+    external_parent_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional external connection identifier for tracked containers.",
+    )
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -44,6 +64,9 @@ class Container(models.Model):
         self.name = (self.name or "").strip()
         self.kind = (self.kind or "").strip()
         self.description = (self.description or "").strip()
+        self.source = (self.source or "").strip()
+        self.external_id = (self.external_id or "").strip()
+        self.external_parent_id = (self.external_parent_id or "").strip()
 
         if not self.name:
             raise ValidationError("Container name is required.")
