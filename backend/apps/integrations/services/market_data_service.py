@@ -1,0 +1,27 @@
+from apps.integrations.exceptions import EmptyProviderResult
+from apps.integrations.providers.fmp import FMP_PROVIDER
+
+
+class MarketDataService:
+    @staticmethod
+    def get_quote_for_symbol(*, symbol: str):
+        return FMP_PROVIDER.get_quote(symbol)
+
+    @staticmethod
+    def get_profile_for_symbol(*, symbol: str):
+        return FMP_PROVIDER.get_company_profile(symbol)
+
+    @staticmethod
+    def get_stock_list():
+        return FMP_PROVIDER.get_stock_list()
+
+    @staticmethod
+    def get_actively_traded_symbols():
+        return FMP_PROVIDER.get_actively_traded_symbols()
+
+    @staticmethod
+    def get_quote_for_asset(*, asset):
+        symbol = (getattr(asset, "symbol", "") or "").strip().upper()
+        if not symbol:
+            raise EmptyProviderResult("Asset has no symbol for market data lookup.")
+        return FMP_PROVIDER.get_quote(symbol)

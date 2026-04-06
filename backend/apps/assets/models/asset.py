@@ -68,6 +68,16 @@ class Asset(models.Model):
     def is_public(self) -> bool:
         return self.owner is None
 
+    @property
+    def is_market_tracked(self) -> bool:
+        market_data = getattr(self, "market_data", None)
+        return bool(market_data and market_data.is_tracked)
+
+    @property
+    def current_price(self):
+        price = getattr(self, "price", None)
+        return getattr(price, "price", None)
+
     def clean(self):
         super().clean()
 

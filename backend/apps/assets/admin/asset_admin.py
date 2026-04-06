@@ -1,6 +1,27 @@
 from django.contrib import admin
 
-from apps.assets.models import Asset
+from apps.assets.models import Asset, AssetMarketData, AssetPrice
+
+
+class AssetMarketDataInline(admin.StackedInline):
+    model = AssetMarketData
+    extra = 0
+    max_num = 1
+    can_delete = False
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "last_synced_at",
+        "last_successful_sync_at",
+    )
+
+
+class AssetPriceInline(admin.StackedInline):
+    model = AssetPrice
+    extra = 0
+    max_num = 1
+    can_delete = False
+    readonly_fields = ("as_of",)
 
 
 @admin.register(Asset)
@@ -11,6 +32,8 @@ class AssetAdmin(admin.ModelAdmin):
         "asset_type",
         "owner",
         "is_public",
+        "is_market_tracked",
+        "current_price",
         "is_active",
         "created_at",
         "updated_at",
@@ -27,9 +50,12 @@ class AssetAdmin(admin.ModelAdmin):
         "description",
         "owner__user__email",
     )
+    inlines = (AssetMarketDataInline, AssetPriceInline)
     readonly_fields = (
         "id",
         "is_public",
+        "is_market_tracked",
+        "current_price",
         "created_at",
         "updated_at",
     )
@@ -48,6 +74,8 @@ class AssetAdmin(admin.ModelAdmin):
                     "description",
                     "is_active",
                     "is_public",
+                    "is_market_tracked",
+                    "current_price",
                 )
             },
         ),

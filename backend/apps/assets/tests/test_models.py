@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.assets.models import Asset, AssetType
+from apps.assets.models import Asset, AssetMarketData, AssetType
 
 
 class AssetTypeModelTests(TestCase):
@@ -83,3 +83,41 @@ class AssetModelTests(TestCase):
         with self.assertRaises(ValidationError):
             duplicate.full_clean()
 
+    def test_asset_can_report_market_tracking_state(self):
+        asset = Asset.objects.create(
+            asset_type=self.equity_type,
+            name="Apple Inc.",
+            symbol="AAPL",
+        )
+
+        self.assertFalse(asset.is_market_tracked)
+
+        AssetMarketData.objects.create(
+            asset=asset,
+            provider=AssetMarketData.Provider.FMP,
+            provider_symbol="AAPL",
+            status=AssetMarketData.Status.TRACKED,
+        )
+
+        asset.refresh_from_db()
+        self.assertTrue(asset.is_market_tracked)
+
+
+class AssetMarketDataModelTests(TestCase):
+    def setUp(self):
+        self.equity_type = AssetType.objects.create(name="Equity")
+
+    def test_tracked_market_data_requires_provider_symbol(self):
+        asset = Asset.objects.create(
+            asset_type=self.equity_type,
+            name="Test Asset",
+        )
+
+        market_data = AssetMarketData(
+            asset=asset,
+            provider=AssetMarketData.Provider.FMP,
+            status=AssetMarketData.Status.TRACKED,
+        )
+
+        with self.assertRaises(ValidationError):
+            market_data.full_clean()

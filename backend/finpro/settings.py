@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'apps.assets.apps.AssetsConfig',
+    'apps.integrations.apps.IntegrationsConfig',
     'apps.holdings.apps.HoldingsConfig',
     'apps.users.apps.UsersConfig',
 ]
@@ -172,3 +173,14 @@ AUTH_TRUSTED_DEVICE_COOKIE = "trusted_device"
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@finpro.local"
+
+
+# Integrations / External Providers
+
+FMP_API_KEY = os.getenv("FMP_API_KEY", "")
+FMP_BASE_URL = os.getenv("FMP_BASE_URL", "https://financialmodelingprep.com/stable")
+INTEGRATIONS_TIMEOUT_SECONDS = int(os.getenv("INTEGRATIONS_TIMEOUT_SECONDS", "10"))
+INTEGRATIONS_MAX_RETRIES = int(os.getenv("INTEGRATIONS_MAX_RETRIES", "2"))
+INTEGRATIONS_RETRY_BACKOFF_SECONDS = float(
+    os.getenv("INTEGRATIONS_RETRY_BACKOFF_SECONDS", "0.5")
+)

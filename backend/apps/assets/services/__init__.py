@@ -1,4 +1,5 @@
 from .asset_service import AssetService
 from .asset_type_service import AssetTypeService
+from .public_asset_sync_service import PublicAssetSyncService
 
-__all__ = ["AssetTypeService", "AssetService"]
+__all__ = ["AssetTypeService", "AssetService", "PublicAssetSyncService"]
