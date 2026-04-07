@@ -6,12 +6,15 @@ from django.test import TestCase
 
 
 class RebuildEquityDirectoryCommandTests(TestCase):
-    @patch("apps.integrations.management.commands.rebuild_equity_directory.EquityDirectorySyncService.rebuild_from_fmp")
-    def test_rebuild_equity_directory_command_calls_service(self, mock_rebuild):
-        mock_rebuild.return_value = {"snapshot_id": "1", "row_count": 2, "active_symbol_count": 1}
+    @patch("apps.integrations.management.commands.refresh_active_equities.HeldEquityReviewService.review_all_tracked_equities")
+    @patch("apps.integrations.management.commands.refresh_active_equities.ActiveEquitySyncService.refresh_from_fmp")
+    def test_refresh_active_equities_command_calls_services(self, mock_refresh, mock_review):
+        mock_refresh.return_value = {"provider": "fmp", "row_count": 2}
+        mock_review.return_value = {"tracked": 1, "needs_review": 0, "stale": 0, "skipped": 0}
 
         out = StringIO()
-        call_command("rebuild_equity_directory", stdout=out)
+        call_command("refresh_active_equities", stdout=out)
 
-        mock_rebuild.assert_called_once_with()
-        self.assertIn("row_count", out.getvalue())
+        mock_refresh.assert_called_once_with()
+        mock_review.assert_called_once_with()
+        self.assertIn("active_list", out.getvalue())

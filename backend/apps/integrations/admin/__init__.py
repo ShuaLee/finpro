@@ -1,3 +1,3 @@
-from .equity_directory_admin import EquityDirectoryEntryAdmin, EquityDirectorySnapshotAdmin
+from .active_equity_admin import ActiveEquityListingAdmin
 
-__all__ = ["EquityDirectorySnapshotAdmin", "EquityDirectoryEntryAdmin"]
+__all__ = ["ActiveEquityListingAdmin"]

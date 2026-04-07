@@ -11,6 +11,7 @@ class AssetMarketData(models.Model):
         TRACKED = "tracked", "Tracked"
         STALE = "stale", "Stale"
         UNRESOLVED = "unresolved", "Unresolved"
+        NEEDS_REVIEW = "needs_review", "Needs Review"
 
     asset = models.OneToOneField(
         "assets.Asset",
@@ -32,6 +33,12 @@ class AssetMarketData(models.Model):
         blank=True,
         help_text="Optional stable provider identifier if available.",
     )
+    isin = models.CharField(max_length=20, blank=True)
+    cusip = models.CharField(max_length=20, blank=True)
+    cik = models.CharField(max_length=20, blank=True)
+    last_seen_symbol = models.CharField(max_length=50, blank=True)
+    last_seen_name = models.CharField(max_length=255, blank=True)
+    last_seen_exchange = models.CharField(max_length=100, blank=True)
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -72,6 +79,12 @@ class AssetMarketData(models.Model):
 
         self.provider_symbol = (self.provider_symbol or "").strip().upper()
         self.provider_identifier = (self.provider_identifier or "").strip()
+        self.isin = (self.isin or "").strip().upper()
+        self.cusip = (self.cusip or "").strip().upper()
+        self.cik = (self.cik or "").strip()
+        self.last_seen_symbol = (self.last_seen_symbol or "").strip().upper()
+        self.last_seen_name = (self.last_seen_name or "").strip()
+        self.last_seen_exchange = (self.last_seen_exchange or "").strip()
         self.last_error = (self.last_error or "").strip()
 
         if self.asset.owner is not None and self.status == self.Status.TRACKED:

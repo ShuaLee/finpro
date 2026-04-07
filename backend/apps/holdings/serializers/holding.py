@@ -69,6 +69,7 @@ class HoldingUpdateSerializer(serializers.Serializer):
 class HoldingCreateWithAssetSerializer(serializers.Serializer):
     container = serializers.PrimaryKeyRelatedField(queryset=Container.objects.all())
     asset = serializers.PrimaryKeyRelatedField(queryset=Asset.objects.all(), required=False, allow_null=True)
+    active_equity_symbol = serializers.CharField(required=False, allow_blank=False, max_length=50)
     quantity = serializers.DecimalField(max_digits=40, decimal_places=18, required=False)
     unit_value = serializers.DecimalField(max_digits=40, decimal_places=18, required=False, allow_null=True)
     unit_cost_basis = serializers.DecimalField(max_digits=40, decimal_places=18, required=False, allow_null=True)
@@ -93,25 +94,34 @@ class HoldingCreateWithAssetSerializer(serializers.Serializer):
     def validate_asset_symbol(self, value):
         return value.strip().upper()
 
+    def validate_active_equity_symbol(self, value):
+        return value.strip().upper()
+
     def validate_asset_description(self, value):
         return value.strip()
 
     def validate(self, attrs):
         asset = attrs.get("asset")
+        active_equity_symbol = attrs.get("active_equity_symbol")
         asset_name = attrs.get("asset_name")
         asset_type = attrs.get("asset_type")
 
-        if asset is None and not asset_name:
+        if asset is None and not active_equity_symbol and not asset_name:
             raise serializers.ValidationError(
-                {"asset": "Select an existing asset or provide data for a new asset."}
+                {"asset": "Select an existing asset, choose an active equity, or provide data for a new asset."}
             )
 
-        if asset is not None and (asset_name or asset_type):
+        if asset is not None and (active_equity_symbol or asset_name or asset_type):
             raise serializers.ValidationError(
-                "Provide either an existing asset or new asset details, not both."
+                "Provide either an existing asset, an active equity symbol, or new asset details, not both."
             )
 
-        if asset is None and asset_type is None:
+        if active_equity_symbol and (asset_name or asset_type):
+            raise serializers.ValidationError(
+                "Provide either an active equity symbol or new asset details, not both."
+            )
+
+        if asset is None and active_equity_symbol is None and asset_type is None:
             raise serializers.ValidationError(
                 {"asset_type": "Asset type is required when creating a new asset."}
             )

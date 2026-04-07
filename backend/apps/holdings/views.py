@@ -22,6 +22,7 @@ from apps.holdings.serializers import (
     PortfolioUpdateSerializer,
 )
 from apps.holdings.services import ContainerService, HoldingService, PortfolioService
+from apps.integrations.services import ActiveEquityAssetService
 from apps.users.views.base import ServiceAPIView
 
 
@@ -175,6 +176,7 @@ class HoldingListCreateView(ServiceAPIView):
             Asset.objects.filter(Q(owner__isnull=True) | Q(owner=request.user.profile)),
             pk=data["asset"].pk,
         )
+        ActiveEquityAssetService.ensure_identity_for_held_asset(asset=asset)
 
         holding = HoldingService.create_holding(
             container=container,
@@ -207,19 +209,27 @@ class HoldingCreateWithAssetView(ServiceAPIView):
                 Asset.objects.filter(Q(owner__isnull=True) | Q(owner=request.user.profile)),
                 pk=asset.pk,
             )
+            ActiveEquityAssetService.ensure_identity_for_held_asset(asset=asset)
         else:
-            asset_type = get_object_or_404(
-                AssetType.objects.filter(Q(created_by__isnull=True) | Q(created_by=request.user.profile)),
-                pk=data["asset_type"].pk,
-            )
-            asset = AssetService.create_custom_asset(
-                profile=request.user.profile,
-                asset_type=asset_type,
-                name=data["asset_name"],
-                symbol=data.get("asset_symbol", ""),
-                description=data.get("asset_description", ""),
-                data=data.get("asset_data") or {},
-            )
+            active_equity_symbol = data.get("active_equity_symbol")
+            if active_equity_symbol:
+                asset = ActiveEquityAssetService.get_or_create_public_asset(
+                    symbol=active_equity_symbol,
+                )
+                ActiveEquityAssetService.ensure_identity_for_held_asset(asset=asset)
+            else:
+                asset_type = get_object_or_404(
+                    AssetType.objects.filter(Q(created_by__isnull=True) | Q(created_by=request.user.profile)),
+                    pk=data["asset_type"].pk,
+                )
+                asset = AssetService.create_custom_asset(
+                    profile=request.user.profile,
+                    asset_type=asset_type,
+                    name=data["asset_name"],
+                    symbol=data.get("asset_symbol", ""),
+                    description=data.get("asset_description", ""),
+                    data=data.get("asset_data") or {},
+                )
 
         holding = HoldingService.create_holding(
             container=container,

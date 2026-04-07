@@ -2,7 +2,7 @@ from django.db import models
 
 from apps.integrations.exceptions import EmptyProviderResult
 from apps.integrations.providers.fmp import FMP_PROVIDER
-from apps.integrations.services.equity_directory_sync_service import EquityDirectorySyncService
+from apps.integrations.services.active_equity_sync_service import ActiveEquitySyncService
 
 
 class MarketDataService:
@@ -24,15 +24,17 @@ class MarketDataService:
 
     @staticmethod
     def search_active_equities(*, query: str):
-        queryset = EquityDirectorySyncService.get_active_entries(provider="fmp").filter(
-            is_actively_traded=True
-        )
+        queryset = ActiveEquitySyncService.get_queryset(provider="fmp")
         normalized = (query or "").strip()
         if normalized:
             queryset = queryset.filter(
                 models.Q(symbol__icontains=normalized) | models.Q(name__icontains=normalized)
             )
         return queryset.order_by("symbol")
+
+    @staticmethod
+    def get_profile_with_identifiers(*, symbol: str):
+        return FMP_PROVIDER.get_profile_with_identifiers(symbol)
 
     @staticmethod
     def get_quote_for_asset(*, asset):

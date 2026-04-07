@@ -3,13 +3,19 @@ from apps.integrations.providers.fmp.constants import (
     ACTIVELY_TRADING_LIST,
     DIVIDENDS,
     PROFILE,
+    PROFILE_CIK,
     PROVIDER_NAME,
     QUOTE_SHORT,
+    SEARCH_CUSIP,
+    SEARCH_ISIN,
     STOCK_LIST,
 )
 from apps.integrations.providers.fmp.parsers import (
     parse_actively_traded_row,
+    parse_active_equity_row,
     parse_company_profile_payload,
+    parse_identifier_search_row,
+    parse_profile_identity_payload,
     parse_quote_payload,
     parse_stock_list_row,
 )
@@ -86,3 +92,58 @@ class FMPProvider(MarketDataProvider):
             except InvalidProviderResponse:
                 continue
         return parsed
+
+    def get_actively_traded_rows(self) -> list[dict]:
+        data = fmp_get_json(ACTIVELY_TRADING_LIST)
+        if not isinstance(data, list):
+            raise InvalidProviderResponse("Malformed actively trading list payload.")
+
+        parsed: list[dict] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            try:
+                parsed.append(parse_active_equity_row(row))
+            except InvalidProviderResponse:
+                continue
+        return parsed
+
+    def get_profile_with_identifiers(self, symbol: str) -> dict:
+        normalized = (symbol or "").strip().upper()
+        if not normalized:
+            raise InvalidProviderResponse("Symbol is required for profile lookup.")
+
+        data = fmp_get_json(PROFILE, symbol=normalized)
+        if not isinstance(data, list) or not data:
+            raise EmptyProviderResult(f"No profile found for {normalized}.")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise InvalidProviderResponse(f"Malformed profile payload for {normalized}.")
+        return parse_profile_identity_payload(row)
+
+    def search_by_isin(self, isin: str) -> list[dict]:
+        normalized = (isin or "").strip().upper()
+        if not normalized:
+            return []
+        data = fmp_get_json(SEARCH_ISIN, isin=normalized)
+        if not isinstance(data, list):
+            return []
+        return [parse_identifier_search_row(row) for row in data if isinstance(row, dict)]
+
+    def search_by_cusip(self, cusip: str) -> list[dict]:
+        normalized = (cusip or "").strip().upper()
+        if not normalized:
+            return []
+        data = fmp_get_json(SEARCH_CUSIP, cusip=normalized)
+        if not isinstance(data, list):
+            return []
+        return [parse_identifier_search_row(row) for row in data if isinstance(row, dict)]
+
+    def search_by_cik(self, cik: str) -> list[dict]:
+        normalized = (cik or "").strip()
+        if not normalized:
+            return []
+        data = fmp_get_json(PROFILE_CIK, cik=normalized)
+        if not isinstance(data, list):
+            return []
+        return [parse_identifier_search_row(row) for row in data if isinstance(row, dict)]
