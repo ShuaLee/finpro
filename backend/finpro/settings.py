@@ -13,6 +13,7 @@ import os
 import sys
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -94,7 +95,7 @@ WSGI_APPLICATION = 'finpro.wsgi.application'
 
 DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.mysql')
 
-DATABASES = {
+DATABASES: dict[str, dict[str, Any]] = {
     'default': {
         'ENGINE': DB_ENGINE,
         'NAME': os.getenv('DB_NAME', 'finpro'),
