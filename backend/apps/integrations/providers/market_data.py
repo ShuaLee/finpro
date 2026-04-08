@@ -27,6 +27,14 @@ class MarketDataProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_cryptocurrency_rows(self) -> list[dict]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_commodity_rows(self) -> list[dict]:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_profile_with_identifiers(self, symbol: str) -> dict:
         raise NotImplementedError
 

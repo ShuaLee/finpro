@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 
-from apps.integrations.services import ActiveEquitySyncService, HeldEquityReviewService
+from apps.integrations.services import (
+    ActiveEquitySyncService,
+    HeldEquityReviewService,
+)
 
 
 class Command(BaseCommand):

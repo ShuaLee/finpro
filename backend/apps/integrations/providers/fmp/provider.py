@@ -1,6 +1,8 @@
 from apps.integrations.exceptions import EmptyProviderResult, InvalidProviderResponse
 from apps.integrations.providers.fmp.constants import (
     ACTIVELY_TRADING_LIST,
+    COMMODITIES_LIST,
+    CRYPTOCURRENCY_LIST,
     DIVIDENDS,
     PROFILE,
     PROFILE_CIK,
@@ -14,6 +16,8 @@ from apps.integrations.providers.fmp.parsers import (
     parse_actively_traded_row,
     parse_active_equity_row,
     parse_company_profile_payload,
+    parse_commodity_list_row,
+    parse_crypto_list_row,
     parse_identifier_search_row,
     parse_profile_identity_payload,
     parse_quote_payload,
@@ -120,6 +124,36 @@ class FMPProvider(MarketDataProvider):
         if not isinstance(row, dict):
             raise InvalidProviderResponse(f"Malformed profile payload for {normalized}.")
         return parse_profile_identity_payload(row)
+
+    def get_cryptocurrency_rows(self) -> list[dict]:
+        data = fmp_get_json(CRYPTOCURRENCY_LIST)
+        if not isinstance(data, list):
+            raise InvalidProviderResponse("Malformed cryptocurrency list payload.")
+
+        parsed: list[dict] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            try:
+                parsed.append(parse_crypto_list_row(row))
+            except InvalidProviderResponse:
+                continue
+        return parsed
+
+    def get_commodity_rows(self) -> list[dict]:
+        data = fmp_get_json(COMMODITIES_LIST)
+        if not isinstance(data, list):
+            raise InvalidProviderResponse("Malformed commodities list payload.")
+
+        parsed: list[dict] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            try:
+                parsed.append(parse_commodity_list_row(row))
+            except InvalidProviderResponse:
+                continue
+        return parsed
 
     def search_by_isin(self, isin: str) -> list[dict]:
         normalized = (isin or "").strip().upper()

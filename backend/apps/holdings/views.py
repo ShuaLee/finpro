@@ -22,7 +22,11 @@ from apps.holdings.serializers import (
     PortfolioUpdateSerializer,
 )
 from apps.holdings.services import ContainerService, HoldingService, PortfolioService
-from apps.integrations.services import ActiveEquityAssetService
+from apps.integrations.services import (
+    ActiveCommodityAssetService,
+    ActiveCryptoAssetService,
+    ActiveEquityAssetService,
+)
 from apps.users.views.base import ServiceAPIView
 
 
@@ -212,11 +216,26 @@ class HoldingCreateWithAssetView(ServiceAPIView):
             ActiveEquityAssetService.ensure_identity_for_held_asset(asset=asset)
         else:
             active_equity_symbol = data.get("active_equity_symbol")
+            active_crypto_symbol = data.get("active_crypto_symbol")
+            active_commodity_symbol = data.get("active_commodity_symbol")
+            precious_metal_code = data.get("precious_metal_code")
             if active_equity_symbol:
                 asset = ActiveEquityAssetService.get_or_create_public_asset(
                     symbol=active_equity_symbol,
                 )
                 ActiveEquityAssetService.ensure_identity_for_held_asset(asset=asset)
+            elif active_crypto_symbol:
+                asset = ActiveCryptoAssetService.get_or_create_public_asset(
+                    symbol=active_crypto_symbol,
+                )
+            elif active_commodity_symbol:
+                asset = ActiveCommodityAssetService.get_or_create_public_asset(
+                    symbol=active_commodity_symbol,
+                )
+            elif precious_metal_code:
+                asset = ActiveCommodityAssetService.get_or_create_precious_metal_asset(
+                    metal=precious_metal_code,
+                )
             else:
                 asset_type = get_object_or_404(
                     AssetType.objects.filter(Q(created_by__isnull=True) | Q(created_by=request.user.profile)),

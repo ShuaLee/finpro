@@ -6,11 +6,16 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.assets.models import Asset, AssetMarketData, AssetType
-from apps.integrations.models import ActiveEquityListing
+from apps.integrations.models import ActiveCommodityListing, ActiveCryptoListing, ActiveEquityListing
 from apps.integrations.services import (
+    ActiveCommodityAssetService,
+    ActiveCommoditySyncService,
+    ActiveCryptoAssetService,
+    ActiveCryptoSyncService,
     ActiveEquityAssetService,
     ActiveEquitySyncService,
     HeldEquityReviewService,
+    HeldMarketAssetReviewService,
 )
 
 
@@ -32,6 +37,30 @@ class ActiveEquitySyncServiceTests(TestCase):
 
         self.assertEqual(ActiveEquityListing.objects.count(), 1)
         self.assertTrue(ActiveEquityListing.objects.filter(symbol="NVDA").exists())
+
+    @patch("apps.integrations.services.active_crypto_sync_service.FMP_PROVIDER.get_cryptocurrency_rows")
+    def test_crypto_refresh_rebuilds_current_crypto_list(self, mock_get_rows):
+        mock_get_rows.return_value = [
+            {"symbol": "BTCUSD", "name": "Bitcoin", "base_symbol": "BTC", "quote_currency": "USD"},
+            {"symbol": "ETHUSD", "name": "Ethereum", "base_symbol": "ETH", "quote_currency": "USD"},
+        ]
+
+        result = ActiveCryptoSyncService.refresh_from_fmp()
+
+        self.assertEqual(result["row_count"], 2)
+        self.assertEqual(ActiveCryptoListing.objects.count(), 2)
+
+    @patch("apps.integrations.services.active_commodity_sync_service.FMP_PROVIDER.get_commodity_rows")
+    def test_commodity_refresh_rebuilds_current_commodity_list(self, mock_get_rows):
+        mock_get_rows.return_value = [
+            {"symbol": "GCUSD", "name": "Gold", "exchange": "COMEX", "trade_month": "", "currency": "USD"},
+            {"symbol": "CLUSD", "name": "Crude Oil", "exchange": "NYMEX", "trade_month": "", "currency": "USD"},
+        ]
+
+        result = ActiveCommoditySyncService.refresh_from_fmp()
+
+        self.assertEqual(result["row_count"], 2)
+        self.assertEqual(ActiveCommodityListing.objects.count(), 2)
 
 
 class HeldEquityReviewServiceTests(TestCase):
@@ -85,11 +114,27 @@ class HeldEquityReviewServiceTests(TestCase):
 class ActiveEquityAssetServiceTests(TestCase):
     def setUp(self):
         self.equity_type = AssetType.objects.create(name="Equity")
+        self.crypto_type = AssetType.objects.create(name="Cryptocurrency")
+        self.commodity_type = AssetType.objects.create(name="Commodity")
+        self.precious_metal_type = AssetType.objects.create(name="Precious Metal")
         self.user = get_user_model().objects.create_user(
             email="equity-picker@example.com",
             password="StrongPass123!",
         )
         ActiveEquityListing.objects.create(symbol="AAPL", name="Apple Inc.")
+        ActiveCryptoListing.objects.create(
+            symbol="BTCUSD",
+            name="Bitcoin",
+            base_symbol="BTC",
+            quote_currency="USD",
+        )
+        ActiveCommodityListing.objects.create(
+            symbol="GCUSD",
+            name="Gold",
+            exchange="COMEX",
+            trade_month="",
+            currency="USD",
+        )
 
     def test_get_or_create_public_asset_creates_shared_equity_asset(self):
         asset = ActiveEquityAssetService.get_or_create_public_asset(symbol="aapl")
@@ -138,6 +183,43 @@ class ActiveEquityAssetServiceTests(TestCase):
 
         self.assertEqual(mock_enrich_identity.call_count, 2)
 
+    def test_crypto_asset_service_promotes_active_crypto_listing(self):
+        asset = ActiveCryptoAssetService.get_or_create_public_asset(symbol="btcusd")
+
+        self.assertIn(asset.asset_type.slug, {"crypto", "cryptocurrency"})
+        self.assertEqual(asset.symbol, "BTCUSD")
+        self.assertEqual(asset.market_data.provider_symbol, "BTCUSD")
+        self.assertEqual(asset.data["crypto_profile"]["base_symbol"], "BTC")
+
+    def test_precious_metal_asset_service_derives_asset_from_commodity_listing(self):
+        asset = ActiveCommodityAssetService.get_or_create_precious_metal_asset(metal="gold")
+
+        self.assertEqual(asset.asset_type.slug, "precious_metal")
+        self.assertEqual(asset.name, "Gold")
+        self.assertEqual(asset.symbol, "GCUSD")
+        self.assertEqual(asset.market_data.provider_symbol, "GCUSD")
+
+
+class HeldMarketAssetReviewServiceTests(TestCase):
+    def setUp(self):
+        self.crypto_type = AssetType.objects.create(name="Cryptocurrency")
+        self.commodity_type = AssetType.objects.create(name="Commodity")
+
+    def test_review_marks_crypto_stale_when_pair_disappears(self):
+        asset = Asset.objects.create(asset_type=self.crypto_type, name="Bitcoin", symbol="BTCUSD")
+        AssetMarketData.objects.create(
+            asset=asset,
+            provider=AssetMarketData.Provider.FMP,
+            provider_symbol="BTCUSD",
+            status=AssetMarketData.Status.TRACKED,
+        )
+
+        result = HeldMarketAssetReviewService.review_asset(asset=asset)
+
+        self.assertEqual(result, "stale")
+        asset.refresh_from_db()
+        self.assertFalse(asset.is_active)
+
 
 class ActiveEquityApiTests(TestCase):
     def setUp(self):
@@ -149,9 +231,48 @@ class ActiveEquityApiTests(TestCase):
         self.client.force_authenticate(self.user)
         ActiveEquityListing.objects.create(symbol="AAPL", name="Apple Inc.")
         ActiveEquityListing.objects.create(symbol="MSFT", name="Microsoft Corporation")
+        ActiveCryptoListing.objects.create(
+            symbol="BTCUSD",
+            name="Bitcoin",
+            base_symbol="BTC",
+            quote_currency="USD",
+        )
+        ActiveCommodityListing.objects.create(
+            symbol="GCUSD",
+            name="Gold",
+            exchange="COMEX",
+            trade_month="",
+            currency="USD",
+        )
 
     def test_active_equity_search_returns_filtered_results(self):
         response = self.client.get(reverse("active-equity-list"), {"q": "app"})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{"symbol": "AAPL", "name": "Apple Inc."}])
+
+    def test_active_crypto_search_returns_results(self):
+        response = self.client.get(reverse("active-crypto-list"), {"q": "btc"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{"symbol": "BTCUSD", "name": "Bitcoin", "base_symbol": "BTC", "quote_currency": "USD"}],
+        )
+
+    def test_active_precious_metals_returns_derived_rows(self):
+        response = self.client.get(reverse("active-precious-metal-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [
+                {
+                    "metal": "gold",
+                    "name": "Gold",
+                    "spot_symbol": "GCUSD",
+                    "spot_name": "Gold",
+                    "currency": "USD",
+                }
+            ],
+        )

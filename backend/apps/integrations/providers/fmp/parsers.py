@@ -115,3 +115,59 @@ def parse_identifier_search_row(raw: dict) -> dict:
         "cusip": (raw.get("cusip") or "").strip().upper(),
         "cik": (raw.get("cik") or "").strip(),
     }
+
+
+KNOWN_CRYPTO_QUOTES = (
+    "USDT",
+    "USDC",
+    "USD",
+    "EUR",
+    "GBP",
+)
+
+
+def split_crypto_pair(pair_symbol: str) -> tuple[str, str]:
+    normalized = (pair_symbol or "").strip().upper()
+    if not normalized:
+        raise InvalidProviderResponse("Crypto list row missing pair symbol.")
+
+    for quote in KNOWN_CRYPTO_QUOTES:
+        if normalized.endswith(quote) and len(normalized) > len(quote):
+            return normalized[: -len(quote)], quote
+
+    raise InvalidProviderResponse(f"Unrecognized crypto pair symbol: {pair_symbol}")
+
+
+def parse_crypto_list_row(raw: dict) -> dict:
+    symbol = (raw.get("symbol") or "").strip().upper()
+    if not symbol:
+        raise InvalidProviderResponse("Crypto list row missing symbol.")
+
+    base_symbol, quote_currency = split_crypto_pair(symbol)
+    return {
+        "symbol": symbol,
+        "name": (raw.get("name") or symbol).strip(),
+        "base_symbol": base_symbol,
+        "quote_currency": quote_currency,
+    }
+
+
+def normalize_commodity_currency(code: str | None) -> str:
+    normalized = (code or "").strip().upper()
+    if normalized == "USX":
+        return "USD"
+    return normalized or "USD"
+
+
+def parse_commodity_list_row(raw: dict) -> dict:
+    symbol = (raw.get("symbol") or "").strip().upper()
+    if not symbol:
+        raise InvalidProviderResponse("Commodity list row missing symbol.")
+
+    return {
+        "symbol": symbol,
+        "name": (raw.get("name") or symbol).strip(),
+        "exchange": (raw.get("exchange") or raw.get("exchangeShortName") or "").strip(),
+        "trade_month": (raw.get("tradeMonth") or "").strip(),
+        "currency": normalize_commodity_currency(raw.get("currency")),
+    }
