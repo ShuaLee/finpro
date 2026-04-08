@@ -82,10 +82,21 @@ class HeldEquityReviewService:
             ).exists():
                 continue
 
-            if not HeldEquityReviewService._names_are_consistent(expected_name, candidate["name"]):
+            if expected_exchange and candidate["exchange"] and candidate["exchange"] != expected_exchange:
                 continue
 
-            if expected_exchange and candidate["exchange"] and candidate["exchange"] != expected_exchange:
+            strong_identifier_match = any(
+                [
+                    market_data.isin and candidate["isin"] and market_data.isin == candidate["isin"],
+                    market_data.cusip and candidate["cusip"] and market_data.cusip == candidate["cusip"],
+                    market_data.cik and candidate["cik"] and market_data.cik == candidate["cik"],
+                ]
+            )
+
+            if not strong_identifier_match and not HeldEquityReviewService._names_are_consistent(
+                expected_name,
+                candidate["name"],
+            ):
                 continue
 
             matched.append(candidate)
