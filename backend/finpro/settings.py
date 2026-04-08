@@ -10,11 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+TESTING = "test" in sys.argv
 
 
 # Quick-start development settings - unsuitable for production
@@ -23,8 +25,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-!h8luv#74$(cm3$7#wu@rx6ol514nox(s#$lr@=ks+s)ei!va-'
 
+# Centralized provider / secret configuration
+FMP_API_KEY = os.getenv("FMP_API_KEY", "OUhgmsouzr7iyAeEf0ktRtn69OfjF7W4")
+FMP_BASE_URL = os.getenv("FMP_BASE_URL", "https://financialmodelingprep.com/stable")
+INTEGRATIONS_TIMEOUT_SECONDS = int(os.getenv("INTEGRATIONS_TIMEOUT_SECONDS", "10"))
+INTEGRATIONS_MAX_RETRIES = int(os.getenv("INTEGRATIONS_MAX_RETRIES", "2"))
+INTEGRATIONS_RETRY_BACKOFF_SECONDS = float(
+    os.getenv("INTEGRATIONS_RETRY_BACKOFF_SECONDS", "0.5")
+)
+
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
 ALLOWED_HOSTS = []
 
@@ -83,8 +94,15 @@ WSGI_APPLICATION = 'finpro.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
+        'NAME': os.getenv('DB_NAME', 'finpro'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '3306'),
+        'USER': os.getenv('DB_USER', 'root'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'Helpome123'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
     }
 }
 
@@ -177,10 +195,5 @@ DEFAULT_FROM_EMAIL = "no-reply@finpro.local"
 
 # Integrations / External Providers
 
-FMP_API_KEY = os.getenv("FMP_API_KEY", "")
-FMP_BASE_URL = os.getenv("FMP_BASE_URL", "https://financialmodelingprep.com/stable")
-INTEGRATIONS_TIMEOUT_SECONDS = int(os.getenv("INTEGRATIONS_TIMEOUT_SECONDS", "10"))
-INTEGRATIONS_MAX_RETRIES = int(os.getenv("INTEGRATIONS_MAX_RETRIES", "2"))
-INTEGRATIONS_RETRY_BACKOFF_SECONDS = float(
-    os.getenv("INTEGRATIONS_RETRY_BACKOFF_SECONDS", "0.5")
-)
+ASSET_PRICE_CACHE_TTL_SECONDS = int(os.getenv("ASSET_PRICE_CACHE_TTL_SECONDS", "600"))
+FX_RATE_CACHE_TTL_SECONDS = int(os.getenv("FX_RATE_CACHE_TTL_SECONDS", "3600"))

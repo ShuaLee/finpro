@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.users.models import EmailVerificationToken
+from apps.users.models import EmailVerificationToken, SupportedCountry, SupportedCurrency
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
@@ -13,6 +13,8 @@ class AuthApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user_model = get_user_model()
+        SupportedCurrency.objects.create(code="USD", name="US Dollar")
+        SupportedCountry.objects.create(code="US", name="United States")
 
     def test_register_creates_user_profile_and_verification_token(self):
         response = self.client.post(
@@ -24,6 +26,7 @@ class AuthApiTests(TestCase):
                 "full_name": "Test User",
                 "language": "en",
                 "timezone": "UTC",
+                "country": "US",
                 "currency": "USD",
             },
             format="json",
@@ -32,6 +35,8 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         user = self.user_model.objects.get(email="test@example.com")
         self.assertEqual(user.profile.full_name, "Test User")
+        self.assertEqual(user.profile.country, "US")
+        self.assertEqual(user.profile.currency, "USD")
         self.assertTrue(
             EmailVerificationToken.objects.filter(
                 user=user,

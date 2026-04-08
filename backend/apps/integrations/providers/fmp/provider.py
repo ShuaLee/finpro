@@ -1,9 +1,11 @@
 from apps.integrations.exceptions import EmptyProviderResult, InvalidProviderResponse
 from apps.integrations.providers.fmp.constants import (
     ACTIVELY_TRADING_LIST,
+    AVAILABLE_COUNTRIES,
     COMMODITIES_LIST,
     CRYPTOCURRENCY_LIST,
     DIVIDENDS,
+    FOREX_LIST,
     PROFILE,
     PROFILE_CIK,
     PROVIDER_NAME,
@@ -66,6 +68,25 @@ class FMPProvider(MarketDataProvider):
         if not isinstance(data, list):
             return []
         return [row for row in data if isinstance(row, dict)]
+
+    def get_forex_list(self) -> list[dict]:
+        data = fmp_get_json(FOREX_LIST)
+        if not isinstance(data, list):
+            raise InvalidProviderResponse("Malformed forex list payload.")
+        return [row for row in data if isinstance(row, dict)]
+
+    def get_available_countries(self) -> list[str]:
+        data = fmp_get_json(AVAILABLE_COUNTRIES)
+        if not isinstance(data, list):
+            raise InvalidProviderResponse("Malformed available countries payload.")
+        results: list[str] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            code = (row.get("country") or "").strip().upper()
+            if code:
+                results.append(code)
+        return results
 
     def get_stock_list(self) -> list[dict]:
         data = fmp_get_json(STOCK_LIST)

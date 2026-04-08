@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from apps.holdings.models import Holding
+from apps.holdings.models import Holding, HoldingFactValue, HoldingOverride
+
+
+class HoldingFactValueInline(admin.TabularInline):
+    model = HoldingFactValue
+    extra = 0
+    autocomplete_fields = ("definition",)
+
+
+class HoldingOverrideInline(admin.TabularInline):
+    model = HoldingOverride
+    extra = 0
 
 
 @admin.register(Holding)
@@ -35,4 +46,5 @@ class HoldingAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+    inlines = (HoldingFactValueInline, HoldingOverrideInline)
     ordering = ("container", "asset")

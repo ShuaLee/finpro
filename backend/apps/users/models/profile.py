@@ -12,6 +12,7 @@ class Profile(models.Model):
     full_name = models.CharField(max_length=150, blank=True)
     language = models.CharField(max_length=16, default="en")
     timezone = models.CharField(max_length=64, default="UTC")
+    country = models.CharField(max_length=2, blank=True, default="")
     currency = models.CharField(max_length=10, default="USD")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -25,6 +26,8 @@ class Profile(models.Model):
 
     def clean(self):
         super().clean()
+        self.country = (self.country or "").strip().upper()
+        self.currency = (self.currency or "").strip().upper()
         if not self.pk:
             return
         original = Profile.objects.select_related(

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.assets.models import Asset, AssetMarketData, AssetPrice
+from apps.assets.models import Asset, AssetDividendSnapshot, AssetMarketData, AssetPrice
 
 
 class AssetMarketDataInline(admin.StackedInline):
@@ -22,6 +22,14 @@ class AssetPriceInline(admin.StackedInline):
     max_num = 1
     can_delete = False
     readonly_fields = ("as_of",)
+
+
+class AssetDividendSnapshotInline(admin.StackedInline):
+    model = AssetDividendSnapshot
+    extra = 0
+    max_num = 1
+    can_delete = False
+    readonly_fields = ("last_computed_at", "created_at", "updated_at")
 
 
 @admin.register(Asset)
@@ -50,7 +58,7 @@ class AssetAdmin(admin.ModelAdmin):
         "description",
         "owner__user__email",
     )
-    inlines = (AssetMarketDataInline, AssetPriceInline)
+    inlines = (AssetMarketDataInline, AssetPriceInline, AssetDividendSnapshotInline)
     readonly_fields = (
         "id",
         "is_public",

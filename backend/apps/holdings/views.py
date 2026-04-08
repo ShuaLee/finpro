@@ -7,12 +7,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.assets.models import Asset, AssetType
-from apps.assets.services import AssetService
-from apps.holdings.models import Container, Holding, Portfolio
+from apps.assets.services import AssetPriceService, AssetService
+from apps.holdings.models import Container, Holding, HoldingFactDefinition, HoldingOverride, Portfolio
 from apps.holdings.serializers import (
     ContainerCreateSerializer,
     ContainerSerializer,
     ContainerUpdateSerializer,
+    HoldingFactDefinitionCreateSerializer,
+    HoldingFactDefinitionSerializer,
+    HoldingFactValueSerializer,
+    HoldingFactValueUpsertSerializer,
+    HoldingOverrideSerializer,
+    HoldingOverrideUpsertSerializer,
     HoldingCreateSerializer,
     HoldingCreateWithAssetSerializer,
     HoldingSerializer,
@@ -21,13 +27,27 @@ from apps.holdings.serializers import (
     PortfolioSerializer,
     PortfolioUpdateSerializer,
 )
-from apps.holdings.services import ContainerService, HoldingService, PortfolioService
+from apps.holdings.services import ContainerService, HoldingService, HoldingValueService, PortfolioService
 from apps.integrations.services import (
     ActiveCommodityAssetService,
     ActiveCryptoAssetService,
     ActiveEquityAssetService,
 )
 from apps.users.views.base import ServiceAPIView
+
+
+def _hydrate_holding_asset_price(*, holding: Holding) -> Holding:
+    asset = holding.asset
+    market_data = getattr(asset, "market_data", None)
+    if asset.owner is not None or market_data is None or not market_data.provider_symbol:
+        return holding
+
+    if asset.asset_type.slug not in {"equity", "crypto", "cryptocurrency", "commodity", "precious_metal"}:
+        return holding
+
+    AssetPriceService.get_current_price(asset=asset)
+    holding.refresh_from_db()
+    return holding
 
 
 class PortfolioListCreateView(ServiceAPIView):
@@ -156,7 +176,16 @@ class HoldingListCreateView(ServiceAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self, request):
-        return Holding.objects.select_related("container", "asset").filter(
+        return Holding.objects.select_related(
+            "container",
+            "asset",
+            "asset__price",
+            "asset__market_data",
+            "asset__dividend_snapshot",
+        ).prefetch_related(
+            "fact_values__definition",
+            "overrides",
+        ).filter(
             container__portfolio__profile=request.user.profile
         ).order_by("container_id", "asset_id", "id")
 
@@ -267,7 +296,16 @@ class HoldingDetailView(ServiceAPIView):
 
     def get_object(self, request, pk):
         return get_object_or_404(
-            Holding.objects.select_related("container", "asset").filter(
+            Holding.objects.select_related(
+                "container",
+                "asset",
+                "asset__price",
+                "asset__market_data",
+                "asset__dividend_snapshot",
+            ).prefetch_related(
+                "fact_values__definition",
+                "overrides",
+            ).filter(
                 container__portfolio__profile=request.user.profile
             ),
             pk=pk,
@@ -275,6 +313,7 @@ class HoldingDetailView(ServiceAPIView):
 
     def get(self, request, pk):
         holding = self.get_object(request, pk)
+        holding = _hydrate_holding_asset_price(holding=holding)
         return Response(HoldingSerializer(holding).data)
 
     def patch(self, request, pk):
@@ -293,3 +332,148 @@ class HoldingDetailView(ServiceAPIView):
             data=data.get("data"),
         )
         return Response(HoldingSerializer(holding).data)
+
+
+class HoldingFactDefinitionListCreateView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self, request):
+        return HoldingFactDefinition.objects.select_related("portfolio").filter(
+            portfolio__profile=request.user.profile
+        ).order_by("label", "key")
+
+    def get(self, request):
+        queryset = self.get_queryset(request)
+        portfolio_id = request.query_params.get("portfolio")
+        if portfolio_id:
+            queryset = queryset.filter(portfolio_id=portfolio_id)
+        return Response(HoldingFactDefinitionSerializer(queryset, many=True).data)
+
+    def post(self, request):
+        serializer = HoldingFactDefinitionCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = cast(dict[str, Any], serializer.validated_data)
+        portfolio = get_object_or_404(
+            Portfolio.objects.filter(profile=request.user.profile),
+            pk=data["portfolio"].pk,
+        )
+        definition = HoldingValueService.create_fact_definition(
+            portfolio=portfolio,
+            key=data["key"],
+            label=data["label"],
+            data_type=data["data_type"],
+            description=data.get("description", ""),
+            is_active=data.get("is_active", True),
+        )
+        return Response(HoldingFactDefinitionSerializer(definition).data, status=status.HTTP_201_CREATED)
+
+
+class HoldingFactDefinitionDetailView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk):
+        return get_object_or_404(
+            HoldingFactDefinition.objects.select_related("portfolio").filter(
+                portfolio__profile=request.user.profile
+            ),
+            pk=pk,
+        )
+
+    def patch(self, request, pk):
+        definition = self.get_object(request, pk)
+        serializer = HoldingFactDefinitionCreateSerializer(data=request.data, partial=True, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = cast(dict[str, Any], serializer.validated_data)
+        definition = HoldingValueService.update_fact_definition(
+            definition=definition,
+            profile=request.user.profile,
+            label=data.get("label"),
+            description=data.get("description"),
+            data_type=data.get("data_type"),
+            is_active=data.get("is_active"),
+        )
+        return Response(HoldingFactDefinitionSerializer(definition).data)
+
+    def delete(self, request, pk):
+        definition = self.get_object(request, pk)
+        definition.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class HoldingFactValueListUpsertView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_holding(self, request, pk):
+        return get_object_or_404(
+            Holding.objects.select_related("container", "container__portfolio").prefetch_related("fact_values__definition").filter(
+                container__portfolio__profile=request.user.profile
+            ),
+            pk=pk,
+        )
+
+    def get(self, request, pk):
+        holding = self.get_holding(request, pk)
+        return Response(HoldingFactValueSerializer(holding.fact_values.all(), many=True).data)
+
+    def post(self, request, pk):
+        holding = self.get_holding(request, pk)
+        serializer = HoldingFactValueUpsertSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = cast(dict[str, Any], serializer.validated_data)
+        definition = get_object_or_404(
+            HoldingFactDefinition.objects.filter(portfolio=holding.container.portfolio),
+            pk=data["definition"].pk,
+        )
+        fact_value = HoldingValueService.upsert_fact_value(
+            holding=holding,
+            definition=definition,
+            value=data.get("value"),
+        )
+        fact_value.refresh_from_db()
+        return Response(HoldingFactValueSerializer(fact_value).data, status=status.HTTP_201_CREATED)
+
+
+class HoldingOverrideListUpsertView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_holding(self, request, pk):
+        return get_object_or_404(
+            Holding.objects.select_related("container", "container__portfolio").prefetch_related("overrides").filter(
+                container__portfolio__profile=request.user.profile
+            ),
+            pk=pk,
+        )
+
+    def get(self, request, pk):
+        holding = self.get_holding(request, pk)
+        return Response(HoldingOverrideSerializer(holding.overrides.all(), many=True).data)
+
+    def post(self, request, pk):
+        holding = self.get_holding(request, pk)
+        serializer = HoldingOverrideUpsertSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = cast(dict[str, Any], serializer.validated_data)
+        override = HoldingValueService.upsert_override(
+            holding=holding,
+            key=data["key"],
+            data_type=data["data_type"],
+            value=data.get("value"),
+        )
+        return Response(HoldingOverrideSerializer(override).data, status=status.HTTP_201_CREATED)
+
+
+class HoldingOverrideDetailView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, override_id):
+        return get_object_or_404(
+            HoldingOverride.objects.select_related("holding", "holding__container", "holding__container__portfolio").filter(
+                holding__container__portfolio__profile=request.user.profile
+            ),
+            pk=override_id,
+        )
+
+    def delete(self, request, override_id):
+        override = self.get_object(request, override_id)
+        override.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

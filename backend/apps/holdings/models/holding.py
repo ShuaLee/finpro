@@ -78,6 +78,66 @@ class Holding(models.Model):
             return None
         return quantity * unit_cost_basis
 
+    @property
+    def effective_price(self):
+        from apps.holdings.services import HoldingValueService
+
+        return HoldingValueService.get_effective_value(holding=self, key="price")
+
+    @property
+    def effective_current_value(self):
+        from apps.holdings.services import HoldingValueService
+
+        return HoldingValueService.get_effective_value(holding=self, key="current_value")
+
+    @property
+    def effective_sector(self):
+        from apps.holdings.services import HoldingValueService
+
+        return HoldingValueService.get_effective_value(holding=self, key="sector")
+
+    @property
+    def effective_industry(self):
+        from apps.holdings.services import HoldingValueService
+
+        return HoldingValueService.get_effective_value(holding=self, key="industry")
+
+    @property
+    def fx_rate(self):
+        from apps.holdings.services import HoldingFormulaService
+
+        return HoldingFormulaService.evaluate(holding=self, identifier="fx_rate")
+
+    @property
+    def market_value(self):
+        from apps.holdings.services import HoldingFormulaService
+
+        return HoldingFormulaService.evaluate(holding=self, identifier="market_value")
+
+    @property
+    def current_value_profile(self):
+        from apps.holdings.services import HoldingFormulaService
+
+        return HoldingFormulaService.evaluate(holding=self, identifier="current_value")
+
+    @property
+    def cost_basis_profile(self):
+        from apps.holdings.services import HoldingFormulaService
+
+        return HoldingFormulaService.evaluate(holding=self, identifier="cost_basis")
+
+    @property
+    def unrealized_gain(self):
+        from apps.holdings.services import HoldingFormulaService
+
+        return HoldingFormulaService.evaluate(holding=self, identifier="unrealized_gain")
+
+    @property
+    def unrealized_gain_pct(self):
+        from apps.holdings.services import HoldingFormulaService
+
+        return HoldingFormulaService.evaluate(holding=self, identifier="unrealized_gain_pct")
+
     def clean(self):
         super().clean()
 

@@ -40,6 +40,7 @@ class RegisterView(ServiceAPIView):
             full_name=data.get("full_name", ""),
             language=data.get("language", "en"),
             timezone_name=data.get("timezone", "UTC"),
+            country=data.get("country", ""),
             currency=data.get("currency", "USD"),
             request=request,
         )

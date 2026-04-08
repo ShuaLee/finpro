@@ -22,9 +22,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         queryset = Asset.objects.filter(owner__isnull=True).select_related("market_data")
+        default_price_types = ["equity", "crypto", "cryptocurrency", "commodity", "precious_metal"]
 
         if options["asset_type"]:
             queryset = queryset.filter(asset_type__slug=options["asset_type"])
+        else:
+            queryset = queryset.filter(asset_type__slug__in=default_price_types)
 
         symbols = options.get("symbols") or []
         if symbols:

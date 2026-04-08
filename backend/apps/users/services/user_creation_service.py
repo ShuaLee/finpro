@@ -17,6 +17,7 @@ class UserCreationService:
         full_name: str = "",
         language: str = "en",
         timezone: str = "UTC",
+        country: str = "",
         currency: str = "USD",
         is_active: bool = True,
     ) -> User:
@@ -33,6 +34,7 @@ class UserCreationService:
             full_name=full_name,
             language=language,
             timezone=timezone,
+            country=country,
             currency=currency,
         )
 

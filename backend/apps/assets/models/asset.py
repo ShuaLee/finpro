@@ -1,7 +1,10 @@
 import uuid
+from datetime import timedelta
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 class Asset(models.Model):
@@ -77,6 +80,35 @@ class Asset(models.Model):
     def current_price(self):
         price = getattr(self, "price", None)
         return getattr(price, "price", None)
+
+    @property
+    def current_price_as_of(self):
+        price = getattr(self, "price", None)
+        return getattr(price, "as_of", None)
+
+    @property
+    def current_price_is_fresh(self) -> bool:
+        price = getattr(self, "price", None)
+        as_of = getattr(price, "as_of", None)
+        if as_of is None:
+            return False
+        ttl_seconds = getattr(settings, "ASSET_PRICE_CACHE_TTL_SECONDS", 600)
+        return as_of >= timezone.now() - timedelta(seconds=ttl_seconds)
+
+    @property
+    def dividend_status(self):
+        snapshot = getattr(self, "dividend_snapshot", None)
+        return getattr(snapshot, "status", None)
+
+    @property
+    def trailing_12m_dividend(self):
+        snapshot = getattr(self, "dividend_snapshot", None)
+        return getattr(snapshot, "trailing_12m_dividend", None)
+
+    @property
+    def forward_annual_dividend(self):
+        snapshot = getattr(self, "dividend_snapshot", None)
+        return getattr(snapshot, "forward_annual_dividend", None)
 
     def clean(self):
         super().clean()

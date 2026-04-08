@@ -32,6 +32,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             "full_name",
             "language",
             "timezone",
+            "country",
             "currency",
             "created_at",
             "updated_at",
@@ -46,8 +47,20 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             "full_name",
             "language",
             "timezone",
+            "country",
             "currency",
         )
+
+    def validate_country(self, value):
+        return value.strip().upper()
+
+    def validate_currency(self, value):
+        return value.strip().upper()
+
+
+class ProfileOptionsSerializer(serializers.Serializer):
+    countries = serializers.ListField(read_only=True)
+    currencies = serializers.ListField(read_only=True)
 
 
 class MeSerializer(serializers.Serializer):

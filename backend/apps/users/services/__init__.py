@@ -3,5 +3,6 @@ from .auth_service import AuthService
 from .email_verification_service import EmailVerificationService
 from .password_reset_service import PasswordResetService
 from .profile_creation_service import ProfileCreationService
+from .reference_data_service import ReferenceDataService
 from .trusted_device_service import TrustedDeviceService
 from .user_creation_service import UserCreationService

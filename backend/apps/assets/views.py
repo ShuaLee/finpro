@@ -16,8 +16,21 @@ from apps.assets.serializers import (
     AssetTypeUpdateSerializer,
     AssetUpdateSerializer,
 )
-from apps.assets.services import AssetService, AssetTypeService
+from apps.assets.services import AssetPriceService, AssetService, AssetTypeService
 from apps.users.views.base import ServiceAPIView
+
+
+def _hydrate_price_if_needed(*, asset: Asset):
+    market_data = getattr(asset, "market_data", None)
+    if asset.owner is not None or market_data is None or not market_data.provider_symbol:
+        return asset
+
+    if asset.asset_type.slug not in {"equity", "crypto", "cryptocurrency", "commodity", "precious_metal"}:
+        return asset
+
+    AssetPriceService.get_current_price(asset=asset)
+    asset.refresh_from_db()
+    return asset
 
 
 class AssetTypeListCreateView(ServiceAPIView):
@@ -77,7 +90,13 @@ class AssetListCreateView(ServiceAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self, request):
-        queryset = Asset.objects.select_related("asset_type", "owner__user").filter(
+        queryset = Asset.objects.select_related(
+            "asset_type",
+            "owner__user",
+            "price",
+            "market_data",
+            "dividend_snapshot",
+        ).filter(
             Q(owner__isnull=True) | Q(owner=request.user.profile)
         )
         query = (request.query_params.get("q") or "").strip()
@@ -127,7 +146,13 @@ class AssetDetailView(ServiceAPIView):
 
     def get_object(self, request, pk):
         return get_object_or_404(
-            Asset.objects.select_related("asset_type", "owner__user").filter(
+            Asset.objects.select_related(
+                "asset_type",
+                "owner__user",
+                "price",
+                "market_data",
+                "dividend_snapshot",
+            ).filter(
                 Q(owner__isnull=True) | Q(owner=request.user.profile)
             ),
             pk=pk,
@@ -135,6 +160,7 @@ class AssetDetailView(ServiceAPIView):
 
     def get(self, request, pk):
         asset = self.get_object(request, pk)
+        asset = _hydrate_price_if_needed(asset=asset)
         return Response(AssetSerializer(asset).data)
 
     def patch(self, request, pk):

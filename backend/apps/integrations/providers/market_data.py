@@ -15,6 +15,18 @@ class MarketDataProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_dividends(self, symbol: str) -> list[dict]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_forex_list(self) -> list[dict]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_available_countries(self) -> list[str]:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_stock_list(self) -> list[dict]:
         raise NotImplementedError
 

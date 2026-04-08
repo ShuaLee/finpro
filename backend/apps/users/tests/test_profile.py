@@ -3,6 +3,8 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.users.models import SupportedCountry, SupportedCurrency
+
 
 class ProfileApiTests(TestCase):
     def setUp(self):
@@ -13,6 +15,8 @@ class ProfileApiTests(TestCase):
             email_verified_at=timezone.now(),
         )
         self.client.force_authenticate(user=self.user)
+        SupportedCountry.objects.create(code="CA", name="Canada")
+        SupportedCurrency.objects.create(code="CAD", name="Canadian Dollar")
 
     def test_me_returns_user_and_profile(self):
         response = self.client.get("/api/v1/auth/me/")
@@ -27,6 +31,7 @@ class ProfileApiTests(TestCase):
             {
                 "full_name": "Updated Name",
                 "timezone": "America/Toronto",
+                "country": "CA",
                 "currency": "CAD",
             },
             format="json",
@@ -36,4 +41,5 @@ class ProfileApiTests(TestCase):
         self.user.profile.refresh_from_db()
         self.assertEqual(self.user.profile.full_name, "Updated Name")
         self.assertEqual(self.user.profile.timezone, "America/Toronto")
+        self.assertEqual(self.user.profile.country, "CA")
         self.assertEqual(self.user.profile.currency, "CAD")

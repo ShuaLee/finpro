@@ -12,6 +12,8 @@ class RegisterSerializer(serializers.Serializer):
         required=False, allow_blank=True, max_length=16, default="en")
     timezone = serializers.CharField(
         required=False, allow_blank=True, max_length=64, default="UTC")
+    country = serializers.CharField(
+        required=False, allow_blank=True, max_length=2, default="")
     currency = serializers.CharField(
         required=False, allow_blank=False, max_length=10, default="USD")
     accept_terms = serializers.BooleanField()
@@ -22,6 +24,12 @@ class RegisterSerializer(serializers.Serializer):
     def validate_password(self, value):
         validate_password(value)
         return value
+
+    def validate_country(self, value):
+        return value.strip().upper()
+
+    def validate_currency(self, value):
+        return value.strip().upper()
 
 
 class LoginSerializer(serializers.Serializer):

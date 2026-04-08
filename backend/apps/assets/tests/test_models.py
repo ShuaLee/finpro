@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.assets.models import Asset, AssetMarketData, AssetType
+from apps.assets.models import Asset, AssetDividendSnapshot, AssetMarketData, AssetType
 
 
 class AssetTypeModelTests(TestCase):
@@ -121,3 +121,21 @@ class AssetMarketDataModelTests(TestCase):
 
         with self.assertRaises(ValidationError):
             market_data.full_clean()
+
+
+class AssetDividendSnapshotModelTests(TestCase):
+    def setUp(self):
+        self.equity_type = AssetType.objects.create(name="Equity")
+        self.crypto_type = AssetType.objects.create(name="Cryptocurrency")
+
+    def test_dividend_snapshot_requires_equity_asset_type(self):
+        asset = Asset.objects.create(
+            asset_type=self.crypto_type,
+            name="Bitcoin",
+            symbol="BTCUSD",
+        )
+
+        snapshot = AssetDividendSnapshot(asset=asset)
+
+        with self.assertRaises(ValidationError):
+            snapshot.full_clean()

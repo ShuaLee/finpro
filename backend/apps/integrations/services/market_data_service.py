@@ -25,6 +25,14 @@ class MarketDataService:
         return FMP_PROVIDER.get_actively_traded_symbols()
 
     @staticmethod
+    def get_forex_list():
+        return FMP_PROVIDER.get_forex_list()
+
+    @staticmethod
+    def get_available_countries():
+        return FMP_PROVIDER.get_available_countries()
+
+    @staticmethod
     def search_active_equities(*, query: str):
         queryset = ActiveEquitySyncService.get_queryset(provider="fmp")
         normalized = (query or "").strip()

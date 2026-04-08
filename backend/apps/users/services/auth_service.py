@@ -48,6 +48,7 @@ class AuthService:
         full_name: str = "",
         language: str = "en",
         timezone_name: str = "UTC",
+        country: str = "",
         currency: str = "USD",
         request=None,
     ):
@@ -63,6 +64,7 @@ class AuthService:
             full_name=full_name,
             language=language,
             timezone=timezone_name,
+            country=country,
             currency=currency,
         )
 
@@ -388,6 +390,7 @@ class AuthService:
         full_name: str = "",
         language: str = "en",
         timezone_name: str = "UTC",
+        country: str = "",
         currency: str = "USD",
     ):
         return ProfileCreationService.update_profile(
@@ -395,5 +398,6 @@ class AuthService:
             full_name=full_name,
             language=language,
             timezone=timezone_name,
+            country=country,
             currency=currency,
         )
