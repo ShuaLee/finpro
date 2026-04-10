@@ -27,6 +27,32 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
   }
 }
 
+function collectErrorMessages(value: unknown): string[] {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap(collectErrorMessages);
+  }
+
+  if (typeof value === "object" && value) {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, nestedValue]) => {
+      const nestedMessages = collectErrorMessages(nestedValue);
+      if (!nestedMessages.length) {
+        return [];
+      }
+      if (key === "non_field_errors" || key === "detail") {
+        return nestedMessages;
+      }
+      return nestedMessages.map((message) => `${key}: ${message}`);
+    });
+  }
+
+  return [];
+}
+
 function isStateChangingMethod(method: RequestMethod): boolean {
   return method !== "GET";
 }
@@ -81,10 +107,8 @@ export async function apiRequest<TResponse>(
   const data = (await parseJsonSafely(response)) as { detail?: string } | TResponse | null;
 
   if (!response.ok) {
-    const detail = typeof data === "object" && data && "detail" in data
-      ? (data.detail ?? "Request failed.")
-      : "Request failed.";
-    throw new ApiError(String(detail), response.status);
+    const messages = collectErrorMessages(data);
+    throw new ApiError(messages[0] ?? "Request failed.", response.status);
   }
 
   return (data as TResponse) ?? ({} as TResponse);

@@ -37,20 +37,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshAuth = useCallback(async () => {
-    const status = await getAuthStatus();
-    if (status.authenticated) {
-      setUser(mapStatusToUser(status));
-      return;
-    }
-
     try {
-      await refreshSession();
-      const refreshedStatus = await getAuthStatus();
-      setUser(mapStatusToUser(refreshedStatus));
+      const status = await getAuthStatus();
+      setUser(mapStatusToUser(status));
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
-        setUser(null);
-        return;
+        try {
+          await refreshSession();
+          const refreshedStatus = await getAuthStatus();
+          setUser(mapStatusToUser(refreshedStatus));
+          return;
+        } catch (refreshCaught) {
+          if (refreshCaught instanceof ApiError && refreshCaught.status === 401) {
+            setUser(null);
+            return;
+          }
+          throw refreshCaught;
+        }
       }
       throw caught;
     }

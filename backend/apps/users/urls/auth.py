@@ -1,7 +1,9 @@
 from django.urls import path
 
 from apps.users.views import (
+    CsrfTokenView,
     ChangePasswordView,
+    DeleteAccountView,
     EmailChangeConfirmView,
     EmailChangeRequestView,
     LoginView,
@@ -9,6 +11,7 @@ from apps.users.views import (
     MeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    RefreshSessionView,
     RegisterView,
     ResendVerificationView,
     VerifyEmailView,
@@ -16,9 +19,12 @@ from apps.users.views import (
 
 
 urlpatterns = [
+    path("auth/csrf/", CsrfTokenView.as_view(), name="auth-csrf"),
     path("auth/register/", RegisterView.as_view(), name="auth-register"),
     path("auth/login/", LoginView.as_view(), name="auth-login"),
+    path("auth/refresh/", RefreshSessionView.as_view(), name="auth-refresh"),
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
+    path("auth/delete-account/", DeleteAccountView.as_view(), name="auth-delete-account"),
     path("auth/me/", MeView.as_view(), name="auth-me"),
     path("auth/email/verify/", VerifyEmailView.as_view(), name="auth-email-verify"),
     path("auth/email/resend/", ResendVerificationView.as_view(), name="auth-email-resend"),

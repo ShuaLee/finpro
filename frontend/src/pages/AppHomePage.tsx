@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { useLocation } from "react-router-dom";
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CubeIcon as CubeOutlineIcon,
   HomeIcon as HomeOutlineIcon,
   ListBulletIcon as ListBulletOutlineIcon,
   Squares2X2Icon as Squares2X2OutlineIcon,
-  UserCircleIcon as UserCircleOutlineIcon,
   WalletIcon as WalletOutlineIcon,
 } from "@heroicons/react/24/outline";
 import {
-  BriefcaseIcon as BriefcaseSolidIcon,
   CubeIcon as CubeSolidIcon,
   HomeIcon as HomeSolidIcon,
   ListBulletIcon as ListBulletSolidIcon,
@@ -25,8 +23,6 @@ import {
 import {
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Ellipsis,
   Eye,
   EyeOff,
@@ -35,6 +31,7 @@ import {
   Monitor,
   MoveDiagonal2,
   Plus,
+  LogOut,
   Settings,
   Smartphone,
   Tablet,
@@ -63,6 +60,7 @@ import { ApiError } from "../api/http";
 import { getNavigationState, upsertNavigationState } from "../api/navigationState";
 import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
+import { SettingsPage } from "./SettingsPage";
 
 type DashboardTile = {
   id: number;
@@ -100,7 +98,7 @@ type NavDragItem = {
   kind: NavDragKind;
   key: string;
 };
-type AppShellSection = "portfolio" | "holdings" | "dashboards" | "accounts" | "assetTypes" | "addAccount";
+type AppShellSection = "portfolio" | "holdings" | "dashboards" | "accounts" | "assetTypes" | "addAccount" | "settings";
 type PortfolioHoldingRow = AccountHolding & {
   account_name: string;
 };
@@ -112,6 +110,14 @@ type PortfolioGroupedSection = {
 };
 type ShellSortMode = "name_asc" | "name_desc" | "value_desc" | "value_asc";
 type AddAssetStep = "type" | "account" | "asset";
+type AppShellNavItem = {
+  key: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  activeIcon: ReactNode;
+  inactiveIcon: ReactNode;
+};
 
 type SavedLayout = {
   id: string;
@@ -327,11 +333,10 @@ const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) =
 };
 
 export function AppHomePage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>("dashboards");
-  const [previousAppShellSection, setPreviousAppShellSection] = useState<AppShellSection>("dashboards");
-  const [isSideNavCollapsed, setIsSideNavCollapsed] = useState(false);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
   const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
@@ -359,6 +364,7 @@ export function AppHomePage() {
   const [accountCreateOptions, setAccountCreateOptions] = useState<AccountCreateOptions | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [holderMenuOpenId, setHolderMenuOpenId] = useState<number | null>(null);
   const [isNewLayoutDialogOpen, setIsNewLayoutDialogOpen] = useState(false);
   const [isAddTileDialogOpen, setIsAddTileDialogOpen] = useState(false);
@@ -485,6 +491,14 @@ export function AppHomePage() {
 
   const displayViewport: EditViewport = windowWidth < 768 ? "mobile" : windowWidth < 1280 ? "tablet" : "desktop";
   const profileFirstName = getFirstNameFromEmail(user?.email);
+  const isSettingsRoute = location.pathname === "/settings";
+  const routeShellState = location.state as
+    | {
+        appShellSection?: AppShellSection;
+        sidebarCategory?: string;
+        sidebarLabel?: string;
+      }
+    | null;
   const activeViewport: EditViewport = isEditing ? editingViewport : displayViewport;
   const columns = clamp(
     viewportLayouts[activeViewport]?.targetColumns ?? VIEWPORT_DEFAULT_COLUMNS[activeViewport],
@@ -624,10 +638,6 @@ export function AppHomePage() {
     return next;
   }, [accountCreateOptions]);
   const assetTypesForNav = assetTypes.length > 0 ? assetTypes : fallbackAssetTypesFromAccountTypes;
-  const sideNavWidthClass = isSideNavCollapsed ? "w-[84px]" : "w-[228px]";
-  const sideNavLeftOffsetClass = isSideNavCollapsed ? "lg:left-[84px]" : "lg:left-[228px]";
-  const sideNavContentInsetClass = isSideNavCollapsed ? "lg:pl-[92px] lg:pr-[48px]" : "lg:pl-[252px] lg:pr-[48px]";
-  const topNavInsetClass = isSideNavCollapsed ? "lg:pl-4 lg:pr-[48px]" : "lg:pl-6 lg:pr-[48px]";
   const assetTypeNameBySlug = useMemo(
     () =>
       new Map(
@@ -3292,12 +3302,6 @@ export function AppHomePage() {
   }, [isAssetsLiabilitiesDashboard, isEditing]);
 
   useEffect(() => {
-    if (activeAppShellSection !== "addAccount") {
-      setPreviousAppShellSection(activeAppShellSection);
-    }
-  }, [activeAppShellSection]);
-
-  useEffect(() => {
     if (activeAppShellSection !== "addAccount") return;
     if (selectedAddAccountAssetType) return;
     const firstAssetType = addAssetModalAssetTypes[0] ?? null;
@@ -3306,7 +3310,53 @@ export function AppHomePage() {
     }
   }, [activeAppShellSection, addAssetModalAssetTypes, selectedAddAccountAssetType]);
 
+  const handleLogout = useCallback(async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  }, [logout, navigate]);
+
+  const navigateToShellSection = useCallback(
+    (section: AppShellSection, sidebarCategory: string, sidebarLabel: string) => {
+      setActiveAppShellSection(section);
+      setActiveSidebarCategory(sidebarCategory);
+      setActiveSidebarLabel(sidebarLabel);
+
+      if (location.pathname !== "/") {
+        navigate("/", {
+          state: {
+            appShellSection: section,
+            sidebarCategory,
+            sidebarLabel,
+          },
+        });
+      }
+    },
+    [location.pathname, navigate],
+  );
+
   useEffect(() => {
+    if (isSettingsRoute || !routeShellState?.appShellSection) return;
+    setActiveAppShellSection(routeShellState.appShellSection);
+    if (routeShellState.sidebarCategory) {
+      setActiveSidebarCategory(routeShellState.sidebarCategory);
+    }
+    if (routeShellState.sidebarLabel) {
+      setActiveSidebarLabel(routeShellState.sidebarLabel);
+    }
+  }, [
+    isSettingsRoute,
+    routeShellState?.appShellSection,
+    routeShellState?.sidebarCategory,
+    routeShellState?.sidebarLabel,
+  ]);
+
+  useEffect(() => {
+    if (isSettingsRoute) {
+      setActiveAppShellSection("settings");
+      setActiveSidebarCategory("settings");
+      setActiveSidebarLabel("Settings");
+      return;
+    }
     if (activeAppShellSection === "addAccount") return;
     if (activeAppShellSection === "portfolio" && activeSidebarCategory === "portfolio") return;
     if (activeSidebarCategory === "accounts" || activeSidebarCategory.startsWith("account:")) {
@@ -3318,250 +3368,38 @@ export function AppHomePage() {
       return;
     }
     setActiveAppShellSection("dashboards");
-  }, [activeAppShellSection, activeSidebarCategory]);
+  }, [activeAppShellSection, activeSidebarCategory, isSettingsRoute]);
+
+  const shellNavItems: AppShellNavItem[] = [
+    { key: "dashboard", label: "Dashboard", active: activeAppShellSection === "dashboards", onClick: () => navigateToShellSection("dashboards", "portfolio", "Portfolio"), activeIcon: <Squares2X2SolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <Squares2X2OutlineIcon className="h-4 w-4" /> },
+    { key: "portfolio", label: "Portfolio", active: activeAppShellSection === "portfolio", onClick: () => navigateToShellSection("portfolio", "portfolio", "Portfolio"), activeIcon: <HomeSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <HomeOutlineIcon className="h-4 w-4" /> },
+    { key: "holdings", label: "Holdings", active: activeAppShellSection === "holdings", onClick: () => navigateToShellSection("holdings", "portfolio", "Portfolio"), activeIcon: <ListBulletSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <ListBulletOutlineIcon className="h-4 w-4" /> },
+    { key: "accounts", label: "Accounts", active: activeAppShellSection === "accounts", onClick: () => navigateToShellSection("accounts", "accounts", "Accounts"), activeIcon: <WalletSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <WalletOutlineIcon className="h-4 w-4" /> },
+    { key: "assetTypes", label: "Asset Types", active: activeAppShellSection === "assetTypes", onClick: () => { const firstAssetType = assetTypeEntries[0]; if (firstAssetType) { navigateToShellSection("assetTypes", firstAssetType.key, firstAssetType.assetType.name); return; } navigateToShellSection("assetTypes", "portfolio", "Portfolio"); }, activeIcon: <CubeSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <CubeOutlineIcon className="h-4 w-4" /> },
+  ];
 
   return (
     <main className="app-home min-h-screen w-full bg-background dark:bg-background dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="flex min-h-screen w-full">
-        <aside
-          className={`fixed left-0 top-0 hidden h-screen shrink-0 flex-col border-r border-background bg-background py-6 transition-[width,padding] duration-200 lg:flex ${
-            isSideNavCollapsed ? "px-[10px]" : "pl-6 pr-2"
-          } ${sideNavWidthClass}`}
-        >
-          <div className={`flex h-[72px] items-center px-2 ${isSideNavCollapsed ? "justify-center" : "gap-3"}`}>
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <BriefcaseSolidIcon className="h-5 w-5" />
-            </div>
-            {!isSideNavCollapsed ? <p className="text-lg font-semibold tracking-tight text-foreground">FinPro</p> : null}
-          </div>
-          <div className={`mt-8 flex flex-1 flex-col gap-1 ${isSideNavCollapsed ? "" : "px-0"}`}>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAppShellSection("portfolio");
-                setActiveSidebarCategory("portfolio");
-                setActiveSidebarLabel("Portfolio");
-              }}
-              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
-                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
-              } ${
-                isSideNavCollapsed ? "justify-center" : "gap-3"
-              } ${
-                activeAppShellSection === "portfolio"
-                  ? "bg-foreground/[0.07] font-bold text-foreground"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-              aria-label="Portfolio"
-            >
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
-                {activeAppShellSection === "portfolio" ? (
-                  <HomeSolidIcon className="h-[18px] w-[18px] text-foreground" />
-                ) : (
-                  <HomeOutlineIcon className="h-4 w-4 text-muted-foreground" />
-                )}
-              </span>
-              {!isSideNavCollapsed ? <span>Portfolio</span> : null}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAppShellSection("holdings");
-                setActiveSidebarCategory("portfolio");
-                setActiveSidebarLabel("Portfolio");
-              }}
-              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
-                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
-              } ${
-                isSideNavCollapsed ? "justify-center" : "gap-3"
-              } ${
-                activeAppShellSection === "holdings"
-                  ? "bg-foreground/[0.07] font-bold text-foreground"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-              aria-label="Holdings"
-            >
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
-                {activeAppShellSection === "holdings" ? (
-                  <ListBulletSolidIcon className="h-[18px] w-[18px] text-foreground" />
-                ) : (
-                  <ListBulletOutlineIcon className="h-4 w-4 text-muted-foreground" />
-                )}
-              </span>
-              {!isSideNavCollapsed ? <span>Holdings</span> : null}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAppShellSection("dashboards");
-                setActiveSidebarCategory("portfolio");
-                setActiveSidebarLabel("Portfolio");
-              }}
-              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
-                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
-              } ${
-                isSideNavCollapsed ? "justify-center" : "gap-3"
-              } ${
-                activeAppShellSection === "dashboards"
-                  ? "bg-foreground/[0.07] font-bold text-foreground"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-              aria-label="Dashboards"
-            >
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
-                {activeAppShellSection === "dashboards" ? (
-                  <Squares2X2SolidIcon className="h-[18px] w-[18px] text-foreground" />
-                ) : (
-                  <Squares2X2OutlineIcon className="h-4 w-4 text-muted-foreground" />
-                )}
-              </span>
-              {!isSideNavCollapsed ? <span>Dashboards</span> : null}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAppShellSection("accounts");
-                setActiveSidebarCategory("accounts");
-                setActiveSidebarLabel("Accounts");
-              }}
-              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
-                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
-              } ${
-                isSideNavCollapsed ? "justify-center" : "gap-3"
-              } ${
-                activeAppShellSection === "accounts"
-                  ? "bg-foreground/[0.07] font-bold text-foreground"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-              aria-label="Accounts"
-            >
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
-                {activeAppShellSection === "accounts" ? (
-                  <WalletSolidIcon className="h-[18px] w-[18px] text-foreground" />
-                ) : (
-                  <WalletOutlineIcon className="h-4 w-4 text-muted-foreground" />
-                )}
-              </span>
-              {!isSideNavCollapsed ? <span>Accounts</span> : null}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAppShellSection("assetTypes");
-                const firstAssetType = assetTypeEntries[0];
-                if (firstAssetType) {
-                  setActiveSidebarCategory(firstAssetType.key);
-                  setActiveSidebarLabel(firstAssetType.assetType.name);
-                  return;
-                }
-                setActiveSidebarCategory("portfolio");
-                setActiveSidebarLabel("Portfolio");
-              }}
-              className={`relative flex items-center rounded-xl py-3 text-left text-[0.92rem] transition-colors ${
-                isSideNavCollapsed ? "w-full px-3" : "w-full px-3"
-              } ${
-                isSideNavCollapsed ? "justify-center" : "gap-3"
-              } ${
-                activeAppShellSection === "assetTypes"
-                  ? "bg-foreground/[0.07] font-bold text-foreground"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-              aria-label="Asset Types"
-            >
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors">
-                {activeAppShellSection === "assetTypes" ? (
-                  <CubeSolidIcon className="h-[18px] w-[18px] text-foreground" />
-                ) : (
-                  <CubeOutlineIcon className="h-4 w-4 text-muted-foreground" />
-                )}
-              </span>
-              {!isSideNavCollapsed ? <span>Asset Types</span> : null}
-            </button>
-          </div>
-          <button
-            type="button"
-            className={`mt-6 flex items-center rounded-xl px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-secondary ${
-              isSideNavCollapsed ? "justify-center" : "gap-3"
-            }`}
-            aria-label="Profile"
-          >
-            <UserCircleOutlineIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
-            {!isSideNavCollapsed ? <span className="truncate">{profileFirstName}</span> : null}
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsSideNavCollapsed((previous) => !previous)}
-            className={`mt-2 flex items-center rounded-xl px-3 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground ${
-              isSideNavCollapsed ? "justify-center" : "gap-3"
-            }`}
-            aria-label={isSideNavCollapsed ? "Expand side navigation" : "Collapse side navigation"}
-          >
-            {isSideNavCollapsed ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
-            {!isSideNavCollapsed ? <span>Collapse</span> : null}
-          </button>
-        </aside>
-        <div className={`min-w-0 flex-1 px-4 pb-2 pt-[88px] sm:px-6 sm:pt-[92px] ${sideNavContentInsetClass}`}>
-          <div className={`fixed left-0 right-0 top-2 z-40 ${sideNavLeftOffsetClass}`}>
-            <div className={`px-4 sm:px-6 ${topNavInsetClass}`}>
-              <div className="w-full max-w-none lg:ml-auto lg:mr-0">
-                <div className="flex h-[72px] items-center justify-between gap-4 border border-background bg-background px-5 shadow-none">
-                  <div className="min-w-0">
-                    {activeAppShellSection === "addAccount" ? (
-                      <button
-                        type="button"
-                        onClick={() => setActiveAppShellSection(previousAppShellSection)}
-                        className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[0.92rem] font-bold text-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        <span>Back</span>
-                      </button>
-                    ) : (
-                      <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
-                        {activeAppShellSection === "portfolio"
-                          ? "Portfolio"
-                          : activeAppShellSection === "holdings"
-                            ? "Holdings"
-                            : activeAppShellSection === "dashboards"
-                              ? "Dashboards"
-                              : activeAppShellSection === "accounts"
-                                ? "Accounts"
-                                : "Asset Types"}
-                      </h1>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddAssetModalOpen(true)}
-                      className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-[0.92rem] font-bold text-foreground shadow-[0_6px_14px_rgba(28,24,20,0.08)] transition-colors hover:bg-white"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Assets</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedAddAccountAssetType(addAssetModalAssetTypes[0] ?? null);
-                        setActiveAppShellSection("addAccount");
-                        setActiveSidebarCategory("accounts");
-                        setActiveSidebarLabel("Accounts");
-                      }}
-                      className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-[0.92rem] font-bold text-foreground shadow-[0_6px_14px_rgba(28,24,20,0.08)] transition-colors hover:bg-white"
-                      aria-label="Add account"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Account</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="w-full max-w-none lg:ml-auto lg:mr-0">
-            <div>
-              <section>
-                <div className="flex flex-col gap-4">
+      <div className="min-h-screen w-full px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex min-h-screen w-full flex-col">
+          <AppShellTopbar
+            navItems={shellNavItems}
+            profileFirstName={profileFirstName}
+            profileMenuOpen={profileMenuOpen}
+            onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
+            onOpenAddAssets={() => setIsAddAssetModalOpen(true)}
+            onOpenSettings={() => {
+              setProfileMenuOpen(false);
+              navigate("/settings");
+            }}
+            onLogout={() => {
+              setProfileMenuOpen(false);
+              void handleLogout();
+            }}
+          />
+          <div className="mt-6 flex w-full flex-1 flex-col gap-4">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -4864,7 +4702,7 @@ export function AppHomePage() {
                 className={`${isNavRearranging || dashboardTilesEditMode ? "pointer-events-none select-none" : ""} space-y-4`}
               >
               <div className="space-y-4">
-              {activeAppShellSection !== "portfolio" && activeAppShellSection !== "addAccount" ? (
+              {activeAppShellSection !== "portfolio" && activeAppShellSection !== "addAccount" && activeAppShellSection !== "settings" ? (
                 <div className="grid grid-cols-1 gap-3">
                   <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
                       <CardContent className="h-[92px] px-4 py-2">
@@ -4913,8 +4751,8 @@ export function AppHomePage() {
                  </div>
               ) : null}
               {!isEditing ? (
-                <Card className="overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background">
-                  <CardContent className={activeAppShellSection === "portfolio" || activeAppShellSection === "addAccount" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
+                <Card className={activeAppShellSection === "settings" ? "overflow-visible border-0 bg-transparent shadow-none dark:border-0 dark:bg-transparent" : "overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background"}>
+                  <CardContent className={activeAppShellSection === "portfolio" || activeAppShellSection === "addAccount" || activeAppShellSection === "settings" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
                     {activeAppShellSection === "portfolio" ? (
                       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                       <div className="space-y-4 rounded-xl border border-background bg-background p-4">
@@ -5078,6 +4916,8 @@ export function AppHomePage() {
                       <div className="flex min-h-[74vh] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-muted-foreground">
                         Holdings view coming next.
                       </div>
+                    ) : activeAppShellSection === "settings" ? (
+                      <SettingsPage embedded />
                     ) : activeAppShellSection === "accounts" ? (
                       <div className="grid gap-5 xl:grid-cols-[0.95fr_1.35fr]">
                         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
@@ -5697,11 +5537,8 @@ export function AppHomePage() {
               ) : null}
               </div>
             </div>
-            </div>
-          </section>
+          </div>
         </div>
-      </div>
-      </div>
       </div>
       {isAddAssetModalOpen && !isEditing ? (
         <div className="fixed inset-0 z-[78] flex items-center justify-center bg-slate-900/35 px-4">
@@ -7539,6 +7376,91 @@ export function AppHomePage() {
   );
 }
 
+function AppShellTopbar({
+  navItems,
+  profileFirstName,
+  profileMenuOpen,
+  onToggleProfileMenu,
+  onOpenAddAssets,
+  onOpenSettings,
+  onLogout,
+}: {
+  navItems: AppShellNavItem[];
+  profileFirstName: string;
+  profileMenuOpen: boolean;
+  onToggleProfileMenu: () => void;
+  onOpenAddAssets: () => void;
+  onOpenSettings: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="flex w-full flex-col gap-4 px-1 py-1 md:flex-row md:items-center">
+      <div className="flex items-center gap-4 md:flex-1">
+        <div className="inline-flex h-12 min-w-[126px] items-center justify-center rounded-full border border-foreground/15 bg-white/85 px-4 text-xl font-semibold tracking-tight text-foreground">
+          FinPro
+        </div>
+        <div className="hidden items-center gap-2 rounded-full border border-white/80 bg-white/70 p-1 shadow-[0_8px_24px_rgba(28,24,20,0.06)] lg:ml-auto lg:flex">
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={item.onClick}
+              className={`inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm transition-colors ${item.active ? "bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(28,24,20,0.16)]" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
+            >
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-4 md:ml-4 md:justify-end">
+        <div className="rounded-full border border-white/80 bg-white/70 p-1 shadow-[0_8px_24px_rgba(28,24,20,0.06)]">
+          <button
+            type="button"
+            onClick={onOpenAddAssets}
+            className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            <span>Add Assets</span>
+          </button>
+        </div>
+        <div className="relative rounded-full border border-white/80 bg-white/70 p-1 shadow-[0_8px_24px_rgba(28,24,20,0.06)]">
+          <button
+            type="button"
+            onClick={onToggleProfileMenu}
+            className="inline-flex h-10 items-center gap-2.5 rounded-full px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            aria-label="Profile menu"
+          >
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {profileFirstName.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="hidden sm:inline">{profileFirstName}</span>
+          </button>
+          {profileMenuOpen ? (
+            <div className="absolute right-0 z-30 mt-2 w-44 rounded-2xl border border-border bg-white p-1.5 shadow-lg">
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+              >
+                <Settings className="h-4 w-4 text-muted-foreground" />
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+              >
+                <LogOut className="h-4 w-4 text-muted-foreground" />
+                <span>Log out</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function createDefaultViewportLayouts(): ViewportLayouts {
   return {
     mobile: {
@@ -7958,6 +7880,7 @@ function getSlotFromPoint(
   const row = Math.max(0, Math.floor(y / Math.max(1, metrics.cellHeight + metrics.rowGap)));
   return row * columns + col;
 }
+
 
 
 

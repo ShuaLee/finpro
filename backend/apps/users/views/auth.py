@@ -1,13 +1,23 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import HttpResponse
+from django.middleware.csrf import get_token
+from django.middleware.csrf import CsrfViewMiddleware
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 from typing import Any, cast
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.auth import clear_auth_cookies, set_auth_cookies
 from apps.users.models import User
 from apps.users.serializers import (
     ChangePasswordSerializer,
+    DeleteAccountSerializer,
     EmailChangeConfirmSerializer,
     EmailChangeRequestSerializer,
     LoginSerializer,
@@ -25,10 +35,25 @@ from apps.users.services import (
 from apps.users.views.base import ServiceAPIView
 
 
+class _CSRFCheck(CsrfViewMiddleware):
+    def _reject(self, request, reason):
+        return reason
+
+
+def enforce_csrf(request):
+    check = _CSRFCheck(lambda _request: HttpResponse())
+    check.process_request(request)
+    reason = check.process_view(request, None, (), {})
+    if reason:
+        raise ValidationError("CSRF Failed: CSRF token missing or incorrect.")
+
+
 class RegisterView(ServiceAPIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
+        enforce_csrf(request)
         serializer = RegisterSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = cast(dict[str, Any], serializer.validated_data)
@@ -56,8 +81,10 @@ class RegisterView(ServiceAPIView):
 
 class LoginView(ServiceAPIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
+        enforce_csrf(request)
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = cast(dict[str, Any], serializer.validated_data)
@@ -102,10 +129,36 @@ class LogoutView(ServiceAPIView):
         return clear_auth_cookies(response)
 
 
-class VerifyEmailView(ServiceAPIView):
-    permission_classes = [AllowAny]
+class DeleteAccountView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        serializer = DeleteAccountSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = cast(dict[str, Any], serializer.validated_data)
+
+        deleted_email = AuthService.delete_account(
+            user=request.user,
+            current_password=data["current_password"],
+            request=request,
+        )
+
+        response = Response(
+            {
+                "detail": "Account deleted successfully.",
+                "email": deleted_email,
+            },
+            status=status.HTTP_200_OK,
+        )
+        return clear_auth_cookies(response)
+
+
+class VerifyEmailView(ServiceAPIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        enforce_csrf(request)
         serializer = VerifyEmailSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = cast(dict[str, Any], serializer.validated_data)
@@ -116,26 +169,35 @@ class VerifyEmailView(ServiceAPIView):
             request=request,
         )
 
-        return Response(
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+
+        response = Response(
             {
                 "detail": "Email verified successfully.",
                 "email": user.email,
             },
             status=status.HTTP_200_OK,
         )
+        return set_auth_cookies(response, access, refresh)
 
 
 class ResendVerificationView(ServiceAPIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
+        enforce_csrf(request)
         serializer = ResendVerificationSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = cast(dict[str, Any], serializer.validated_data)
 
         user = User.objects.filter(email__iexact=data["email"]).first()
         if user:
-            AuthService.resend_verification_for_user(user=user, request=request)
+            try:
+                AuthService.resend_verification_for_user(user=user, request=request)
+            except (ValidationError, DjangoValidationError):
+                pass
 
         return Response(
             {"detail": "If the account exists, a verification email has been sent."},
@@ -145,8 +207,10 @@ class ResendVerificationView(ServiceAPIView):
 
 class PasswordResetRequestView(ServiceAPIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
+        enforce_csrf(request)
         serializer = PasswordResetRequestSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = cast(dict[str, Any], serializer.validated_data)
@@ -163,8 +227,10 @@ class PasswordResetRequestView(ServiceAPIView):
 
 class PasswordResetConfirmView(ServiceAPIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
+        enforce_csrf(request)
         serializer = PasswordResetConfirmSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         data = cast(dict[str, Any], serializer.validated_data)
@@ -247,3 +313,48 @@ class EmailChangeConfirmView(ServiceAPIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class CsrfTokenView(ServiceAPIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response(
+            {"csrfToken": get_token(request)},
+            status=status.HTTP_200_OK,
+        )
+
+
+class RefreshSessionView(ServiceAPIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        enforce_csrf(request)
+        refresh_cookie_name = settings.SIMPLE_JWT.get("AUTH_COOKIE_REFRESH", "refresh")
+        refresh_token = request.COOKIES.get(refresh_cookie_name)
+        if not refresh_token:
+            return Response(
+                {"detail": "Refresh token missing."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            return Response(
+                {"detail": "Invalid refresh token."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        access_token = serializer.validated_data["access"]
+        rotated_refresh_token = serializer.validated_data.get("refresh", refresh_token)
+
+        response = Response(
+            {"detail": "Session refreshed."},
+            status=status.HTTP_200_OK,
+        )
+        return set_auth_cookies(response, access_token, rotated_refresh_token)

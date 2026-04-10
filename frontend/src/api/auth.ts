@@ -19,27 +19,43 @@ export type RegisterResponse = {
   email: string;
 };
 
+export type RegisterPayload = {
+  fullName: string;
+  email: string;
+  password: string;
+  acceptTerms: boolean;
+  language?: string;
+  timezone?: string;
+  country?: string | null;
+  currency?: string;
+};
+
 export type VerifyEmailResponse = {
   detail: string;
   email: string;
 };
 
 export async function getAuthStatus(): Promise<AuthStatusResponse> {
-  return apiRequest<AuthStatusResponse>(API_ENDPOINTS.auth.status, "GET");
+  const response = await apiRequest<{
+    user: {
+      email: string;
+      is_email_verified: boolean;
+      is_locked: boolean;
+    };
+  }>(API_ENDPOINTS.auth.me, "GET");
+
+  return {
+    authenticated: true,
+    email: response.user.email,
+    is_email_verified: response.user.is_email_verified,
+    is_locked: response.user.is_locked,
+  };
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
   return apiRequest<LoginResponse>(API_ENDPOINTS.auth.login, "POST", {
     email,
     password,
-  });
-}
-
-export async function verifyLoginCode(email: string, code: string, rememberDevice: boolean): Promise<LoginResponse> {
-  return apiRequest<LoginResponse>(API_ENDPOINTS.auth.loginVerifyCode, "POST", {
-    email,
-    code,
-    remember_device: rememberDevice,
   });
 }
 
@@ -52,12 +68,16 @@ export async function refreshSession(): Promise<void> {
   await apiRequest<{ detail: string }>(API_ENDPOINTS.auth.refresh, "POST");
 }
 
-export async function register(fullName: string, email: string, password: string, acceptTerms: boolean): Promise<RegisterResponse> {
+export async function register(payload: RegisterPayload): Promise<RegisterResponse> {
   return apiRequest<RegisterResponse>(API_ENDPOINTS.auth.register, "POST", {
-    full_name: fullName,
-    email,
-    password,
-    accept_terms: acceptTerms,
+    full_name: payload.fullName,
+    email: payload.email,
+    password: payload.password,
+    accept_terms: payload.acceptTerms,
+    language: payload.language ?? "en",
+    timezone: payload.timezone ?? "UTC",
+    country: payload.country ?? "",
+    currency: payload.currency ?? "USD",
   });
 }
 

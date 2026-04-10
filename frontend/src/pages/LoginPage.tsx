@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ChartNoAxesCombined } from "lucide-react";
 
-import { login as loginRequest, verifyLoginCode } from "../api/auth";
+import { login as loginRequest } from "../api/auth";
 import { ApiError } from "../api/http";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -14,13 +14,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [stage, setStage] = useState<"login" | "verify">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [rememberDevice, setRememberDevice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -40,14 +36,9 @@ export function LoginPage() {
 
     try {
       const response = await loginRequest(email.trim(), password);
-      if (response.requires_login_code) {
-        setStage("verify");
-        setCode("");
-        setSuccessMessage(response.detail);
-      } else {
-        await refreshAuth();
-        navigate(fromPath, { replace: true });
-      }
+      setSuccessMessage(response.detail);
+      await refreshAuth();
+      navigate(fromPath, { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError) {
         setError(caught.message);
@@ -56,51 +47,6 @@ export function LoginPage() {
       }
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const onSubmitVerify = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      await verifyLoginCode(email.trim(), code.trim(), rememberDevice);
-      await refreshAuth();
-      navigate(fromPath, { replace: true });
-    } catch (caught) {
-      if (caught instanceof ApiError) {
-        setError(caught.message);
-      } else {
-        setError("Unable to verify security code.");
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const onResendCode = async () => {
-    setResending(true);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      const response = await loginRequest(email.trim(), password);
-      if (response.requires_login_code) {
-        setSuccessMessage("Security code resent.");
-      } else {
-        await refreshAuth();
-        navigate(fromPath, { replace: true });
-      }
-    } catch (caught) {
-      if (caught instanceof ApiError) {
-        setError(caught.message);
-      } else {
-        setError("Unable to resend security code.");
-      }
-    } finally {
-      setResending(false);
     }
   };
 
@@ -118,99 +64,44 @@ export function LoginPage() {
       <div className="mx-auto w-full max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
         <Card className="mx-auto max-w-lg bg-white/95">
           <CardHeader>
-            <CardTitle className="font-display text-3xl">
-              {stage === "login" ? "Welcome back" : "Confirm sign in"}
-            </CardTitle>
+            <CardTitle className="font-display text-3xl">Welcome back</CardTitle>
           </CardHeader>
           <CardContent>
-            {stage === "login" ? (
-              <form className="space-y-4" onSubmit={onSubmitLogin}>
+            <form className="space-y-4" onSubmit={onSubmitLogin}>
+              <FloatingInput
+                id="login-email"
+                label="Email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                autoComplete="email"
+              />
+
+              <div className="space-y-1">
                 <FloatingInput
-                  id="login-email"
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  id="login-password"
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                   required
-                  autoComplete="email"
+                  autoComplete="current-password"
                 />
+                <p>
+                  <Link to="/forgot-password" className="text-sm font-semibold text-primary">
+                    Forgot password?
+                  </Link>
+                </p>
+              </div>
 
-                <div className="space-y-1">
-                  <FloatingInput
-                    id="login-password"
-                    label="Password"
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    required
-                    autoComplete="current-password"
-                  />
-                  <p>
-                    <Link to="/forgot-password" className="text-sm font-semibold text-primary">
-                      Forgot password?
-                    </Link>
-                  </p>
-                </div>
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {successMessage ? <p className="text-sm text-primary">{successMessage}</p> : null}
 
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
-                {successMessage ? <p className="text-sm text-primary">{successMessage}</p> : null}
-
-                <Button className="w-full" type="submit" disabled={submitting}>
-                  {submitting ? "Logging in..." : "Continue"}
-                </Button>
-              </form>
-            ) : (
-              <form className="space-y-4" onSubmit={onSubmitVerify}>
-                <FloatingInput id="verify-email" label="Email" type="email" value={email} disabled readOnly />
-
-                <FloatingInput
-                  id="login-code"
-                  label="6-digit code"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
-                />
-
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 p-3 text-sm" htmlFor="remember-device-login">
-                  <input
-                    id="remember-device-login"
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 rounded border-border"
-                    checked={rememberDevice}
-                    onChange={(event) => setRememberDevice(event.target.checked)}
-                  />
-                  <span>Remember this device for next time.</span>
-                </label>
-
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
-                {successMessage ? <p className="text-sm text-primary">{successMessage}</p> : null}
-
-                <Button className="w-full" type="submit" disabled={submitting}>
-                  {submitting ? "Verifying..." : "Verify and sign in"}
-                </Button>
-
-                <Button className="w-full" variant="secondary" type="button" onClick={onResendCode} disabled={resending}>
-                  {resending ? "Sending..." : "Resend security code"}
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStage("login");
-                    setCode("");
-                    setError(null);
-                    setSuccessMessage(null);
-                  }}
-                  className="w-full text-sm font-semibold text-primary"
-                >
-                  Use a different account
-                </button>
-              </form>
-            )}
+              <Button className="w-full" type="submit" disabled={submitting}>
+                {submitting ? "Logging in..." : "Continue"}
+              </Button>
+            </form>
 
             <p className="mt-6 text-sm text-muted-foreground">
               New here? <Link className="font-semibold text-primary" to="/signup">Create an account</Link>

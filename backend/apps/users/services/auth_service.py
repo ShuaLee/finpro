@@ -401,3 +401,22 @@ class AuthService:
             country=country,
             currency=currency,
         )
+
+    @staticmethod
+    @transaction.atomic
+    def delete_account(*, user, current_password: str, request=None):
+        if not user.check_password(current_password):
+            raise ValidationError("Current password is incorrect.")
+
+        email = user.email
+        AuthEventService.log_event(
+            user=user,
+            event_type=AuthEvent.EventType.LOGOUT,
+            ip_address=AuthService._client_ip(
+                request=request) if request else None,
+            user_agent=AuthService._user_agent(
+                request=request) if request else "",
+            metadata={"reason": "account_deleted"},
+        )
+        user.delete()
+        return email

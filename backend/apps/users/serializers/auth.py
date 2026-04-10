@@ -112,5 +112,16 @@ class EmailChangeConfirmSerializer(serializers.Serializer):
         return value.strip()
 
 
+class DeleteAccountSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirmation = serializers.CharField(trim_whitespace=True)
+
+    def validate_confirmation(self, value):
+        normalized = value.strip().upper()
+        if normalized != "DELETE":
+            raise serializers.ValidationError('Type "DELETE" to confirm account deletion.')
+        return normalized
+
+
 class TrustedDeviceRevokeSerializer(serializers.Serializer):
     token = serializers.CharField(trim_whitespace=True)

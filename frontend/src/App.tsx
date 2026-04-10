@@ -18,7 +18,6 @@ import { PricingPage } from "./pages/PricingPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SecurityPage } from "./pages/SecurityPage";
-import { SettingsPage } from "./pages/SettingsPage";
 import { SignupPage } from "./pages/SignupPage";
 import { TermsPage } from "./pages/TermsPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
@@ -68,7 +67,7 @@ function App() {
             path="/settings"
             element={(
               <ProtectedRoute>
-                <SettingsPage />
+                <AppHomePage />
               </ProtectedRoute>
             )}
           />

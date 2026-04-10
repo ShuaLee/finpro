@@ -9,9 +9,39 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { FloatingInput } from "../components/ui/floating-input";
 import { useAuth } from "../context/AuthContext";
 
+const FALLBACK_CURRENCY_BY_COUNTRY: Record<string, string> = {
+  AU: "AUD",
+  CA: "CAD",
+  CH: "CHF",
+  DE: "EUR",
+  ES: "EUR",
+  FR: "EUR",
+  GB: "GBP",
+  IE: "EUR",
+  IT: "EUR",
+  JP: "JPY",
+  MX: "MXN",
+  NL: "EUR",
+  NZ: "NZD",
+  SE: "SEK",
+  SG: "SGD",
+  US: "USD",
+};
+
+function getBrowserDefaults() {
+  const locale = navigator.language || "en-US";
+  const language = locale.split("-")[0]?.trim().toLowerCase() || "en";
+  const country = locale.split("-")[1]?.trim().toUpperCase() || "";
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const currency = FALLBACK_CURRENCY_BY_COUNTRY[country] ?? "USD";
+
+  return { language, country, timezone, currency };
+}
+
 export function SignupPage() {
   const { user, refreshAuth } = useAuth();
   const navigate = useNavigate();
+  const browserDefaults = getBrowserDefaults();
 
   const [stage, setStage] = useState<"signup" | "verify">("signup");
   const [fullName, setFullName] = useState("");
@@ -33,7 +63,16 @@ export function SignupPage() {
     setError(null);
 
     try {
-      const response = await register(fullName.trim(), email.trim(), password, true);
+      const response = await register({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+        acceptTerms: true,
+        language: browserDefaults.language,
+        timezone: browserDefaults.timezone,
+        country: browserDefaults.country,
+        currency: browserDefaults.currency,
+      });
       setSuccessMessage(response.detail);
       setStage("verify");
       setCode("");

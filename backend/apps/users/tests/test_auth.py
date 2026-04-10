@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.models import EmailVerificationToken, SupportedCountry, SupportedCurrency
 
@@ -124,6 +125,8 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         user.refresh_from_db()
         self.assertIsNotNone(user.email_verified_at)
+        self.assertIn("access", response.cookies)
+        self.assertIn("refresh", response.cookies)
 
     def test_verify_email_with_invalid_code_returns_400(self):
         user = self.user_model.objects.create_user(
@@ -154,6 +157,52 @@ class AuthApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("If the account exists", response.data["detail"])
+
+    def test_resend_verification_for_verified_user_returns_safe_200(self):
+        user = self.user_model.objects.create_user(
+            email="verified@example.com",
+            password="StrongPass123!",
+            email_verified_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            reverse("auth-email-resend"),
+            {
+                "email": user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("If the account exists", response.data["detail"])
+
+    def test_csrf_endpoint_returns_token_and_sets_cookie(self):
+        response = self.client.get(reverse("auth-csrf"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrfToken", response.data)
+        self.assertIn("csrftoken", response.cookies)
+
+    def test_refresh_uses_refresh_cookie_and_rotates_session_cookie(self):
+        user = self.user_model.objects.create_user(
+            email="refreshme@example.com",
+            password="StrongPass123!",
+            email_verified_at=timezone.now(),
+        )
+        refresh = RefreshToken.for_user(user)
+        self.client.cookies["refresh"] = str(refresh)
+
+        response = self.client.post(reverse("auth-refresh"), {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.cookies)
+        self.assertIn("refresh", response.cookies)
+
+    def test_refresh_without_cookie_returns_401(self):
+        response = self.client.post(reverse("auth-refresh"), {}, format="json")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Refresh token missing.")
 
     def test_password_reset_confirm_updates_password(self):
         user = self.user_model.objects.create_user(
@@ -222,6 +271,50 @@ class AuthApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Current password is incorrect.", str(response.data))
+
+    def test_delete_account_deletes_user_and_clears_auth_cookies(self):
+        user = self.user_model.objects.create_user(
+            email="delete@example.com",
+            password="StrongPass123!",
+            email_verified_at=timezone.now(),
+        )
+        self.client.force_authenticate(user=user)
+        self.client.cookies["access"] = "access-token"
+        self.client.cookies["refresh"] = "refresh-token"
+
+        response = self.client.post(
+            reverse("auth-delete-account"),
+            {
+                "current_password": "StrongPass123!",
+                "confirmation": "DELETE",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.user_model.objects.filter(email="delete@example.com").exists())
+        self.assertEqual(response.cookies["access"].value, "")
+        self.assertEqual(response.cookies["refresh"].value, "")
+
+    def test_delete_account_with_wrong_password_returns_400(self):
+        user = self.user_model.objects.create_user(
+            email="deletefail@example.com",
+            password="StrongPass123!",
+            email_verified_at=timezone.now(),
+        )
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            reverse("auth-delete-account"),
+            {
+                "current_password": "WrongPass123!",
+                "confirmation": "DELETE",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(self.user_model.objects.filter(email="deletefail@example.com").exists())
 
     def test_email_change_request_with_wrong_password_returns_400(self):
         user = self.user_model.objects.create_user(
