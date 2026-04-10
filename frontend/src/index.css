@@ -7,7 +7,8 @@
 @layer base {
   :root {
     --background: 36 16% 93%;
-    --foreground: 28 12% 21%;
+    --app-shell-background: 0 0% 100%;
+    --foreground: 28 28% 9%;
     --card: 36 22% 96%;
     --card-foreground: 28 12% 21%;
     --popover: 36 22% 96%;
@@ -17,7 +18,7 @@
     --secondary: 34 20% 91%;
     --secondary-foreground: 28 12% 21%;
     --muted: 34 16% 89%;
-    --muted-foreground: 28 10% 33%;
+    --muted-foreground: 28 18% 16%;
     --accent: 34 18% 87%;
     --accent-foreground: 28 12% 21%;
     --destructive: 0 74% 45%;
@@ -32,6 +33,7 @@
 
   .dark {
     --background: 225 22% 5%;
+    --app-shell-background: 225 22% 5%;
     --foreground: 210 12% 92%;
     --card: 220 10% 13%;
     --card-foreground: 210 12% 92%;
@@ -61,15 +63,15 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    background-image: linear-gradient(180deg, #f3f0ea 0%, #ece8e1 100%);
+    background-color: hsl(var(--app-shell-background));
+    background-image: none;
     min-width: 320px;
     min-height: 100vh;
   }
 
   .dark body {
-    background-image:
-      radial-gradient(circle at 14% 12%, rgba(24, 36, 60, 0.28) 0%, transparent 36%),
-      linear-gradient(180deg, #06080c 0%, #090d14 100%);
+    background-color: hsl(var(--app-shell-background));
+    background-image: none;
   }
 
   #root {

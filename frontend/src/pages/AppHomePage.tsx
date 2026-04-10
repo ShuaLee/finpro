@@ -1,18 +1,12 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  CubeIcon as CubeOutlineIcon,
   HomeIcon as HomeOutlineIcon,
-  ListBulletIcon as ListBulletOutlineIcon,
   Squares2X2Icon as Squares2X2OutlineIcon,
-  WalletIcon as WalletOutlineIcon,
 } from "@heroicons/react/24/outline";
 import {
-  CubeIcon as CubeSolidIcon,
   HomeIcon as HomeSolidIcon,
-  ListBulletIcon as ListBulletSolidIcon,
   Squares2X2Icon as Squares2X2SolidIcon,
-  WalletIcon as WalletSolidIcon,
 } from "@heroicons/react/24/solid";
 import {
   Coins as CoinsIcon,
@@ -117,6 +111,11 @@ type AppShellNavItem = {
   onClick: () => void;
   activeIcon: ReactNode;
   inactiveIcon: ReactNode;
+};
+
+type AppShellBreadcrumbItem = {
+  label: string;
+  onClick?: () => void;
 };
 
 type SavedLayout = {
@@ -3371,35 +3370,82 @@ export function AppHomePage() {
   }, [activeAppShellSection, activeSidebarCategory, isSettingsRoute]);
 
   const shellNavItems: AppShellNavItem[] = [
-    { key: "dashboard", label: "Dashboard", active: activeAppShellSection === "dashboards", onClick: () => navigateToShellSection("dashboards", "portfolio", "Portfolio"), activeIcon: <Squares2X2SolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <Squares2X2OutlineIcon className="h-4 w-4" /> },
-    { key: "portfolio", label: "Portfolio", active: activeAppShellSection === "portfolio", onClick: () => navigateToShellSection("portfolio", "portfolio", "Portfolio"), activeIcon: <HomeSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <HomeOutlineIcon className="h-4 w-4" /> },
-    { key: "holdings", label: "Holdings", active: activeAppShellSection === "holdings", onClick: () => navigateToShellSection("holdings", "portfolio", "Portfolio"), activeIcon: <ListBulletSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <ListBulletOutlineIcon className="h-4 w-4" /> },
-    { key: "accounts", label: "Accounts", active: activeAppShellSection === "accounts", onClick: () => navigateToShellSection("accounts", "accounts", "Accounts"), activeIcon: <WalletSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <WalletOutlineIcon className="h-4 w-4" /> },
-    { key: "assetTypes", label: "Asset Types", active: activeAppShellSection === "assetTypes", onClick: () => { const firstAssetType = assetTypeEntries[0]; if (firstAssetType) { navigateToShellSection("assetTypes", firstAssetType.key, firstAssetType.assetType.name); return; } navigateToShellSection("assetTypes", "portfolio", "Portfolio"); }, activeIcon: <CubeSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <CubeOutlineIcon className="h-4 w-4" /> },
+    { key: "dashboard", label: "Dashboard", active: !isSettingsRoute && activeAppShellSection === "dashboards", onClick: () => navigateToShellSection("dashboards", "portfolio", "Portfolio"), activeIcon: <Squares2X2SolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <Squares2X2OutlineIcon className="h-4 w-4" /> },
+    { key: "portfolio", label: "Portfolio", active: !isSettingsRoute && activeAppShellSection === "portfolio", onClick: () => navigateToShellSection("portfolio", "portfolio", "Portfolio"), activeIcon: <HomeSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <HomeOutlineIcon className="h-4 w-4" /> },
   ];
 
+  const shellBreadcrumbs = useMemo<AppShellBreadcrumbItem[]>(() => {
+    if (isSettingsRoute || activeAppShellSection === "settings") {
+      return [{ label: "Settings" }];
+    }
+
+    if (activeAppShellSection === "addAccount") {
+      return [
+        { label: "Accounts", onClick: () => navigateToShellSection("accounts", "accounts", "Accounts") },
+        { label: "Add Account" },
+      ];
+    }
+
+    if (activeAppShellSection === "accounts") {
+      if (activeSidebarCategory.startsWith("account:")) {
+        return [
+          { label: "Accounts", onClick: () => navigateToShellSection("accounts", "accounts", "Accounts") },
+          { label: activeSidebarLabel },
+        ];
+      }
+      return [{ label: "Accounts" }];
+    }
+
+    if (activeAppShellSection === "assetTypes") {
+      if (activeSidebarCategory.startsWith("asset-type:")) {
+        return [
+          { label: "Asset Types", onClick: () => navigateToShellSection("assetTypes", "assetTypes", "Asset Types") },
+          { label: activeSidebarLabel },
+        ];
+      }
+      return [{ label: "Asset Types" }];
+    }
+
+    if (activeAppShellSection === "portfolio") {
+      return [{ label: activeSidebarLabel || "Portfolio" }];
+    }
+
+    if (activeAppShellSection === "dashboards") {
+      return [{ label: `${activeSidebarLabel || "Portfolio"} Dashboard` }];
+    }
+
+    if (activeAppShellSection === "holdings") {
+      return [{ label: "Holdings" }];
+    }
+
+    return [{ label: activeSidebarLabel || "Portfolio" }];
+  }, [activeAppShellSection, activeSidebarCategory, activeSidebarLabel, isSettingsRoute, navigateToShellSection]);
+
   return (
-    <main className="app-home min-h-screen w-full bg-background dark:bg-background dark:text-foreground">
+    <main className="app-home min-h-screen w-full bg-[hsl(var(--app-shell-background))] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <div className="min-h-screen w-full px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex min-h-screen w-full flex-col">
-          <AppShellTopbar
-            navItems={shellNavItems}
-            profileFirstName={profileFirstName}
-            profileMenuOpen={profileMenuOpen}
-            onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
-            onOpenAddAssets={() => setIsAddAssetModalOpen(true)}
-            onOpenSettings={() => {
-              setProfileMenuOpen(false);
-              navigate("/settings");
-            }}
-            onLogout={() => {
-              setProfileMenuOpen(false);
-              void handleLogout();
-            }}
-          />
-          <div className="mt-6 flex w-full flex-1 flex-col gap-4">
+          <div className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--app-shell-background))] px-4 py-4 sm:px-6 lg:px-8">
+            <AppShellTopbar
+              breadcrumbs={shellBreadcrumbs}
+              navItems={shellNavItems}
+              profileFirstName={profileFirstName}
+              profileMenuOpen={profileMenuOpen}
+              onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
+              onOpenAddAssets={() => setIsAddAssetModalOpen(true)}
+              onOpenSettings={() => {
+                setProfileMenuOpen(false);
+                navigate("/settings");
+              }}
+              onLogout={() => {
+                setProfileMenuOpen(false);
+                void handleLogout();
+              }}
+            />
+          </div>
+          <div className="flex w-full flex-1 flex-col gap-4 pt-[88px] sm:pt-[96px]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -7377,6 +7423,7 @@ export function AppHomePage() {
 }
 
 function AppShellTopbar({
+  breadcrumbs,
   navItems,
   profileFirstName,
   profileMenuOpen,
@@ -7385,6 +7432,7 @@ function AppShellTopbar({
   onOpenSettings,
   onLogout,
 }: {
+  breadcrumbs: AppShellBreadcrumbItem[];
   navItems: AppShellNavItem[];
   profileFirstName: string;
   profileMenuOpen: boolean;
@@ -7393,47 +7441,84 @@ function AppShellTopbar({
   onOpenSettings: () => void;
   onLogout: () => void;
 }) {
+  const activeNavIndex = navItems.findIndex((item) => item.active);
+
   return (
-    <div className="flex w-full flex-col gap-4 px-1 py-1 md:flex-row md:items-center">
-      <div className="flex items-center gap-4 md:flex-1">
-        <div className="inline-flex h-12 min-w-[126px] items-center justify-center rounded-full border border-foreground/15 bg-white/85 px-4 text-xl font-semibold tracking-tight text-foreground">
+    <div className="flex w-full flex-col gap-4 px-1 py-1 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-14">
+        <div className="inline-flex h-12 min-w-[126px] items-center justify-center rounded-full border border-border bg-[rgba(255,255,255,0.56)] px-4 text-xl font-semibold tracking-tight text-foreground shadow-[0_4px_10px_rgba(28,24,20,0.035)] backdrop-blur-lg">
           FinPro
         </div>
-        <div className="hidden items-center gap-2 rounded-full border border-white/80 bg-white/70 p-1 shadow-[0_8px_24px_rgba(28,24,20,0.06)] lg:ml-auto lg:flex">
-          {navItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={item.onClick}
-              className={`inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm transition-colors ${item.active ? "bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(28,24,20,0.16)]" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
-            >
-              <span>{item.label}</span>
-            </button>
+        <nav aria-label="Breadcrumb" className="hidden items-center gap-3 pl-4 text-[1.55rem] md:flex">
+          {breadcrumbs.map((breadcrumb, index) => (
+            <div key={`${breadcrumb.label}-${index}`} className="flex items-center gap-3">
+              {index > 0 ? <span className="text-muted-foreground/45">/</span> : null}
+              {breadcrumb.onClick ? (
+                <button
+                  type="button"
+                  onClick={breadcrumb.onClick}
+                  className="font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {breadcrumb.label}
+                </button>
+              ) : (
+                <span className="font-semibold tracking-tight text-muted-foreground">{breadcrumb.label}</span>
+              )}
+            </div>
           ))}
-        </div>
+        </nav>
       </div>
-      <div className="flex items-center gap-4 md:ml-4 md:justify-end">
-        <div className="rounded-full border border-white/80 bg-white/70 p-1 shadow-[0_8px_24px_rgba(28,24,20,0.06)]">
+      <div className="flex items-center gap-4 md:justify-end">
+        <div className="hidden rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg lg:block">
+          <div
+            className="relative grid min-w-[220px] items-center gap-0.5"
+            style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+          >
+            {activeNavIndex >= 0 ? (
+              <div
+                className="absolute top-0 h-10 rounded-full bg-primary shadow-[0_6px_16px_rgba(28,24,20,0.16)] transition-transform duration-200 ease-out"
+                style={{
+                  left: 0,
+                  width: `${100 / navItems.length}%`,
+                  transform: `translateX(${activeNavIndex * 100}%)`,
+                }}
+                aria-hidden="true"
+              />
+            ) : null}
+            {navItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={item.onClick}
+                className={`relative z-10 inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-medium transition-colors ${
+                  item.active ? "text-primary-foreground" : "text-foreground/78 hover:text-foreground/78"
+                }`}
+              >
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg">
           <button
             type="button"
             onClick={onOpenAddAssets}
-            className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-foreground/78"
           >
-            <Plus className="h-4 w-4 text-muted-foreground" />
+            <Plus className="h-4 w-4 text-foreground/78" />
             <span>Add Assets</span>
           </button>
         </div>
-        <div className="relative rounded-full border border-white/80 bg-white/70 p-1 shadow-[0_8px_24px_rgba(28,24,20,0.06)]">
+        <div className="relative rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg">
           <button
             type="button"
             onClick={onToggleProfileMenu}
-            className="inline-flex h-10 items-center gap-2.5 rounded-full px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium text-foreground/78"
             aria-label="Profile menu"
           >
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {profileFirstName.slice(0, 1).toUpperCase()}
             </span>
-            <span className="hidden sm:inline">{profileFirstName}</span>
           </button>
           {profileMenuOpen ? (
             <div className="absolute right-0 z-30 mt-2 w-44 rounded-2xl border border-border bg-white p-1.5 shadow-lg">
