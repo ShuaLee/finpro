@@ -1,13 +1,6 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  HomeIcon as HomeOutlineIcon,
-  Squares2X2Icon as Squares2X2OutlineIcon,
-} from "@heroicons/react/24/outline";
-import {
-  HomeIcon as HomeSolidIcon,
-  Squares2X2Icon as Squares2X2SolidIcon,
-} from "@heroicons/react/24/solid";
+import "lineicons-react/dist/lineicons.css";
 import {
   Coins as CoinsIcon,
   CurrencyDollarSimple as CurrencyDollarSimpleIcon,
@@ -16,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   Check,
+  ChartNoAxesCombined,
   ChevronDown,
   Ellipsis,
   Eye,
@@ -104,19 +98,6 @@ type PortfolioGroupedSection = {
 };
 type ShellSortMode = "name_asc" | "name_desc" | "value_desc" | "value_asc";
 type AddAssetStep = "type" | "account" | "asset";
-type AppShellNavItem = {
-  key: string;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  activeIcon: ReactNode;
-  inactiveIcon: ReactNode;
-};
-
-type AppShellBreadcrumbItem = {
-  label: string;
-  onClick?: () => void;
-};
 
 type SavedLayout = {
   id: string;
@@ -335,9 +316,32 @@ export function AppHomePage() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>("dashboards");
-  const [activeSidebarCategory, setActiveSidebarCategory] = useState("portfolio");
-  const [activeSidebarLabel, setActiveSidebarLabel] = useState("Portfolio");
+  const routeShellState = location.state as
+    | {
+        appShellSection?: AppShellSection;
+        sidebarCategory?: string;
+        sidebarLabel?: string;
+      }
+    | null;
+  const isSettingsRoute = location.pathname === "/settings";
+  const initialSidebarCategory = isSettingsRoute ? "settings" : (routeShellState?.sidebarCategory?.trim() || "portfolio");
+  const initialShellSection: AppShellSection = isSettingsRoute
+    ? "settings"
+    : routeShellState?.appShellSection
+      ?? (initialSidebarCategory === "holdings"
+        ? "holdings"
+        : initialSidebarCategory === "accounts" || initialSidebarCategory.startsWith("account:")
+          ? "accounts"
+          : initialSidebarCategory.startsWith("asset-type:")
+            ? "assetTypes"
+            : initialSidebarCategory === "dashboards"
+              ? "dashboards"
+              : "portfolio");
+  const initialSidebarLabel = isSettingsRoute ? "Settings" : (routeShellState?.sidebarLabel?.trim() || "Portfolio");
+  const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>(initialShellSection);
+  const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
+  const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
+  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "security" | "billing" | "danger" | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -490,14 +494,6 @@ export function AppHomePage() {
 
   const displayViewport: EditViewport = windowWidth < 768 ? "mobile" : windowWidth < 1280 ? "tablet" : "desktop";
   const profileFirstName = getFirstNameFromEmail(user?.email);
-  const isSettingsRoute = location.pathname === "/settings";
-  const routeShellState = location.state as
-    | {
-        appShellSection?: AppShellSection;
-        sidebarCategory?: string;
-        sidebarLabel?: string;
-      }
-    | null;
   const activeViewport: EditViewport = isEditing ? editingViewport : displayViewport;
   const columns = clamp(
     viewportLayouts[activeViewport]?.targetColumns ?? VIEWPORT_DEFAULT_COLUMNS[activeViewport],
@@ -2016,6 +2012,7 @@ export function AppHomePage() {
       const target = event.target as HTMLElement | null;
       if (!target) return;
       const inDashboardMenu = Boolean(target.closest("[data-dashboard-menu]"));
+      const inProfileMenu = Boolean(target.closest("[data-profile-menu]"));
       const inHolderMenu = Boolean(target.closest("[data-holder-menu]"));
       const inAccountActionsMenu = Boolean(target.closest("[data-account-actions-menu]"));
       const inFavoritesActionsMenu = Boolean(target.closest("[data-favorites-actions-menu]"));
@@ -2027,6 +2024,7 @@ export function AppHomePage() {
 
       if (!inDashboardMenu) setSettingsMenuOpen(false);
       if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
+      if (!inProfileMenu) setProfileMenuOpen(false);
       if (!inHolderMenu) setHolderMenuOpenId(null);
 
       if (!inAccountActionsMenu) {
@@ -2134,8 +2132,6 @@ export function AppHomePage() {
         setNavAccountItemOrder(payload.account_item_order ?? []);
         setAssetTypesCollapsed(Boolean(payload.asset_types_collapsed));
         setAccountsCollapsed(Boolean(payload.accounts_collapsed));
-        const nextActiveKey = (payload.active_item_key ?? "").trim() || "portfolio";
-        setActiveSidebarCategory(nextActiveKey);
         setHasHydratedNavState(true);
       } catch {
         if (isCancelled) return;
@@ -2144,7 +2140,6 @@ export function AppHomePage() {
         setNavAccountItemOrder([]);
         setAssetTypesCollapsed(false);
         setAccountsCollapsed(false);
-        setActiveSidebarCategory("portfolio");
         setHasHydratedNavState(true);
       }
     };
@@ -2238,6 +2233,10 @@ export function AppHomePage() {
       setActiveSidebarLabel("Portfolio");
       return;
     }
+    if (activeSidebarCategory === "dashboards") {
+      setActiveSidebarLabel("Dashboards");
+      return;
+    }
     if (activeSidebarCategory === "assets-liabilities") {
       setActiveSidebarLabel("Assets & Liabilities");
       return;
@@ -2250,6 +2249,14 @@ export function AppHomePage() {
       setActiveSidebarLabel("Accounts");
       return;
     }
+    if (activeSidebarCategory === "settings") {
+      setActiveSidebarLabel("Settings");
+      return;
+    }
+    if (activeSidebarCategory === "asset-type:all") {
+      setActiveSidebarLabel("Asset Types");
+      return;
+    }
     const assetMatch = assetTypeEntries.find((entry) => entry.key === activeSidebarCategory);
     if (assetMatch) {
       setActiveSidebarLabel(assetMatch.assetType.name);
@@ -2260,8 +2267,6 @@ export function AppHomePage() {
       setActiveSidebarLabel(accountMatch.account.name);
       return;
     }
-    setActiveSidebarCategory("portfolio");
-    setActiveSidebarLabel("Portfolio");
   }, [accountEntries, activeSidebarCategory, assetTypeEntries]);
 
   useEffect(() => {
@@ -2386,7 +2391,6 @@ export function AppHomePage() {
       account_item_order: navAccountItemOrder,
       asset_types_collapsed: assetTypesCollapsed,
       accounts_collapsed: accountsCollapsed,
-      active_item_key: activeSidebarCategory,
     }).catch(() => {
       // Keep UI responsive if persistence fails.
     });
@@ -2399,7 +2403,6 @@ export function AppHomePage() {
     navAccountItemOrder,
     assetTypesCollapsed,
     accountsCollapsed,
-    activeSidebarCategory,
   ]);
 
   useEffect(() => {
@@ -3213,7 +3216,6 @@ export function AppHomePage() {
         account_item_order: nextAccountOrder,
         asset_types_collapsed: assetTypesCollapsed,
         accounts_collapsed: accountsCollapsed,
-        active_item_key: activeSidebarCategory,
       }).catch(() => {
         // Keep UI responsive if persistence fails.
       });
@@ -3316,10 +3318,6 @@ export function AppHomePage() {
 
   const navigateToShellSection = useCallback(
     (section: AppShellSection, sidebarCategory: string, sidebarLabel: string) => {
-      setActiveAppShellSection(section);
-      setActiveSidebarCategory(sidebarCategory);
-      setActiveSidebarLabel(sidebarLabel);
-
       if (location.pathname !== "/") {
         navigate("/", {
           state: {
@@ -3328,7 +3326,12 @@ export function AppHomePage() {
             sidebarLabel,
           },
         });
+        return;
       }
+
+      setActiveAppShellSection(section);
+      setActiveSidebarCategory(sidebarCategory);
+      setActiveSidebarLabel(sidebarLabel);
     },
     [location.pathname, navigate],
   );
@@ -3356,70 +3359,30 @@ export function AppHomePage() {
       setActiveSidebarLabel("Settings");
       return;
     }
+    setActiveSettingsSection(null);
     if (activeAppShellSection === "addAccount") return;
-    if (activeAppShellSection === "portfolio" && activeSidebarCategory === "portfolio") return;
+    if (activeSidebarCategory === "portfolio") {
+      setActiveAppShellSection("portfolio");
+      return;
+    }
+    if (activeAppShellSection === "holdings" && activeSidebarCategory === "holdings") return;
     if (activeSidebarCategory === "accounts" || activeSidebarCategory.startsWith("account:")) {
       setActiveAppShellSection("accounts");
+      return;
+    }
+    if (activeSidebarCategory === "holdings") {
+      setActiveAppShellSection("holdings");
       return;
     }
     if (activeSidebarCategory.startsWith("asset-type:")) {
       setActiveAppShellSection("assetTypes");
       return;
     }
-    setActiveAppShellSection("dashboards");
+    if (activeSidebarCategory === "dashboards") {
+      setActiveAppShellSection("dashboards");
+      return;
+    }
   }, [activeAppShellSection, activeSidebarCategory, isSettingsRoute]);
-
-  const shellNavItems: AppShellNavItem[] = [
-    { key: "dashboard", label: "Dashboard", active: !isSettingsRoute && activeAppShellSection === "dashboards", onClick: () => navigateToShellSection("dashboards", "portfolio", "Portfolio"), activeIcon: <Squares2X2SolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <Squares2X2OutlineIcon className="h-4 w-4" /> },
-    { key: "portfolio", label: "Portfolio", active: !isSettingsRoute && activeAppShellSection === "portfolio", onClick: () => navigateToShellSection("portfolio", "portfolio", "Portfolio"), activeIcon: <HomeSolidIcon className="h-[18px] w-[18px]" />, inactiveIcon: <HomeOutlineIcon className="h-4 w-4" /> },
-  ];
-
-  const shellBreadcrumbs = useMemo<AppShellBreadcrumbItem[]>(() => {
-    if (isSettingsRoute || activeAppShellSection === "settings") {
-      return [{ label: "Settings" }];
-    }
-
-    if (activeAppShellSection === "addAccount") {
-      return [
-        { label: "Accounts", onClick: () => navigateToShellSection("accounts", "accounts", "Accounts") },
-        { label: "Add Account" },
-      ];
-    }
-
-    if (activeAppShellSection === "accounts") {
-      if (activeSidebarCategory.startsWith("account:")) {
-        return [
-          { label: "Accounts", onClick: () => navigateToShellSection("accounts", "accounts", "Accounts") },
-          { label: activeSidebarLabel },
-        ];
-      }
-      return [{ label: "Accounts" }];
-    }
-
-    if (activeAppShellSection === "assetTypes") {
-      if (activeSidebarCategory.startsWith("asset-type:")) {
-        return [
-          { label: "Asset Types", onClick: () => navigateToShellSection("assetTypes", "assetTypes", "Asset Types") },
-          { label: activeSidebarLabel },
-        ];
-      }
-      return [{ label: "Asset Types" }];
-    }
-
-    if (activeAppShellSection === "portfolio") {
-      return [{ label: activeSidebarLabel || "Portfolio" }];
-    }
-
-    if (activeAppShellSection === "dashboards") {
-      return [{ label: `${activeSidebarLabel || "Portfolio"} Dashboard` }];
-    }
-
-    if (activeAppShellSection === "holdings") {
-      return [{ label: "Holdings" }];
-    }
-
-    return [{ label: activeSidebarLabel || "Portfolio" }];
-  }, [activeAppShellSection, activeSidebarCategory, activeSidebarLabel, isSettingsRoute, navigateToShellSection]);
 
   return (
     <main className="app-home min-h-screen w-full bg-[hsl(var(--app-shell-background))] dark:text-foreground">
@@ -3427,16 +3390,15 @@ export function AppHomePage() {
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <div className="min-h-screen w-full px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex min-h-screen w-full flex-col">
-          <div className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--app-shell-background))] px-4 py-4 sm:px-6 lg:px-8">
+          <div className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--app-shell-background))] px-4 py-4 sm:px-6 md:left-[96px] md:px-5 xl:left-[236px] xl:px-8">
             <AppShellTopbar
-              breadcrumbs={shellBreadcrumbs}
-              navItems={shellNavItems}
               profileFirstName={profileFirstName}
               profileMenuOpen={profileMenuOpen}
               onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
               onOpenAddAssets={() => setIsAddAssetModalOpen(true)}
               onOpenSettings={() => {
                 setProfileMenuOpen(false);
+                setActiveSettingsSection(null);
                 navigate("/settings");
               }}
               onLogout={() => {
@@ -3445,7 +3407,29 @@ export function AppHomePage() {
               }}
             />
           </div>
-          <div className="flex w-full flex-1 flex-col gap-4 pt-[88px] sm:pt-[96px]">
+          <AppShellSideNav
+            activeSection={activeAppShellSection}
+            profileFirstName={profileFirstName}
+            profileMenuOpen={profileMenuOpen}
+            onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
+            onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
+            onOpenHoldings={() => navigateToShellSection("holdings", "holdings", "Holdings")}
+            onOpenAccounts={() => navigateToShellSection("accounts", "accounts", "Accounts")}
+            onOpenAssetTypes={() => navigateToShellSection("assetTypes", "asset-type:all", "Asset Types")}
+            onOpenSettings={() => {
+              setProfileMenuOpen(false);
+              setActiveSettingsSection(null);
+              navigate("/settings");
+            }}
+            onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
+            onLogout={() => {
+              setProfileMenuOpen(false);
+              void handleLogout();
+            }}
+          />
+          <div
+            className="flex w-full flex-1 flex-col gap-4 pt-[88px] sm:pt-[96px] md:pl-[112px] xl:pl-[252px]"
+          >
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -3503,11 +3487,10 @@ export function AppHomePage() {
                                   }`}
                                   aria-label="Portfolio"
                                 >
-                                  {activeSidebarCategory === "portfolio" ? (
-                                    <HomeSolidIcon className="h-4 w-4 text-current" />
-                                  ) : (
-                                    <HomeOutlineIcon className="h-4 w-4 text-current" />
-                                  )}
+                                  <i
+                                    className={`lni lni-briefcase-1 text-[16px] leading-none text-current ${activeSidebarCategory === "portfolio" ? "opacity-100" : "opacity-72"}`}
+                                    aria-hidden="true"
+                                  />
                                   <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
                                     Portfolio
                                     {activeSidebarCategory === "portfolio" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
@@ -3731,11 +3714,10 @@ export function AppHomePage() {
                                         }`}
                                       >
                                         <div className="flex items-center gap-2">
-                                          {activeSidebarCategory === "portfolio" ? (
-                                            <HomeSolidIcon className="h-4 w-4 shrink-0 text-foreground dark:text-foreground" />
-                                          ) : (
-                                            <HomeOutlineIcon className="h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" />
-                                          )}
+                                          <i
+                                            className={`lni lni-briefcase-1 text-[16px] leading-none ${activeSidebarCategory === "portfolio" ? "text-foreground opacity-100 dark:text-foreground" : "text-muted-foreground opacity-72 dark:text-muted-foreground"}`}
+                                            aria-hidden="true"
+                                          />
                                           <span className={`truncate text-sm ${activeSidebarCategory === "portfolio" ? "font-medium" : "font-normal"}`}>
                                             Portfolio
                                           </span>
@@ -4750,57 +4732,47 @@ export function AppHomePage() {
               <div className="space-y-4">
               {activeAppShellSection !== "portfolio" && activeAppShellSection !== "addAccount" && activeAppShellSection !== "settings" ? (
                 <div className="grid grid-cols-1 gap-3">
-                  <Card className="rounded-lg border border-background bg-background shadow-none dark:border-background dark:bg-background dark:text-foreground">
-                      <CardContent className="h-[92px] px-4 py-2">
-                        <div className="flex h-full items-center justify-between gap-3">
-                          <h1 className="font-sans text-[2rem] font-semibold tracking-tight text-foreground dark:text-foreground">
-                            {`${activeSidebarLabel} Dashboard`}
-                          </h1>
-                          {!isAssetsLiabilitiesDashboard ? (
-                            <div className="flex items-center gap-2">
-                              <div className="relative" data-dashboard-menu>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSettingsMenuOpen((previous) => !previous);
-                                  }}
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
-                                >
-                                  <Settings className="h-5 w-5" />
-                                </button>
-                                {settingsMenuOpen ? (
-                                  <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
-                                    {!isEditing ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsEditing(true);
-                                          setSettingsMenuOpen(false);
-                                        }}
-                                        className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
-                                      >
-                                        Edit Dashboard
-                                      </button>
-                                    ) : (
-                                      <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
-                                        Use the edit toolbar above the dashboard.
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : null}
+                  {!isAssetsLiabilitiesDashboard ? (
+                    <div className="flex justify-end">
+                      <div className="relative" data-dashboard-menu>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsMenuOpen((previous) => !previous);
+                          }}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                        >
+                          <Settings className="h-5 w-5" />
+                        </button>
+                        {settingsMenuOpen ? (
+                          <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-border bg-white p-1 shadow-lg dark:border-border dark:bg-popover">
+                            {!isEditing ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsEditing(true);
+                                  setSettingsMenuOpen(false);
+                                }}
+                                className="w-full rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/80 hover:text-foreground"
+                              >
+                                Edit Dashboard
+                              </button>
+                            ) : (
+                              <div className="rounded px-2 py-1.5 text-xs text-muted-foreground">
+                                Use the edit toolbar above the dashboard.
                               </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      </CardContent>
-                    </Card>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                  </div>
               ) : null}
               {!isEditing ? (
                 <Card className={activeAppShellSection === "settings" ? "overflow-visible border-0 bg-transparent shadow-none dark:border-0 dark:bg-transparent" : "overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background"}>
                   <CardContent className={activeAppShellSection === "portfolio" || activeAppShellSection === "addAccount" || activeAppShellSection === "settings" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
                     {activeAppShellSection === "portfolio" ? (
-                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                       <div className="space-y-4 rounded-xl border border-background bg-background p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
@@ -4952,18 +4924,12 @@ export function AppHomePage() {
                           </div>
                         )}
                       </div>
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="flex min-h-[240px] flex-col">
-                          <p className="text-sm font-medium text-slate-900">New Tile</p>
-                        </div>
-                      </div>
-                      </div>
                     ) : activeAppShellSection === "holdings" ? (
                       <div className="flex min-h-[74vh] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-muted-foreground">
                         Holdings view coming next.
                       </div>
                     ) : activeAppShellSection === "settings" ? (
-                      <SettingsPage embedded />
+                      <SettingsPage embedded activeSection={activeSettingsSection} onSectionChange={setActiveSettingsSection} />
                     ) : activeAppShellSection === "accounts" ? (
                       <div className="grid gap-5 xl:grid-cols-[0.95fr_1.35fr]">
                         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
@@ -7423,8 +7389,6 @@ export function AppHomePage() {
 }
 
 function AppShellTopbar({
-  breadcrumbs,
-  navItems,
   profileFirstName,
   profileMenuOpen,
   onToggleProfileMenu,
@@ -7432,8 +7396,6 @@ function AppShellTopbar({
   onOpenSettings,
   onLogout,
 }: {
-  breadcrumbs: AppShellBreadcrumbItem[];
-  navItems: AppShellNavItem[];
   profileFirstName: string;
   profileMenuOpen: boolean;
   onToggleProfileMenu: () => void;
@@ -7441,64 +7403,17 @@ function AppShellTopbar({
   onOpenSettings: () => void;
   onLogout: () => void;
 }) {
-  const activeNavIndex = navItems.findIndex((item) => item.active);
-
   return (
     <div className="flex w-full flex-col gap-4 px-1 py-1 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-14">
-        <div className="inline-flex h-12 min-w-[126px] items-center justify-center rounded-full border border-border bg-[rgba(255,255,255,0.56)] px-4 text-xl font-semibold tracking-tight text-foreground shadow-[0_4px_10px_rgba(28,24,20,0.035)] backdrop-blur-lg">
-          FinPro
+      <div className="flex items-center md:hidden">
+        <div className="inline-flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <ChartNoAxesCombined className="h-5 w-5" />
+          </span>
+          <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
         </div>
-        <nav aria-label="Breadcrumb" className="hidden items-center gap-3 pl-4 text-[1.55rem] md:flex">
-          {breadcrumbs.map((breadcrumb, index) => (
-            <div key={`${breadcrumb.label}-${index}`} className="flex items-center gap-3">
-              {index > 0 ? <span className="text-muted-foreground/45">/</span> : null}
-              {breadcrumb.onClick ? (
-                <button
-                  type="button"
-                  onClick={breadcrumb.onClick}
-                  className="font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {breadcrumb.label}
-                </button>
-              ) : (
-                <span className="font-semibold tracking-tight text-muted-foreground">{breadcrumb.label}</span>
-              )}
-            </div>
-          ))}
-        </nav>
       </div>
-      <div className="flex items-center gap-4 md:justify-end">
-        <div className="hidden rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg lg:block">
-          <div
-            className="relative grid min-w-[220px] items-center gap-0.5"
-            style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
-          >
-            {activeNavIndex >= 0 ? (
-              <div
-                className="absolute top-0 h-10 rounded-full bg-primary shadow-[0_6px_16px_rgba(28,24,20,0.16)] transition-transform duration-200 ease-out"
-                style={{
-                  left: 0,
-                  width: `${100 / navItems.length}%`,
-                  transform: `translateX(${activeNavIndex * 100}%)`,
-                }}
-                aria-hidden="true"
-              />
-            ) : null}
-            {navItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={item.onClick}
-                className={`relative z-10 inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-medium transition-colors ${
-                  item.active ? "text-primary-foreground" : "text-foreground/78 hover:text-foreground/78"
-                }`}
-              >
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center gap-4 md:ml-auto md:justify-end">
         <div className="rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg">
           <button
             type="button"
@@ -7509,7 +7424,7 @@ function AppShellTopbar({
             <span>Add Assets</span>
           </button>
         </div>
-        <div className="relative rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg">
+        <div className="relative rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg lg:hidden" data-profile-menu>
           <button
             type="button"
             onClick={onToggleProfileMenu}
@@ -7543,6 +7458,140 @@ function AppShellTopbar({
         </div>
       </div>
     </div>
+  );
+}
+
+function AppShellSideNav({
+  activeSection,
+  profileFirstName,
+  profileMenuOpen,
+  onOpenDashboard,
+  onOpenPortfolio,
+  onOpenHoldings,
+  onOpenAccounts,
+  onOpenAssetTypes,
+  onOpenSettings,
+  onToggleProfileMenu,
+  onLogout,
+}: {
+  activeSection: AppShellSection;
+  profileFirstName: string;
+  profileMenuOpen: boolean;
+  onOpenDashboard: () => void;
+  onOpenPortfolio: () => void;
+  onOpenHoldings: () => void;
+  onOpenAccounts: () => void;
+  onOpenAssetTypes: () => void;
+  onOpenSettings: () => void;
+  onToggleProfileMenu: () => void;
+  onLogout: () => void;
+}) {
+  const items = [
+    {
+      key: "portfolio",
+      label: "Portfolio",
+      isActive: activeSection === "portfolio",
+      onClick: onOpenPortfolio,
+      icon: <i className={`lni lni-briefcase-1 text-[16px] leading-none ${activeSection === "portfolio" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
+    },
+    {
+      key: "dashboards",
+      label: "Dashboards",
+      isActive: activeSection === "dashboards",
+      onClick: onOpenDashboard,
+      icon: <i className={`lni lni-dashboard-square-1 text-[16px] leading-none ${activeSection === "dashboards" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
+    },
+    {
+      key: "holdings",
+      label: "Holdings",
+      isActive: activeSection === "holdings",
+      onClick: onOpenHoldings,
+      icon: <i className={`lni lni-layers-1 text-[16px] leading-none ${activeSection === "holdings" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
+    },
+    {
+      key: "accounts",
+      label: "Accounts",
+      isActive: activeSection === "accounts" || activeSection === "addAccount",
+      onClick: onOpenAccounts,
+      icon: <i className={`lni lni-wallet-1 text-[16px] leading-none ${activeSection === "accounts" || activeSection === "addAccount" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
+    },
+    {
+      key: "assetTypes",
+      label: "Asset Types",
+      isActive: activeSection === "assetTypes",
+      onClick: onOpenAssetTypes,
+      icon: <i className={`lni lni-box-closed text-[16px] leading-none ${activeSection === "assetTypes" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
+    },
+  ];
+
+  return (
+    <aside className="fixed bottom-0 left-0 top-[88px] z-30 hidden border-r border-black/[0.05] bg-[rgba(255,255,255,0.82)] backdrop-blur-sm sm:top-[96px] md:block md:w-[96px] xl:w-[236px]">
+      <nav className="flex h-full flex-col px-3 py-5 xl:px-5">
+        <div className="flex items-center justify-center px-1 pb-3 xl:justify-start">
+          <div className="inline-flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <ChartNoAxesCombined className="h-5 w-5" />
+            </span>
+            <span className="hidden font-display text-[1.35rem] font-bold tracking-tight text-foreground xl:inline">FinPro</span>
+          </div>
+        </div>
+        <div className="mb-4 border-t border-border/70" />
+        <div className="flex-1 space-y-1.5">
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={item.onClick}
+              className={`relative flex h-12 w-full items-center rounded-2xl text-left text-sm font-medium transition-colors md:justify-center md:px-0 xl:justify-start xl:gap-3 xl:px-4 ${
+                item.isActive
+                  ? "bg-[rgba(34,30,27,0.12)] text-foreground ring-1 ring-black/8"
+                  : "text-foreground/68 hover:bg-[rgba(255,255,255,0.68)] hover:text-foreground"
+              }`}
+            >
+              <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center ${item.isActive ? "text-foreground" : "text-foreground/58"}`}>
+                {item.icon}
+              </span>
+              <span className="hidden xl:inline">{item.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-6 border-t border-border/70 pt-4">
+          <div className="relative" data-profile-menu>
+            <button
+              type="button"
+              onClick={onToggleProfileMenu}
+              className="flex h-12 w-full items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.74)] text-left text-sm font-medium text-foreground transition-colors md:px-0 xl:justify-start xl:gap-3 xl:px-4"
+              aria-label="Profile menu"
+            >
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                {profileFirstName.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="hidden truncate xl:inline">{profileFirstName}</span>
+            </button>
+            {profileMenuOpen ? (
+              <div className="absolute bottom-full left-0 z-30 mb-3 w-full rounded-2xl border border-border bg-white p-1.5 shadow-lg md:w-[180px] xl:w-full">
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  <span>Settings</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
+                >
+                  <LogOut className="h-4 w-4 text-muted-foreground" />
+                  <span>Log out</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </nav>
+    </aside>
   );
 }
 

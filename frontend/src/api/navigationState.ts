@@ -8,7 +8,7 @@ export type NavigationStateResponse = {
   account_item_order: string[];
   asset_types_collapsed: boolean;
   accounts_collapsed: boolean;
-  active_item_key: string;
+  active_item_key?: string;
   updated_at: string | null;
 };
 
@@ -19,7 +19,7 @@ export type UpsertNavigationStatePayload = {
   account_item_order: string[];
   asset_types_collapsed: boolean;
   accounts_collapsed: boolean;
-  active_item_key: string;
+  active_item_key?: string;
 };
 
 export async function getNavigationState(scope: string): Promise<NavigationStateResponse> {

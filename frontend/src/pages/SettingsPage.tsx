@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, ChevronRight, CreditCard, Shield, UserRound } from "lucide-react";
 
 import {
   changePassword,
@@ -18,9 +19,15 @@ import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../context/AuthContext";
 
-type SettingsTab = "profile" | "security" | "billing" | "danger";
+export type SettingsTab = "profile" | "security" | "billing" | "danger";
 
-export function SettingsPage({ embedded = false }: { embedded?: boolean }) {
+type SettingsPageProps = {
+  embedded?: boolean;
+  activeSection?: SettingsTab | null;
+  onSectionChange?: (section: SettingsTab | null) => void;
+};
+
+export function SettingsPage({ embedded = false, activeSection, onSectionChange }: SettingsPageProps) {
   const { refreshAuth, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -55,7 +62,15 @@ export function SettingsPage({ embedded = false }: { embedded?: boolean }) {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const [internalActiveTab, setInternalActiveTab] = useState<SettingsTab | null>(null);
+  const activeTab = activeSection ?? internalActiveTab;
+
+  const setActiveTab = (next: SettingsTab | null) => {
+    onSectionChange?.(next);
+    if (activeSection === undefined) {
+      setInternalActiveTab(next);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -240,13 +255,22 @@ export function SettingsPage({ embedded = false }: { embedded?: boolean }) {
     );
   }
 
+  const isOverview = activeTab === null;
+
   const content = (
     <main className={`mx-auto w-full ${embedded ? "max-w-none px-0 py-0" : "max-w-6xl px-4 py-8 sm:px-6 lg:px-8"}`}>
       <div className={`space-y-8 ${embedded ? "pt-2" : ""}`}>
-        <div className="space-y-1">
-          <h1 className="text-[2.15rem] font-semibold tracking-tight text-foreground">Settings</h1>
-          <p className="text-sm text-foreground/70">Manage your account settings and preferences.</p>
-        </div>
+        {!isOverview ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab(null)}
+            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to settings</span>
+          </button>
+        ) : null}
+        {!isOverview ? (
         <div className="lg:hidden">
           <nav className="flex flex-wrap items-center gap-3">
             <SettingsTopNavButton label="Account" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
@@ -255,20 +279,49 @@ export function SettingsPage({ embedded = false }: { embedded?: boolean }) {
             <SettingsTopNavButton label="Danger zone" active={activeTab === "danger"} onClick={() => setActiveTab("danger")} />
           </nav>
         </div>
+        ) : null}
 
-        <div className="grid min-w-0 gap-10 text-foreground/90 lg:grid-cols-[190px_minmax(0,1fr)] lg:items-start">
-          <aside className="hidden lg:block lg:sticky lg:top-28">
-            <div className="space-y-5">
-              <p className="text-sm font-semibold text-foreground">Settings</p>
-              <nav className="space-y-1 border-l border-border/80 pl-3">
-                <SettingsSideNavButton label="General" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
-                <SettingsSideNavButton label="Security" active={activeTab === "security"} onClick={() => setActiveTab("security")} />
-                <SettingsSideNavButton label="Billing" active={activeTab === "billing"} onClick={() => setActiveTab("billing")} />
-                <SettingsSideNavButton label="Danger zone" active={activeTab === "danger"} onClick={() => setActiveTab("danger")} />
-              </nav>
-            </div>
-          </aside>
+        {isOverview ? (
+          <div className="grid min-w-0 gap-10 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="min-w-0">
+              {globalError ? <p className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{globalError}</p> : null}
+              <div className="grid gap-4 md:grid-cols-2">
+                <SettingsOverviewCard
+                  title="Personal information"
+                  icon={<UserRound className="h-5 w-5" />}
+                  onClick={() => setActiveTab("profile")}
+                />
+                <SettingsOverviewCard
+                  title="Login and security"
+                  icon={<Shield className="h-5 w-5" />}
+                  onClick={() => setActiveTab("security")}
+                />
+                <SettingsOverviewCard
+                  title="Billing"
+                  icon={<CreditCard className="h-5 w-5" />}
+                  onClick={() => setActiveTab("billing")}
+                />
+                <SettingsOverviewCard
+                  title="Danger zone"
+                  icon={<AlertTriangle className="h-5 w-5" />}
+                  onClick={() => setActiveTab("danger")}
+                />
+              </div>
+            </section>
 
+            <aside className="space-y-8">
+              <SettingsRailSection title="General preferences">
+                <SettingsRailRow label="Change language" value={language === "en" ? "English" : language} onClick={() => setActiveTab("profile")} />
+                <SettingsRailRow label="Timezone" value={timezone} onClick={() => setActiveTab("profile")} />
+                <SettingsRailRow label="Currency" value={currency || "USD"} onClick={() => setActiveTab("profile")} />
+              </SettingsRailSection>
+              <SettingsRailSection title="How can we help?">
+                <SettingsLinkRow label="Login and security" description="Email changes, password updates, and account protection." onClick={() => setActiveTab("security")} />
+                <SettingsLinkRow label="Billing" description="Subscription and billing controls for your account." onClick={() => setActiveTab("billing")} />
+              </SettingsRailSection>
+            </aside>
+          </div>
+        ) : (
           <section className="min-w-0">
             {globalError ? <p className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{globalError}</p> : null}
 
@@ -468,7 +521,7 @@ export function SettingsPage({ embedded = false }: { embedded?: boolean }) {
               </div>
             ) : null}
           </section>
-        </div>
+        )}
       </div>
     </main>
   );
@@ -504,27 +557,90 @@ function SettingsTopNavButton({
   );
 }
 
-function SettingsSideNavButton({
-  label,
-  active,
+function SettingsOverviewCard({
+  title,
+  icon,
   onClick,
 }: {
-  label: string;
-  active: boolean;
+  title: string;
+  icon: ReactNode;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative block w-full rounded-r-xl px-3 py-2.5 text-left text-base transition-colors ${
-        active
-          ? "font-medium text-foreground"
-          : "text-foreground/68 hover:text-foreground"
-      }`}
+      className="group flex min-h-[132px] w-full flex-col justify-between rounded-[26px] border border-border bg-white px-6 py-6 text-left transition-colors hover:bg-white"
     >
-      {active ? <span className="absolute -left-[13px] top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden="true" /> : null}
-      <span className="block">{label}</span>
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary/35 text-foreground">
+        {icon}
+      </span>
+      <span className="text-[1.05rem] font-semibold text-foreground">{title}</span>
+    </button>
+  );
+}
+
+function SettingsRailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+      <div className="divide-y divide-border rounded-2xl border border-border bg-white/55">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function SettingsRailRow({
+  label,
+  value,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-secondary/30"
+    >
+      <div>
+        <p className="text-base font-semibold text-foreground">{label}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{value}</p>
+      </div>
+      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+    </button>
+  );
+}
+
+function SettingsLinkRow({
+  label,
+  description,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-secondary/30"
+    >
+      <div>
+        <p className="text-base font-semibold text-foreground">{label}</p>
+        <p className="mt-1 max-w-xs text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      <ChevronRight className="mt-1 h-5 w-5 text-muted-foreground" />
     </button>
   );
 }
