@@ -3413,8 +3413,6 @@ export function AppHomePage() {
             profileMenuOpen={profileMenuOpen}
             onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
             onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
-            onOpenHoldings={() => navigateToShellSection("holdings", "holdings", "Holdings")}
-            onOpenAccounts={() => navigateToShellSection("accounts", "accounts", "Accounts")}
             onOpenAssetTypes={() => navigateToShellSection("assetTypes", "asset-type:all", "Asset Types")}
             onOpenSettings={() => {
               setProfileMenuOpen(false);
@@ -7467,8 +7465,6 @@ function AppShellSideNav({
   profileMenuOpen,
   onOpenDashboard,
   onOpenPortfolio,
-  onOpenHoldings,
-  onOpenAccounts,
   onOpenAssetTypes,
   onOpenSettings,
   onToggleProfileMenu,
@@ -7479,8 +7475,6 @@ function AppShellSideNav({
   profileMenuOpen: boolean;
   onOpenDashboard: () => void;
   onOpenPortfolio: () => void;
-  onOpenHoldings: () => void;
-  onOpenAccounts: () => void;
   onOpenAssetTypes: () => void;
   onOpenSettings: () => void;
   onToggleProfileMenu: () => void;
@@ -7502,20 +7496,6 @@ function AppShellSideNav({
       icon: <i className={`lni lni-dashboard-square-1 text-[16px] leading-none ${activeSection === "dashboards" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
     },
     {
-      key: "holdings",
-      label: "Holdings",
-      isActive: activeSection === "holdings",
-      onClick: onOpenHoldings,
-      icon: <i className={`lni lni-layers-1 text-[16px] leading-none ${activeSection === "holdings" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
-    },
-    {
-      key: "accounts",
-      label: "Accounts",
-      isActive: activeSection === "accounts" || activeSection === "addAccount",
-      onClick: onOpenAccounts,
-      icon: <i className={`lni lni-wallet-1 text-[16px] leading-none ${activeSection === "accounts" || activeSection === "addAccount" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
-    },
-    {
       key: "assetTypes",
       label: "Asset Types",
       isActive: activeSection === "assetTypes",
@@ -7525,9 +7505,9 @@ function AppShellSideNav({
   ];
 
   return (
-    <aside className="fixed bottom-0 left-0 top-[88px] z-30 hidden border-r border-black/[0.05] bg-[rgba(255,255,255,0.82)] backdrop-blur-sm sm:top-[96px] md:block md:w-[96px] xl:w-[236px]">
-      <nav className="flex h-full flex-col px-3 py-5 xl:px-5">
-        <div className="flex items-center justify-center px-1 pb-3 xl:justify-start">
+    <aside className="fixed bottom-0 left-0 top-0 z-30 hidden border-r border-black/[0.05] bg-card backdrop-blur-sm md:block md:w-[96px] xl:w-[236px]">
+      <nav className="flex h-full flex-col px-3 py-6 xl:px-5">
+        <div className="flex items-center justify-center px-1 pb-4 xl:justify-start">
           <div className="inline-flex items-center gap-3">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <ChartNoAxesCombined className="h-5 w-5" />
@@ -7535,20 +7515,20 @@ function AppShellSideNav({
             <span className="hidden font-display text-[1.35rem] font-bold tracking-tight text-foreground xl:inline">FinPro</span>
           </div>
         </div>
-        <div className="mb-4 border-t border-border/70" />
-        <div className="flex-1 space-y-1.5">
+        <div className="mb-5 border-t border-border/70" />
+        <div className="flex-1 space-y-1">
           {items.map((item) => (
             <button
               key={item.key}
               type="button"
               onClick={item.onClick}
-              className={`relative flex h-12 w-full items-center rounded-2xl text-left text-sm font-medium transition-colors md:justify-center md:px-0 xl:justify-start xl:gap-3 xl:px-4 ${
+              className={`relative flex h-10 w-full items-center rounded-xl text-left text-[13.5px] font-medium leading-none tracking-[-0.01em] antialiased transition-colors md:justify-center md:px-0 xl:justify-start xl:gap-3 xl:px-4 ${
                 item.isActive
-                  ? "bg-[rgba(34,30,27,0.12)] text-foreground ring-1 ring-black/8"
-                  : "text-foreground/68 hover:bg-[rgba(255,255,255,0.68)] hover:text-foreground"
+                  ? "bg-[#141c25] text-[rgba(255,255,255,0.96)]"
+                  : "text-[#222935] hover:bg-secondary/55 hover:text-[#161c25]"
               }`}
             >
-              <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center ${item.isActive ? "text-foreground" : "text-foreground/58"}`}>
+              <span className={`inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center ${item.isActive ? "text-white" : "text-[#2e3643]"}`}>
                 {item.icon}
               </span>
               <span className="hidden xl:inline">{item.label}</span>
@@ -7560,7 +7540,7 @@ function AppShellSideNav({
             <button
               type="button"
               onClick={onToggleProfileMenu}
-              className="flex h-12 w-full items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.74)] text-left text-sm font-medium text-foreground transition-colors md:px-0 xl:justify-start xl:gap-3 xl:px-4"
+              className="flex h-10 w-full items-center justify-center rounded-xl bg-card text-left text-[13.5px] font-medium leading-none tracking-[-0.01em] antialiased text-[#222935] transition-colors md:px-0 xl:justify-start xl:gap-3 xl:px-4"
               aria-label="Profile menu"
             >
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
