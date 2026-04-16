@@ -335,7 +335,7 @@ export function AppHomePage() {
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>(initialShellSection);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
   const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "security" | "billing" | "danger" | null>(null);
+  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "danger" | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);

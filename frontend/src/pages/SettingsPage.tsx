@@ -18,7 +18,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../context/AuthContext";
 
-export type SettingsTab = "profile" | "security" | "billing" | "danger";
+export type SettingsTab = "profile" | "danger";
 
 type SettingsPageProps = {
   embedded?: boolean;
@@ -62,6 +62,8 @@ export function SettingsPage({ embedded = false, activeSection, onSectionChange 
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [internalActiveTab, setInternalActiveTab] = useState<SettingsTab | null>(null);
+  const [editingProfileSection, setEditingProfileSection] = useState<"name" | "preferences" | null>(null);
+  const [editingSecuritySection, setEditingSecuritySection] = useState<"email" | "password" | null>(null);
   const activeTab = activeSection ?? internalActiveTab ?? "profile";
 
   const setActiveTab = (next: SettingsTab) => {
@@ -256,167 +258,197 @@ export function SettingsPage({ embedded = false, activeSection, onSectionChange 
 
   const content = (
     <main className={`mx-auto w-full ${embedded ? "max-w-none px-0 py-0" : "max-w-6xl px-4 py-8 sm:px-6 lg:px-8"}`}>
-      <header className={`mb-7 border-b border-border pb-4 ${embedded ? "pt-5" : ""}`}>
+      <header className={`pb-2 ${embedded ? "pt-5" : ""}`}>
         <h1 className="text-[2rem] font-semibold tracking-tight text-foreground">Settings</h1>
       </header>
-      <div className="grid gap-8 lg:grid-cols-[190px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="min-w-0">
-          <div className="sticky top-24 space-y-3">
-            <nav className="flex gap-2 overflow-x-auto pb-2 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0" aria-label="Settings sections">
-              <SettingsSideNavButton label="Account information" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
-              <SettingsSideNavButton label="Login and security" active={activeTab === "security"} onClick={() => setActiveTab("security")} />
-              <SettingsSideNavButton label="Billing" active={activeTab === "billing"} onClick={() => setActiveTab("billing")} />
-              <SettingsSideNavButton label="Delete account" active={activeTab === "danger"} onClick={() => setActiveTab("danger")} />
-            </nav>
-          </div>
-        </aside>
-
+      <nav className="mb-7 flex gap-8 overflow-x-auto border-b border-[#d8d2c7] text-sm" aria-label="Settings sections">
+        <SettingsTabButton label="Account" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
+        <SettingsTabButton label="Danger zone" active={activeTab === "danger"} onClick={() => setActiveTab("danger")} />
+      </nav>
+      <div className="min-w-0">
         <section className="min-w-0">
           {globalError ? <p className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{globalError}</p> : null}
 
           {activeTab === "profile" ? (
-            <SettingsPanel
-              title="Account information"
-              description="Manage the user and profile fields currently supported by your account."
-              actions={(
-                <>
-                  <Button type="button" variant="outline" className="h-8 rounded-full px-4 text-xs">Cancel</Button>
-                  <Button type="submit" form="settings-profile-form" className="h-8 rounded-full px-4 text-xs" disabled={profileSubmitting}>
-                    {profileSubmitting ? "Saving..." : "Save Changes"}
-                  </Button>
-                </>
-              )}
-            >
-              <form id="settings-profile-form" className="divide-y divide-border" onSubmit={onSaveProfile}>
-                <SettingsFormRow title="User" description="Read-only account fields from the user model.">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <FieldGroup label="Email address">
-                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={me.user.email} disabled readOnly />
-                    </FieldGroup>
-                    <FieldGroup label="Email status">
-                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={me.user.is_email_verified ? "Verified" : "Not verified"} disabled readOnly />
-                    </FieldGroup>
-                    <FieldGroup label="Account status">
-                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={me.user.is_active ? "Active" : "Inactive"} disabled readOnly />
-                    </FieldGroup>
-                    <FieldGroup label="Date joined">
-                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={formatSettingsDate(me.user.date_joined)} disabled readOnly />
-                    </FieldGroup>
-                  </div>
-                </SettingsFormRow>
-                <SettingsFormRow title="Full name" description="Stored on your profile and shown across the app.">
-                  <Input id="full-name" className="h-10 rounded-xl bg-white" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                </SettingsFormRow>
-                <SettingsFormRow title="Profile defaults" description="Used for localization, reporting, and valuation defaults.">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <FieldGroup label="Language">
-                      <Input id="language" className="h-10 rounded-xl bg-white" value={language} onChange={(e) => setLanguage(e.target.value)} required />
-                    </FieldGroup>
-                    <FieldGroup label="Timezone">
-                      <Input id="timezone" className="h-10 rounded-xl bg-white" value={timezone} onChange={(e) => setTimezone(e.target.value)} required />
-                    </FieldGroup>
-                    <FieldGroup label="Country code">
-                      <Input id="country" className="h-10 rounded-xl bg-white" placeholder="US" value={country} onChange={(e) => setCountry(e.target.value)} />
-                    </FieldGroup>
-                    <FieldGroup label="Currency code">
-                      <Input id="currency" className="h-10 rounded-xl bg-white" placeholder="USD" value={currency} onChange={(e) => setCurrency(e.target.value)} required />
-                    </FieldGroup>
-                  </div>
-                </SettingsFormRow>
-                {profileMessage ? <p className="pt-4 text-sm text-primary">{profileMessage}</p> : null}
-              </form>
-            </SettingsPanel>
-          ) : null}
+            <div className="space-y-12">
+              <SettingsPanel title={null} description={null}>
+                <form id="settings-profile-form" className="divide-y divide-[#e4ded3]" onSubmit={onSaveProfile}>
+                  <SettingsSectionBlock title="Profile" description="Your personal information and account profile settings.">
+                    <div className="space-y-5">
+                      <div>
+                        <p className="text-xs font-medium text-foreground/70">Avatar</p>
+                        <div className="mt-3 flex items-center gap-4">
+                          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#2d2925] text-xl font-semibold text-[#f8f6f1]">
+                            {getInitials(fullName || me.user.email)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{fullName || "Not set"}</p>
+                            <p className="mt-1 text-sm text-foreground/60">{me.user.email}</p>
+                          </div>
+                        </div>
+                      </div>
 
-          {activeTab === "security" ? (
-            <SettingsPanel title="Login and security" description="Manage your email and password.">
-              <div className="space-y-8">
-                <form className="divide-y divide-border" onSubmit={onUpdateEmail}>
-                  <SettingsFormRow title="Email address" description="A verification code will be sent to the new address.">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <FieldGroup label="Email">
-                        <Input id="settings-email" className="h-10 rounded-xl bg-white" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                      </FieldGroup>
-                      <FieldGroup label="Current password">
-                        <Input id="settings-email-password" className="h-10 rounded-xl bg-white" type="password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
-                      </FieldGroup>
+                      <SettingsReadRow
+                        title="Full name"
+                        value={fullName || "Not set"}
+                        onEdit={() => setEditingProfileSection(editingProfileSection === "name" ? null : "name")}
+                      >
+                        {editingProfileSection === "name" ? (
+                          <div className="space-y-4 pt-4">
+                            <Input id="full-name" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                            <Button type="submit" className="h-9 rounded-full bg-[#2d2925] px-4 text-xs text-[#f8f6f1] hover:bg-[#2d2925]" disabled={profileSubmitting}>
+                              {profileSubmitting ? "Saving..." : "Save changes"}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </SettingsReadRow>
                     </div>
-                  </SettingsFormRow>
-                  <div className="flex items-center gap-3 pt-5">
-                    <Button type="submit" className="rounded-full px-5" disabled={emailSubmitting}>{emailSubmitting ? "Saving..." : "Update email"}</Button>
-                    {emailMessage ? <span className="text-sm text-primary">{emailMessage}</span> : null}
-                  </div>
+                  </SettingsSectionBlock>
+
+                  <SettingsSectionBlock title="Account" description="Your login identity and current account state.">
+                    <div className="space-y-1">
+                      <SettingsReadRow title="Email" value={me.user.email} />
+                      <SettingsReadRow title="Email status" value={me.user.is_email_verified ? "Verified" : "Not verified"} />
+                      <SettingsReadRow title="Account status" value={me.user.is_active ? "Active" : "Inactive"} />
+                      <SettingsReadRow title="Date joined" value={formatSettingsDate(me.user.date_joined)} />
+                    </div>
+                  </SettingsSectionBlock>
+
+                  <SettingsSectionBlock title="Preferences" description="Your localization, reporting, and valuation defaults.">
+                    <div className="space-y-1">
+                      <SettingsReadRow
+                        title="Language"
+                        value={language || "Not set"}
+                        onEdit={() => setEditingProfileSection(editingProfileSection === "preferences" ? null : "preferences")}
+                      >
+                        {editingProfileSection === "preferences" ? (
+                          <div className="space-y-4 pt-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <FieldGroup label="Language">
+                                <Input id="language" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" value={language} onChange={(e) => setLanguage(e.target.value)} required />
+                              </FieldGroup>
+                              <FieldGroup label="Timezone">
+                                <Input id="timezone" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" value={timezone} onChange={(e) => setTimezone(e.target.value)} required />
+                              </FieldGroup>
+                              <FieldGroup label="Country code">
+                                <Input id="country" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" placeholder="US" value={country} onChange={(e) => setCountry(e.target.value)} />
+                              </FieldGroup>
+                              <FieldGroup label="Currency code">
+                                <Input id="currency" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" placeholder="USD" value={currency} onChange={(e) => setCurrency(e.target.value)} required />
+                              </FieldGroup>
+                            </div>
+                            <Button type="submit" className="h-9 rounded-full bg-[#2d2925] px-4 text-xs text-[#f8f6f1] hover:bg-[#2d2925]" disabled={profileSubmitting}>
+                              {profileSubmitting ? "Saving..." : "Save changes"}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </SettingsReadRow>
+                      <SettingsReadRow title="Timezone" value={timezone || "Not set"} onEdit={() => setEditingProfileSection(editingProfileSection === "preferences" ? null : "preferences")} />
+                      <SettingsReadRow title="Country" value={country || "Not set"} onEdit={() => setEditingProfileSection(editingProfileSection === "preferences" ? null : "preferences")} />
+                      <SettingsReadRow title="Currency" value={currency || "Not set"} onEdit={() => setEditingProfileSection(editingProfileSection === "preferences" ? null : "preferences")} />
+                    </div>
+                  </SettingsSectionBlock>
+                  {profileMessage ? <p className="pt-4 text-sm text-primary">{profileMessage}</p> : null}
                 </form>
+              </SettingsPanel>
 
-                {pendingEmailChange ? (
-                  <form className="rounded-2xl border border-border bg-secondary/20 p-5" onSubmit={onVerifyEmailChange}>
-                    <p className="text-sm text-muted-foreground">
-                      Verification code sent to <span className="font-semibold text-foreground">{pendingEmailChange}</span>.
-                    </p>
-                    <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                      <FieldGroup label="6-digit verification code">
-                        <Input
-                          id="email-change-code"
-                          className="h-10 rounded-xl bg-white"
-                          inputMode="numeric"
-                          pattern="[0-9]{6}"
-                          maxLength={6}
-                          value={emailCode}
-                          onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                          required
-                        />
-                      </FieldGroup>
-                      <Button type="submit" className="rounded-full px-5" disabled={verifySubmitting || emailCode.length !== 6}>
-                        {verifySubmitting ? "Verifying..." : "Verify"}
-                      </Button>
-                    </div>
-                    {verifyMessage ? <p className="mt-3 text-sm text-primary">{verifyMessage}</p> : null}
-                  </form>
-                ) : null}
+              <SettingsPanel title={null} description={null}>
+                <SettingsSectionBlock title="Login and security" description="Change the credentials used to access your account.">
+                  <div className="space-y-8">
+                    <form className="divide-y divide-[#e4ded3]" onSubmit={onUpdateEmail}>
+                      <SettingsReadRow
+                        title="Email"
+                        value="Change the email address used to sign in."
+                        onEdit={() => setEditingSecuritySection(editingSecuritySection === "email" ? null : "email")}
+                      >
+                        {editingSecuritySection === "email" ? (
+                          <div className="space-y-4 pt-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <FieldGroup label="Email">
+                                <Input id="settings-email" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                              </FieldGroup>
+                              <FieldGroup label="Current password">
+                                <Input id="settings-email-password" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" type="password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
+                              </FieldGroup>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Button type="submit" className="rounded-full px-5" disabled={emailSubmitting}>{emailSubmitting ? "Saving..." : "Update email"}</Button>
+                              {emailMessage ? <span className="text-sm text-primary">{emailMessage}</span> : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </SettingsReadRow>
+                    </form>
 
-                <form className="divide-y divide-border" onSubmit={onChangePassword}>
-                  <SettingsFormRow title="Password" description="Use a strong password and rotate it whenever needed.">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <FieldGroup label="Current password">
-                        <Input id="current-password" className="h-10 rounded-xl bg-white" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-                      </FieldGroup>
-                      <FieldGroup label="New password">
-                        <Input id="new-password" className="h-10 rounded-xl bg-white" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
-                      </FieldGroup>
-                      <FieldGroup label="Confirm password">
-                        <Input id="confirm-password" className="h-10 rounded-xl bg-white" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
-                      </FieldGroup>
-                    </div>
-                  </SettingsFormRow>
-                  <div className="flex items-center gap-3 pt-5">
-                    <Button type="submit" className="rounded-full px-5" disabled={passwordSubmitting}>{passwordSubmitting ? "Saving..." : "Change password"}</Button>
-                    {passwordMessage ? <span className="text-sm text-primary">{passwordMessage}</span> : null}
+                    {pendingEmailChange ? (
+                      <form className="rounded-2xl border border-border bg-secondary/20 p-5" onSubmit={onVerifyEmailChange}>
+                        <p className="text-sm text-muted-foreground">
+                          Verification code sent to <span className="font-semibold text-foreground">{pendingEmailChange}</span>.
+                        </p>
+                        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                          <FieldGroup label="6-digit verification code">
+                            <Input
+                              id="email-change-code"
+                              className="h-11 rounded-[18px] border-[#d8d2c7] bg-white"
+                              inputMode="numeric"
+                              pattern="[0-9]{6}"
+                              maxLength={6}
+                              value={emailCode}
+                              onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                              required
+                            />
+                          </FieldGroup>
+                          <Button type="submit" className="rounded-full px-5" disabled={verifySubmitting || emailCode.length !== 6}>
+                            {verifySubmitting ? "Verifying..." : "Verify"}
+                          </Button>
+                        </div>
+                        {verifyMessage ? <p className="mt-3 text-sm text-primary">{verifyMessage}</p> : null}
+                      </form>
+                    ) : null}
+
+                    <form className="divide-y divide-[#e4ded3]" onSubmit={onChangePassword}>
+                      <SettingsReadRow
+                        title="Password"
+                        value="Use a strong password and rotate it whenever needed."
+                        onEdit={() => setEditingSecuritySection(editingSecuritySection === "password" ? null : "password")}
+                      >
+                        {editingSecuritySection === "password" ? (
+                          <div className="space-y-4 pt-4">
+                            <div className="grid gap-4 md:grid-cols-3">
+                              <FieldGroup label="Current password">
+                                <Input id="current-password" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+                              </FieldGroup>
+                              <FieldGroup label="New password">
+                                <Input id="new-password" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+                              </FieldGroup>
+                              <FieldGroup label="Confirm password">
+                                <Input id="confirm-password" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
+                              </FieldGroup>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Button type="submit" className="rounded-full px-5" disabled={passwordSubmitting}>{passwordSubmitting ? "Saving..." : "Change password"}</Button>
+                              {passwordMessage ? <span className="text-sm text-primary">{passwordMessage}</span> : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </SettingsReadRow>
+                    </form>
                   </div>
-                </form>
-              </div>
-            </SettingsPanel>
-          ) : null}
-
-          {activeTab === "billing" ? (
-            <SettingsPanel title="Payment information" description="Subscription and billing controls for your account.">
-              <SettingsFormRow title="Manage subscription" description="This will connect to your billing portal once subscriptions are wired.">
-                <div className="rounded-2xl border border-border bg-secondary/20 p-5 text-sm text-muted-foreground">
-                  Subscription management is not connected yet. This section is reserved for your future billing portal flow.
-                </div>
-              </SettingsFormRow>
-            </SettingsPanel>
+                </SettingsSectionBlock>
+              </SettingsPanel>
+            </div>
           ) : null}
 
           {activeTab === "danger" ? (
             <SettingsPanel title="Terms and account actions" description="Destructive account-level actions.">
-              <form className="divide-y divide-border" onSubmit={onDeleteAccount}>
+              <form className="divide-y divide-[#e4ded3]" onSubmit={onDeleteAccount}>
                 <SettingsFormRow title="Delete account" description="Account deletion is permanent in the current build.">
                   <div className="grid gap-4 md:grid-cols-2">
                     <FieldGroup label="Current password">
-                      <Input id="delete-account-password" className="h-10 rounded-xl bg-white" type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} required />
+                      <Input id="delete-account-password" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} required />
                     </FieldGroup>
                     <FieldGroup label='Type "DELETE" to confirm'>
-                      <Input id="delete-account-confirmation" className="h-10 rounded-xl bg-white" value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value.toUpperCase())} required />
+                      <Input id="delete-account-confirmation" className="h-11 rounded-[18px] border-[#d8d2c7] bg-white" value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value.toUpperCase())} required />
                     </FieldGroup>
                   </div>
                 </SettingsFormRow>
@@ -440,7 +472,7 @@ export function SettingsPage({ embedded = false, activeSection, onSectionChange 
   return content;
 }
 
-function SettingsSideNavButton({
+function SettingsTabButton({
   label,
   active,
   onClick,
@@ -453,10 +485,10 @@ function SettingsSideNavButton({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full shrink-0 rounded-md px-3 py-2 text-left text-xs transition-colors lg:block ${
+      className={`relative shrink-0 border-b-2 px-0 pb-3 pt-1 text-sm transition-colors ${
         active
-          ? "bg-[#f8f6f1] font-medium text-foreground"
-          : "text-foreground/68 hover:bg-[#f8f6f1]/70 hover:text-foreground"
+          ? "border-[#2d2925] text-[#1f1b17]"
+          : "border-transparent text-[#47423b]/68 hover:text-[#47423b]"
       }`}
     >
       {label}
@@ -470,20 +502,22 @@ function SettingsPanel({
   children,
   actions,
 }: {
-  title: string;
-  description: string;
+  title: string | null;
+  description: string | null;
   children: ReactNode;
   actions?: ReactNode;
 }) {
   return (
     <div className="min-w-0">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
-          <p className="mt-1 text-xs text-foreground/64">{description}</p>
+      {title || description || actions ? (
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            {title ? <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2> : null}
+            {description ? <p className="mt-1 text-sm text-foreground/62">{description}</p> : null}
+          </div>
+          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-      </div>
+      ) : null}
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -499,15 +533,69 @@ function SettingsFormRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-4 py-5 first:pt-0 md:grid-cols-[190px_minmax(0,1fr)] md:items-start xl:grid-cols-[230px_minmax(0,1fr)]">
+    <div className="grid gap-5 py-7 first:pt-0 md:grid-cols-[260px_minmax(0,1fr)] md:items-start xl:grid-cols-[300px_minmax(0,1fr)]">
       <div>
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        {description ? <p className="mt-1 max-w-[13rem] text-xs leading-5 text-foreground/60">{description}</p> : null}
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {description ? <p className="mt-1 max-w-[16rem] text-xs leading-5 text-foreground/60">{description}</p> : null}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
   );
 }
+
+function SettingsSectionBlock({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-6 py-8 first:pt-0 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <p className="mt-2 max-w-[16rem] text-sm leading-6 text-foreground/58">{description}</p>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function SettingsReadRow({
+  title,
+  value,
+  onEdit,
+  children,
+}: {
+  title: string;
+  value: string;
+  onEdit?: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="py-6">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-2 text-sm leading-6 text-foreground/62">{value}</p>
+        </div>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="justify-self-start text-sm font-medium text-[#00756f] transition-colors hover:text-[#005f5a] md:justify-self-end"
+          >
+            Edit
+          </button>
+        ) : null}
+      </div>
+      {children ? <div className="mt-1">{children}</div> : null}
+    </div>
+  );
+}
+
 function FieldGroup({
   label,
   children,
@@ -517,7 +605,7 @@ function FieldGroup({
 }) {
   return (
     <label className="block space-y-2">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-xs font-medium text-foreground/78">{label}</span>
       {children}
     </label>
   );
@@ -531,6 +619,15 @@ function formatSettingsDate(value: string) {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function getInitials(value: string) {
+  const parts = value
+    .trim()
+    .split(/\s+|@/)
+    .filter(Boolean)
+    .slice(0, 2);
+  return (parts.map((part) => part[0]).join("") || "U").toUpperCase();
 }
 
 
