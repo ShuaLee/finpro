@@ -24,6 +24,7 @@ import {
   Smartphone,
   Tablet,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react";
 
@@ -230,13 +231,6 @@ const formatSlugLabel = (value: string) =>
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (match) => match.toUpperCase());
-const getFirstNameFromEmail = (email: string | null | undefined) => {
-  if (!email) return "Profile";
-  const prefix = email.split("@")[0]?.trim();
-  if (!prefix) return "Profile";
-  const normalized = prefix.replace(/[._-]+/g, " ").trim();
-  return normalized ? normalized.replace(/\b\w/g, (match) => match.toUpperCase()).split(" ")[0] : "Profile";
-};
 const formatNumber = (value: string | number | null | undefined, options?: Intl.NumberFormatOptions) => {
   if (value === null || value === undefined || value === "") return "—";
   const parsed = typeof value === "number" ? value : Number(value);
@@ -493,7 +487,6 @@ export function AppHomePage() {
   const tileRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const displayViewport: EditViewport = windowWidth < 768 ? "mobile" : windowWidth < 1280 ? "tablet" : "desktop";
-  const profileFirstName = getFirstNameFromEmail(user?.email);
   const activeViewport: EditViewport = isEditing ? editingViewport : displayViewport;
   const columns = clamp(
     viewportLayouts[activeViewport]?.targetColumns ?? VIEWPORT_DEFAULT_COLUMNS[activeViewport],
@@ -3388,45 +3381,30 @@ export function AppHomePage() {
     <main className="app-home min-h-screen w-full bg-[hsl(var(--app-shell-background))] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="min-h-screen w-full px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex min-h-screen w-full flex-col">
-          <div className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--app-shell-background))] px-4 py-4 sm:px-6 md:left-[96px] md:px-5 xl:left-[236px] xl:px-8">
-            <AppShellTopbar
-              profileFirstName={profileFirstName}
-              profileMenuOpen={profileMenuOpen}
-              onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
-              onOpenAddAssets={() => setIsAddAssetModalOpen(true)}
-              onOpenSettings={() => {
-                setProfileMenuOpen(false);
-                setActiveSettingsSection(null);
-                navigate("/settings");
-              }}
-              onLogout={() => {
-                setProfileMenuOpen(false);
-                void handleLogout();
-              }}
-            />
+      <div className="min-h-screen w-full py-4">
+        <div className="mx-auto flex min-h-screen w-full max-w-[1840px] flex-col px-4 sm:px-6 lg:px-8">
+          <div className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--app-shell-background))]">
+            <div className="mx-auto w-full max-w-[1840px] px-4 py-4 sm:px-6 lg:px-8">
+              <AppShellTopbar
+                activeSection={activeAppShellSection}
+                profileMenuOpen={profileMenuOpen}
+                onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
+                onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
+                onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
+                onOpenSettings={() => {
+                  setProfileMenuOpen(false);
+                  setActiveSettingsSection(null);
+                  navigate("/settings");
+                }}
+                onLogout={() => {
+                  setProfileMenuOpen(false);
+                  void handleLogout();
+                }}
+              />
+            </div>
           </div>
-          <AppShellSideNav
-            activeSection={activeAppShellSection}
-            profileFirstName={profileFirstName}
-            profileMenuOpen={profileMenuOpen}
-            onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
-            onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
-            onOpenAssetTypes={() => navigateToShellSection("assetTypes", "asset-type:all", "Asset Types")}
-            onOpenSettings={() => {
-              setProfileMenuOpen(false);
-              setActiveSettingsSection(null);
-              navigate("/settings");
-            }}
-            onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
-            onLogout={() => {
-              setProfileMenuOpen(false);
-              void handleLogout();
-            }}
-          />
           <div
-            className="flex w-full flex-1 flex-col gap-4 pt-[88px] sm:pt-[96px] md:pl-[112px] xl:pl-[252px]"
+            className="flex w-full flex-1 flex-col gap-4 pt-[88px] sm:pt-[96px]"
           >
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
@@ -3467,7 +3445,7 @@ export function AppHomePage() {
                                   }`}
                                   aria-label="Reorder Add Assets section"
                                 >
-                                  <GripVertical className="h-3.5 w-3.5" />
+                                  <GripVertical className="h-5 w-5" />
                                 </button>
                               ) : null}
                               <div className="grid grid-cols-2 gap-3">
@@ -7387,51 +7365,80 @@ export function AppHomePage() {
 }
 
 function AppShellTopbar({
-  profileFirstName,
+  activeSection,
   profileMenuOpen,
   onToggleProfileMenu,
-  onOpenAddAssets,
+  onOpenDashboard,
+  onOpenPortfolio,
   onOpenSettings,
   onLogout,
 }: {
-  profileFirstName: string;
+  activeSection: AppShellSection;
   profileMenuOpen: boolean;
   onToggleProfileMenu: () => void;
-  onOpenAddAssets: () => void;
+  onOpenDashboard: () => void;
+  onOpenPortfolio: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
 }) {
   return (
-    <div className="flex w-full flex-col gap-4 px-1 py-1 md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center md:hidden">
-        <div className="inline-flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ChartNoAxesCombined className="h-5 w-5" />
-          </span>
-          <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
+      <div className="flex w-full flex-col gap-4 py-1 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center">
+          <div className="inline-flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <ChartNoAxesCombined className="h-5 w-5" />
+            </span>
+            <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-4 md:ml-auto md:justify-end">
-        <div className="rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg">
+        <div className="flex items-center gap-4 md:ml-auto md:-mr-0.5 md:justify-end">
+        <div className="rounded-full border border-[#d8d2c7] bg-[#f8f6f1] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
+          <div className="relative grid grid-cols-2 rounded-full">
+            {(activeSection === "dashboards" || activeSection === "portfolio") ? (
+              <div
+                className={`absolute bottom-0 top-0 z-0 rounded-full bg-[#2d2925] transition-transform duration-200 ${
+                  activeSection === "portfolio" ? "translate-x-full" : "translate-x-0"
+                }`}
+                style={{ width: "50%" }}
+              />
+            ) : null}
+            <button
+              type="button"
+              onClick={onOpenDashboard}
+              className={`relative z-10 inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium transition-colors ${
+                activeSection === "dashboards" ? "text-[#f8f6f1]" : "text-[#47423b]"
+              }`}
+            >
+              <span>Dashboard</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenPortfolio}
+              className={`relative z-10 inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium transition-colors ${
+                activeSection === "portfolio" ? "text-[#f8f6f1]" : "text-[#47423b]"
+              }`}
+            >
+              <span>Portfolio</span>
+            </button>
+          </div>
+        </div>
+        <div className="rounded-full border border-[#d8d2c7] bg-[#f8f6f1] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <button
             type="button"
-            onClick={onOpenAddAssets}
-            className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-foreground/78"
+            className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-[#47423b]"
           >
-            <Plus className="h-4 w-4 text-foreground/78" />
+            <Plus className="h-4 w-4 text-[#47423b]" />
             <span>Add Assets</span>
           </button>
         </div>
-        <div className="relative rounded-full border border-border bg-[rgba(255,255,255,0.52)] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)] backdrop-blur-lg lg:hidden" data-profile-menu>
+        <div className="relative rounded-full border border-[#d8d2c7] bg-[#f8f6f1] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)]" data-profile-menu>
           <button
             type="button"
             onClick={onToggleProfileMenu}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium text-foreground/78"
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors ${activeSection === "settings" ? "bg-[#2d2925] text-[#f8f6f1]" : "text-[#222935]"}`}
             aria-label="Profile menu"
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-              {profileFirstName.slice(0, 1).toUpperCase()}
-            </span>
+            <UserRound className="h-[18px] w-[18px]" strokeWidth={1.9} aria-hidden="true" />
           </button>
           {profileMenuOpen ? (
             <div className="absolute right-0 z-30 mt-2 w-44 rounded-2xl border border-border bg-white p-1.5 shadow-lg">
@@ -7456,122 +7463,6 @@ function AppShellTopbar({
         </div>
       </div>
     </div>
-  );
-}
-
-function AppShellSideNav({
-  activeSection,
-  profileFirstName,
-  profileMenuOpen,
-  onOpenDashboard,
-  onOpenPortfolio,
-  onOpenAssetTypes,
-  onOpenSettings,
-  onToggleProfileMenu,
-  onLogout,
-}: {
-  activeSection: AppShellSection;
-  profileFirstName: string;
-  profileMenuOpen: boolean;
-  onOpenDashboard: () => void;
-  onOpenPortfolio: () => void;
-  onOpenAssetTypes: () => void;
-  onOpenSettings: () => void;
-  onToggleProfileMenu: () => void;
-  onLogout: () => void;
-}) {
-  const items = [
-    {
-      key: "portfolio",
-      label: "Portfolio",
-      isActive: activeSection === "portfolio",
-      onClick: onOpenPortfolio,
-      icon: <i className={`lni lni-briefcase-1 text-[16px] leading-none ${activeSection === "portfolio" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
-    },
-    {
-      key: "dashboards",
-      label: "Dashboards",
-      isActive: activeSection === "dashboards",
-      onClick: onOpenDashboard,
-      icon: <i className={`lni lni-dashboard-square-1 text-[16px] leading-none ${activeSection === "dashboards" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
-    },
-    {
-      key: "assetTypes",
-      label: "Asset Types",
-      isActive: activeSection === "assetTypes",
-      onClick: onOpenAssetTypes,
-      icon: <i className={`lni lni-box-closed text-[16px] leading-none ${activeSection === "assetTypes" ? "opacity-100" : "opacity-72"}`} aria-hidden="true" />,
-    },
-  ];
-
-  return (
-    <aside className="fixed bottom-0 left-0 top-0 z-30 hidden border-r border-black/[0.05] bg-card backdrop-blur-sm md:block md:w-[96px] xl:w-[236px]">
-      <nav className="flex h-full flex-col px-3 py-6 xl:px-5">
-        <div className="flex items-center justify-center px-1 pb-4 xl:justify-start">
-          <div className="inline-flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <ChartNoAxesCombined className="h-5 w-5" />
-            </span>
-            <span className="hidden font-display text-[1.35rem] font-bold tracking-tight text-foreground xl:inline">FinPro</span>
-          </div>
-        </div>
-        <div className="mb-5 border-t border-border/70" />
-        <div className="flex-1 space-y-1">
-          {items.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={item.onClick}
-              className={`relative flex h-10 w-full items-center rounded-xl text-left text-[13.5px] font-medium leading-none tracking-[-0.01em] antialiased transition-colors md:justify-center md:px-0 xl:justify-start xl:gap-3 xl:px-4 ${
-                item.isActive
-                  ? "bg-[#141c25] text-[rgba(255,255,255,0.96)]"
-                  : "text-[#222935] hover:bg-secondary/55 hover:text-[#161c25]"
-              }`}
-            >
-              <span className={`inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center ${item.isActive ? "text-white" : "text-[#2e3643]"}`}>
-                {item.icon}
-              </span>
-              <span className="hidden xl:inline">{item.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="mt-6 border-t border-border/70 pt-4">
-          <div className="relative" data-profile-menu>
-            <button
-              type="button"
-              onClick={onToggleProfileMenu}
-              className="flex h-10 w-full items-center justify-center rounded-xl bg-card text-left text-[13.5px] font-medium leading-none tracking-[-0.01em] antialiased text-[#222935] transition-colors md:px-0 xl:justify-start xl:gap-3 xl:px-4"
-              aria-label="Profile menu"
-            >
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-                {profileFirstName.slice(0, 1).toUpperCase()}
-              </span>
-              <span className="hidden truncate xl:inline">{profileFirstName}</span>
-            </button>
-            {profileMenuOpen ? (
-              <div className="absolute bottom-full left-0 z-30 mb-3 w-full rounded-2xl border border-border bg-white p-1.5 shadow-lg md:w-[180px] xl:w-full">
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                >
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  <span>Settings</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-                >
-                  <LogOut className="h-4 w-4 text-muted-foreground" />
-                  <span>Log out</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </nav>
-    </aside>
   );
 }
 
