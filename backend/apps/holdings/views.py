@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from apps.assets.models import Asset, AssetType
 from apps.assets.services import AssetPriceService, AssetService
-from apps.holdings.models import Container, Holding, HoldingFactDefinition, HoldingOverride, Portfolio
+from apps.holdings.models import Container, DashboardLayoutState, Holding, HoldingFactDefinition, HoldingOverride, Portfolio
 from apps.holdings.serializers import (
     ContainerCreateSerializer,
     ContainerSerializer,
@@ -98,6 +98,40 @@ class PortfolioDetailView(ServiceAPIView):
             is_default=data.get("is_default"),
         )
         return Response(PortfolioSerializer(portfolio).data)
+
+
+class DashboardLayoutStateView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def _serialize(self, state: DashboardLayoutState | None, scope: str) -> dict[str, Any]:
+        return {
+            "scope": scope,
+            "active_layout_id": state.active_layout_id if state else "",
+            "layouts": state.layouts if state else [],
+            "updated_at": state.updated_at.isoformat() if state and state.updated_at else None,
+        }
+
+    def get(self, request):
+        scope = (request.query_params.get("scope") or "dashboards").strip() or "dashboards"
+        state = DashboardLayoutState.objects.filter(profile=request.user.profile, scope=scope).first()
+        return Response(self._serialize(state, scope))
+
+    def put(self, request):
+        scope = str(request.data.get("scope") or "dashboards").strip() or "dashboards"
+        active_layout_id = str(request.data.get("active_layout_id") or "")
+        layouts = request.data.get("layouts")
+        if not isinstance(layouts, list):
+            return Response({"layouts": "Expected a list of dashboard layouts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        state, _created = DashboardLayoutState.objects.update_or_create(
+            profile=request.user.profile,
+            scope=scope,
+            defaults={
+                "active_layout_id": active_layout_id,
+                "layouts": layouts,
+            },
+        )
+        return Response(self._serialize(state, scope))
 
 
 class ContainerListCreateView(ServiceAPIView):

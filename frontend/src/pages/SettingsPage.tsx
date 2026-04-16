@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, ChevronRight, CreditCard, Shield, UserRound } from "lucide-react";
 
 import {
   changePassword,
@@ -63,9 +62,9 @@ export function SettingsPage({ embedded = false, activeSection, onSectionChange 
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [internalActiveTab, setInternalActiveTab] = useState<SettingsTab | null>(null);
-  const activeTab = activeSection ?? internalActiveTab;
+  const activeTab = activeSection ?? internalActiveTab ?? "profile";
 
-  const setActiveTab = (next: SettingsTab | null) => {
+  const setActiveTab = (next: SettingsTab) => {
     onSectionChange?.(next);
     if (activeSection === undefined) {
       setInternalActiveTab(next);
@@ -255,285 +254,193 @@ export function SettingsPage({ embedded = false, activeSection, onSectionChange 
     );
   }
 
-  const isOverview = activeTab === null;
-
   const content = (
     <main className={`mx-auto w-full ${embedded ? "max-w-none px-0 py-0" : "max-w-6xl px-4 py-8 sm:px-6 lg:px-8"}`}>
-      <div className={`space-y-8 ${embedded ? "pt-2" : ""}`}>
-        {!isOverview ? (
-          <button
-            type="button"
-            onClick={() => setActiveTab(null)}
-            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to settings</span>
-          </button>
-        ) : null}
-        {!isOverview ? (
-        <div className="lg:hidden">
-          <nav className="flex flex-wrap items-center gap-3">
-            <SettingsTopNavButton label="Account" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
-            <SettingsTopNavButton label="Login & security" active={activeTab === "security"} onClick={() => setActiveTab("security")} />
-            <SettingsTopNavButton label="Billing" active={activeTab === "billing"} onClick={() => setActiveTab("billing")} />
-            <SettingsTopNavButton label="Danger zone" active={activeTab === "danger"} onClick={() => setActiveTab("danger")} />
-          </nav>
-        </div>
-        ) : null}
-
-        {isOverview ? (
-          <div className="grid min-w-0 gap-10 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="min-w-0">
-              {globalError ? <p className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{globalError}</p> : null}
-              <div className="grid gap-4 md:grid-cols-2">
-                <SettingsOverviewCard
-                  title="Personal information"
-                  icon={<UserRound className="h-5 w-5" />}
-                  onClick={() => setActiveTab("profile")}
-                />
-                <SettingsOverviewCard
-                  title="Login and security"
-                  icon={<Shield className="h-5 w-5" />}
-                  onClick={() => setActiveTab("security")}
-                />
-                <SettingsOverviewCard
-                  title="Billing"
-                  icon={<CreditCard className="h-5 w-5" />}
-                  onClick={() => setActiveTab("billing")}
-                />
-                <SettingsOverviewCard
-                  title="Danger zone"
-                  icon={<AlertTriangle className="h-5 w-5" />}
-                  onClick={() => setActiveTab("danger")}
-                />
-              </div>
-            </section>
-
-            <aside className="space-y-8">
-              <SettingsRailSection title="General preferences">
-                <SettingsRailRow label="Change language" value={language === "en" ? "English" : language} onClick={() => setActiveTab("profile")} />
-                <SettingsRailRow label="Timezone" value={timezone} onClick={() => setActiveTab("profile")} />
-                <SettingsRailRow label="Currency" value={currency || "USD"} onClick={() => setActiveTab("profile")} />
-              </SettingsRailSection>
-              <SettingsRailSection title="How can we help?">
-                <SettingsLinkRow label="Login and security" description="Email changes, password updates, and account protection." onClick={() => setActiveTab("security")} />
-                <SettingsLinkRow label="Billing" description="Subscription and billing controls for your account." onClick={() => setActiveTab("billing")} />
-              </SettingsRailSection>
-            </aside>
+      <header className={`mb-7 border-b border-border pb-4 ${embedded ? "pt-5" : ""}`}>
+        <h1 className="text-[2rem] font-semibold tracking-tight text-foreground">Settings</h1>
+      </header>
+      <div className="grid gap-8 lg:grid-cols-[190px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="min-w-0">
+          <div className="sticky top-24 space-y-3">
+            <nav className="flex gap-2 overflow-x-auto pb-2 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0" aria-label="Settings sections">
+              <SettingsSideNavButton label="Account information" active={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
+              <SettingsSideNavButton label="Login and security" active={activeTab === "security"} onClick={() => setActiveTab("security")} />
+              <SettingsSideNavButton label="Billing" active={activeTab === "billing"} onClick={() => setActiveTab("billing")} />
+              <SettingsSideNavButton label="Delete account" active={activeTab === "danger"} onClick={() => setActiveTab("danger")} />
+            </nav>
           </div>
-        ) : (
-          <section className="min-w-0">
-            {globalError ? <p className="mb-6 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{globalError}</p> : null}
+        </aside>
 
-            {activeTab === "profile" ? (
-              <div className="space-y-6">
-                <SectionShell
-                  title="Profile"
-                  description="Update the details your account uses for localization and valuation."
-                >
-                  <form className="space-y-8" onSubmit={onSaveProfile}>
-                    <SettingFieldRow label="Full name" hint="Used across your account and profile displays.">
-                      <Input id="full-name" className="h-12 rounded-xl bg-white" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                    </SettingFieldRow>
-                    <SettingsSectionDivider />
-                    <SettingFieldGridRow
-                      title="Timezone & preferences"
-                      description="Let us know the region and defaults your account should use."
-                    >
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FieldGroup label="Language">
-                          <Input id="language" className="h-12 rounded-xl bg-white" value={language} onChange={(e) => setLanguage(e.target.value)} required />
-                        </FieldGroup>
-                        <FieldGroup label="Timezone">
-                          <Input id="timezone" className="h-12 rounded-xl bg-white" value={timezone} onChange={(e) => setTimezone(e.target.value)} required />
-                        </FieldGroup>
-                        <FieldGroup label="Country code">
-                          <Input id="country" className="h-12 rounded-xl bg-white" placeholder="US" value={country} onChange={(e) => setCountry(e.target.value)} />
-                        </FieldGroup>
-                        <FieldGroup label="Currency code">
-                          <Input id="currency" className="h-12 rounded-xl bg-white" placeholder="USD" value={currency} onChange={(e) => setCurrency(e.target.value)} required />
-                        </FieldGroup>
-                      </div>
-                    </SettingFieldGridRow>
-                    <div className="flex items-center gap-3 pt-1">
-                      <Button type="submit" className="rounded-full px-5" disabled={profileSubmitting}>{profileSubmitting ? "Saving..." : "Save changes"}</Button>
-                      {profileMessage ? <span className="text-sm text-primary">{profileMessage}</span> : null}
+        <section className="min-w-0">
+          {globalError ? <p className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{globalError}</p> : null}
+
+          {activeTab === "profile" ? (
+            <SettingsPanel
+              title="Account information"
+              description="Manage the user and profile fields currently supported by your account."
+              actions={(
+                <>
+                  <Button type="button" variant="outline" className="h-8 rounded-full px-4 text-xs">Cancel</Button>
+                  <Button type="submit" form="settings-profile-form" className="h-8 rounded-full px-4 text-xs" disabled={profileSubmitting}>
+                    {profileSubmitting ? "Saving..." : "Save Changes"}
+                  </Button>
+                </>
+              )}
+            >
+              <form id="settings-profile-form" className="divide-y divide-border" onSubmit={onSaveProfile}>
+                <SettingsFormRow title="User" description="Read-only account fields from the user model.">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FieldGroup label="Email address">
+                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={me.user.email} disabled readOnly />
+                    </FieldGroup>
+                    <FieldGroup label="Email status">
+                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={me.user.is_email_verified ? "Verified" : "Not verified"} disabled readOnly />
+                    </FieldGroup>
+                    <FieldGroup label="Account status">
+                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={me.user.is_active ? "Active" : "Inactive"} disabled readOnly />
+                    </FieldGroup>
+                    <FieldGroup label="Date joined">
+                      <Input className="h-10 rounded-xl bg-white text-muted-foreground" value={formatSettingsDate(me.user.date_joined)} disabled readOnly />
+                    </FieldGroup>
+                  </div>
+                </SettingsFormRow>
+                <SettingsFormRow title="Full name" description="Stored on your profile and shown across the app.">
+                  <Input id="full-name" className="h-10 rounded-xl bg-white" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                </SettingsFormRow>
+                <SettingsFormRow title="Profile defaults" description="Used for localization, reporting, and valuation defaults.">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FieldGroup label="Language">
+                      <Input id="language" className="h-10 rounded-xl bg-white" value={language} onChange={(e) => setLanguage(e.target.value)} required />
+                    </FieldGroup>
+                    <FieldGroup label="Timezone">
+                      <Input id="timezone" className="h-10 rounded-xl bg-white" value={timezone} onChange={(e) => setTimezone(e.target.value)} required />
+                    </FieldGroup>
+                    <FieldGroup label="Country code">
+                      <Input id="country" className="h-10 rounded-xl bg-white" placeholder="US" value={country} onChange={(e) => setCountry(e.target.value)} />
+                    </FieldGroup>
+                    <FieldGroup label="Currency code">
+                      <Input id="currency" className="h-10 rounded-xl bg-white" placeholder="USD" value={currency} onChange={(e) => setCurrency(e.target.value)} required />
+                    </FieldGroup>
+                  </div>
+                </SettingsFormRow>
+                {profileMessage ? <p className="pt-4 text-sm text-primary">{profileMessage}</p> : null}
+              </form>
+            </SettingsPanel>
+          ) : null}
+
+          {activeTab === "security" ? (
+            <SettingsPanel title="Login and security" description="Manage your email and password.">
+              <div className="space-y-8">
+                <form className="divide-y divide-border" onSubmit={onUpdateEmail}>
+                  <SettingsFormRow title="Email address" description="A verification code will be sent to the new address.">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <FieldGroup label="Email">
+                        <Input id="settings-email" className="h-10 rounded-xl bg-white" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                      </FieldGroup>
+                      <FieldGroup label="Current password">
+                        <Input id="settings-email-password" className="h-10 rounded-xl bg-white" type="password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
+                      </FieldGroup>
                     </div>
-                  </form>
-                </SectionShell>
-              </div>
-            ) : null}
+                  </SettingsFormRow>
+                  <div className="flex items-center gap-3 pt-5">
+                    <Button type="submit" className="rounded-full px-5" disabled={emailSubmitting}>{emailSubmitting ? "Saving..." : "Update email"}</Button>
+                    {emailMessage ? <span className="text-sm text-primary">{emailMessage}</span> : null}
+                  </div>
+                </form>
 
-            {activeTab === "security" ? (
-              <div className="space-y-6">
-                <SectionShell
-                  title="Login & security"
-                  description="Manage the credentials and email address attached to your account."
-                >
-                  <form className="space-y-8" onSubmit={onUpdateEmail}>
-                    <SettingFieldGridRow
-                      title="Email"
-                      description="Change the email you use to sign in. A verification code will be sent to the new address."
-                    >
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FieldGroup label="Email">
-                          <Input id="settings-email" className="h-12 rounded-xl bg-white" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                        </FieldGroup>
-                        <FieldGroup label="Current password">
-                          <Input id="settings-email-password" className="h-12 rounded-xl bg-white" type="password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
-                        </FieldGroup>
-                      </div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <Button type="submit" className="rounded-full px-5" disabled={emailSubmitting}>{emailSubmitting ? "Saving..." : "Update email"}</Button>
-                        {emailMessage ? <span className="text-sm text-primary">{emailMessage}</span> : null}
-                      </div>
-                    </SettingFieldGridRow>
-                  </form>
-                  {pendingEmailChange ? (
-                    <>
-                      <SettingsSectionDivider />
-                      <form className="space-y-4 rounded-2xl border border-border bg-secondary/20 p-5" onSubmit={onVerifyEmailChange}>
-                        <div className="text-sm text-muted-foreground">
-                          Verification code sent to <span className="font-semibold text-foreground">{pendingEmailChange}</span>. Your login email will stay as{" "}
-                          <span className="font-semibold text-foreground">{me.user.email}</span> until verified.
-                        </div>
-                        <FieldGroup label="6-digit verification code">
-                          <Input
-                            id="email-change-code"
-                            className="h-12 rounded-xl bg-white"
-                            inputMode="numeric"
-                            pattern="[0-9]{6}"
-                            maxLength={6}
-                            value={emailCode}
-                            onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                            required
-                          />
-                        </FieldGroup>
-                        <div className="flex items-center gap-3">
-                          <Button type="submit" className="rounded-full px-5" disabled={verifySubmitting || emailCode.length !== 6}>
-                            {verifySubmitting ? "Verifying..." : "Verify new email"}
-                          </Button>
-                          {verifyMessage ? <p className="text-sm text-primary">{verifyMessage}</p> : null}
-                        </div>
-                      </form>
-                    </>
-                  ) : null}
-                  <SettingsSectionDivider />
-                  <form className="space-y-8" onSubmit={onChangePassword}>
-                    <SettingFieldGridRow
-                      title="Password"
-                      description="Use a strong password and rotate it whenever you think your account may be exposed."
-                    >
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <FieldGroup label="Current password">
-                          <Input id="current-password" className="h-12 rounded-xl bg-white" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-                        </FieldGroup>
-                        <FieldGroup label="New password">
-                          <Input id="new-password" className="h-12 rounded-xl bg-white" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
-                        </FieldGroup>
-                        <FieldGroup label="Confirm new password">
-                          <Input id="confirm-password" className="h-12 rounded-xl bg-white" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
-                        </FieldGroup>
-                      </div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <Button type="submit" className="rounded-full px-5" disabled={passwordSubmitting}>{passwordSubmitting ? "Saving..." : "Change password"}</Button>
-                        {passwordMessage ? <span className="text-sm text-primary">{passwordMessage}</span> : null}
-                      </div>
-                    </SettingFieldGridRow>
-                  </form>
-                </SectionShell>
-              </div>
-            ) : null}
-
-            {activeTab === "billing" ? (
-              <div className="space-y-6">
-                <SectionShell
-                  title="Billing"
-                  description="Subscription and billing controls for your account."
-                >
-                  <SettingFieldGridRow
-                    title="Manage subscription"
-                    description="This will connect to your billing portal once subscriptions are wired."
-                    action={(
-                      <button
-                        type="button"
-                        className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
-                        disabled
-                      >
-                        Coming soon
-                      </button>
-                    )}
-                  >
-                    <div className="rounded-2xl border border-border bg-secondary/20 p-5 text-sm text-muted-foreground">
-                      Subscription management is not connected yet. This section is reserved for your future billing portal flow.
+                {pendingEmailChange ? (
+                  <form className="rounded-2xl border border-border bg-secondary/20 p-5" onSubmit={onVerifyEmailChange}>
+                    <p className="text-sm text-muted-foreground">
+                      Verification code sent to <span className="font-semibold text-foreground">{pendingEmailChange}</span>.
+                    </p>
+                    <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                      <FieldGroup label="6-digit verification code">
+                        <Input
+                          id="email-change-code"
+                          className="h-10 rounded-xl bg-white"
+                          inputMode="numeric"
+                          pattern="[0-9]{6}"
+                          maxLength={6}
+                          value={emailCode}
+                          onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          required
+                        />
+                      </FieldGroup>
+                      <Button type="submit" className="rounded-full px-5" disabled={verifySubmitting || emailCode.length !== 6}>
+                        {verifySubmitting ? "Verifying..." : "Verify"}
+                      </Button>
                     </div>
-                  </SettingFieldGridRow>
-                </SectionShell>
-              </div>
-            ) : null}
-
-            {activeTab === "danger" ? (
-              <div className="space-y-6">
-                <SectionShell
-                  title="Danger zone"
-                  description="Destructive account-level actions."
-                >
-                  <form className="space-y-8" onSubmit={onDeleteAccount}>
-                    <SettingFieldGridRow
-                      title="Delete account"
-                      description="Account deletion is permanent in the current build. We can soften this later with deactivation or delayed deletion."
-                    >
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FieldGroup label="Current password">
-                          <Input
-                            id="delete-account-password"
-                            className="h-12 rounded-xl bg-white"
-                            type="password"
-                            value={deletePassword}
-                            onChange={(e) => setDeletePassword(e.target.value)}
-                            required
-                          />
-                        </FieldGroup>
-                        <FieldGroup label='Type "DELETE" to confirm'>
-                          <Input
-                            id="delete-account-confirmation"
-                            className="h-12 rounded-xl bg-white"
-                            value={deleteConfirmation}
-                            onChange={(e) => setDeleteConfirmation(e.target.value.toUpperCase())}
-                            required
-                          />
-                        </FieldGroup>
-                      </div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <Button
-                          type="submit"
-                          variant="outline"
-                          className="rounded-full border-destructive/40 px-5 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          disabled={deleteSubmitting}
-                        >
-                          {deleteSubmitting ? "Deleting..." : "Delete account"}
-                        </Button>
-                        {deleteMessage ? <span className="text-sm text-primary">{deleteMessage}</span> : null}
-                      </div>
-                    </SettingFieldGridRow>
+                    {verifyMessage ? <p className="mt-3 text-sm text-primary">{verifyMessage}</p> : null}
                   </form>
-                </SectionShell>
+                ) : null}
+
+                <form className="divide-y divide-border" onSubmit={onChangePassword}>
+                  <SettingsFormRow title="Password" description="Use a strong password and rotate it whenever needed.">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <FieldGroup label="Current password">
+                        <Input id="current-password" className="h-10 rounded-xl bg-white" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+                      </FieldGroup>
+                      <FieldGroup label="New password">
+                        <Input id="new-password" className="h-10 rounded-xl bg-white" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+                      </FieldGroup>
+                      <FieldGroup label="Confirm password">
+                        <Input id="confirm-password" className="h-10 rounded-xl bg-white" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
+                      </FieldGroup>
+                    </div>
+                  </SettingsFormRow>
+                  <div className="flex items-center gap-3 pt-5">
+                    <Button type="submit" className="rounded-full px-5" disabled={passwordSubmitting}>{passwordSubmitting ? "Saving..." : "Change password"}</Button>
+                    {passwordMessage ? <span className="text-sm text-primary">{passwordMessage}</span> : null}
+                  </div>
+                </form>
               </div>
-            ) : null}
-          </section>
-        )}
+            </SettingsPanel>
+          ) : null}
+
+          {activeTab === "billing" ? (
+            <SettingsPanel title="Payment information" description="Subscription and billing controls for your account.">
+              <SettingsFormRow title="Manage subscription" description="This will connect to your billing portal once subscriptions are wired.">
+                <div className="rounded-2xl border border-border bg-secondary/20 p-5 text-sm text-muted-foreground">
+                  Subscription management is not connected yet. This section is reserved for your future billing portal flow.
+                </div>
+              </SettingsFormRow>
+            </SettingsPanel>
+          ) : null}
+
+          {activeTab === "danger" ? (
+            <SettingsPanel title="Terms and account actions" description="Destructive account-level actions.">
+              <form className="divide-y divide-border" onSubmit={onDeleteAccount}>
+                <SettingsFormRow title="Delete account" description="Account deletion is permanent in the current build.">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FieldGroup label="Current password">
+                      <Input id="delete-account-password" className="h-10 rounded-xl bg-white" type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} required />
+                    </FieldGroup>
+                    <FieldGroup label='Type "DELETE" to confirm'>
+                      <Input id="delete-account-confirmation" className="h-10 rounded-xl bg-white" value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value.toUpperCase())} required />
+                    </FieldGroup>
+                  </div>
+                </SettingsFormRow>
+                <div className="flex items-center gap-3 pt-5">
+                  <Button type="submit" variant="outline" className="rounded-full border-destructive/40 px-5 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={deleteSubmitting}>
+                    {deleteSubmitting ? "Deleting..." : "Delete account"}
+                  </Button>
+                  {deleteMessage ? <span className="text-sm text-primary">{deleteMessage}</span> : null}
+                </div>
+              </form>
+            </SettingsPanel>
+          ) : null}
+        </section>
       </div>
     </main>
   );
-
   if (embedded) {
-    return <div className="px-5 pb-5 pt-0">{content}</div>;
+    return <div className="px-5 pt-0">{content}</div>;
   }
 
   return content;
 }
 
-function SettingsTopNavButton({
+function SettingsSideNavButton({
   label,
   active,
   onClick,
@@ -546,10 +453,10 @@ function SettingsTopNavButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center rounded-full px-4 py-2 text-sm transition-colors ${
+      className={`w-full shrink-0 rounded-md px-3 py-2 text-left text-xs transition-colors lg:block ${
         active
-          ? "bg-primary text-primary-foreground shadow-[0_4px_14px_rgba(28,24,20,0.12)]"
-          : "bg-[rgba(255,255,255,0.58)] font-medium text-foreground/75 backdrop-blur-md hover:bg-[rgba(255,255,255,0.72)] hover:text-foreground"
+          ? "bg-[#f8f6f1] font-medium text-foreground"
+          : "text-foreground/68 hover:bg-[#f8f6f1]/70 hover:text-foreground"
       }`}
     >
       {label}
@@ -557,166 +464,50 @@ function SettingsTopNavButton({
   );
 }
 
-function SettingsOverviewCard({
-  title,
-  icon,
-  onClick,
-}: {
-  title: string;
-  icon: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex min-h-[132px] w-full flex-col justify-between rounded-[26px] border border-border bg-white px-6 py-6 text-left transition-colors hover:bg-white"
-    >
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary/35 text-foreground">
-        {icon}
-      </span>
-      <span className="text-[1.05rem] font-semibold text-foreground">{title}</span>
-    </button>
-  );
-}
-
-function SettingsRailSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
-      <div className="divide-y divide-border rounded-2xl border border-border bg-white/55">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function SettingsRailRow({
-  label,
-  value,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-secondary/30"
-    >
-      <div>
-        <p className="text-base font-semibold text-foreground">{label}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{value}</p>
-      </div>
-      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-    </button>
-  );
-}
-
-function SettingsLinkRow({
-  label,
-  description,
-  onClick,
-}: {
-  label: string;
-  description: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-secondary/30"
-    >
-      <div>
-        <p className="text-base font-semibold text-foreground">{label}</p>
-        <p className="mt-1 max-w-xs text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-      <ChevronRight className="mt-1 h-5 w-5 text-muted-foreground" />
-    </button>
-  );
-}
-
-function SectionShell({
+function SettingsPanel({
   title,
   description,
   children,
-  action,
+  actions,
 }: {
   title: string;
   description: string;
   children: ReactNode;
-  action?: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white">
-      <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+    <div className="min-w-0">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-display text-[1.9rem] font-semibold tracking-tight text-foreground">{title}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-foreground/68">{description}</p>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
+          <p className="mt-1 text-xs text-foreground/64">{description}</p>
         </div>
-        {action ? <div className="pt-1">{action}</div> : null}
+        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="px-6 py-5">{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
 
-function SettingFieldRow({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid gap-3 border-b border-border pb-6 last:border-b-0 last:pb-0 md:grid-cols-[180px_minmax(0,1fr)] md:items-start">
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="mt-1 text-xs leading-5 text-foreground/66">{hint}</p>
-      </div>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function SettingFieldGridRow({
+function SettingsFormRow({
   title,
   description,
   children,
-  action,
 }: {
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
-  action?: ReactNode;
 }) {
   return (
-    <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+    <div className="grid gap-4 py-5 first:pt-0 md:grid-cols-[190px_minmax(0,1fr)] md:items-start xl:grid-cols-[230px_minmax(0,1fr)]">
       <div>
-        <p className="text-lg font-semibold text-foreground">{title}</p>
-        <p className="mt-2 text-sm leading-6 text-foreground/66">{description}</p>
-        {action ? <div className="mt-4">{action}</div> : null}
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        {description ? <p className="mt-1 max-w-[13rem] text-xs leading-5 text-foreground/60">{description}</p> : null}
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
-
-function SettingsSectionDivider() {
-  return <div className="border-t border-border" aria-hidden="true" />;
-}
-
 function FieldGroup({
   label,
   children,
@@ -731,3 +522,15 @@ function FieldGroup({
     </label>
   );
 }
+
+function formatSettingsDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+

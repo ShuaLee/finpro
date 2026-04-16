@@ -6,8 +6,8 @@
 
 @layer base {
   :root {
-    --background: 220 18% 92%;
-    --app-shell-background: 220 18% 92%;
+    --background: 60 14% 97%;
+    --app-shell-background: 60 14% 97%;
     --foreground: 28 28% 9%;
     --card: 0 0% 100%;
     --card-foreground: 28 12% 21%;
@@ -60,6 +60,11 @@
     @apply border-border;
   }
 
+  html {
+    background-color: hsl(var(--app-shell-background));
+    scrollbar-gutter: stable;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
@@ -67,6 +72,7 @@
     background-image: none;
     min-width: 320px;
     min-height: 100vh;
+    overflow-x: hidden;
   }
 
   .dark body {

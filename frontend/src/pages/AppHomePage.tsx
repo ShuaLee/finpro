@@ -460,6 +460,7 @@ export function AppHomePage() {
   const [nextTileId, setNextTileId] = useState(2);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayout[]>([]);
   const [activeLayoutId, setActiveLayoutId] = useState(DEFAULT_LAYOUT_ID);
+  const [hydratedDashboardScope, setHydratedDashboardScope] = useState<string | null>(null);
   const [editingViewport, setEditingViewport] = useState<EditViewport>("desktop");
   const [activeDropSlot, setActiveDropSlot] = useState<number | null>(null);
   const [draggingTileId, setDraggingTileId] = useState<number | null>(null);
@@ -514,6 +515,7 @@ export function AppHomePage() {
   const sectionLabel = activeSidebarLabel;
   const defaultLayoutName = `${sectionLabel} Default Layout`;
   const dashboardScope = activeSidebarCategory;
+  const isDashboardLayoutReady = hydratedDashboardScope === dashboardScope;
   const navigationScope = "left-nav";
   const navVisibilityStorageKey = `finpro.nav.visibility.${(user?.email ?? "anonymous").toLowerCase()}.${navigationScope}`;
   const legacyStorageKey = `finpro.dashboard.layouts.${(user?.email ?? "anonymous").toLowerCase()}.${dashboardScope}`;
@@ -2324,6 +2326,7 @@ export function AppHomePage() {
       setSavedLayouts(layouts);
       setActiveLayoutId(activeId);
       applyLayout(activeLayout);
+      setHydratedDashboardScope(dashboardScope);
       persistLayouts(layouts, activeId);
     };
 
@@ -2564,7 +2567,7 @@ export function AppHomePage() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateMetrics);
     };
-  }, [isEditing, editingViewport, activeViewport, columns]);
+  }, [isDashboardLayoutReady, isEditing, editingViewport, activeViewport, columns]);
 
   const addTile = (preset: TilePreset = TILE_PRESETS[0]) => {
     const newTileId = nextTileId;
@@ -3082,6 +3085,12 @@ export function AppHomePage() {
   };
   const totalRows = computeTotalRows(targetRows);
   const totalSlots = totalRows * columns;
+  const dashboardSkeletonTiles = [
+    { key: "large-left", colSpan: Math.min(columns, columns >= 6 ? 2 : 1), rowSpan: 3 },
+    { key: "small-center", colSpan: Math.min(columns, columns >= 6 ? 1 : 1), rowSpan: 1 },
+    { key: "large-right", colSpan: Math.min(columns, columns >= 6 ? 2 : 1), rowSpan: 3 },
+    { key: "small-bottom", colSpan: Math.min(columns, columns >= 6 ? 1 : 1), rowSpan: 1 },
+  ];
   const occupiedSlots = getOccupiedSlots(
     tiles.map((tile) => {
       const preview = resizePreview?.tileId === tile.id ? resizePreview : null;
@@ -3381,10 +3390,10 @@ export function AppHomePage() {
     <main className="app-home min-h-screen w-full bg-[hsl(var(--app-shell-background))] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="min-h-screen w-full py-4">
-        <div className="mx-auto flex min-h-screen w-full max-w-[1840px] flex-col px-4 sm:px-6 lg:px-8">
-          <div className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--app-shell-background))]">
-            <div className="mx-auto w-full max-w-[1840px] px-4 py-4 sm:px-6 lg:px-8">
+      <div className="w-full">
+        <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4 sm:px-6 lg:px-8">
+          <div className="app-top-nav fixed inset-x-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
+            <div className="mx-auto w-full max-w-[1840px] px-4 py-3.5 sm:px-6 lg:px-8">
               <AppShellTopbar
                 activeSection={activeAppShellSection}
                 profileMenuOpen={profileMenuOpen}
@@ -3403,9 +3412,7 @@ export function AppHomePage() {
               />
             </div>
           </div>
-          <div
-            className="flex w-full flex-1 flex-col gap-4 pt-[88px] sm:pt-[96px]"
-          >
+          <div className="flex w-full flex-col gap-4 pt-[82px] sm:pt-[90px]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -4747,7 +4754,15 @@ export function AppHomePage() {
               ) : null}
               {!isEditing ? (
                 <Card className={activeAppShellSection === "settings" ? "overflow-visible border-0 bg-transparent shadow-none dark:border-0 dark:bg-transparent" : "overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background"}>
-                  <CardContent className={activeAppShellSection === "portfolio" || activeAppShellSection === "addAccount" || activeAppShellSection === "settings" ? "min-h-[74vh] p-0" : "min-h-[74vh] px-5 pb-5 pt-2"}>
+                  <CardContent
+                    className={
+                      activeAppShellSection === "settings"
+                        ? "p-0"
+                        : activeAppShellSection === "portfolio" || activeAppShellSection === "addAccount"
+                          ? "min-h-[74vh] p-0"
+                          : "min-h-[74vh] px-5 pb-5 pt-2"
+                    }
+                  >
                     {activeAppShellSection === "portfolio" ? (
                       <div className="space-y-4 rounded-xl border border-background bg-background p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -5477,6 +5492,32 @@ export function AppHomePage() {
                       </div>
                     ) : activeSidebarCategory === "holdings" ? (
                       <div className="h-[520px] w-full rounded-xl border border-slate-300/80 bg-slate-100/70 dark:border-border dark:bg-card" />
+                    ) : !isDashboardLayoutReady ? (
+                      <div className="min-h-[520px] w-full">
+                        <div
+                          className="grid auto-rows-[120px] gap-3 md:auto-rows-[132px]"
+                          style={{ gridTemplateColumns: `repeat(${Math.max(1, columns)}, minmax(0, 1fr))` }}
+                          aria-label="Loading saved dashboard layout"
+                        >
+                          {dashboardSkeletonTiles.map((tile, index) => (
+                            <div
+                              key={`dashboard-layout-skeleton-${tile.key}`}
+                              className="animate-pulse rounded-xl border border-slate-200/70 bg-white/70 shadow-[0_8px_24px_rgba(28,24,20,0.035)]"
+                              style={{
+                                gridColumn: `span ${tile.colSpan} / span ${tile.colSpan}`,
+                                gridRow: `span ${tile.rowSpan} / span ${tile.rowSpan}`,
+                                animationDelay: `${index * 140}ms`,
+                                animationDuration: "1800ms",
+                              }}
+                            >
+                              <div className="flex h-full flex-col justify-between p-3">
+                                <div className="h-3 w-16 rounded-full bg-slate-200/80" />
+                                <div className="h-2.5 w-12 rounded-full bg-slate-200/70" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex items-start gap-2">
                         <div className="relative flex-1 overflow-hidden">
@@ -7391,8 +7432,8 @@ function AppShellTopbar({
             <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
           </div>
         </div>
-        <div className="flex items-center gap-4 md:ml-auto md:-mr-0.5 md:justify-end">
-        <div className="rounded-full border border-[#d8d2c7] bg-[#f8f6f1] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
+        <div className="flex shrink-0 items-center gap-4 md:ml-auto md:justify-end">
+        <div className="rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <div className="relative grid grid-cols-2 rounded-full">
             {(activeSection === "dashboards" || activeSection === "portfolio") ? (
               <div
@@ -7405,7 +7446,7 @@ function AppShellTopbar({
             <button
               type="button"
               onClick={onOpenDashboard}
-              className={`relative z-10 inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium transition-colors ${
+                className={`relative z-10 inline-flex h-[38px] items-center justify-center rounded-full px-[18px] text-sm font-medium transition-colors ${
                 activeSection === "dashboards" ? "text-[#f8f6f1]" : "text-[#47423b]"
               }`}
             >
@@ -7414,7 +7455,7 @@ function AppShellTopbar({
             <button
               type="button"
               onClick={onOpenPortfolio}
-              className={`relative z-10 inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium transition-colors ${
+                className={`relative z-10 inline-flex h-[38px] items-center justify-center rounded-full px-[18px] text-sm font-medium transition-colors ${
                 activeSection === "portfolio" ? "text-[#f8f6f1]" : "text-[#47423b]"
               }`}
             >
@@ -7422,20 +7463,20 @@ function AppShellTopbar({
             </button>
           </div>
         </div>
-        <div className="rounded-full border border-[#d8d2c7] bg-[#f8f6f1] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
+        <div className="rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-[#47423b]"
+            className="inline-flex h-[38px] items-center gap-2 rounded-full px-[15px] text-sm font-medium text-[#47423b]"
           >
             <Plus className="h-4 w-4 text-[#47423b]" />
             <span>Add Assets</span>
           </button>
         </div>
-        <div className="relative rounded-full border border-[#d8d2c7] bg-[#f8f6f1] p-1 shadow-[0_4px_10px_rgba(28,24,20,0.03)]" data-profile-menu>
+        <div className="relative rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]" data-profile-menu>
           <button
             type="button"
             onClick={onToggleProfileMenu}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors ${activeSection === "settings" ? "bg-[#2d2925] text-[#f8f6f1]" : "text-[#222935]"}`}
+            className={`inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-colors ${activeSection === "settings" ? "bg-[#2d2925] text-[#f8f6f1]" : "text-[#222935]"}`}
             aria-label="Profile menu"
           >
             <UserRound className="h-[18px] w-[18px]" strokeWidth={1.9} aria-hidden="true" />
