@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
     verifyEmailChange: `${API_BASE_URL}/auth/email/change/confirm/`,
     requestEmailChange: `${API_BASE_URL}/auth/email/change/request/`,
     logout: `${API_BASE_URL}/auth/logout/`,
+    logoutAll: `${API_BASE_URL}/auth/logout-all/`,
     deleteAccount: `${API_BASE_URL}/auth/delete-account/`,
     refresh: `${API_BASE_URL}/auth/refresh/`,
     register: `${API_BASE_URL}/auth/register/`,
@@ -37,8 +38,8 @@ export const API_ENDPOINTS = {
     createCustomAssetType: `${API_BASE_URL}/assets/asset-types/custom/`,
     equityLookup: `${API_BASE_URL}/assets/equities/lookup/`,
   },
-  portfolios: {
-    dashboardLayouts: `${API_BASE_URL}/portfolios/dashboard-layouts/`,
-    navigationState: `${API_BASE_URL}/portfolios/navigation-state/`,
+  ui: {
+    dashboardLayouts: `${API_BASE_URL}/ui/dashboard-layouts/`,
+    navigationState: `${API_BASE_URL}/ui/navigation-state/`,
   },
 };

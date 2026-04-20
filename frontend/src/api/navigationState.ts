@@ -23,14 +23,14 @@ export type UpsertNavigationStatePayload = {
 };
 
 export async function getNavigationState(scope: string): Promise<NavigationStateResponse> {
-  const url = new URL(API_ENDPOINTS.portfolios.navigationState);
+  const url = new URL(API_ENDPOINTS.ui.navigationState);
   url.searchParams.set("scope", scope);
   return apiRequest<NavigationStateResponse>(url.toString(), "GET");
 }
 
 export async function upsertNavigationState(payload: UpsertNavigationStatePayload): Promise<NavigationStateResponse> {
   return apiRequest<NavigationStateResponse>(
-    API_ENDPOINTS.portfolios.navigationState,
+    API_ENDPOINTS.ui.navigationState,
     "PUT",
     payload as unknown as Record<string, unknown>,
   );

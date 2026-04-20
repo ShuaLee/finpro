@@ -11,13 +11,11 @@ from apps.holdings.views import (
     HoldingCreateWithAssetView,
     HoldingDetailView,
     HoldingListCreateView,
-    DashboardLayoutStateView,
     PortfolioDetailView,
     PortfolioListCreateView,
 )
 
 urlpatterns = [
-    path("portfolios/dashboard-layouts/", DashboardLayoutStateView.as_view(), name="dashboard-layout-state"),
     path("portfolios/", PortfolioListCreateView.as_view(), name="portfolio-list-create"),
     path("portfolios/<int:pk>/", PortfolioDetailView.as_view(), name="portfolio-detail"),
     path("containers/", ContainerListCreateView.as_view(), name="container-list-create"),

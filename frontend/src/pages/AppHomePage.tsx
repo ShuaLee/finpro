@@ -19,7 +19,6 @@ import {
   Monitor,
   MoveDiagonal2,
   Plus,
-  LogOut,
   Settings,
   Smartphone,
   Tablet,
@@ -307,7 +306,7 @@ const moveKeyForDrag = (items: string[], sourceKey: string, targetKey: string) =
 };
 
 export function AppHomePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const routeShellState = location.state as
@@ -335,7 +334,7 @@ export function AppHomePage() {
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>(initialShellSection);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
   const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "danger" | null>(null);
+  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | null>(null);
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -361,7 +360,6 @@ export function AppHomePage() {
   const [accountCreateOptions, setAccountCreateOptions] = useState<AccountCreateOptions | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [holderMenuOpenId, setHolderMenuOpenId] = useState<number | null>(null);
   const [isNewLayoutDialogOpen, setIsNewLayoutDialogOpen] = useState(false);
   const [isAddTileDialogOpen, setIsAddTileDialogOpen] = useState(false);
@@ -2007,7 +2005,6 @@ export function AppHomePage() {
       const target = event.target as HTMLElement | null;
       if (!target) return;
       const inDashboardMenu = Boolean(target.closest("[data-dashboard-menu]"));
-      const inProfileMenu = Boolean(target.closest("[data-profile-menu]"));
       const inHolderMenu = Boolean(target.closest("[data-holder-menu]"));
       const inAccountActionsMenu = Boolean(target.closest("[data-account-actions-menu]"));
       const inFavoritesActionsMenu = Boolean(target.closest("[data-favorites-actions-menu]"));
@@ -2019,7 +2016,6 @@ export function AppHomePage() {
 
       if (!inDashboardMenu) setSettingsMenuOpen(false);
       if (!inDashboardMenu) setLayoutActionsMenuOpen(false);
-      if (!inProfileMenu) setProfileMenuOpen(false);
       if (!inHolderMenu) setHolderMenuOpenId(null);
 
       if (!inAccountActionsMenu) {
@@ -3313,11 +3309,6 @@ export function AppHomePage() {
     }
   }, [activeAppShellSection, addAssetModalAssetTypes, selectedAddAccountAssetType]);
 
-  const handleLogout = useCallback(async () => {
-    await logout();
-    navigate("/login", { replace: true });
-  }, [logout, navigate]);
-
   const navigateToShellSection = useCallback(
     (section: AppShellSection, sidebarCategory: string, sidebarLabel: string) => {
       if (location.pathname !== "/") {
@@ -3390,25 +3381,22 @@ export function AppHomePage() {
     <main className="app-home min-h-screen w-full bg-[hsl(var(--app-shell-background))] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="w-full">
+      <AppShellSidebar
+        activeSection={activeAppShellSection}
+        userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
+        userEmail={user?.email ?? ""}
+        onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
+        onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
+        onOpenSettings={() => {
+          setActiveSettingsSection(null);
+          navigate("/settings");
+        }}
+      />
+      <div className="w-full pl-[240px]">
         <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4 sm:px-6 lg:px-8">
-          <div className="app-top-nav fixed inset-x-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
-            <div className="mx-auto w-full max-w-[1840px] px-4 py-3.5 sm:px-6 lg:px-8">
+          <div className="app-top-nav fixed left-[240px] right-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
+            <div className="mx-auto w-full max-w-[1600px] px-4 py-3.5 sm:px-6 lg:px-8">
               <AppShellTopbar
-                activeSection={activeAppShellSection}
-                profileMenuOpen={profileMenuOpen}
-                onToggleProfileMenu={() => setProfileMenuOpen((previous) => !previous)}
-                onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
-                onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
-                onOpenSettings={() => {
-                  setProfileMenuOpen(false);
-                  setActiveSettingsSection(null);
-                  navigate("/settings");
-                }}
-                onLogout={() => {
-                  setProfileMenuOpen(false);
-                  void handleLogout();
-                }}
               />
             </div>
           </div>
@@ -7405,64 +7393,91 @@ export function AppHomePage() {
   );
 }
 
-function AppShellTopbar({
+function AppShellSidebar({
   activeSection,
-  profileMenuOpen,
-  onToggleProfileMenu,
-  onOpenDashboard,
+  userName,
+  userEmail,
   onOpenPortfolio,
+  onOpenDashboard,
   onOpenSettings,
-  onLogout,
 }: {
   activeSection: AppShellSection;
-  profileMenuOpen: boolean;
-  onToggleProfileMenu: () => void;
-  onOpenDashboard: () => void;
+  userName: string;
+  userEmail: string;
   onOpenPortfolio: () => void;
+  onOpenDashboard: () => void;
   onOpenSettings: () => void;
-  onLogout: () => void;
 }) {
+  const navItems = [
+    {
+      key: "portfolio",
+      label: "Portfolio",
+      active: activeSection === "portfolio",
+      onClick: onOpenPortfolio,
+      icon: <i className="lni lni-briefcase-1 text-[15px] leading-none text-current" aria-hidden="true" />,
+    },
+    {
+      key: "dashboards",
+      label: "Dashboard",
+      active: activeSection === "dashboards",
+      onClick: onOpenDashboard,
+      icon: <Grid2x2 className="h-[15px] w-[15px]" strokeWidth={1.9} aria-hidden="true" />,
+    },
+  ];
+
   return (
-      <div className="flex w-full flex-col gap-4 py-1 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center">
-          <div className="inline-flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <ChartNoAxesCombined className="h-5 w-5" />
+    <aside className="fixed bottom-0 left-0 top-0 z-50 flex w-[240px] flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] px-5">
+      <div className="flex h-[90px] items-center justify-start pl-4">
+        <div className="inline-flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <ChartNoAxesCombined className="h-5 w-5" />
+          </span>
+          <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
+        </div>
+      </div>
+      <nav className="mt-3 flex flex-col gap-1.5" aria-label="Primary navigation">
+        {navItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={item.onClick}
+            className={`flex h-11 items-center gap-3 rounded-2xl px-4 text-left text-sm font-medium transition-colors ${
+              item.active
+                ? "bg-[#2d2925] text-[#f8f6f1]"
+                : "text-[#47423b] hover:bg-[#e9e3d8]"
+            }`}
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center text-current">{item.icon}</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="mt-auto border-t border-[#d8d2c7]/70 py-5" data-profile-menu>
+        <div className="flex h-[58px] items-center rounded-2xl">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex h-14 w-full min-w-0 items-center gap-3 rounded-2xl px-4 text-left transition-colors hover:bg-[#e9e3d8]"
+            aria-label="Open profile settings"
+          >
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2d2925] text-[#f8f6f1]">
+              <UserRound className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
             </span>
-            <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
-          </div>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium leading-5 text-[#222935]">{userName}</span>
+              <span className="block truncate text-xs leading-4 text-[#47423b]/70">{userEmail || "Account settings"}</span>
+            </span>
+          </button>
         </div>
-        <div className="flex shrink-0 items-center gap-4 md:ml-auto md:justify-end">
-        <div className="rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
-          <div className="relative grid grid-cols-2 rounded-full">
-            {(activeSection === "dashboards" || activeSection === "portfolio") ? (
-              <div
-                className={`absolute bottom-0 top-0 z-0 rounded-full bg-[#2d2925] transition-transform duration-200 ${
-                  activeSection === "portfolio" ? "translate-x-full" : "translate-x-0"
-                }`}
-                style={{ width: "50%" }}
-              />
-            ) : null}
-            <button
-              type="button"
-              onClick={onOpenDashboard}
-                className={`relative z-10 inline-flex h-[38px] items-center justify-center rounded-full px-[18px] text-sm font-medium transition-colors ${
-                activeSection === "dashboards" ? "text-[#f8f6f1]" : "text-[#47423b]"
-              }`}
-            >
-              <span>Dashboard</span>
-            </button>
-            <button
-              type="button"
-              onClick={onOpenPortfolio}
-                className={`relative z-10 inline-flex h-[38px] items-center justify-center rounded-full px-[18px] text-sm font-medium transition-colors ${
-                activeSection === "portfolio" ? "text-[#f8f6f1]" : "text-[#47423b]"
-              }`}
-            >
-              <span>Portfolio</span>
-            </button>
-          </div>
-        </div>
+      </div>
+    </aside>
+  );
+}
+
+function AppShellTopbar() {
+  return (
+      <div className="flex w-full justify-end py-1">
+        <div className="flex shrink-0 items-center gap-4">
         <div className="rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <button
             type="button"
@@ -7471,36 +7486,6 @@ function AppShellTopbar({
             <Plus className="h-4 w-4 text-[#47423b]" />
             <span>Add Assets</span>
           </button>
-        </div>
-        <div className="relative rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]" data-profile-menu>
-          <button
-            type="button"
-            onClick={onToggleProfileMenu}
-            className={`inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-colors ${activeSection === "settings" ? "bg-[#2d2925] text-[#f8f6f1]" : "text-[#222935]"}`}
-            aria-label="Profile menu"
-          >
-            <UserRound className="h-[18px] w-[18px]" strokeWidth={1.9} aria-hidden="true" />
-          </button>
-          {profileMenuOpen ? (
-            <div className="absolute right-0 z-30 mt-2 w-44 rounded-2xl border border-border bg-white p-1.5 shadow-lg">
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-              >
-                <Settings className="h-4 w-4 text-muted-foreground" />
-                <span>Settings</span>
-              </button>
-              <button
-                type="button"
-                onClick={onLogout}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary"
-              >
-                <LogOut className="h-4 w-4 text-muted-foreground" />
-                <span>Log out</span>
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

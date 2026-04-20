@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.models import EmailVerificationToken, SupportedCountry, SupportedCurrency
@@ -293,6 +294,27 @@ class AuthApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(self.user_model.objects.filter(email="delete@example.com").exists())
+        self.assertEqual(response.cookies["access"].value, "")
+        self.assertEqual(response.cookies["refresh"].value, "")
+
+    def test_logout_all_blacklists_all_user_refresh_tokens_and_clears_auth_cookies(self):
+        user = self.user_model.objects.create_user(
+            email="logoutall@example.com",
+            password="StrongPass123!",
+            email_verified_at=timezone.now(),
+        )
+        RefreshToken.for_user(user)
+        RefreshToken.for_user(user)
+        self.client.force_authenticate(user=user)
+        self.client.cookies["access"] = "access-token"
+        self.client.cookies["refresh"] = "refresh-token"
+
+        response = self.client.post(reverse("auth-logout-all"), {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        outstanding_tokens = OutstandingToken.objects.filter(user=user)
+        self.assertEqual(outstanding_tokens.count(), 2)
+        self.assertEqual(BlacklistedToken.objects.filter(token__in=outstanding_tokens).count(), 2)
         self.assertEqual(response.cookies["access"].value, "")
         self.assertEqual(response.cookies["refresh"].value, "")
 

@@ -129,6 +129,25 @@ class LogoutView(ServiceAPIView):
         return clear_auth_cookies(response)
 
 
+class LogoutAllSessionsView(ServiceAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        revoked_count = AuthService.logout_all_sessions(
+            user=request.user,
+            request=request,
+        )
+
+        response = Response(
+            {
+                "detail": "Logged out of all sessions.",
+                "revoked_refresh_tokens": revoked_count,
+            },
+            status=status.HTTP_200_OK,
+        )
+        return clear_auth_cookies(response)
+
+
 class DeleteAccountView(ServiceAPIView):
     permission_classes = [IsAuthenticated]
 

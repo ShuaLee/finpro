@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { getAuthStatus, login as loginRequest, logout as logoutRequest, refreshSession } from "../api/auth";
+import { getAuthStatus, login as loginRequest, logout as logoutRequest, logoutAllSessions as logoutAllSessionsRequest, refreshSession } from "../api/auth";
 import { ApiError } from "../api/http";
 
 type AuthUser = {
   email: string;
+  fullName: string;
   isEmailVerified: boolean;
   isLocked: boolean;
 };
@@ -16,6 +17,7 @@ type AuthContextValue = {
   refreshAuth: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  logoutAllSessions: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -27,6 +29,7 @@ function mapStatusToUser(status: Awaited<ReturnType<typeof getAuthStatus>>): Aut
 
   return {
     email: status.email,
+    fullName: status.full_name ?? "",
     isEmailVerified: Boolean(status.is_email_verified),
     isLocked: Boolean(status.is_locked),
   };
@@ -81,13 +84,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const logoutAllSessions = useCallback(async () => {
+    await logoutAllSessionsRequest();
+    setUser(null);
+  }, []);
+
   const value = useMemo<AuthContextValue>(() => ({
     user,
     loading,
     refreshAuth,
     login,
     logout,
-  }), [user, loading, refreshAuth, login, logout]);
+    logoutAllSessions,
+  }), [user, loading, refreshAuth, login, logout, logoutAllSessions]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

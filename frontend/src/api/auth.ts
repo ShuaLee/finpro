@@ -4,6 +4,7 @@ import { apiRequest, clearCachedCsrfToken } from "./http";
 export type AuthStatusResponse = {
   authenticated: boolean;
   email?: string;
+  full_name?: string;
   is_email_verified?: boolean;
   is_locked?: boolean;
 };
@@ -42,11 +43,15 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
       is_email_verified: boolean;
       is_locked: boolean;
     };
+    profile?: {
+      full_name?: string;
+    };
   }>(API_ENDPOINTS.auth.me, "GET");
 
   return {
     authenticated: true,
     email: response.user.email,
+    full_name: response.profile?.full_name,
     is_email_verified: response.user.is_email_verified,
     is_locked: response.user.is_locked,
   };
@@ -62,6 +67,12 @@ export async function login(email: string, password: string): Promise<LoginRespo
 export async function logout(): Promise<void> {
   await apiRequest<{ detail: string }>(API_ENDPOINTS.auth.logout, "POST");
   clearCachedCsrfToken();
+}
+
+export async function logoutAllSessions(): Promise<{ detail: string; revoked_refresh_tokens: number }> {
+  const response = await apiRequest<{ detail: string; revoked_refresh_tokens: number }>(API_ENDPOINTS.auth.logoutAll, "POST");
+  clearCachedCsrfToken();
+  return response;
 }
 
 export async function refreshSession(): Promise<void> {

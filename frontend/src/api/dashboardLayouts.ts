@@ -15,14 +15,14 @@ export type UpsertDashboardLayoutStatePayload = {
 };
 
 export async function getDashboardLayoutState(scope: string): Promise<DashboardLayoutStateResponse> {
-  const url = new URL(API_ENDPOINTS.portfolios.dashboardLayouts);
+  const url = new URL(API_ENDPOINTS.ui.dashboardLayouts);
   url.searchParams.set("scope", scope);
   return apiRequest<DashboardLayoutStateResponse>(url.toString(), "GET");
 }
 
 export async function upsertDashboardLayoutState(payload: UpsertDashboardLayoutStatePayload): Promise<DashboardLayoutStateResponse> {
   return apiRequest<DashboardLayoutStateResponse>(
-    API_ENDPOINTS.portfolios.dashboardLayouts,
+    API_ENDPOINTS.ui.dashboardLayouts,
     "PUT",
     payload as unknown as Record<string, unknown>,
   );

@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'apps.assets.apps.AssetsConfig',
     'apps.integrations.apps.IntegrationsConfig',
     'apps.holdings.apps.HoldingsConfig',
+    'apps.ui.apps.UiConfig',
     'apps.users.apps.UsersConfig',
 ]
 

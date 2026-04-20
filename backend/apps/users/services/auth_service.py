@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from apps.users.models import AuthEvent, EmailVerificationToken, User
 from apps.users.services.auth_event_service import AuthEventService
@@ -187,6 +188,26 @@ class AuthService:
                 request=request) if request else "",
         )
         return True
+
+    @staticmethod
+    def logout_all_sessions(*, user, request=None):
+        tokens = OutstandingToken.objects.filter(user=user)
+        revoked_count = 0
+        for token in tokens:
+            _, created = BlacklistedToken.objects.get_or_create(token=token)
+            if created:
+                revoked_count += 1
+
+        AuthEventService.log_event(
+            user=user,
+            event_type=AuthEvent.EventType.LOGOUT,
+            ip_address=AuthService._client_ip(
+                request=request) if request else None,
+            user_agent=AuthService._user_agent(
+                request=request) if request else "",
+            metadata={"reason": "logout_all_sessions", "revoked_refresh_tokens": revoked_count},
+        )
+        return revoked_count
 
     @staticmethod
     def change_password(*, user, current_password: str, new_password: str, request=None):
