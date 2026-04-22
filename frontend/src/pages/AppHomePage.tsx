@@ -16,6 +16,7 @@ import {
   EyeOff,
   Grid2x2,
   GripVertical,
+  Menu,
   Monitor,
   MoveDiagonal2,
   Plus,
@@ -335,6 +336,7 @@ export function AppHomePage() {
   const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
   const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
   const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -3383,6 +3385,7 @@ export function AppHomePage() {
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
       <AppShellSidebar
         activeSection={activeAppShellSection}
+        collapsed={isSidebarCollapsed}
         userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
         userEmail={user?.email ?? ""}
         onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
@@ -3392,15 +3395,17 @@ export function AppHomePage() {
           navigate("/settings");
         }}
       />
-      <div className="w-full pl-[240px]">
-        <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4 sm:px-6 lg:px-8">
-          <div className="app-top-nav fixed left-[240px] right-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
-            <div className="mx-auto w-full max-w-[1600px] px-4 py-3.5 sm:px-6 lg:px-8">
+      <div className={`w-full ${isSidebarCollapsed ? "pl-[72px]" : "pl-[224px]"}`}>
+        <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4">
+          <div className="app-top-nav fixed inset-x-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
+            <div className="w-full px-4 py-2.5">
               <AppShellTopbar
+                collapsed={isSidebarCollapsed}
+                onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
               />
             </div>
           </div>
-          <div className="flex w-full flex-col gap-4 pt-[82px] sm:pt-[90px]">
+          <div className="flex w-full flex-col gap-4 pt-[70px] sm:pt-[76px]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -7395,6 +7400,7 @@ export function AppHomePage() {
 
 function AppShellSidebar({
   activeSection,
+  collapsed,
   userName,
   userEmail,
   onOpenPortfolio,
@@ -7402,6 +7408,7 @@ function AppShellSidebar({
   onOpenSettings,
 }: {
   activeSection: AppShellSection;
+  collapsed: boolean;
   userName: string;
   userEmail: string;
   onOpenPortfolio: () => void;
@@ -7414,41 +7421,36 @@ function AppShellSidebar({
       label: "Portfolio",
       active: activeSection === "portfolio",
       onClick: onOpenPortfolio,
-      icon: <i className="lni lni-briefcase-1 text-[15px] leading-none text-current" aria-hidden="true" />,
+      icon: <i className="lni lni-briefcase-1 text-[17px] leading-none text-current" aria-hidden="true" />,
     },
     {
       key: "dashboards",
       label: "Dashboard",
       active: activeSection === "dashboards",
       onClick: onOpenDashboard,
-      icon: <Grid2x2 className="h-[15px] w-[15px]" strokeWidth={1.9} aria-hidden="true" />,
+      icon: <Grid2x2 className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />,
     },
   ];
 
   return (
-    <aside className="fixed bottom-0 left-0 top-0 z-50 flex w-[240px] flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] px-5">
-      <div className="flex h-[90px] items-center justify-start pl-4">
-        <div className="inline-flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ChartNoAxesCombined className="h-5 w-5" />
-          </span>
-          <span className="font-display text-[1.45rem] font-bold tracking-tight text-foreground">FinPro</span>
-        </div>
-      </div>
-      <nav className="mt-3 flex flex-col gap-1.5" aria-label="Primary navigation">
+    <aside className={`fixed bottom-0 left-0 top-[61px] z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
+      <nav className="mt-4 flex flex-col gap-1.5" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={item.onClick}
-            className={`flex h-11 items-center gap-3 rounded-2xl px-4 text-left text-sm font-medium transition-colors ${
+            className={`flex h-11 items-center rounded-2xl text-sm font-medium transition-colors ${
+              collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
+            } ${
               item.active
-                ? "bg-[#2d2925] text-[#f8f6f1]"
+                ? "bg-[#e9e3d8] text-[#47423b]"
                 : "text-[#47423b] hover:bg-[#e9e3d8]"
             }`}
+            title={collapsed ? item.label : undefined}
           >
-            <span className="inline-flex h-5 w-5 items-center justify-center text-current">{item.icon}</span>
-            <span>{item.label}</span>
+            <span className="inline-flex h-6 w-6 items-center justify-center text-current">{item.icon}</span>
+            <span className={collapsed ? "sr-only" : ""}>{item.label}</span>
           </button>
         ))}
       </nav>
@@ -7457,13 +7459,20 @@ function AppShellSidebar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="flex h-14 w-full min-w-0 items-center gap-3 rounded-2xl px-4 text-left transition-colors hover:bg-[#e9e3d8]"
+            className={`flex h-14 w-full min-w-0 items-center rounded-2xl text-left transition-colors ${
+              collapsed ? "justify-center px-0" : "gap-3 px-2"
+            } ${
+              activeSection === "settings"
+                ? "bg-[#e9e3d8] text-[#47423b]"
+                : "text-[#47423b] hover:bg-[#e9e3d8]"
+            }`}
             aria-label="Open profile settings"
+            title={collapsed ? userName : undefined}
           >
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2d2925] text-[#f8f6f1]">
               <UserRound className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
             </span>
-            <span className="min-w-0">
+            <span className={collapsed ? "sr-only" : "min-w-0"}>
               <span className="block truncate text-sm font-medium leading-5 text-[#222935]">{userName}</span>
               <span className="block truncate text-xs leading-4 text-[#47423b]/70">{userEmail || "Account settings"}</span>
             </span>
@@ -7474,17 +7483,40 @@ function AppShellSidebar({
   );
 }
 
-function AppShellTopbar() {
+function AppShellTopbar({
+  collapsed,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   return (
-      <div className="flex w-full justify-end py-1">
-        <div className="flex shrink-0 items-center gap-4">
-        <div className="rounded-full border border-[#d8d2c7] bg-white p-[3px] shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
+    <div className="flex w-full items-center justify-between">
+      <div className="inline-flex items-center gap-5">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#47423b] transition-colors hover:bg-[#e9e3d8]"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Menu className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
+        </button>
+        <div className="inline-flex items-center gap-3">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <ChartNoAxesCombined className="h-4 w-4" />
+          </span>
+          <span className="font-display text-[1.25rem] font-bold tracking-tight text-foreground">FinPro</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-4">
+        <div className="rounded-full border border-[#d8d2c7] bg-white p-0.5 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <button
             type="button"
-            className="inline-flex h-[38px] items-center gap-2 rounded-full px-[15px] text-sm font-medium text-[#47423b]"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold leading-none text-[#47423b]"
           >
-            <Plus className="h-4 w-4 text-[#47423b]" />
-            <span>Add Assets</span>
+            <Plus className="h-4 w-4 text-[#47423b]" strokeWidth={2} />
+            <span>Asset</span>
           </button>
         </div>
       </div>
