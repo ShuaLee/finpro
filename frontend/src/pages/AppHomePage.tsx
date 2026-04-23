@@ -16,10 +16,9 @@ import {
   EyeOff,
   Grid2x2,
   GripVertical,
+  Menu,
   Monitor,
   MoveDiagonal2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Settings,
   Smartphone,
@@ -3390,7 +3389,6 @@ export function AppHomePage() {
         collapsed={isSidebarCollapsed}
         userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
         userEmail={user?.email ?? ""}
-        onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
         onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
         onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
         onOpenSettings={() => {
@@ -3400,9 +3398,11 @@ export function AppHomePage() {
       />
       <div className={`w-full ${isSidebarCollapsed ? "pl-[72px]" : "pl-[224px]"}`}>
         <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4">
-          <div className={`app-top-nav fixed right-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${isSidebarCollapsed ? "left-[72px]" : "left-[224px]"}`}>
+          <div className="app-top-nav fixed inset-x-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
             <div className="w-full pb-3 pl-5 pr-4 pt-5">
               <AppShellTopbar
+                collapsed={isSidebarCollapsed}
+                onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
               />
             </div>
           </div>
@@ -7404,7 +7404,6 @@ function AppShellSidebar({
   collapsed,
   userName,
   userEmail,
-  onToggleCollapsed,
   onOpenPortfolio,
   onOpenDashboard,
   onOpenSettings,
@@ -7413,7 +7412,6 @@ function AppShellSidebar({
   collapsed: boolean;
   userName: string;
   userEmail: string;
-  onToggleCollapsed: () => void;
   onOpenPortfolio: () => void;
   onOpenDashboard: () => void;
   onOpenSettings: () => void;
@@ -7436,13 +7434,7 @@ function AppShellSidebar({
   ];
 
   return (
-    <aside className={`fixed bottom-0 left-0 top-0 z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
-      <div className={`flex h-[73px] shrink-0 items-center ${collapsed ? "justify-center" : "gap-3 pl-1"}`}>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <ChartNoAxesCombined className="h-4 w-4" />
-        </span>
-        <span className={collapsed ? "sr-only" : "font-display text-[1.25rem] font-bold tracking-tight text-foreground"}>FinPro</span>
-      </div>
+    <aside className={`fixed bottom-0 left-0 top-[73px] z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
       <nav className="mt-4 flex flex-col gap-1.5" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
@@ -7470,24 +7462,6 @@ function AppShellSidebar({
           userEmail={userEmail}
           onOpenSettings={onOpenSettings}
         />
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className={`group relative mt-1.5 flex h-11 w-full items-center rounded-2xl text-sm font-medium text-[#47423b] transition-colors hover:bg-[#e9e3d8] ${
-            collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
-          }`}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <span className="inline-flex h-6 w-6 items-center justify-center text-current">
-            {collapsed ? (
-              <PanelLeftOpen className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
-            )}
-          </span>
-          <span className={collapsed ? "sr-only" : ""}>{collapsed ? "Expand" : "Collapse"}</span>
-          {collapsed ? <CollapsedSidebarTooltip label="Expand sidebar" /> : null}
-        </button>
       </div>
     </aside>
   );
@@ -7501,9 +7475,30 @@ function CollapsedSidebarTooltip({ label }: { label: string }) {
   );
 }
 
-function AppShellTopbar() {
+function AppShellTopbar({
+  collapsed,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   return (
-    <div className="flex w-full items-center justify-end">
+    <div className="flex w-full items-center justify-between">
+      <div className="inline-flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#47423b] transition-colors hover:bg-[#e9e3d8]"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Menu className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
+        </button>
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <ChartNoAxesCombined className="h-4 w-4" />
+        </span>
+        <span className="font-display text-[1.25rem] font-bold tracking-tight text-foreground">FinPro</span>
+      </div>
       <div className="flex shrink-0 items-center gap-4">
         <div className="rounded-full border border-[#d8d2c7] bg-white p-0.5 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <button
