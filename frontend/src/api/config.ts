@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   },
   profile: {
     detail: `${API_BASE_URL}/profile/`,
+    options: `${API_BASE_URL}/profile/options/`,
   },
   accounts: {
     create: `${API_BASE_URL}/accounts/`,

@@ -16,9 +16,10 @@ import {
   EyeOff,
   Grid2x2,
   GripVertical,
-  Menu,
   Monitor,
   MoveDiagonal2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Settings,
   Smartphone,
@@ -47,6 +48,7 @@ import { createCustomAssetType, getAssetTypes, lookupEquities, type AssetTypeOpt
 import { getDashboardLayoutState, upsertDashboardLayoutState } from "../api/dashboardLayouts";
 import { ApiError } from "../api/http";
 import { getNavigationState, upsertNavigationState } from "../api/navigationState";
+import { getProfile, getProfileOptions, updateProfile } from "../api/settings";
 import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 import { SettingsPage } from "./SettingsPage";
@@ -3388,6 +3390,7 @@ export function AppHomePage() {
         collapsed={isSidebarCollapsed}
         userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
         userEmail={user?.email ?? ""}
+        onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
         onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
         onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
         onOpenSettings={() => {
@@ -3397,15 +3400,13 @@ export function AppHomePage() {
       />
       <div className={`w-full ${isSidebarCollapsed ? "pl-[72px]" : "pl-[224px]"}`}>
         <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4">
-          <div className="app-top-nav fixed inset-x-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
-            <div className="w-full px-4 py-2.5">
+          <div className={`app-top-nav fixed right-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${isSidebarCollapsed ? "left-[72px]" : "left-[224px]"}`}>
+            <div className="w-full pb-3 pl-5 pr-4 pt-5">
               <AppShellTopbar
-                collapsed={isSidebarCollapsed}
-                onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
               />
             </div>
           </div>
-          <div className="flex w-full flex-col gap-4 pt-[70px] sm:pt-[76px]">
+          <div className="flex w-full flex-col gap-4 pt-[82px] sm:pt-[88px]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -7403,6 +7404,7 @@ function AppShellSidebar({
   collapsed,
   userName,
   userEmail,
+  onToggleCollapsed,
   onOpenPortfolio,
   onOpenDashboard,
   onOpenSettings,
@@ -7411,6 +7413,7 @@ function AppShellSidebar({
   collapsed: boolean;
   userName: string;
   userEmail: string;
+  onToggleCollapsed: () => void;
   onOpenPortfolio: () => void;
   onOpenDashboard: () => void;
   onOpenSettings: () => void;
@@ -7433,82 +7436,74 @@ function AppShellSidebar({
   ];
 
   return (
-    <aside className={`fixed bottom-0 left-0 top-[61px] z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
+    <aside className={`fixed bottom-0 left-0 top-0 z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
+      <div className={`flex h-[73px] shrink-0 items-center ${collapsed ? "justify-center" : "gap-3 pl-1"}`}>
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <ChartNoAxesCombined className="h-4 w-4" />
+        </span>
+        <span className={collapsed ? "sr-only" : "font-display text-[1.25rem] font-bold tracking-tight text-foreground"}>FinPro</span>
+      </div>
       <nav className="mt-4 flex flex-col gap-1.5" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={item.onClick}
-            className={`flex h-11 items-center rounded-2xl text-sm font-medium transition-colors ${
+            className={`group relative flex h-11 items-center rounded-2xl text-sm font-medium transition-colors ${
               collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
             } ${
               item.active
                 ? "bg-[#e9e3d8] text-[#47423b]"
                 : "text-[#47423b] hover:bg-[#e9e3d8]"
             }`}
-            title={collapsed ? item.label : undefined}
           >
             <span className="inline-flex h-6 w-6 items-center justify-center text-current">{item.icon}</span>
             <span className={collapsed ? "sr-only" : ""}>{item.label}</span>
+            {collapsed ? <CollapsedSidebarTooltip label={`Go to ${item.label}`} /> : null}
           </button>
         ))}
       </nav>
-      <div className="mt-auto border-t border-[#d8d2c7]/70 py-5" data-profile-menu>
-        <div className="flex h-[58px] items-center rounded-2xl">
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className={`flex h-14 w-full min-w-0 items-center rounded-2xl text-left transition-colors ${
-              collapsed ? "justify-center px-0" : "gap-3 px-2"
-            } ${
-              activeSection === "settings"
-                ? "bg-[#e9e3d8] text-[#47423b]"
-                : "text-[#47423b] hover:bg-[#e9e3d8]"
-            }`}
-            aria-label="Open profile settings"
-            title={collapsed ? userName : undefined}
-          >
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2d2925] text-[#f8f6f1]">
-              <UserRound className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
-            </span>
-            <span className={collapsed ? "sr-only" : "min-w-0"}>
-              <span className="block truncate text-sm font-medium leading-5 text-[#222935]">{userName}</span>
-              <span className="block truncate text-xs leading-4 text-[#47423b]/70">{userEmail || "Account settings"}</span>
-            </span>
-          </button>
-        </div>
+      <div className="mt-auto border-t border-[#d8d2c7]/70 py-4">
+        <AppShellProfileMenu
+          collapsed={collapsed}
+          userName={userName}
+          userEmail={userEmail}
+          onOpenSettings={onOpenSettings}
+        />
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className={`group relative mt-1.5 flex h-11 w-full items-center rounded-2xl text-sm font-medium text-[#47423b] transition-colors hover:bg-[#e9e3d8] ${
+            collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
+          }`}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <span className="inline-flex h-6 w-6 items-center justify-center text-current">
+            {collapsed ? (
+              <PanelLeftOpen className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
+            )}
+          </span>
+          <span className={collapsed ? "sr-only" : ""}>{collapsed ? "Expand" : "Collapse"}</span>
+          {collapsed ? <CollapsedSidebarTooltip label="Expand sidebar" /> : null}
+        </button>
       </div>
     </aside>
   );
 }
 
-function AppShellTopbar({
-  collapsed,
-  onToggleCollapsed,
-}: {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-}) {
+function CollapsedSidebarTooltip({ label }: { label: string }) {
   return (
-    <div className="flex w-full items-center justify-between">
-      <div className="inline-flex items-center gap-5">
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#47423b] transition-colors hover:bg-[#e9e3d8]"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <Menu className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
-        </button>
-        <div className="inline-flex items-center gap-3">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <ChartNoAxesCombined className="h-4 w-4" />
-          </span>
-          <span className="font-display text-[1.25rem] font-bold tracking-tight text-foreground">FinPro</span>
-        </div>
-      </div>
+    <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-[#2d2925] px-2.5 py-1.5 text-xs font-semibold leading-none text-[#f8f6f1] shadow-[0_10px_24px_rgba(28,24,20,0.18)] group-hover:inline-flex">
+      {label}
+    </span>
+  );
+}
+
+function AppShellTopbar() {
+  return (
+    <div className="flex w-full items-center justify-end">
       <div className="flex shrink-0 items-center gap-4">
         <div className="rounded-full border border-[#d8d2c7] bg-white p-0.5 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
           <button
@@ -7520,6 +7515,145 @@ function AppShellTopbar({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AppShellProfileMenu({
+  collapsed,
+  userName,
+  userEmail,
+  onOpenSettings,
+}: {
+  collapsed: boolean;
+  userName: string;
+  userEmail: string;
+  onOpenSettings: () => void;
+}) {
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [currency, setCurrency] = useState("USD");
+  const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
+  const [currencySaving, setCurrencySaving] = useState(false);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfileCurrency() {
+      try {
+        const [profile, options] = await Promise.all([getProfile(), getProfileOptions()]);
+        if (cancelled) return;
+        setCurrency(profile.currency || "USD");
+        setCurrencyOptions(options.currencies.length ? options.currencies : [{ code: profile.currency || "USD", name: profile.currency || "USD" }]);
+      } catch {
+        if (!cancelled) {
+          setCurrencyOptions([
+            { code: "USD", name: "US Dollar" },
+            { code: "CAD", name: "Canadian Dollar" },
+            { code: "EUR", name: "Euro" },
+            { code: "GBP", name: "British Pound" },
+          ]);
+        }
+      }
+    }
+
+    loadProfileCurrency();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [profileMenuOpen]);
+
+  const handleCurrencyChange = async (nextCurrency: string) => {
+    setCurrency(nextCurrency);
+    setCurrencySaving(true);
+    setCurrencyError(null);
+
+    try {
+      const updated = await updateProfile({ currency: nextCurrency });
+      setCurrency(updated.currency || nextCurrency);
+    } catch {
+      setCurrencyError("Could not update currency.");
+    } finally {
+      setCurrencySaving(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={profileMenuRef}>
+      <button
+        type="button"
+        onClick={() => setProfileMenuOpen((open) => !open)}
+        className={`group relative flex h-11 w-full items-center rounded-2xl text-sm font-medium text-[#47423b] transition-colors hover:bg-[#e9e3d8] ${
+          collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
+        }`}
+        aria-expanded={profileMenuOpen}
+        aria-haspopup="menu"
+        aria-label={`Open profile menu for ${userName}`}
+      >
+        <span className="inline-flex h-6 w-6 items-center justify-center text-current">
+          <UserRound className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
+        </span>
+        <span className={collapsed ? "sr-only" : "min-w-0 truncate"}>{userName}</span>
+        {collapsed ? <CollapsedSidebarTooltip label={userName} /> : null}
+      </button>
+          {profileMenuOpen ? (
+            <div
+              className={`absolute z-50 w-64 rounded-2xl border border-[#d8d2c7] bg-white p-3 text-[#47423b] shadow-[0_18px_45px_rgba(28,24,20,0.12)] ${
+                collapsed ? "bottom-0 left-[calc(100%+10px)]" : "bottom-[calc(100%+10px)] left-0"
+              }`}
+              role="menu"
+            >
+              <div className="border-b border-[#e4ded3] px-2 pb-3">
+                <p className="truncate text-sm font-semibold text-[#222935]">{userName}</p>
+                {userEmail ? <p className="truncate text-xs text-[#47423b]/70">{userEmail}</p> : null}
+              </div>
+              <label className="mt-3 block px-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#47423b]/60" htmlFor="topbar-profile-currency">
+                Currency
+              </label>
+              <select
+                id="topbar-profile-currency"
+                className="mt-1 h-10 w-full rounded-xl border border-[#d8d2c7] bg-[#fbfaf7] px-3 text-sm font-medium text-[#47423b] outline-none focus:border-[#2d2925]"
+                value={currency}
+                disabled={currencySaving}
+                onChange={(event) => handleCurrencyChange(event.target.value)}
+              >
+                {currencyOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.code} - {option.name}
+                  </option>
+                ))}
+              </select>
+              {currencySaving ? <p className="mt-2 px-2 text-xs text-[#47423b]/60">Saving currency...</p> : null}
+              {currencyError ? <p className="mt-2 px-2 text-xs text-red-600">{currencyError}</p> : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileMenuOpen(false);
+                  onOpenSettings();
+                }}
+                className="mt-3 flex h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm font-medium text-[#47423b] hover:bg-[#e9e3d8]"
+                role="menuitem"
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+                <span>Settings</span>
+              </button>
+            </div>
+          ) : null}
     </div>
   );
 }

@@ -41,6 +41,17 @@ export type ProfileResponse = {
   updated_at: string;
 };
 
+export type ProfileOptionsResponse = {
+  countries: Array<{
+    code: string;
+    name: string;
+  }>;
+  currencies: Array<{
+    code: string;
+    name: string;
+  }>;
+};
+
 export async function getMe(): Promise<MeResponse> {
   return apiRequest<MeResponse>(API_ENDPOINTS.auth.me, "GET");
 }
@@ -75,6 +86,10 @@ export async function verifyPendingEmailChange(newEmail: string, code: string): 
 
 export async function getProfile(): Promise<ProfileResponse> {
   return apiRequest<ProfileResponse>(API_ENDPOINTS.profile.detail, "GET");
+}
+
+export async function getProfileOptions(): Promise<ProfileOptionsResponse> {
+  return apiRequest<ProfileOptionsResponse>(API_ENDPOINTS.profile.options, "GET");
 }
 
 export async function updateProfile(payload: Partial<ProfileResponse>): Promise<ProfileResponse> {
