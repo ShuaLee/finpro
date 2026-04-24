@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useLocation, useNavigate } from "react-router-dom";
 import "lineicons-react/dist/lineicons.css";
 import {
+  Briefcase as BriefcaseIcon,
   Coins as CoinsIcon,
   CurrencyDollarSimple as CurrencyDollarSimpleIcon,
   HouseSimple as HouseSimpleIcon,
   Shapes as ShapesIcon,
+  SquaresFour as SquaresFourIcon,
+  UserCircle as UserCircleIcon,
 } from "@phosphor-icons/react";
 import {
   Check,
@@ -24,7 +27,6 @@ import {
   Smartphone,
   Tablet,
   Trash2,
-  UserRound,
   X,
 } from "lucide-react";
 
@@ -3399,14 +3401,28 @@ export function AppHomePage() {
       <div className={`w-full ${isSidebarCollapsed ? "pl-[72px]" : "pl-[224px]"}`}>
         <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4">
           <div className="app-top-nav fixed inset-x-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
-            <div className="w-full pb-3 pl-5 pr-4 pt-5">
+            <div className="w-full px-4 py-3">
               <AppShellTopbar
                 collapsed={isSidebarCollapsed}
+                userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
+                userEmail={user?.email ?? ""}
+                contextLabel={activeSidebarLabel}
+                contextSecondaryLabel={
+                  activeAppShellSection === "settings"
+                    ? activeSettingsSection === "profile"
+                      ? "Account"
+                      : null
+                    : null
+                }
                 onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
+                onOpenSettings={() => {
+                  setActiveSettingsSection(null);
+                  navigate("/settings");
+                }}
               />
             </div>
           </div>
-          <div className="flex w-full flex-col gap-4 pt-[82px] sm:pt-[88px]">
+          <div className="flex w-full flex-col gap-4 pt-[64px] sm:pt-[64px]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -7422,31 +7438,43 @@ function AppShellSidebar({
       label: "Portfolio",
       active: activeSection === "portfolio",
       onClick: onOpenPortfolio,
-      icon: <i className="lni lni-briefcase-1 text-[17px] leading-none text-current" aria-hidden="true" />,
+      icon: (
+        <BriefcaseIcon
+          size={18}
+          weight={activeSection === "portfolio" ? "fill" : "regular"}
+          aria-hidden="true"
+        />
+      ),
     },
     {
       key: "dashboards",
       label: "Dashboard",
       active: activeSection === "dashboards",
       onClick: onOpenDashboard,
-      icon: <Grid2x2 className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />,
+      icon: (
+        <SquaresFourIcon
+          size={18}
+          weight={activeSection === "dashboards" ? "fill" : "regular"}
+          aria-hidden="true"
+        />
+      ),
     },
   ];
 
   return (
-    <aside className={`fixed bottom-0 left-0 top-[73px] z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
+    <aside className={`fixed bottom-0 left-0 top-[57px] z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[72px] px-4" : "w-[224px] px-4"}`}>
       <nav className="mt-4 flex flex-col gap-1.5" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={item.onClick}
-            className={`group relative flex h-11 items-center rounded-2xl text-sm font-medium transition-colors ${
+            className={`group relative flex h-11 items-center rounded-2xl text-[14px] font-medium leading-none transition-colors ${
               collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
             } ${
               item.active
-                ? "bg-[#e9e3d8] text-[#47423b]"
-                : "text-[#47423b] hover:bg-[#e9e3d8]"
+                ? "bg-[#e5e5e5] text-[#0f0f0f]"
+                : "text-[#0f0f0f] hover:bg-[#e5e5e5]"
             }`}
           >
             <span className="inline-flex h-6 w-6 items-center justify-center text-current">{item.icon}</span>
@@ -7477,39 +7505,211 @@ function CollapsedSidebarTooltip({ label }: { label: string }) {
 
 function AppShellTopbar({
   collapsed,
+  userName,
+  userEmail,
+  contextLabel,
+  contextSecondaryLabel,
   onToggleCollapsed,
+  onOpenSettings,
 }: {
   collapsed: boolean;
+  userName: string;
+  userEmail: string;
+  contextLabel: string;
+  contextSecondaryLabel?: string | null;
   onToggleCollapsed: () => void;
+  onOpenSettings: () => void;
 }) {
+  const profileInitial = (userName || "P").trim().charAt(0).toUpperCase() || "P";
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [currency, setCurrency] = useState("USD");
+  const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
+  const [currencySaving, setCurrencySaving] = useState(false);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfileCurrency() {
+      try {
+        const [profile, options] = await Promise.all([getProfile(), getProfileOptions()]);
+        if (cancelled) return;
+        setCurrency(profile.currency || "USD");
+        setCurrencyOptions(options.currencies.length ? options.currencies : [{ code: profile.currency || "USD", name: profile.currency || "USD" }]);
+      } catch {
+        if (!cancelled) {
+          setCurrencyOptions([
+            { code: "USD", name: "US Dollar" },
+            { code: "CAD", name: "Canadian Dollar" },
+            { code: "EUR", name: "Euro" },
+            { code: "GBP", name: "British Pound" },
+          ]);
+        }
+      }
+    }
+
+    loadProfileCurrency();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [profileMenuOpen]);
+
+  const handleCurrencyChange = async (nextCurrency: string) => {
+    setCurrency(nextCurrency);
+    setCurrencySaving(true);
+    setCurrencyError(null);
+
+    try {
+      const updated = await updateProfile({ currency: nextCurrency });
+      setCurrency(updated.currency || nextCurrency);
+    } catch {
+      setCurrencyError("Could not update currency.");
+    } finally {
+      setCurrencySaving(false);
+    }
+  };
+
+  const hasContext = contextLabel.trim().length > 0;
+
   return (
     <div className="flex w-full items-center justify-between">
       <div className="inline-flex items-center gap-3">
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#47423b] transition-colors hover:bg-[#e9e3d8]"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#47423b]"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <Menu className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
+          <Menu className="h-[18px] w-[18px]" strokeWidth={2.2} aria-hidden="true" />
         </button>
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <ChartNoAxesCombined className="h-4 w-4" />
         </span>
         <span className="font-display text-[1.25rem] font-bold tracking-tight text-foreground">FinPro</span>
+        {hasContext ? (
+          <div className="ml-5 inline-flex items-center gap-2 text-[15px] font-semibold leading-none text-[#0f0f0f]">
+            <span>{contextLabel}</span>
+            {contextSecondaryLabel ? (
+              <>
+                <span className="text-[#8e857a]">/</span>
+                <span className="text-[#0f0f0f]">{contextSecondaryLabel}</span>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-4">
-        <div className="rounded-full border border-[#d8d2c7] bg-white p-0.5 shadow-[0_4px_10px_rgba(28,24,20,0.03)]">
+        <button
+          type="button"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#e5e5e5] px-4 text-[14px] font-medium leading-none text-[#0f0f0f] shadow-[0_4px_10px_rgba(28,24,20,0.03)] transition-colors hover:bg-[#d9d9d9]"
+        >
+          <Plus className="h-[17px] w-[17px] text-[#0f0f0f]" strokeWidth={2.2} />
+          <span>Asset</span>
+        </button>
+        <div className="relative" ref={profileMenuRef}>
           <button
             type="button"
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold leading-none text-[#47423b]"
+            onClick={() => setProfileMenuOpen((open) => !open)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2d2925] text-[#f8f6f1] shadow-[0_4px_10px_rgba(28,24,20,0.08)]"
+            aria-expanded={profileMenuOpen}
+            aria-haspopup="menu"
+            aria-label={`Open profile menu for ${userName}`}
+            title={userName}
           >
-            <Plus className="h-4 w-4 text-[#47423b]" strokeWidth={2} />
-            <span>Asset</span>
+            <span className="text-[14px] font-semibold leading-none">{profileInitial}</span>
           </button>
+          {profileMenuOpen ? (
+            <ProfileMenuDropdown
+              userName={userName}
+              userEmail={userEmail}
+              currency={currency}
+              currencyOptions={currencyOptions}
+              currencySaving={currencySaving}
+              currencyError={currencyError}
+              onCurrencyChange={handleCurrencyChange}
+              onOpenSettings={() => {
+                setProfileMenuOpen(false);
+                onOpenSettings();
+              }}
+              className="absolute right-0 top-[calc(100%+10px)] z-50"
+            />
+          ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProfileMenuDropdown({
+  userName,
+  userEmail,
+  currency,
+  currencyOptions,
+  currencySaving,
+  currencyError,
+  onCurrencyChange,
+  onOpenSettings,
+  className,
+}: {
+  userName: string;
+  userEmail: string;
+  currency: string;
+  currencyOptions: Array<{ code: string; name: string }>;
+  currencySaving: boolean;
+  currencyError: string | null;
+  onCurrencyChange: (nextCurrency: string) => void;
+  onOpenSettings: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={`${className ?? ""} w-64 rounded-2xl border border-[#d8d2c7] bg-white p-3 text-[#47423b] shadow-[0_18px_45px_rgba(28,24,20,0.12)]`} role="menu">
+      <div className="border-b border-[#e4ded3] px-2 pb-3">
+        <p className="truncate text-sm font-semibold text-[#222935]">{userName}</p>
+        {userEmail ? <p className="truncate text-xs text-[#47423b]/70">{userEmail}</p> : null}
+      </div>
+      <label className="mt-3 block px-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#47423b]/60" htmlFor="shared-profile-currency">
+        Currency
+      </label>
+      <select
+        id="shared-profile-currency"
+        className="mt-1 h-10 w-full rounded-xl border border-[#d8d2c7] bg-[#fbfaf7] px-3 text-sm font-medium text-[#47423b] outline-none focus:border-[#2d2925]"
+        value={currency}
+        disabled={currencySaving}
+        onChange={(event) => onCurrencyChange(event.target.value)}
+      >
+        {currencyOptions.map((option) => (
+          <option key={option.code} value={option.code}>
+            {option.code} - {option.name}
+          </option>
+        ))}
+      </select>
+      {currencySaving ? <p className="mt-2 px-2 text-xs text-[#47423b]/60">Saving currency...</p> : null}
+      {currencyError ? <p className="mt-2 px-2 text-xs text-red-600">{currencyError}</p> : null}
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        className="mt-3 flex h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm font-medium text-[#0f0f0f] hover:bg-[#e5e5e5]"
+        role="menuitem"
+      >
+        <Settings className="h-[17px] w-[17px]" strokeWidth={2.2} aria-hidden="true" />
+        <span>Settings</span>
+      </button>
     </div>
   );
 }
@@ -7593,7 +7793,7 @@ function AppShellProfileMenu({
       <button
         type="button"
         onClick={() => setProfileMenuOpen((open) => !open)}
-        className={`group relative flex h-11 w-full items-center rounded-2xl text-sm font-medium text-[#47423b] transition-colors hover:bg-[#e9e3d8] ${
+        className={`group relative flex h-11 w-full items-center rounded-2xl text-[14px] font-medium leading-none text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5] ${
           collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
         }`}
         aria-expanded={profileMenuOpen}
@@ -7601,54 +7801,31 @@ function AppShellProfileMenu({
         aria-label={`Open profile menu for ${userName}`}
       >
         <span className="inline-flex h-6 w-6 items-center justify-center text-current">
-          <UserRound className="h-[17px] w-[17px]" strokeWidth={1.9} aria-hidden="true" />
+          <UserCircleIcon
+            size={18}
+            weight={collapsed || profileMenuOpen ? "fill" : "regular"}
+            aria-hidden="true"
+          />
         </span>
         <span className={collapsed ? "sr-only" : "min-w-0 truncate"}>{userName}</span>
         {collapsed ? <CollapsedSidebarTooltip label={userName} /> : null}
       </button>
-          {profileMenuOpen ? (
-            <div
-              className={`absolute z-50 w-64 rounded-2xl border border-[#d8d2c7] bg-white p-3 text-[#47423b] shadow-[0_18px_45px_rgba(28,24,20,0.12)] ${
-                collapsed ? "bottom-0 left-[calc(100%+10px)]" : "bottom-[calc(100%+10px)] left-0"
-              }`}
-              role="menu"
-            >
-              <div className="border-b border-[#e4ded3] px-2 pb-3">
-                <p className="truncate text-sm font-semibold text-[#222935]">{userName}</p>
-                {userEmail ? <p className="truncate text-xs text-[#47423b]/70">{userEmail}</p> : null}
-              </div>
-              <label className="mt-3 block px-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#47423b]/60" htmlFor="topbar-profile-currency">
-                Currency
-              </label>
-              <select
-                id="topbar-profile-currency"
-                className="mt-1 h-10 w-full rounded-xl border border-[#d8d2c7] bg-[#fbfaf7] px-3 text-sm font-medium text-[#47423b] outline-none focus:border-[#2d2925]"
-                value={currency}
-                disabled={currencySaving}
-                onChange={(event) => handleCurrencyChange(event.target.value)}
-              >
-                {currencyOptions.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.code} - {option.name}
-                  </option>
-                ))}
-              </select>
-              {currencySaving ? <p className="mt-2 px-2 text-xs text-[#47423b]/60">Saving currency...</p> : null}
-              {currencyError ? <p className="mt-2 px-2 text-xs text-red-600">{currencyError}</p> : null}
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileMenuOpen(false);
-                  onOpenSettings();
-                }}
-                className="mt-3 flex h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm font-medium text-[#47423b] hover:bg-[#e9e3d8]"
-                role="menuitem"
-              >
-                <Settings className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
-                <span>Settings</span>
-              </button>
-            </div>
-          ) : null}
+      {profileMenuOpen ? (
+        <ProfileMenuDropdown
+          userName={userName}
+          userEmail={userEmail}
+          currency={currency}
+          currencyOptions={currencyOptions}
+          currencySaving={currencySaving}
+          currencyError={currencyError}
+          onCurrencyChange={handleCurrencyChange}
+          onOpenSettings={() => {
+            setProfileMenuOpen(false);
+            onOpenSettings();
+          }}
+          className={collapsed ? "absolute bottom-0 left-[calc(100%+10px)] z-50" : "absolute bottom-[calc(100%+10px)] left-0 z-50"}
+        />
+      ) : null}
     </div>
   );
 }
