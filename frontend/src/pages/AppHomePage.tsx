@@ -3484,7 +3484,7 @@ export function AppHomePage() {
                                     className={`lni lni-briefcase-1 text-[16px] leading-none text-current ${activeSidebarCategory === "portfolio" ? "opacity-100" : "opacity-72"}`}
                                     aria-hidden="true"
                                   />
-                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
+                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-[1.2] ${activeSidebarCategory === "portfolio" ? "font-bold" : "font-normal"}`}>
                                     Portfolio
                                     {activeSidebarCategory === "portfolio" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
                                   </span>
@@ -3504,7 +3504,7 @@ export function AppHomePage() {
                                   aria-label="Assets and liabilities"
                                 >
                                   <CurrencyDollarSimpleIcon className="h-4 w-4 text-current" weight="regular" />
-                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-none ${activeSidebarCategory === "assets-liabilities" ? "font-bold" : "font-normal"}`}>
+                                  <span className={`relative inline-flex min-h-[1.1rem] items-center text-sm leading-[1.2] ${activeSidebarCategory === "assets-liabilities" ? "font-bold" : "font-normal"}`}>
                                     Assets & Liabilities
                                     {activeSidebarCategory === "assets-liabilities" ? <span className="absolute -bottom-1.5 left-1 right-1 h-0.5 bg-current" /> : null}
                                   </span>
@@ -7469,7 +7469,7 @@ function AppShellSidebar({
             key={item.key}
             type="button"
             onClick={item.onClick}
-            className={`group relative flex h-11 items-center rounded-2xl text-[14px] font-medium leading-none transition-colors ${
+            className={`group relative flex h-11 items-center rounded-2xl text-[14px] font-medium leading-[1.2] transition-colors ${
               collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
             } ${
               item.active
@@ -7587,7 +7587,7 @@ function AppShellTopbar({
   const hasContext = contextLabel.trim().length > 0;
 
   return (
-    <div className="flex w-full items-center justify-between">
+    <div className="relative flex w-full items-center justify-between">
       <div className="inline-flex items-center gap-3">
         <button
           type="button"
@@ -7602,18 +7602,18 @@ function AppShellTopbar({
           <ChartNoAxesCombined className="h-4 w-4" />
         </span>
         <span className="font-display text-[1.25rem] font-bold tracking-tight text-foreground">FinPro</span>
-        {hasContext ? (
-          <div className="ml-5 inline-flex items-center gap-2 text-[15px] font-semibold leading-none text-[#0f0f0f]">
-            <span>{contextLabel}</span>
-            {contextSecondaryLabel ? (
-              <>
-                <span className="text-[#8e857a]">/</span>
-                <span className="text-[#0f0f0f]">{contextSecondaryLabel}</span>
-              </>
-            ) : null}
-          </div>
-        ) : null}
       </div>
+      {hasContext ? (
+        <div className="pointer-events-none absolute left-[240px] top-1/2 inline-flex -translate-y-1/2 items-center gap-2 text-[15px] font-semibold leading-none text-[#0f0f0f]">
+          <span>{contextLabel}</span>
+          {contextSecondaryLabel ? (
+            <>
+              <span className="text-[#8e857a]">/</span>
+              <span className="text-[#0f0f0f]">{contextSecondaryLabel}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex shrink-0 items-center gap-4">
         <button
           type="button"
@@ -7793,7 +7793,7 @@ function AppShellProfileMenu({
       <button
         type="button"
         onClick={() => setProfileMenuOpen((open) => !open)}
-        className={`group relative flex h-11 w-full items-center rounded-2xl text-[14px] font-medium leading-none text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5] ${
+        className={`group relative flex h-11 w-full items-center rounded-2xl text-[14px] font-medium leading-[1.2] text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5] ${
           collapsed ? "justify-center px-0" : "gap-3 px-2 text-left"
         }`}
         aria-expanded={profileMenuOpen}
@@ -7807,7 +7807,7 @@ function AppShellProfileMenu({
             aria-hidden="true"
           />
         </span>
-        <span className={collapsed ? "sr-only" : "min-w-0 truncate"}>{userName}</span>
+        <span className={collapsed ? "sr-only" : "block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap py-[2px] leading-[1.25]"}>{userName}</span>
         {collapsed ? <CollapsedSidebarTooltip label={userName} /> : null}
       </button>
       {profileMenuOpen ? (
