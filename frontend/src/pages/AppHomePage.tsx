@@ -3383,12 +3383,12 @@ export function AppHomePage() {
   }, [activeAppShellSection, activeSidebarCategory, isSettingsRoute]);
 
   return (
-    <main className="app-home min-h-screen w-full bg-[hsl(var(--app-shell-background))] dark:text-foreground">
+    <main className="app-home h-screen w-full overflow-hidden bg-[hsl(var(--app-shell-background))] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="app-top-nav sticky top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
+      <div className="app-top-nav sticky top-0 z-40 w-full border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
         <div className="w-full">
-          <div className="flex h-14 items-center">
+          <div className="flex h-11 items-center">
               <AppShellTopbar
                 userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
                 userEmail={user?.email ?? ""}
@@ -3402,7 +3402,7 @@ export function AppHomePage() {
           </div>
         </div>
       </div>
-      <div className="flex min-h-[calc(100vh-56px)] w-full items-stretch">
+      <div className="flex h-[calc(100vh-44px)] min-h-0 w-full items-stretch overflow-hidden">
         <AppShellSidebar
           activeSection={activeAppShellSection}
           collapsed={isSidebarCollapsed}
@@ -3410,7 +3410,7 @@ export function AppHomePage() {
           onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-tl-2xl bg-[hsl(var(--background))] shadow-[0_18px_45px_rgba(28,24,20,0.08)]">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-tl-2xl bg-[hsl(var(--background))] shadow-[0_18px_45px_rgba(28,24,20,0.08)]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -7445,26 +7445,26 @@ function AppShellSidebar({
 
   return (
     <aside
-      className={`sticky top-14 z-40 flex h-[calc(100vh-56px)] shrink-0 flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${
-        collapsed ? "w-[80px]" : "w-[204px]"
+      className={`sticky top-11 z-40 flex h-[calc(100vh-44px)] shrink-0 flex-col overflow-hidden border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] transition-[width] duration-200 ease-out ${
+        collapsed ? "w-[64px]" : "w-[180px]"
       } group/sidebar`}
     >
-      <nav className="mt-4 flex flex-col gap-1.5 pl-[22px] pr-5" aria-label="Primary navigation">
+      <nav className="mt-4 flex flex-col gap-3 px-3.5" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={item.onClick}
-            className={`group relative flex h-11 w-full items-center gap-3 rounded-2xl px-0 text-left text-[14px] font-medium leading-[1.2] transition-colors ${
-              collapsed ? "" : ""
+            className={`group relative flex items-center text-left text-[14px] font-medium leading-[1.2] transition-colors ${
+              collapsed ? "h-10 w-10 rounded-[7.5px] px-0" : "h-10 w-full rounded-[7.5px] px-0"
             } ${
               item.active
                 ? "bg-[#e5e5e5] text-[#0f0f0f]"
                 : "text-[#0f0f0f] hover:bg-[#e5e5e5]"
             }`}
           >
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-current [&>svg]:h-[20px] [&>svg]:w-[20px]">{item.icon}</span>
-            <span className={collapsed ? "sr-only" : ""}>{item.label}</span>
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-current [&>svg]:h-[20px] [&>svg]:w-[20px]">{item.icon}</span>
+            <span className={collapsed ? "sr-only" : "ml-3"}>{item.label}</span>
             {collapsed ? <CollapsedSidebarTooltip label={`Go to ${item.label}`} /> : null}
           </button>
         ))}
@@ -7553,11 +7553,11 @@ function AppShellTopbar({
       setCurrency(updated.currency || nextCurrency);
     } catch {
       setCurrencyError("Could not update currency.");
-    } finally {
+  } finally {
       setCurrencySaving(false);
     }
   };
-  const topbarStartSlotWidthClass = "w-[80px]";
+  const topbarStartSlotWidthClass = "w-[64px]";
 
   return (
     <div className="relative flex w-full items-center justify-between">

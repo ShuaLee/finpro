@@ -61,12 +61,14 @@
   }
 
   html {
+    width: 100%;
     background-color: hsl(var(--app-shell-background));
-    scrollbar-gutter: stable;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    width: 100%;
+    margin: 0;
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
     background-color: hsl(var(--app-shell-background));
     background-image: none;
@@ -81,6 +83,7 @@
   }
 
   #root {
+    width: 100%;
     min-height: 100vh;
   }
 
