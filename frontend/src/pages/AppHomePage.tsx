@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "lineicons-react/dist/lineicons.css";
 import {
@@ -27,6 +27,7 @@ import {
   Smartphone,
   Tablet,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react";
 
@@ -338,7 +339,7 @@ export function AppHomePage() {
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>(initialShellSection);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
   const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | null>(null);
+  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "preferences" | "danger" | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
@@ -3389,14 +3390,20 @@ export function AppHomePage() {
       <AppShellSidebar
         activeSection={activeAppShellSection}
         collapsed={isSidebarCollapsed}
+        userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
+        userEmail={user?.email ?? ""}
+        onOpenSettings={() => {
+          setActiveSettingsSection(null);
+          navigate("/settings");
+        }}
         onToggleCollapsed={() => setIsSidebarCollapsed((previous) => !previous)}
         onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
         onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
       />
-      <div className={`w-full ${isSidebarCollapsed ? "pl-[80px]" : "pl-[224px]"}`}>
-        <div className="mx-auto flex w-full max-w-[1840px] flex-col px-4">
-          <div className={`app-top-nav fixed right-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${isSidebarCollapsed ? "left-[80px]" : "left-[224px]"}`}>
-            <div className="w-full px-4 py-3">
+      <div className={`w-full ${isSidebarCollapsed ? "pl-[88px]" : "pl-[216px]"}`}>
+        <div className="mx-auto flex w-full max-w-[1840px] flex-col px-6">
+          <div className={`app-top-nav fixed right-0 top-0 z-40 border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${isSidebarCollapsed ? "left-[88px]" : "left-[216px]"}`}>
+            <div className="w-full px-6 py-5">
               <AppShellTopbar
                 userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
                 userEmail={user?.email ?? ""}
@@ -3415,7 +3422,7 @@ export function AppHomePage() {
               />
             </div>
           </div>
-          <div className="flex w-full flex-col gap-4 pt-[64px] sm:pt-[64px]">
+          <div className="flex w-full flex-col gap-4 pt-[92px] sm:pt-[92px]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -7411,16 +7418,44 @@ export function AppHomePage() {
 function AppShellSidebar({
   activeSection,
   collapsed,
+  userName,
+  userEmail,
+  onOpenSettings,
   onToggleCollapsed,
   onOpenPortfolio,
   onOpenDashboard,
 }: {
   activeSection: AppShellSection;
   collapsed: boolean;
+  userName: string;
+  userEmail: string;
+  onOpenSettings: () => void;
   onToggleCollapsed: () => void;
   onOpenPortfolio: () => void;
   onOpenDashboard: () => void;
 }) {
+  const sidebarProfileName = userName.trim() || "Profile";
+  const trimmedSidebarEmail = userEmail.trim();
+  const sidebarProfileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [sidebarProfileMenuOpen, setSidebarProfileMenuOpen] = useState(false);
+  const sidebarEmailStyle: CSSProperties | undefined =
+    trimmedSidebarEmail.length > 30
+      ? { fontSize: "9px" }
+      : trimmedSidebarEmail.length > 24
+        ? { fontSize: "10px" }
+        : undefined;
+  useEffect(() => {
+    if (!sidebarProfileMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!sidebarProfileMenuRef.current?.contains(event.target as Node)) {
+        setSidebarProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [sidebarProfileMenuOpen]);
   const navItems = [
     {
       key: "portfolio",
@@ -7451,23 +7486,23 @@ function AppShellSidebar({
   ];
 
   return (
-    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[80px] px-4" : "w-[224px] px-4"}`}>
-      <div className="flex h-[57px] items-center">
-        <div className={`flex h-full w-full items-center translate-y-[3px] ${collapsed ? "justify-center" : "gap-3 px-3"}`}>
+    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] ${collapsed ? "w-[88px] px-0" : "w-[216px] px-4"}`}>
+      <div className="flex h-[76px] items-center">
+        <div className={`flex h-full w-full translate-y-[3px] ${collapsed ? "items-center justify-center" : "items-center gap-3 px-3"}`}>
           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-primary">
             <ChartNoAxesCombined className="h-[18px] w-[18px]" />
           </span>
           {collapsed ? null : <span className="font-display text-[1.25rem] font-bold leading-none tracking-tight text-foreground">FinPro</span>}
         </div>
       </div>
-      <nav className="mt-4 flex flex-col gap-1.5" aria-label="Primary navigation">
+      <nav className={`mt-4 flex flex-col gap-1.5 ${collapsed ? "items-center" : ""}`} aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={item.onClick}
-            className={`group relative flex h-11 items-center rounded-2xl text-[14px] font-medium leading-[1.2] transition-colors ${
-              collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
+            className={`group relative flex h-11 rounded-2xl text-[14px] font-medium leading-[1.2] transition-colors ${
+              collapsed ? "w-14 items-center justify-center px-0" : "w-full items-center gap-3 px-3 text-left"
             } ${
               item.active
                 ? "bg-[#e5e5e5] text-[#0f0f0f]"
@@ -7480,26 +7515,77 @@ function AppShellSidebar({
           </button>
         ))}
       </nav>
-      <div className="mt-auto border-t border-[#d8d2c7]/70 py-4">
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className={`group relative flex h-11 w-full items-center rounded-2xl text-[14px] font-medium leading-[1.2] text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5] ${
-            collapsed ? "justify-center px-0" : "gap-3 px-3 text-left"
-          }`}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <span className="inline-flex h-6 w-6 items-center justify-center text-current">
-            {collapsed ? (
-              <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={2.2} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={2.2} aria-hidden="true" />
+      <div className="mt-auto py-4">
+        <div className="relative" ref={sidebarProfileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setSidebarProfileMenuOpen((open) => !open)}
+            className={`group relative flex rounded-2xl text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5] ${
+              collapsed
+                ? "mx-auto h-11 w-14 items-center justify-center px-0 py-0"
+                : "min-h-[56px] w-full items-center gap-3 px-3 py-2 text-left"
+            }`}
+            aria-label="Open profile menu"
+            aria-expanded={sidebarProfileMenuOpen}
+            aria-haspopup="menu"
+          >
+            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-[#0f0f0f]">
+              <UserRound className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
+            </span>
+            {collapsed ? null : (
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold leading-tight text-[#0f0f0f]">{sidebarProfileName}</span>
+                {trimmedSidebarEmail ? (
+                  <span
+                    className="block truncate text-[11px] leading-tight text-[#47423b]/58"
+                    style={sidebarEmailStyle}
+                    title={trimmedSidebarEmail}
+                  >
+                    {trimmedSidebarEmail}
+                  </span>
+                ) : null}
+              </span>
             )}
-          </span>
-          <span className={collapsed ? "sr-only" : ""}>{collapsed ? "Expand" : "Collapse"}</span>
-          {collapsed ? <CollapsedSidebarTooltip label="Expand sidebar" /> : null}
-        </button>
+            {collapsed ? <CollapsedSidebarTooltip label={sidebarProfileName} /> : null}
+          </button>
+          {sidebarProfileMenuOpen ? (
+            <div
+              className={`absolute bottom-full z-50 mb-2 rounded-2xl border border-[#d8d2c7] bg-white p-2 shadow-[0_18px_45px_rgba(28,24,20,0.12)] ${
+                collapsed ? "left-0 w-[196px]" : "left-0 right-0"
+              }`}
+              role="menu"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setSidebarProfileMenuOpen(false);
+                  onOpenSettings();
+                }}
+                className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5]"
+                role="menuitem"
+              >
+                <Settings className="h-[17px] w-[17px]" strokeWidth={2.1} aria-hidden="true" />
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSidebarProfileMenuOpen(false);
+                  onToggleCollapsed();
+                }}
+                className="mt-1 flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5]"
+                role="menuitem"
+              >
+                {collapsed ? (
+                  <PanelLeftOpen className="h-[17px] w-[17px]" strokeWidth={2.1} aria-hidden="true" />
+                ) : (
+                  <PanelLeftClose className="h-[17px] w-[17px]" strokeWidth={2.1} aria-hidden="true" />
+                )}
+                <span>{collapsed ? "Expand sidebar" : "Collapse sidebar"}</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </aside>
   );
@@ -7526,7 +7612,7 @@ function AppShellTopbar({
   contextSecondaryLabel?: string | null;
   onOpenSettings: () => void;
 }) {
-  const profileInitial = (userName || "P").trim().charAt(0).toUpperCase() || "P";
+  const trimmedTopbarProfileName = userName.trim() || "Profile";
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [currency, setCurrency] = useState("USD");
@@ -7596,7 +7682,7 @@ function AppShellTopbar({
     <div className="relative flex w-full items-center justify-between">
       <div className="inline-flex items-center gap-3" />
       {hasContext ? (
-        <div className="pointer-events-none absolute left-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-2 text-[15px] font-semibold leading-none text-[#0f0f0f]">
+        <div className="pointer-events-none absolute left-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-2 text-[1.5rem] font-semibold leading-none text-[#0f0f0f]">
           <span>{contextLabel}</span>
           {contextSecondaryLabel ? (
             <>
@@ -7618,13 +7704,27 @@ function AppShellTopbar({
           <button
             type="button"
             onClick={() => setProfileMenuOpen((open) => !open)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#2d2925] text-[#f8f6f1] shadow-[0_4px_10px_rgba(28,24,20,0.08)]"
+            className="inline-flex h-9 max-w-[220px] items-center gap-2.5 rounded-full bg-transparent px-3 text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5]"
             aria-expanded={profileMenuOpen}
             aria-haspopup="menu"
-            aria-label={`Open profile menu for ${userName}`}
-            title={userName}
+            aria-label={`Open profile menu for ${trimmedTopbarProfileName}`}
           >
-            <span className="text-[14px] font-semibold leading-none">{profileInitial}</span>
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-current">
+              <UserRound className="h-[17px] w-[17px]" strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span
+              className="block truncate text-[14px] font-medium leading-[1.25] sm:max-w-[84px] md:max-w-[96px] lg:max-w-[120px] xl:max-w-[144px] 2xl:max-w-[176px]"
+              title={trimmedTopbarProfileName}
+            >
+              {trimmedTopbarProfileName}
+            </span>
+            <span
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#47423b]/72 transition-transform ${
+                profileMenuOpen ? "rotate-180" : ""
+              }`}
+            >
+              <ChevronDown className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
+            </span>
           </button>
           {profileMenuOpen ? (
             <ProfileMenuDropdown

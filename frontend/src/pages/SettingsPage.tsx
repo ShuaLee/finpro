@@ -18,7 +18,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../context/AuthContext";
 
-export type SettingsTab = "profile";
+export type SettingsTab = "profile" | "preferences" | "danger";
 
 type SettingsPageProps = {
   embedded?: boolean;
@@ -26,7 +26,7 @@ type SettingsPageProps = {
   onSectionChange?: (section: SettingsTab | null) => void;
 };
 
-export function SettingsPage({ embedded = false }: SettingsPageProps) {
+export function SettingsPage({ embedded = false, activeSection = null, onSectionChange }: SettingsPageProps) {
   const { refreshAuth, logoutAllSessions, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -66,6 +66,17 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<SettingsTab>(activeSection ?? "profile");
+
+  useEffect(() => {
+    if (!activeSection) return;
+    setSelectedTab(activeSection);
+  }, [activeSection]);
+
+  const setSettingsTab = (nextTab: SettingsTab) => {
+    setSelectedTab(nextTab);
+    onSectionChange?.(nextTab);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -278,29 +289,49 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
   }
 
   const content = (
-    <main className={`mx-auto w-full ${embedded ? "max-w-[980px] px-0 py-0" : "max-w-[980px] px-4 py-8 sm:px-6 lg:px-8"}`}>
-      <header className={`pb-2 ${embedded ? "pt-5" : ""}`}>
-        <h1 className="text-[2rem] font-semibold tracking-tight text-foreground">Settings</h1>
-      </header>
-      <nav className="mb-7 flex min-h-[48px] items-end justify-between gap-4 border-b border-[#d8d2c7] text-sm" aria-label="Settings sections">
-        <div className="flex items-end gap-8">
-          <button
-            type="button"
-            className="-mb-px shrink-0 border-b-2 border-[#2d2925] px-0 pb-3 text-sm font-medium leading-none text-[#47423b]"
-          >
-            Account
-          </button>
+    <main className={`w-full ${embedded ? "max-w-none px-0 py-0" : "mx-auto max-w-[980px] px-4 py-8 sm:px-6 lg:px-8"}`}>
+      {!embedded ? (
+        <header className="pb-2">
+          <h1 className="text-[2rem] font-semibold tracking-tight text-foreground">Settings</h1>
+        </header>
+      ) : null}
+      <nav className={`${embedded ? "mb-6" : "mb-7"} flex min-h-[48px] items-end justify-between gap-4 border-b border-[#d8d2c7] text-sm`} aria-label="Settings sections">
+        <div className="flex items-end gap-7">
+          {[
+            { key: "profile", label: "Profile" },
+            { key: "preferences", label: "Preferences" },
+            { key: "danger", label: "Danger Zone" },
+          ].map((tab) => {
+            const isSelected = selectedTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSettingsTab(tab.key as SettingsTab)}
+                className={`relative -mb-px shrink-0 px-0 pb-3 text-sm leading-none transition-colors ${
+                  isSelected ? "font-semibold text-[#2d2925]" : "font-medium text-[#7b7368] hover:text-[#47423b]"
+                }`}
+              >
+                {tab.label}
+                {isSelected ? <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#2d2925]" /> : null}
+              </button>
+            );
+          })}
         </div>
-        <div className="pb-2">
-          <Button
-            type="submit"
-            form="settings-profile-form"
-            className="h-[34px] rounded-full bg-[#2d2925] px-4 text-sm font-medium text-[#f8f6f1] shadow-[0_4px_10px_rgba(28,24,20,0.03)] hover:bg-[#2d2925] hover:text-[#f8f6f1]"
-            disabled={profileSubmitting}
-          >
-            {profileSubmitting ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
+        {selectedTab !== "danger" ? (
+          <div className="pb-2">
+            <Button
+              type="submit"
+              form="settings-profile-form"
+              className="h-[34px] rounded-full bg-[#2d2925] px-4 text-sm font-medium text-[#f8f6f1] shadow-[0_4px_10px_rgba(28,24,20,0.03)] hover:bg-[#2d2925] hover:text-[#f8f6f1]"
+              disabled={profileSubmitting}
+            >
+              {profileSubmitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        ) : (
+          <div />
+        )}
       </nav>
       <div className="min-w-0">
         <section className="min-w-0">
@@ -309,6 +340,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
           <div className="space-y-12">
               <SettingsPanel title={null} description={null}>
                 <form id="settings-profile-form" className="divide-y divide-[#e4ded3]" onSubmit={onSaveProfile}>
+                  {selectedTab === "profile" ? (
                   <SettingsSectionBlock title="Profile" description="Your personal information and account security settings.">
                     <div className="space-y-4">
                       <FieldGroup label="Full name">
@@ -360,7 +392,8 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                       </div>
                     </div>
                   </SettingsSectionBlock>
-
+                  ) : null}
+                  {selectedTab === "preferences" ? (
                   <SettingsSectionBlock title="Preferences" description="Finance defaults used for valuation and reporting.">
                     <div className="space-y-4">
                       <div className="grid gap-4 md:grid-cols-2">
@@ -373,9 +406,11 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                       </div>
                     </div>
                   </SettingsSectionBlock>
+                  ) : null}
                 </form>
               </SettingsPanel>
 
+            {selectedTab === "danger" ? (
             <SettingsPanel title={null} description={null}>
               <SettingsSectionBlock title="Danger Zone" description="Permanent account-level actions.">
                 <div className="flex flex-wrap items-center gap-3">
@@ -406,6 +441,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                 </div>
               </SettingsSectionBlock>
             </SettingsPanel>
+            ) : null}
           </div>
         </section>
       </div>
@@ -542,7 +578,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
     </main>
   );
   if (embedded) {
-    return <div className="px-5 pt-0">{content}</div>;
+    return content;
   }
 
   return content;
