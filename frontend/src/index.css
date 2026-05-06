@@ -7,7 +7,7 @@
 @layer base {
   :root {
     --background: 60 14% 97%;
-    --app-shell-background: 60 14% 97%;
+    --app-shell-background: 40 20% 93%;
     --foreground: 28 28% 9%;
     --card: 0 0% 100%;
     --card-foreground: 28 12% 21%;
@@ -33,7 +33,7 @@
 
   .dark {
     --background: 225 22% 5%;
-    --app-shell-background: 225 22% 5%;
+    --app-shell-background: 225 18% 8%;
     --foreground: 210 12% 92%;
     --card: 220 10% 13%;
     --card-foreground: 210 12% 92%;
