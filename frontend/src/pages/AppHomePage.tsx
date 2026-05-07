@@ -174,6 +174,7 @@ const VIEWPORT_BASE_ROWS: Record<EditViewport, number> = {
 };
 const DEFAULT_NAV_SECTION_ORDER: NavSectionKey[] = ["addAssets", "assetTypes", "accounts"];
 const DEFAULT_NAV_DASHBOARD_TILE_ORDER: NavDashboardTileKey[] = ["portfolioOverview", "favorites", "assets", "accounts", "custom"];
+const SIDEBAR_COLLAPSE_STORAGE_KEY = "finpro.sidebarCollapsed";
 const TILE_PRESETS: TilePreset[] = [
   {
     id: "compact",
@@ -339,7 +340,10 @@ export function AppHomePage() {
   const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
   const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
   const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "preferences" | "danger" | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) === "true";
+  });
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [accountRows, setAccountRows] = useState<AccountListItem[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -3382,13 +3386,23 @@ export function AppHomePage() {
     }
   }, [activeAppShellSection, activeSidebarCategory, isSettingsRoute]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SIDEBAR_COLLAPSE_STORAGE_KEY, String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
+
   return (
     <main className="app-home h-screen w-full overflow-hidden bg-[hsl(var(--app-shell-background))] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="app-top-nav sticky top-0 z-40 w-full border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
+      <div className="app-top-nav sticky top-0 z-40 w-full bg-[hsl(var(--app-shell-background))] text-[hsl(var(--app-shell-foreground))]">
+        <div
+          className="pointer-events-none absolute bottom-0 right-0 h-px bg-[hsl(var(--app-shell-border))]"
+          style={{ left: isSidebarCollapsed ? "80px" : "196px" }}
+          aria-hidden="true"
+        />
         <div className="w-full">
-          <div className="flex h-11 items-center">
+          <div className="flex h-12 items-center">
               <AppShellTopbar
                 userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
                 userEmail={user?.email ?? ""}
@@ -3402,15 +3416,15 @@ export function AppHomePage() {
           </div>
         </div>
       </div>
-      <div className="flex h-[calc(100vh-44px)] min-h-0 w-full items-stretch overflow-hidden">
+      <div className="flex h-[calc(100vh-48px)] min-h-0 w-full items-stretch overflow-hidden">
         <AppShellSidebar
           activeSection={activeAppShellSection}
           collapsed={isSidebarCollapsed}
           onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
           onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
         />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-tl-2xl bg-[hsl(var(--background))] shadow-[0_18px_45px_rgba(28,24,20,0.08)]">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-2xl bg-[hsl(var(--app-canvas-background))]">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-[hsl(var(--app-canvas-background))]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -4751,7 +4765,13 @@ export function AppHomePage() {
                  </div>
               ) : null}
               {!isEditing ? (
-                <Card className={activeAppShellSection === "settings" ? "overflow-visible border-0 bg-transparent shadow-none dark:border-0 dark:bg-transparent" : "overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background"}>
+                <Card
+                  className={
+                    activeAppShellSection === "settings" || activeAppShellSection === "portfolio"
+                      ? "overflow-visible border-0 bg-transparent shadow-none dark:border-0 dark:bg-transparent"
+                      : "overflow-visible border border-background bg-background shadow-none dark:border-background dark:bg-background"
+                  }
+                >
                   <CardContent
                     className={
                       activeAppShellSection === "settings"
@@ -4762,7 +4782,7 @@ export function AppHomePage() {
                     }
                   >
                     {activeAppShellSection === "portfolio" ? (
-                      <div className="space-y-4 rounded-xl border border-background bg-background p-4">
+                      <div className="space-y-4 p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <p className="text-3xl font-bold tracking-tight text-foreground">$98,056</p>
@@ -7445,11 +7465,12 @@ function AppShellSidebar({
 
   return (
     <aside
-      className={`sticky top-11 z-40 flex h-[calc(100vh-44px)] shrink-0 flex-col overflow-hidden border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] transition-[width] duration-200 ease-out ${
+      className={`sticky top-12 z-40 flex h-[calc(100vh-48px)] shrink-0 flex-col overflow-hidden bg-[hsl(var(--app-shell-background))] text-[hsl(var(--app-shell-foreground))] transition-[width] duration-200 ease-out ${
         collapsed ? "w-[64px]" : "w-[180px]"
       } group/sidebar`}
     >
-      <nav className="mt-4 flex flex-col gap-3 px-3.5" aria-label="Primary navigation">
+      <div className="pointer-events-none absolute right-0 top-8 bottom-0 w-px bg-[hsl(var(--app-shell-border))]" aria-hidden="true" />
+      <nav className="mt-4 flex flex-col gap-3 px-3" aria-label="Primary navigation">
         {navItems.map((item) => (
           <button
             key={item.key}
@@ -7459,8 +7480,8 @@ function AppShellSidebar({
               collapsed ? "h-10 w-10 rounded-[7.5px] px-0" : "h-10 w-full rounded-[7.5px] px-0"
             } ${
               item.active
-                ? "bg-[#e5e5e5] text-[#0f0f0f]"
-                : "text-[#0f0f0f] hover:bg-[#e5e5e5]"
+                ? "bg-[hsl(var(--app-shell-accent))] text-[hsl(var(--app-shell-foreground))]"
+                : "text-[hsl(var(--app-shell-foreground))] hover:bg-[hsl(var(--app-shell-accent))]"
             }`}
           >
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-current [&>svg]:h-[20px] [&>svg]:w-[20px]">{item.icon}</span>
@@ -7475,7 +7496,7 @@ function AppShellSidebar({
 
 function CollapsedSidebarTooltip({ label }: { label: string }) {
   return (
-    <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-[#2d2925] px-2.5 py-1.5 text-xs font-semibold leading-none text-[#f8f6f1] shadow-[0_10px_24px_rgba(28,24,20,0.18)] group-hover:inline-flex">
+    <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-[hsl(var(--app-shell-accent))] px-2.5 py-1.5 text-xs font-semibold leading-none text-[hsl(var(--app-shell-foreground))] shadow-[0_10px_24px_rgba(15,23,42,0.28)] group-hover:inline-flex">
       {label}
     </span>
   );
@@ -7566,30 +7587,30 @@ function AppShellTopbar({
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[7.5px] text-[hsl(var(--app-shell-foreground))] transition-colors hover:bg-[hsl(var(--app-shell-accent))]"
             aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <Menu className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
-        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-primary">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-[hsl(var(--app-shell-brand))]">
           <ChartNoAxesCombined className="h-[18px] w-[18px]" />
         </span>
-        <span className="font-display text-[1.25rem] font-bold leading-none tracking-tight text-foreground">FinPro</span>
+        <span className="font-display text-[1.25rem] font-bold leading-none tracking-tight text-[hsl(var(--app-shell-foreground))]">FinPro</span>
       </div>
-      <div className="flex shrink-0 items-center gap-4">
+      <div className="flex shrink-0 items-center gap-4 pr-6">
         <button
           type="button"
-          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#e5e5e5] px-4 text-[14px] font-medium leading-none text-[#0f0f0f] shadow-[0_4px_10px_rgba(28,24,20,0.03)] transition-colors hover:bg-[#d9d9d9]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[hsl(var(--app-shell-brand))] px-4 text-[14px] font-medium leading-none text-white transition-colors hover:brightness-110"
         >
-          <Plus className="h-[17px] w-[17px] text-[#0f0f0f]" strokeWidth={2.2} />
+          <Plus className="h-[17px] w-[17px] text-white" strokeWidth={2.2} />
           <span>Asset</span>
         </button>
         <div className="relative" ref={profileMenuRef}>
           <button
             type="button"
             onClick={() => setProfileMenuOpen((open) => !open)}
-            className="inline-flex h-9 max-w-[220px] items-center gap-2.5 rounded-full bg-transparent px-3 text-[#0f0f0f] transition-colors hover:bg-[#e5e5e5]"
+            className="inline-flex h-9 max-w-[220px] items-center gap-2.5 rounded-full bg-transparent px-3 text-[hsl(var(--app-shell-foreground))] transition-colors hover:bg-[hsl(var(--app-shell-accent))]"
             aria-expanded={profileMenuOpen}
             aria-haspopup="menu"
             aria-label={`Open profile menu for ${trimmedTopbarProfileName}`}
@@ -7604,7 +7625,7 @@ function AppShellTopbar({
               {trimmedTopbarProfileName}
             </span>
             <span
-              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#47423b]/72 transition-transform ${
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-[hsl(var(--app-shell-muted))] transition-transform ${
                 profileMenuOpen ? "rotate-180" : ""
               }`}
             >

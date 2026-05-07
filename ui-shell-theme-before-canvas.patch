@@ -1,0 +1,54 @@
+﻿diff --git a/frontend/src/pages/AppHomePage.tsx b/frontend/src/pages/AppHomePage.tsx
+index cfd8765..bfb9e96 100644
+--- a/frontend/src/pages/AppHomePage.tsx
++++ b/frontend/src/pages/AppHomePage.tsx
+@@ -3388,7 +3388,7 @@ export function AppHomePage() {
+       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
+       <div className="app-top-nav sticky top-0 z-40 w-full border-b border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))]">
+         <div className="w-full">
+-          <div className="flex h-11 items-center">
++          <div className="flex h-12 items-center">
+               <AppShellTopbar
+                 userName={user?.fullName || user?.email?.split("@")[0] || "Profile"}
+                 userEmail={user?.email ?? ""}
+@@ -3402,7 +3402,7 @@ export function AppHomePage() {
+           </div>
+         </div>
+       </div>
+-      <div className="flex h-[calc(100vh-44px)] min-h-0 w-full items-stretch overflow-hidden">
++      <div className="flex h-[calc(100vh-48px)] min-h-0 w-full items-stretch overflow-hidden">
+         <AppShellSidebar
+           activeSection={activeAppShellSection}
+           collapsed={isSidebarCollapsed}
+@@ -3410,7 +3410,7 @@ export function AppHomePage() {
+           onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
+         />
+         <div className="flex min-w-0 flex-1 flex-col">
+-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-tl-2xl bg-[hsl(var(--background))] shadow-[0_18px_45px_rgba(28,24,20,0.08)]">
++          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-tl-2xl bg-[hsl(var(--background))] px-3 shadow-[0_18px_45px_rgba(28,24,20,0.08)]">
+               <Card
+                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
+                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
+@@ -7445,11 +7445,11 @@ function AppShellSidebar({
+ 
+   return (
+     <aside
+-      className={`sticky top-11 z-40 flex h-[calc(100vh-44px)] shrink-0 flex-col overflow-hidden border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] transition-[width] duration-200 ease-out ${
++      className={`sticky top-12 z-40 flex h-[calc(100vh-48px)] shrink-0 flex-col overflow-hidden border-r border-[#d8d2c7]/55 bg-[hsl(var(--app-shell-background))] transition-[width] duration-200 ease-out ${
+         collapsed ? "w-[64px]" : "w-[180px]"
+       } group/sidebar`}
+     >
+-      <nav className="mt-4 flex flex-col gap-3 px-3.5" aria-label="Primary navigation">
++      <nav className="mt-4 flex flex-col gap-3 px-3" aria-label="Primary navigation">
+         {navItems.map((item) => (
+           <button
+             key={item.key}
+@@ -7577,7 +7577,7 @@ function AppShellTopbar({
+         </span>
+         <span className="font-display text-[1.25rem] font-bold leading-none tracking-tight text-foreground">FinPro</span>
+       </div>
+-      <div className="flex shrink-0 items-center gap-4">
++      <div className="flex shrink-0 items-center gap-4 pr-6">
+         <button
+           type="button"
+           className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#e5e5e5] px-4 text-[14px] font-medium leading-none text-[#0f0f0f] shadow-[0_4px_10px_rgba(28,24,20,0.03)] transition-colors hover:bg-[#d9d9d9]"

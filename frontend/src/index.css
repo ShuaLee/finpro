@@ -6,26 +6,32 @@
 
 @layer base {
   :root {
-    --background: 60 14% 97%;
-    --app-shell-background: 40 20% 93%;
-    --foreground: 28 28% 9%;
+    --background: 212 28% 97%;
+    --app-shell-background: 220 10% 18%;
+    --app-shell-foreground: 210 20% 95%;
+    --app-shell-muted: 212 14% 74%;
+    --app-shell-accent: 214 20% 28%;
+    --app-shell-border: 214 16% 34%;
+    --app-shell-brand: 212 88% 58%;
+    --app-canvas-background: 220 28% 95%;
+    --foreground: 220 22% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 28 12% 21%;
+    --card-foreground: 220 18% 16%;
     --popover: 0 0% 100%;
     --popover-foreground: 28 12% 21%;
-    --primary: 28 12% 21%;
+    --primary: 220 18% 16%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 220 18% 96%;
-    --secondary-foreground: 28 12% 21%;
-    --muted: 220 15% 88%;
-    --muted-foreground: 28 18% 16%;
-    --accent: 220 18% 95%;
-    --accent-foreground: 28 12% 21%;
+    --secondary: 210 20% 92%;
+    --secondary-foreground: 220 18% 16%;
+    --muted: 212 16% 84%;
+    --muted-foreground: 218 14% 30%;
+    --accent: 210 22% 87%;
+    --accent-foreground: 220 18% 16%;
     --destructive: 0 74% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 14% 84%;
-    --input: 220 14% 84%;
-    --ring: 28 12% 21%;
+    --border: 214 17% 78%;
+    --input: 214 17% 78%;
+    --ring: 220 18% 16%;
     --edit-drop-slot-bg: 0 0% 100%;
     --edit-drop-slot-border: 28 12% 24%;
     --radius: 1rem;
@@ -34,6 +40,12 @@
   .dark {
     --background: 225 22% 5%;
     --app-shell-background: 225 18% 8%;
+    --app-shell-foreground: 210 12% 92%;
+    --app-shell-muted: 214 14% 72%;
+    --app-shell-accent: 220 9% 20%;
+    --app-shell-border: 220 10% 18%;
+    --app-shell-brand: 212 88% 58%;
+    --app-canvas-background: 225 14% 10%;
     --foreground: 210 12% 92%;
     --card: 220 10% 13%;
     --card-foreground: 210 12% 92%;
