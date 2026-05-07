@@ -1,0 +1,11 @@
+:root {
+  --color-page-background: #f1f1f1;
+  --color-text-primary: #111111;
+  --color-dark-slate: #1f2933;
+  --color-surface: #ffffff;
+  --color-border: #d4d4d4;
+  --color-danger: #b91c1c;
+  --size-top-nav-height: 3rem;
+  --size-side-nav-width: 11.5rem;
+  --size-side-nav-collapsed-width: 4rem;
+}

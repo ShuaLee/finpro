@@ -1,102 +1,104 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useState, type FormEvent } from "react";
 
-import { Footer } from "./components/Footer";
-import { Header } from "./components/Header";
-import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ApiError } from "./api/http";
 import { useAuth } from "./context/AuthContext";
-import { AppHomePage } from "./pages/AppHomePage";
-import { AddBrokerageAccountPage } from "./pages/AddBrokerageAccountPage";
-import { AboutPage } from "./pages/AboutPage";
-import { BusinessPage } from "./pages/BusinessPage";
-import { ContactPage } from "./pages/ContactPage";
-import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
-import { LandingPage } from "./pages/LandingPage";
-import { LearnPage } from "./pages/LearnPage";
-import { LoginPage } from "./pages/LoginPage";
-import { HoldingsPage } from "./pages/HoldingsPage";
-import { PricingPage } from "./pages/PricingPage";
-import { PrivacyPage } from "./pages/PrivacyPage";
-import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-import { SecurityPage } from "./pages/SecurityPage";
-import { SignupPage } from "./pages/SignupPage";
-import { TermsPage } from "./pages/TermsPage";
-import { VerifyEmailPage } from "./pages/VerifyEmailPage";
+import { MainContent } from "./MainContent";
+import { SideNav } from "./SideNav";
+import { TopNav } from "./TopNav";
 
-function RootRedirect() {
-  const { user, loading } = useAuth();
+function App() {
+  const { user, loading, login } = useAuth();
+  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [sideNavCollapsed, setSideNavCollapsed] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await login(email, password);
+      setPassword("");
+      setShowLoginForm(false);
+      window.history.replaceState({}, "", "/");
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Unable to log in.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
-    return <div className="grid min-h-[70vh] place-items-center text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <main className="app-screen">
+        <p className="status-text">Loading...</p>
+      </main>
+    );
   }
 
   if (user) {
-    return <AppHomePage />;
+    return (
+      <div className="app-shell">
+        <TopNav sideNavCollapsed={sideNavCollapsed} onToggleSideNav={() => setSideNavCollapsed((current) => !current)} />
+        <div className="app-layout">
+          <SideNav collapsed={sideNavCollapsed} />
+          <MainContent />
+        </div>
+      </div>
+    );
   }
 
-  return <LandingPage />;
-}
-
-function App() {
-  const location = useLocation();
-  const { user } = useAuth();
-  const authStandalonePaths = new Set(["/signup", "/login", "/login-verify", "/forgot-password", "/reset-password"]);
-  const authenticatedAppPathPrefixes = ["/settings", "/accounts", "/holdings", "/app"];
-  const isAuthenticatedAppRoute =
-    Boolean(user) &&
-    (location.pathname === "/" || authenticatedAppPathPrefixes.some((prefix) => location.pathname.startsWith(prefix)));
-  const hideHeader = authStandalonePaths.has(location.pathname) || isAuthenticatedAppRoute;
-  const hideFooter = authStandalonePaths.has(location.pathname) || Boolean(user);
-
   return (
-    <div className="min-h-screen flex flex-col">
-      {hideHeader ? null : <Header />}
-      <div className="flex-1">
-        <Routes>
-          <Route path="/" element={<RootRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/login-verify" element={<Navigate to="/login" replace />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/business" element={<BusinessPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/learn" element={<LearnPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/security" element={<SecurityPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route
-            path="/settings"
-            element={(
-              <ProtectedRoute>
-                <AppHomePage />
-              </ProtectedRoute>
-            )}
+    <main className="app-screen">
+      {!showLoginForm ? (
+        <button type="button" className="primary-button" onClick={() => setShowLoginForm(true)}>
+          Log in
+        </button>
+      ) : (
+        <form className="login-form" onSubmit={handleSubmit}>
+          <label className="field-label" htmlFor="login-email">
+            Email
+          </label>
+          <input
+            id="login-email"
+            className="text-field"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
           />
-          <Route
-            path="/accounts/brokerage/new"
-            element={(
-              <ProtectedRoute>
-                <AddBrokerageAccountPage />
-              </ProtectedRoute>
-            )}
+
+          <label className="field-label" htmlFor="login-password">
+            Password
+          </label>
+          <input
+            id="login-password"
+            className="text-field"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
           />
-          <Route
-            path="/holdings"
-            element={(
-              <ProtectedRoute>
-                <HoldingsPage />
-              </ProtectedRoute>
-            )}
-          />
-          <Route path="/app" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-      {hideFooter ? null : <Footer />}
-    </div>
+
+          {error ? <p className="error-text">{error}</p> : null}
+
+          <div className="form-actions">
+            <button type="button" className="secondary-button" onClick={() => setShowLoginForm(false)} disabled={submitting}>
+              Cancel
+            </button>
+            <button type="submit" className="primary-button" disabled={submitting}>
+              {submitting ? "Logging in..." : "Log in"}
+            </button>
+          </div>
+        </form>
+      )}
+    </main>
   );
 }
 

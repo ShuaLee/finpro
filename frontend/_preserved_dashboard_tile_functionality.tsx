@@ -52,7 +52,6 @@ import { getNavigationState, upsertNavigationState } from "../api/navigationStat
 import { getProfile, getProfileOptions, updateProfile } from "../api/settings";
 import { Card, CardContent } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
-import { SettingsPage } from "./SettingsPage";
 
 type DashboardTile = {
   id: number;
@@ -339,7 +338,6 @@ export function AppHomePage() {
   const [activeAppShellSection, setActiveAppShellSection] = useState<AppShellSection>(initialShellSection);
   const [activeSidebarCategory, setActiveSidebarCategory] = useState(initialSidebarCategory);
   const [activeSidebarLabel, setActiveSidebarLabel] = useState(initialSidebarLabel);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<"profile" | "preferences" | "danger" | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) === "true";
@@ -3361,7 +3359,6 @@ export function AppHomePage() {
       setActiveSidebarLabel("Settings");
       return;
     }
-    setActiveSettingsSection(null);
     if (activeAppShellSection === "addAccount") return;
     if (activeSidebarCategory === "portfolio") {
       setActiveAppShellSection("portfolio");
@@ -3392,13 +3389,13 @@ export function AppHomePage() {
   }, [isSidebarCollapsed]);
 
   return (
-    <main className="app-home h-screen w-full overflow-hidden bg-[hsl(var(--app-shell-background))] dark:text-foreground">
+    <main className="app-home h-screen w-full overflow-hidden bg-[var(--app-shell-background)] dark:text-foreground">
       {isNavRearranging ? <div className="fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]" aria-hidden="true" /> : null}
       {dashboardTilesEditMode ? <div className="pointer-events-none fixed inset-0 z-20 bg-slate-900/25 backdrop-blur-[4px]" aria-hidden="true" /> : null}
-      <div className="app-top-nav sticky top-0 z-40 w-full bg-[hsl(var(--app-shell-background))] text-[hsl(var(--app-shell-foreground))]">
+      <div className="app-top-nav sticky top-0 z-40 w-full bg-[var(--app-shell-background)] text-[hsl(var(--app-shell-foreground))]">
         <div
           className="pointer-events-none absolute bottom-0 right-0 h-px bg-[hsl(var(--app-shell-border))]"
-          style={{ left: isSidebarCollapsed ? "80px" : "196px" }}
+          style={{ left: isSidebarCollapsed ? "64px" : "180px" }}
           aria-hidden="true"
         />
         <div className="w-full">
@@ -3409,7 +3406,6 @@ export function AppHomePage() {
                 isSidebarCollapsed={isSidebarCollapsed}
                 onToggleSidebar={() => setIsSidebarCollapsed((previous) => !previous)}
                 onOpenSettings={() => {
-                  setActiveSettingsSection(null);
                   navigate("/settings");
               }}
             />
@@ -3423,8 +3419,8 @@ export function AppHomePage() {
           onOpenPortfolio={() => navigateToShellSection("portfolio", "portfolio", "Portfolio")}
           onOpenDashboard={() => navigateToShellSection("dashboards", "dashboards", "Dashboards")}
         />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-2xl bg-[hsl(var(--app-canvas-background))]">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-[hsl(var(--app-canvas-background))]">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-2xl bg-[var(--app-canvas-background)]">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-[var(--app-canvas-background)]">
               <Card
                 className={`hidden relative mt-0 h-fit overflow-visible border-0 bg-transparent shadow-none xl:order-2 xl:mt-0 xl:sticky xl:bottom-6 xl:self-start ${
                   dashboardTilesEditMode ? "z-30" : isNavRearranging ? "z-auto" : "z-30"
@@ -4782,6 +4778,8 @@ export function AppHomePage() {
                     }
                   >
                     {activeAppShellSection === "portfolio" ? (
+                      <div className="min-h-[74vh]" />
+                    ) : false ? (
                       <div className="space-y-4 p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
@@ -4938,7 +4936,7 @@ export function AppHomePage() {
                         Holdings view coming next.
                       </div>
                     ) : activeAppShellSection === "settings" ? (
-                      <SettingsPage embedded activeSection={activeSettingsSection} onSectionChange={setActiveSettingsSection} />
+                      <div className="min-h-[74vh]" />
                     ) : activeAppShellSection === "accounts" ? (
                       <div className="grid gap-5 xl:grid-cols-[0.95fr_1.35fr]">
                         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
@@ -7465,7 +7463,7 @@ function AppShellSidebar({
 
   return (
     <aside
-      className={`sticky top-12 z-40 flex h-[calc(100vh-48px)] shrink-0 flex-col overflow-hidden bg-[hsl(var(--app-shell-background))] text-[hsl(var(--app-shell-foreground))] transition-[width] duration-200 ease-out ${
+      className={`sticky top-12 z-40 flex h-[calc(100vh-48px)] shrink-0 flex-col overflow-hidden bg-[var(--app-shell-background)] text-[hsl(var(--app-shell-foreground))] transition-[width] duration-200 ease-out ${
         collapsed ? "w-[64px]" : "w-[180px]"
       } group/sidebar`}
     >

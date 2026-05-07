@@ -1,401 +1,231 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+@import "./theme.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 212 28% 97%;
-    --app-shell-background: 220 10% 18%;
-    --app-shell-foreground: 210 20% 95%;
-    --app-shell-muted: 212 14% 74%;
-    --app-shell-accent: 214 20% 28%;
-    --app-shell-border: 214 16% 34%;
-    --app-shell-brand: 212 88% 58%;
-    --app-canvas-background: 220 28% 95%;
-    --foreground: 220 22% 14%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 18% 16%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 28 12% 21%;
-    --primary: 220 18% 16%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 210 20% 92%;
-    --secondary-foreground: 220 18% 16%;
-    --muted: 212 16% 84%;
-    --muted-foreground: 218 14% 30%;
-    --accent: 210 22% 87%;
-    --accent-foreground: 220 18% 16%;
-    --destructive: 0 74% 45%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 214 17% 78%;
-    --input: 214 17% 78%;
-    --ring: 220 18% 16%;
-    --edit-drop-slot-bg: 0 0% 100%;
-    --edit-drop-slot-border: 28 12% 24%;
-    --radius: 1rem;
-  }
-
-  .dark {
-    --background: 225 22% 5%;
-    --app-shell-background: 225 18% 8%;
-    --app-shell-foreground: 210 12% 92%;
-    --app-shell-muted: 214 14% 72%;
-    --app-shell-accent: 220 9% 20%;
-    --app-shell-border: 220 10% 18%;
-    --app-shell-brand: 212 88% 58%;
-    --app-canvas-background: 225 14% 10%;
-    --foreground: 210 12% 92%;
-    --card: 220 10% 13%;
-    --card-foreground: 210 12% 92%;
-    --popover: 220 10% 13%;
-    --popover-foreground: 210 12% 92%;
-    --primary: 210 12% 92%;
-    --primary-foreground: 225 22% 5%;
-    --secondary: 220 9% 17%;
-    --secondary-foreground: 210 12% 92%;
-    --muted: 220 10% 10%;
-    --muted-foreground: 210 12% 92%;
-    --accent: 220 9% 20%;
-    --accent-foreground: 210 12% 92%;
-    --destructive: 0 63% 48%;
-    --destructive-foreground: 210 12% 92%;
-    --border: 220 9% 24%;
-    --input: 220 9% 24%;
-    --ring: 210 16% 94%;
-    --edit-drop-slot-bg: 220 10% 10%;
-    --edit-drop-slot-border: 220 9% 24%;
-  }
-
-  * {
-    @apply border-border;
-  }
-
-  html {
-    width: 100%;
-    background-color: hsl(var(--app-shell-background));
+  html,
+  body,
+  #root {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    width: 100%;
-    margin: 0;
-    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    background-color: hsl(var(--app-shell-background));
-    background-image: none;
-    min-width: 320px;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  .dark body {
-    background-color: hsl(var(--app-shell-background));
-    background-image: none;
-  }
-
-  #root {
-    width: 100%;
-    min-height: 100vh;
-  }
-
-  .dark,
-  .dark body,
-  .dark * {
-    scrollbar-color: hsl(var(--secondary)) hsl(var(--background));
-  }
-
-  .dark::-webkit-scrollbar,
-  .dark body::-webkit-scrollbar,
-  .dark *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  .dark::-webkit-scrollbar-track,
-  .dark body::-webkit-scrollbar-track,
-  .dark *::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-  }
-
-  .dark::-webkit-scrollbar-thumb,
-  .dark body::-webkit-scrollbar-thumb,
-  .dark *::-webkit-scrollbar-thumb {
-    background: hsl(var(--secondary));
-    border-radius: 9999px;
-    border: 2px solid hsl(var(--background));
-  }
-
-  .dark::-webkit-scrollbar-thumb:hover,
-  .dark body::-webkit-scrollbar-thumb:hover,
-  .dark *::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
-  }
-
-  .dark::-webkit-scrollbar-corner,
-  .dark body::-webkit-scrollbar-corner,
-  .dark *::-webkit-scrollbar-corner {
-    background: hsl(var(--background));
-  }
-
-  ::-webkit-scrollbar,
-  body::-webkit-scrollbar,
-  *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  ::-webkit-scrollbar-track,
-  body::-webkit-scrollbar-track,
-  *::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-  }
-
-  ::-webkit-scrollbar-corner,
-  body::-webkit-scrollbar-corner,
-  *::-webkit-scrollbar-corner {
-    background: hsl(var(--background));
-  }
-
-  h1,
-  h2,
-  h3,
-  .font-display {
-    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-  }
-
-  /* Global weight bump (~10%) to increase text legibility across the app. */
-  .font-normal {
-    font-weight: 480 !important;
-  }
-
-  .font-medium {
-    font-weight: 600 !important;
-  }
-
-  .font-semibold {
-    font-weight: 720 !important;
-  }
-
-  .font-bold {
-    font-weight: 840 !important;
-  }
-
-  /* Side-nav text should always be token-driven, not hardcoded slate shades. */
-  .app-home [data-nav-target-key] .text-slate-400,
-  .app-home [data-nav-target-key] .text-slate-500,
-  .app-home [data-nav-target-key] .text-slate-600 {
-    color: hsl(var(--muted-foreground));
-  }
-
-  .app-home [data-nav-target-key] .text-slate-700,
-  .app-home [data-nav-target-key] .text-slate-800,
-  .app-home [data-nav-target-key] .text-slate-900,
-  .app-home [data-nav-target-key] .text-slate-950 {
-    color: hsl(var(--foreground));
-  }
-
-  .app-home .side-nav-panel .text-sm {
-    font-size: 0.94rem !important;
-    line-height: 1.3rem !important;
-  }
-
-  .app-home .side-nav-panel .text-xs {
-    font-size: 0.8rem !important;
-    line-height: 1.08rem !important;
-  }
-
-  .app-home button[draggable="true"] {
-    border-color: hsl(var(--border)) !important;
-    background: hsl(var(--card)) !important;
-    color: hsl(var(--foreground)) !important;
-  }
-
-  .app-home button[draggable="true"]:hover {
-    background: hsl(var(--accent)) !important;
-    color: hsl(var(--accent-foreground)) !important;
-  }
-
-  html[data-dashboard-tiles-edit-mode="true"] .app-top-nav {
-    pointer-events: none;
-    opacity: 1;
-    filter: blur(3px);
-  }
-
-  html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-nav-item-active {
-    font-weight: 400 !important;
-  }
-
-  html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-nav-item .font-bold {
-    font-weight: 400 !important;
-  }
-
-  html[data-dashboard-tiles-edit-mode="true"] .app-home .sidebar-active-indicator {
-    display: none !important;
-  }
-
-  .app-home .edit-drop-slot {
-    border-width: 1px;
-    border-style: dashed;
-    border-color: hsl(var(--edit-drop-slot-border) / 0.5);
-    background-color: hsl(var(--edit-drop-slot-bg));
-  }
-
-  .app-home .edit-drop-slot-surface {
-    border-style: dashed;
-    border-color: hsl(var(--edit-drop-slot-border) / 0.5);
-    background-color: hsl(var(--edit-drop-slot-bg));
-  }
-
-  .app-home .edit-drop-slot-surface-solid {
-    border-width: 1px;
-    border-style: solid;
-    border-color: hsl(var(--border));
-    background-color: hsl(var(--edit-drop-slot-bg));
-  }
-
-  .app-home .edit-drop-slot-label {
-    color: hsl(var(--foreground));
-  }
-
-  .app-home .edit-dashboard-screen .edit-layout-label,
-  .app-home .edit-dashboard-screen .edit-layout-select,
-  .app-home .edit-dashboard-screen .edit-layout-select option,
-  .app-home .edit-dashboard-screen .edit-drop-slot-label {
-    color: hsl(var(--foreground) / 0.78) !important;
-    font-weight: 450 !important;
-  }
-
-  .app-home .edit-dashboard-sheet-bg {
-    background-color: hsl(var(--background));
-  }
-
-  .app-home .edit-dashboard-screen .edit-top-controls-tile {
-    background-color: hsl(var(--background));
-    border-color: hsl(var(--background));
-  }
-
-  .app-home .edit-dashboard-screen button.edit-add-tile-trigger {
-    border-color: hsl(var(--foreground) / 0.7) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-  }
-
-  .app-home .edit-dashboard-screen button.edit-add-tile-trigger:hover {
-    filter: brightness(0.95);
-  }
-
-  .app-home .edit-dashboard-screen .edit-manage-grid-trigger {
-    border-color: hsl(var(--foreground) / 0.7) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .edit-manage-grid-trigger:hover {
-    filter: brightness(0.95);
-  }
-
-  .app-home .edit-dashboard-screen .edit-save-check-btn:hover:not(:disabled) {
-    border-color: hsl(var(--foreground) / 0.7) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-  }
-
-  .dark .app-home .edit-dashboard-screen .edit-manage-grid-trigger {
-    border-color: hsl(var(--border)) !important;
-    background-color: hsl(var(--card)) !important;
-    color: hsl(var(--foreground)) !important;
-  }
-
-  /* Theme-normalize colorful edit-screen controls to token-based colors. */
-  .app-home .edit-dashboard-screen .bg-blue-600 {
-    background-color: hsl(var(--primary)) !important;
-  }
-  .app-home .edit-dashboard-popup .bg-blue-600 {
-    background-color: hsl(var(--primary)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .border-blue-100,
-  .app-home .edit-dashboard-screen .border-blue-200,
-  .app-home .edit-dashboard-screen .border-amber-200,
-  .app-home .edit-dashboard-screen .border-red-300,
-  .app-home .edit-dashboard-popup .border-amber-200,
-  .app-home .edit-dashboard-popup .border-blue-600 {
-    border-color: hsl(var(--border)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .bg-blue-50,
-  .app-home .edit-dashboard-screen .bg-amber-100,
-  .app-home .edit-dashboard-screen .bg-red-50,
-  .app-home .edit-dashboard-screen .bg-red-100,
-  .app-home .edit-dashboard-popup .bg-amber-50,
-  .app-home .edit-dashboard-popup .bg-amber-100 {
-    background-color: hsl(var(--secondary)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .bg-amber-50 {
-    background-color: hsl(var(--card)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .border-amber-200.bg-amber-50 {
-    border-color: hsl(var(--foreground) / 0.65) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-  }
-  .app-home .edit-dashboard-popup .border-amber-200.bg-amber-50 {
-    border-color: hsl(var(--foreground) / 0.65) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .border-blue-200.bg-blue-50 {
-    border-color: hsl(var(--border)) !important;
-    background-color: hsl(0 0% 100%) !important;
-    color: hsl(var(--foreground)) !important;
-  }
-  .app-home .edit-dashboard-popup .border-blue-600.bg-blue-600 {
-    border-color: hsl(var(--foreground) / 0.65) !important;
-    background-color: hsl(var(--foreground)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .text-blue-800,
-  .app-home .edit-dashboard-screen .text-red-700,
-  .app-home .edit-dashboard-popup .text-red-700 {
-    color: hsl(var(--foreground)) !important;
-  }
-
-  .app-home .edit-dashboard-screen .border-amber-200.bg-amber-50.text-amber-900,
-  .app-home .edit-dashboard-popup .border-amber-200.bg-amber-50.text-amber-900 {
-    color: hsl(var(--primary-foreground)) !important;
+    background: var(--color-page-background);
+    color: var(--color-text-primary);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 }
 
-@layer utilities {
-  .app-home .text-xs {
-    font-size: 0.76rem !important;
-    line-height: 1.05rem !important;
-  }
+.app-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background: var(--color-page-background);
+}
 
-  .app-home .text-sm {
-    font-size: 0.89rem !important;
-    line-height: 1.25rem !important;
-  }
+.app-shell {
+  min-height: 100vh;
+  background: var(--color-page-background);
+}
 
-  .app-home .text-base {
-    font-size: 1.01rem !important;
-    line-height: 1.5rem !important;
-  }
+.top-nav {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--size-top-nav-height);
+  background: var(--color-page-background);
+  border-bottom: 1px solid var(--color-border);
+}
 
-  .app-home .font-medium {
-    font-weight: 450 !important;
-  }
+.top-nav-side-slot {
+  display: flex;
+  width: var(--size-side-nav-collapsed-width);
+  height: 100%;
+  flex: 0 0 var(--size-side-nav-collapsed-width);
+  align-items: center;
+  justify-content: center;
+}
 
-  .app-home .font-semibold {
-    font-weight: 550 !important;
-  }
+.app-layout {
+  display: flex;
+  min-height: calc(100vh - var(--size-top-nav-height));
+  background: var(--color-page-background);
+}
 
-  .app-home .font-bold {
-    font-weight: 650 !important;
-  }
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  width: var(--size-side-nav-width);
+  min-height: calc(100vh - var(--size-top-nav-height));
+  flex: 0 0 var(--size-side-nav-width);
+  background: var(--color-page-background);
+  border-right: 1px solid var(--color-border);
+  transition: width 160ms ease, flex-basis 160ms ease;
+}
+
+.side-nav-collapsed {
+  width: var(--size-side-nav-collapsed-width);
+  flex-basis: var(--size-side-nav-collapsed-width);
+}
+
+.side-nav-bottom {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 0.75rem;
+}
+
+.side-nav-collapsed .side-nav-bottom {
+  justify-content: center;
+  padding: 0.75rem 0;
+}
+
+.side-nav-top {
+  display: flex;
+  width: var(--size-side-nav-collapsed-width);
+  flex: 0 0 var(--size-side-nav-collapsed-width);
+  justify-content: center;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+.side-nav-collapsed .side-nav-top {
+  padding: 0.75rem;
+}
+
+.nav-button {
+  position: relative;
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.nav-button-tooltip {
+  position: absolute;
+  left: calc(100% + 0.625rem);
+  top: 50%;
+  z-index: 10;
+  display: none;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.nav-button:hover .nav-button-tooltip,
+.nav-button:focus-visible .nav-button-tooltip {
+  display: inline-flex;
+}
+
+.nav-button:hover {
+  background: rgba(17, 17, 17, 0.06);
+}
+
+.nav-button-icon {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-button-svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.floating-pill {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--color-dark-slate);
+  color: var(--color-surface);
+  padding: 0 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.main-content {
+  min-width: 0;
+  flex: 1;
+  min-height: calc(100vh - var(--size-top-nav-height));
+  background: var(--color-page-background);
+}
+
+.login-form {
+  display: grid;
+  width: min(100% - 2rem, 22rem);
+  gap: 0.75rem;
+}
+
+.field-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.text-field {
+  height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  padding: 0 0.75rem;
+  font: inherit;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.primary-button,
+.secondary-button {
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  padding: 0 1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 1px solid var(--color-text-primary);
+  background: var(--color-text-primary);
+  color: var(--color-surface);
+}
+
+.secondary-button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.error-text {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.status-text {
+  color: #525252;
 }
