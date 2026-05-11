@@ -5,7 +5,9 @@
   --color-surface: #ffffff;
   --color-border: #d4d4d4;
   --color-danger: #b91c1c;
-  --size-top-nav-height: 3rem;
-  --size-side-nav-width: 11.5rem;
+  --size-top-nav-height: 3.5rem;
+  --size-side-nav-width: 12.25rem;
   --size-side-nav-collapsed-width: 4rem;
+  --size-main-content-inline-offset: 0.375rem;
+  --size-side-nav-icon-center: 2rem;
 }

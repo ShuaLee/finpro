@@ -42,11 +42,13 @@ function App() {
 
   if (user) {
     return (
-      <div className="app-shell">
-        <TopNav sideNavCollapsed={sideNavCollapsed} onToggleSideNav={() => setSideNavCollapsed((current) => !current)} />
-        <div className="app-layout">
-          <SideNav collapsed={sideNavCollapsed} />
-          <MainContent />
+      <div className="app-shell app-shell-authenticated">
+        <SideNav collapsed={sideNavCollapsed} onToggleCollapsed={() => setSideNavCollapsed((current) => !current)} />
+        <div className="app-main-shell">
+          <TopNav />
+          <div className="app-layout">
+            <MainContent />
+          </div>
         </div>
       </div>
     );
