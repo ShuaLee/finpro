@@ -56,7 +56,7 @@ export function SideNav({ collapsed, onToggleCollapsed }: SideNavProps) {
         <NavButton
           icon={collapsed ? <ExpandIcon /> : <CollapseIcon />}
           label={collapsed ? "Expand side navigation" : "Collapse side navigation"}
-          tooltip={collapsed ? "Expand side navigation" : "Collapse side navigation"}
+          tooltip={collapsed ? "Expand side navigation" : null}
           onClick={onToggleCollapsed}
         />
       </div>

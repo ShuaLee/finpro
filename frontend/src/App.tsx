@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError } from "./api/http";
 import { useAuth } from "./context/AuthContext";
@@ -6,14 +6,38 @@ import { MainContent } from "./MainContent";
 import { SideNav } from "./SideNav";
 import { TopNav } from "./TopNav";
 
+type AppPage = "home" | "settings";
+
+function getPageFromPathname(pathname: string): AppPage {
+  return pathname === "/settings" ? "settings" : "home";
+}
+
 function App() {
   const { user, loading, login } = useAuth();
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [sideNavCollapsed, setSideNavCollapsed] = useState(false);
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => getPageFromPathname(window.location.pathname));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncPageFromHistory = () => {
+      setCurrentPage(getPageFromPathname(window.location.pathname));
+    };
+
+    window.addEventListener("popstate", syncPageFromHistory);
+
+    return () => {
+      window.removeEventListener("popstate", syncPageFromHistory);
+    };
+  }, []);
+
+  const openSettings = () => {
+    setCurrentPage("settings");
+    window.history.pushState({}, "", "/settings");
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,10 +68,14 @@ function App() {
     return (
       <div className="app-shell app-shell-authenticated">
         <SideNav collapsed={sideNavCollapsed} onToggleCollapsed={() => setSideNavCollapsed((current) => !current)} />
-        <div className="app-main-shell">
-          <TopNav />
+          <div className="app-main-shell">
+          <TopNav
+            title={currentPage === "settings" ? "Settings" : undefined}
+            hideBorder={currentPage === "settings"}
+            onOpenSettings={openSettings}
+          />
           <div className="app-layout">
-            <MainContent />
+            <MainContent page={currentPage} />
           </div>
         </div>
       </div>

@@ -22,7 +22,9 @@ function BrandIcon() {
 export function BrandLogo({ compact = false }: BrandLogoProps) {
   return (
     <span className={`brand-logo ${compact ? "brand-logo-compact" : ""}`.trim()}>
-      <BrandIcon />
+      <span className="brand-logo-icon-slot">
+        <BrandIcon />
+      </span>
       {!compact ? <span className="brand-logo-wordmark">FinPro</span> : null}
     </span>
   );

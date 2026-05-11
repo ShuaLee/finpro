@@ -20,7 +20,7 @@ export function SideNavButton({ icon, label, collapsed, tooltip, className = "",
       <span className="side-nav-button-icon" aria-hidden="true">
         {icon}
       </span>
-      {!collapsed ? <span className="side-nav-button-label">{label}</span> : null}
+      {!collapsed ? <span className="side-nav-button-label text-nav-primary">{label}</span> : null}
       {collapsed && tooltip ? (
         <span className="nav-button-tooltip">
           <FloatingPill>{tooltip}</FloatingPill>
