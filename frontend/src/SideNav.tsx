@@ -2,8 +2,12 @@ import { BrandLogo } from "./BrandLogo";
 import { SideNavButton } from "./SideNavButton";
 import { NavButton } from "./NavButton";
 
+type AppPage = "home" | "settings";
+
 type SideNavProps = {
   collapsed: boolean;
+  currentPage: AppPage;
+  onNavigateHome: () => void;
   onToggleCollapsed: () => void;
 };
 
@@ -38,7 +42,7 @@ function ExpandIcon() {
   );
 }
 
-export function SideNav({ collapsed, onToggleCollapsed }: SideNavProps) {
+export function SideNav({ collapsed, currentPage, onNavigateHome, onToggleCollapsed }: SideNavProps) {
   return (
     <nav className={`side-nav ${collapsed ? "side-nav-collapsed" : ""}`} aria-label="Primary navigation">
       <div className="side-nav-header">
@@ -49,11 +53,15 @@ export function SideNav({ collapsed, onToggleCollapsed }: SideNavProps) {
           collapsed={collapsed}
           icon={<PortfolioIcon />}
           label="Portfolio"
+          aria-current={currentPage === "home" ? "page" : undefined}
+          className={currentPage === "home" ? "side-nav-button-active" : ""}
+          onClick={onNavigateHome}
           tooltip={collapsed ? "Portfolio" : null}
         />
       </div>
       <div className="side-nav-bottom">
         <NavButton
+          className="side-nav-toggle-button"
           icon={collapsed ? <ExpandIcon /> : <CollapseIcon />}
           label={collapsed ? "Expand side navigation" : "Collapse side navigation"}
           tooltip={collapsed ? "Expand side navigation" : null}

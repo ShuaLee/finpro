@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap");
 
 :root {
-  --color-page-background: #f8f8f7;
+  --color-page-background: #f9f9f9;
   --color-text-primary: #111111;
   --color-text-title: #1f2937;
   --color-text-nav: #374151;
@@ -18,12 +18,12 @@
   --text-dropdown-font-size: 0.9rem;
   --text-dropdown-font-weight: 500;
   --text-dropdown-line-height: 1;
-  --text-page-title-font-size: 1.75rem;
+  --text-page-title-font-size: 1.4rem;
   --text-page-title-font-weight: 700;
   --text-page-title-line-height: 1;
-  --size-top-nav-height: 5.2rem;
+  --size-top-nav-height: 4.25rem;
   --size-nav-button: 2.5rem;
-  --size-side-nav-header-height: 4.5rem;
+  --size-side-nav-header-height: 4.25rem;
   --size-side-nav-width: 12.25rem;
   --size-side-nav-collapsed-width: 4rem;
   --size-content-inline-padding: 2.5rem;

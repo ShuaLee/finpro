@@ -39,6 +39,15 @@ function App() {
     window.history.pushState({}, "", "/settings");
   };
 
+  const openHome = () => {
+    setCurrentPage("home");
+    window.history.pushState({}, "", "/");
+  };
+
+  const handleAddAssets = () => {
+    // Placeholder until add-assets flow is implemented in this shell.
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
@@ -67,11 +76,16 @@ function App() {
   if (user) {
     return (
       <div className="app-shell app-shell-authenticated">
-        <SideNav collapsed={sideNavCollapsed} onToggleCollapsed={() => setSideNavCollapsed((current) => !current)} />
-          <div className="app-main-shell">
+        <SideNav
+          collapsed={sideNavCollapsed}
+          currentPage={currentPage}
+          onNavigateHome={openHome}
+          onToggleCollapsed={() => setSideNavCollapsed((current) => !current)}
+        />
+        <div className="app-main-shell">
           <TopNav
             title={currentPage === "settings" ? "Settings" : undefined}
-            hideBorder={currentPage === "settings"}
+            onAddAssets={handleAddAssets}
             onOpenSettings={openSettings}
           />
           <div className="app-layout">

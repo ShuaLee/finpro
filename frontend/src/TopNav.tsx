@@ -5,6 +5,7 @@ import { useAuth } from "./context/AuthContext";
 type TopNavProps = {
   title?: string;
   onOpenSettings: () => void;
+  onAddAssets?: () => void;
   hideBorder?: boolean;
 };
 
@@ -23,13 +24,17 @@ function ProfileIcon() {
   );
 }
 
-export function TopNav({ title, onOpenSettings, hideBorder = false }: TopNavProps) {
+export function TopNav({ title, onOpenSettings, onAddAssets, hideBorder = false }: TopNavProps) {
   const { logout } = useAuth();
 
   return (
     <header className={`top-nav ${hideBorder ? "top-nav-borderless" : ""}`.trim()}>
       <div className="top-nav-title">{title}</div>
       <div className="top-nav-actions">
+        <button type="button" className="top-nav-action-button" onClick={onAddAssets}>
+          <span className="top-nav-action-plus" aria-hidden="true">+</span>
+          <span>Add Assets</span>
+        </button>
         <Dropdown
           label="Profile menu"
           items={[{ label: "Settings", onSelect: onOpenSettings }, { label: "Logout", onSelect: logout }]}
